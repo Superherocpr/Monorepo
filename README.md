@@ -47,7 +47,6 @@ Each environment has its own Supabase project and S3 bucket. Environment variabl
 │   └── admin/
 ├── schema.md         # Database schema (all tables and columns)
 ├── schema-notes.md   # Workflows, relationships, system notes
-├── AI-DEV-BRIEF.md   # Developer brief for AI-assisted development
 ├── DESIGN-SYSTEM.md  # Visual language, tokens, component patterns
 ├── FOLDER-STRUCTURE.md # Canonical file and folder layout
 └── .env.example      # Environment variable documentation
@@ -90,7 +89,6 @@ All planning documentation is in the monorepo root. Read these before touching t
 - **`schema-notes.md`** — Workflows, email triggers, sidebar nav, API endpoints
 - **`FOLDER-STRUCTURE.md`** — Where every file lives
 - **`DESIGN-SYSTEM.md`** — Tailwind tokens, component patterns, dark mode
-- **`AI-DEV-BRIEF.md`** — Build order, rules, and known failure modes for AI-assisted development
 - **`PageGuides/`** — Self-contained build guide for every page in the application
 
 ---
@@ -109,5 +107,5 @@ All planning documentation is in the monorepo root. Read these before touching t
 
 ## Contributing
 
-See `AI-DEV-BRIEF.md` for the build order, coding standards, and known failure modes.
+See `Page Guides` for the build order, coding standards, and known failure modes.
 All code changes should be developed locally, tested on staging, then merged to main.
