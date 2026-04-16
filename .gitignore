@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnp/
+
+#Files
+TwilioRecovery.rtf
+
+#Folders
+Building/
+.github/
+
+# Build output
+dist/
+build/
+.next/
+.turbo/
+
+
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# Full env wildcard
+.env*
+!.env.example
