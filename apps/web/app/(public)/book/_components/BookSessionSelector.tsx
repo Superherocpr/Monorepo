@@ -40,16 +40,6 @@ function formatTimeRange(startsAt: string, endsAt: string): string {
   return `${fmt(startsAt)} – ${fmt(endsAt)}`;
 }
 
-/** Formats an ISO date to a long group header, e.g. "Tuesday, April 22, 2025". */
-function formatGroupDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 /** Formats an ISO date to a short label, e.g. "Apr 22, 2025". */
 function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -149,55 +139,34 @@ export default function BookSessionSelector({
     return true;
   });
 
-  // ── Group by calendar date ─────────────────────────────────────────────────
-  const grouped = filteredSessions.reduce<Record<string, ScheduleSession[]>>(
-    (acc, session) => {
-      const key = formatGroupDate(session.starts_at);
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(session);
-      return acc;
-    },
-    {}
-  );
-
-  const dateGroups = Object.entries(grouped);
 
   return (
-    <div className="min-h-screen bg-white">
-      <BookingProgress currentStep={1} />
+    <div className="flex flex-col h-screen bg-white overflow-hidden">
 
-      {/* Page header */}
-      <div className="px-4 pb-6 max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900">Choose Your Class</h1>
-        <p className="text-gray-500 mt-1">
-          Select an upcoming session to reserve your spot.
-        </p>
+      {/* Progress bar — full width, pinned at top */}
+      <div className="shrink-0 border-b border-gray-100 bg-white z-10">
+        <BookingProgress currentStep={1} />
       </div>
 
-      {/* Error toast */}
-      {errorMessage && (
-        <div
-          role="alert"
-          className="mx-4 mb-4 max-w-7xl lg:mx-auto bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm flex items-center justify-between"
-        >
-          <span>{errorMessage}</span>
-          <button
-            onClick={() => setErrorMessage(null)}
-            aria-label="Dismiss error"
-            className="ml-4 text-red-400 hover:text-red-600"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      {/* Body — filters sidebar on the left, cards on the right */}
+      <div className="flex flex-1 overflow-hidden">
 
-      <section className="pb-16 px-4">
-        <div className="max-w-7xl mx-auto">
+        {/* ── Left: sticky filters sidebar ── */}
+        <aside className="w-72 shrink-0 border-r border-gray-100 bg-white overflow-y-auto px-6 pt-6 pb-10 flex flex-col gap-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Choose Your Class</h1>
+            <p className="text-gray-500 mt-1 text-sm">
+              Select an upcoming session to reserve your spot.
+            </p>
+          </div>
 
-          {/* ── Filter bar ── */}
-          <div className="flex flex-col gap-5 mb-10">
+          {/* Class type filter pills */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+              Class type
+            </p>
             <div
-              className="flex gap-2 overflow-x-auto pb-1 flex-nowrap md:flex-wrap"
+              className="flex flex-wrap gap-2"
               role="group"
               aria-label="Filter by class type"
             >
@@ -205,15 +174,14 @@ export default function BookSessionSelector({
                 onClick={() => setActiveClassType(null)}
                 aria-pressed={activeClassType === null}
                 className={[
-                  "shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
+                  "px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
                   activeClassType === null
                     ? "bg-red-600 text-white"
                     : "bg-white border border-gray-200 text-gray-700 hover:border-red-300",
                 ].join(" ")}
               >
-                All Classes
+                All
               </button>
-
               {classTypes.map((ct) => {
                 const slug = toSlug(ct.name);
                 const isActive = activeClassType === slug;
@@ -223,7 +191,7 @@ export default function BookSessionSelector({
                     onClick={() => setActiveClassType(isActive ? null : slug)}
                     aria-pressed={isActive}
                     className={[
-                      "shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
+                      "px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
                       isActive
                         ? "bg-red-600 text-white"
                         : "bg-white border border-gray-200 text-gray-700 hover:border-red-300",
@@ -234,79 +202,87 @@ export default function BookSessionSelector({
                 );
               })}
             </div>
-
-            {/* Date range row */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="book-date-from"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  From
-                </label>
-                <input
-                  id="book-date-from"
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="book-date-to"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  To
-                </label>
-                <input
-                  id="book-date-to"
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-
-              {isFiltered && (
-                <button
-                  onClick={clearFilters}
-                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 rounded-sm sm:self-end pb-[9px]"
-                >
-                  <X size={14} aria-hidden="true" />
-                  Clear filters
-                </button>
-              )}
-            </div>
           </div>
 
-          {/* ── Session list or empty state ── */}
-          {dateGroups.length === 0 ? (
+          {/* Date range filter */}
+          <div className="flex flex-col gap-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+              Date range
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="book-date-from" className="text-sm font-medium text-gray-700">
+                From
+              </label>
+              <input
+                id="book-date-from"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="book-date-to" className="text-sm font-medium text-gray-700">
+                To
+              </label>
+              <input
+                id="book-date-to"
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+            {isFiltered && (
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 rounded-sm"
+              >
+                <X size={14} aria-hidden="true" />
+                Clear filters
+              </button>
+            )}
+          </div>
+        </aside>
+
+        {/* ── Right: scrollable cards ── */}
+        <section className="flex-1 overflow-y-auto pb-16 px-6 pt-6">
+
+          {/* Error toast */}
+          {errorMessage && (
+            <div
+              role="alert"
+              className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm flex items-center justify-between"
+            >
+              <span>{errorMessage}</span>
+              <button
+                onClick={() => setErrorMessage(null)}
+                aria-label="Dismiss error"
+                className="ml-4 text-red-400 hover:text-red-600"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Session grid or empty state */}
+          {filteredSessions.length === 0 ? (
             <BookingEmptyState isFiltered={isFiltered} onClearFilters={clearFilters} />
           ) : (
-            <div className="flex flex-col gap-10">
-              {dateGroups.map(([dateLabel, daySessions]) => (
-                <div key={dateLabel}>
-                  <h2 className="text-xs font-medium text-gray-500 uppercase tracking-widest mb-4 border-b border-gray-100 pb-2">
-                    {dateLabel}
-                  </h2>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {daySessions.map((session) => (
-                      <BookingSessionCard
-                        key={session.id}
-                        session={session}
-                        isSelecting={selecting === session.id}
-                        onSelect={handleSelect}
-                      />
-                    ))}
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {filteredSessions.map((session) => (
+                <BookingSessionCard
+                  key={session.id}
+                  session={session}
+                  isSelecting={selecting === session.id}
+                  onSelect={handleSelect}
+                />
               ))}
             </div>
           )}
-        </div>
-      </section>
+        </section>
+
+      </div>
     </div>
   );
 }
@@ -340,7 +316,9 @@ function BookingSessionCard({ session, isSelecting, onSelect }: BookingSessionCa
         </span>
       </p>
 
-      <p className="text-sm text-gray-700 font-medium">{timeRange}</p>
+      <p className="text-sm text-gray-700 font-medium">
+        {formattedDate} &bull; {timeRange}
+      </p>
 
       <address className="not-italic text-sm text-gray-600 leading-relaxed">
         {session.locations.name}

@@ -155,10 +155,10 @@ export default function BookPaymentPage() {
                 </div>
               )}
 
-              {/* Mobile order summary — visible below lg breakpoint only */}
-              <div className="lg:hidden mb-8">
+              {/* Order summary — always shown above PayPal button */}
+              <div className="mb-8">
                 <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Your Selection
+                  Your Booking
                 </h2>
                 <OrderSummary details={store?.sessionDetails ?? null} />
               </div>
@@ -184,13 +184,7 @@ export default function BookPaymentPage() {
               )}
             </div>
 
-            {/* ── Right: order summary (desktop only) ── */}
-            <div className="hidden lg:block w-80 shrink-0">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                Your Selection
-              </h2>
-              <OrderSummary details={store?.sessionDetails ?? null} />
-            </div>
+
           </div>
         </div>
       </div>
