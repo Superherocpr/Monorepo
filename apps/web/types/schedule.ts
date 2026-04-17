@@ -80,3 +80,44 @@ export interface ClassSessionWithDetails extends ClassSession {
   class_types: ClassType;
   locations: Location;
 }
+
+/**
+ * Flattened session shape passed from the schedule page server component to ScheduleClient.
+ * Includes computed `spotsRemaining` and `isFull` fields derived from bookings + invoices.
+ * This shape is a client-safe subset — it does not include internal fields like session_token.
+ */
+export interface ScheduleSession {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  max_capacity: number;
+  status: string;
+  spotsRemaining: number;
+  isFull: boolean;
+  class_types: {
+    id: string;
+    name: string;
+    price: number;
+    duration_minutes: number;
+  };
+  profiles: {
+    first_name: string;
+    last_name: string;
+  };
+  locations: {
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
+}
+
+/**
+ * A minimal class type shape used to populate the filter bar on the schedule page.
+ * Only active class types are included.
+ */
+export interface ClassTypeOption {
+  id: string;
+  name: string;
+}
