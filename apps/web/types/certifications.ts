@@ -42,3 +42,36 @@ export interface Certification {
 export interface CertificationWithType extends Certification {
   cert_types: CertType;
 }
+
+/**
+ * A certification with all related data joined in, as returned by the
+ * certifications dashboard page query. Includes cert_types and the originating
+ * class session (nullable — certs may be manually issued without a session).
+ */
+export interface CertificationRecord {
+  id: string;
+  issued_at: string;
+  expires_at: string;
+  cert_number: string | null;
+  notes: string | null;
+  cert_types: {
+    name: string;
+    issuing_body: string | null;
+    validity_months: number;
+  };
+  class_sessions: {
+    starts_at: string;
+    class_types: { name: string };
+  } | null;
+}
+
+/**
+ * Minimal cert shape used in the dashboard certifications widget.
+ */
+export interface CertificationWidgetItem {
+  id: string;
+  issued_at: string;
+  expires_at: string;
+  cert_number: string | null;
+  cert_types: { name: string };
+}

@@ -38,6 +38,51 @@ export type PaymentType =
   | "invoice";
 
 /**
+ * A booking with all related data joined in, as returned by the dashboard
+ * and bookings page queries. Separate from the flat `Booking` interface.
+ */
+export interface BookingRecord {
+  id: string;
+  cancelled: boolean;
+  cancellation_note: string | null;
+  booking_source: BookingSource;
+  created_at: string;
+  class_sessions: {
+    starts_at: string;
+    ends_at: string;
+    status: string;
+    class_types: { name: string };
+    profiles: { first_name: string; last_name: string };
+    locations: {
+      name: string;
+      address: string;
+      city: string;
+      state: string;
+      zip: string;
+    };
+  };
+  payments: {
+    status: string;
+    payment_type: string;
+    amount: number;
+  }[];
+}
+
+/**
+ * Minimal booking shape used in the dashboard upcoming classes widget.
+ * Only includes the fields needed for the compact widget display.
+ */
+export interface UpcomingBookingWidget {
+  id: string;
+  class_sessions: {
+    starts_at: string;
+    ends_at: string;
+    class_types: { name: string };
+    locations: { name: string; address: string; city: string; state: string };
+  };
+}
+
+/**
  * A payment record from the `payments` table.
  * Loosely coupled to bookings — a payment may exist without a booking (e.g. deposit).
  */
