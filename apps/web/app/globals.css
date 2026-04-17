@@ -17,6 +17,11 @@
  */
 @variant dark (&:where(.dark, .dark *));
 
+/* Smooth scroll for anchor links — e.g. /classes#bls from the home page */
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   @apply bg-white text-gray-900 antialiased;
 }
