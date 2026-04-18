@@ -13,6 +13,7 @@ import { Calendar, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { setBookingStore } from "@/lib/booking-store";
 import BookingProgress from "./BookingProgress";
+import PrivateSessionCta from "./PrivateSessionCta";
 import type { ScheduleSession, ClassTypeOption } from "@/types/schedule";
 
 interface BookSessionSelectorProps {
@@ -280,6 +281,11 @@ export default function BookSessionSelector({
               ))}
             </div>
           )}
+
+          {/* Private session CTA — shown below the grid for users who can't find a suitable time */}
+          <div className="-mx-6 mt-8">
+            <PrivateSessionCta />
+          </div>
         </section>
 
       </div>

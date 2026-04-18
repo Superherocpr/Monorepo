@@ -5,11 +5,10 @@
  */
 
 import Link from "next/link";
-import { CalendarPlus, Calendar, ShoppingBag } from "lucide-react";
+import { CalendarPlus, ShoppingBag } from "lucide-react";
 
 const actions = [
   { icon: CalendarPlus, label: "Book a Class", href: "/book" },
-  { icon: Calendar, label: "View Schedule", href: "/schedule" },
   { icon: ShoppingBag, label: "Shop Merch", href: "/merch" },
 ];
 
