@@ -53,7 +53,8 @@ async function fetchUpcomingBookings(
     .gte("class_sessions.starts_at", new Date().toISOString())
     .order("class_sessions.starts_at", { ascending: true })
     .limit(2);
-  return (data ?? []) as UpcomingBookingWidget[];
+  // Cast via unknown — Supabase infers array shapes for joined tables without generated DB types.
+  return (data ?? []) as unknown as UpcomingBookingWidget[];
 }
 
 /**

@@ -41,7 +41,9 @@ export default async function BookingsPage() {
     .order("class_sessions.starts_at", { ascending: false });
 
   const now = new Date();
-  const all = (bookings ?? []) as BookingRecord[];
+  // Cast via unknown because Supabase infers array shapes for joined tables without
+  // generated DB types — the forward FK (bookings.session_id) guarantees single objects at runtime.
+  const all = (bookings ?? []) as unknown as BookingRecord[];
 
   const upcoming = all
     .filter(
