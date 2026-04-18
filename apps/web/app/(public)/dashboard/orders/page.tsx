@@ -21,7 +21,7 @@ export default async function OrdersPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/book/signin?redirect=/dashboard/orders");
+  if (!user) redirect("/signin?redirect=/dashboard/orders");
 
   const { data: orders } = await supabase
     .from("orders")

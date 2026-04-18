@@ -21,7 +21,7 @@ export default async function DashboardLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/book/signin?redirect=/dashboard");
+    redirect("/signin?redirect=/dashboard");
   }
 
   // Archived accounts must not access the portal even with a valid session

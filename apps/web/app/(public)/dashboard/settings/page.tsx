@@ -20,7 +20,7 @@ export default async function SettingsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/book/signin?redirect=/dashboard/settings");
+  if (!user) redirect("/signin?redirect=/dashboard/settings");
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -28,7 +28,7 @@ export default async function SettingsPage() {
     .eq("id", user.id)
     .single();
 
-  if (!profile) redirect("/book/signin?redirect=/dashboard/settings");
+  if (!profile) redirect("/signin?redirect=/dashboard/settings");
 
   return (
     <div>

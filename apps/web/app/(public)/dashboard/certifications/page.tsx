@@ -24,7 +24,7 @@ export default async function CertificationsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/book/signin?redirect=/dashboard/certifications");
+  if (!user) redirect("/signin?redirect=/dashboard/certifications");
 
   const { data: certs } = await supabase
     .from("certifications")

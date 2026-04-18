@@ -103,7 +103,7 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/book/signin?redirect=/dashboard");
+  if (!user) redirect("/signin?redirect=/dashboard");
 
   const [profile, upcomingBookings, certifications, recentOrder] =
     await Promise.all([
@@ -113,7 +113,7 @@ export default async function DashboardPage() {
       fetchRecentOrder(supabase, user.id),
     ]);
 
-  if (!profile) redirect("/book/signin?redirect=/dashboard");
+  if (!profile) redirect("/signin?redirect=/dashboard");
 
   return (
     <div>

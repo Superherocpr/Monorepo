@@ -57,7 +57,9 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
   return (
     <header className="bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-800 sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        {/* 3-column grid ensures the nav is always centered relative to the full header width,
+            regardless of the logo and auth section having different widths. */}
+        <div className="grid grid-cols-3 items-center h-16">
 
           {/* Logo — TODO: replace text with actual logo image once brand assets are ready */}
           <Link
@@ -68,8 +70,8 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
             <span className="text-gray-900 dark:text-white">CPR</span>
           </Link>
 
-          {/* Desktop nav links */}
-          <nav className="hidden md:flex items-center gap-6" aria-label="Main navigation">
+          {/* Desktop nav links — centered column */}
+          <nav className="hidden md:flex items-center justify-center gap-6" aria-label="Main navigation">
             {NAV_LINKS.map(({ label, href }) => (
               <Link
                 key={href}
@@ -86,8 +88,8 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
             ))}
           </nav>
 
-          {/* Desktop auth actions */}
-          <div className="hidden md:flex items-center gap-4">
+          {/* Desktop auth actions — right-aligned */}
+          <div className="hidden md:flex items-center justify-end gap-4">
             {isAuthenticated ? (
               <>
                 <Link
@@ -111,7 +113,7 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
               </>
             ) : (
               <Link
-                href="/book/signin"
+                href="/signin"
                 className="text-sm font-semibold bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-150"
               >
                 Sign In
@@ -119,9 +121,9 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
             )}
           </div>
 
-          {/* Mobile hamburger toggle */}
+          {/* Mobile hamburger toggle — spans cols 2+3 and right-aligns on mobile */}
           <button
-            className="md:hidden p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+            className="md:hidden col-span-2 flex justify-end p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
@@ -177,7 +179,7 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
                 </>
               ) : (
                 <Link
-                  href="/book/signin"
+                  href="/signin"
                   onClick={() => setMobileOpen(false)}
                   className="py-2 px-3 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
                 >
