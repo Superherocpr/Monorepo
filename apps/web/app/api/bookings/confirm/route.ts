@@ -15,8 +15,6 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getPayPalAccessToken } from "@/lib/paypal";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 const PAYPAL_API_BASE =
   process.env.PAYPAL_API_BASE ?? "https://api-m.sandbox.paypal.com";
 
@@ -168,6 +166,8 @@ export async function POST(request: Request) {
     typeof customerEmail === "string" &&
     typeof startsAt === "string"
   ) {
+    // Instantiated inside the conditional so it never executes at build time
+    const resend = new Resend(process.env.RESEND_API_KEY);
     const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",

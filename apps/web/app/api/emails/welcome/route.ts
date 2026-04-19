@@ -9,8 +9,6 @@
 
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -33,6 +31,9 @@ export async function POST(request: Request) {
     // Skip silently in environments without Resend configured
     return Response.json({ success: true, skipped: true });
   }
+
+  // Instantiated inside the handler so it never executes at build time
+  const resend = new Resend(process.env.RESEND_API_KEY);
 
   await resend.emails.send({
     from: "Superhero CPR <noreply@superherocpr.com>",

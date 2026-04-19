@@ -10,10 +10,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 /** Archives the authenticated customer's account and sends a confirmation email. */
 export async function POST() {
+  // Instantiated inside the handler so it never executes at build time
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const supabase = await createClient();
   const {
     data: { user },
