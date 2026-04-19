@@ -71,7 +71,8 @@ async function fetchCertifications(
     .select("id, issued_at, expires_at, cert_number, cert_types ( name )")
     .eq("customer_id", userId)
     .order("expires_at", { ascending: true });
-  return (data ?? []) as CertificationWidgetItem[];
+  // Cast via unknown — Supabase infers array shapes for joined tables without generated DB types.
+  return (data ?? []) as unknown as CertificationWidgetItem[];
 }
 
 /**

@@ -29,9 +29,9 @@ export default async function CertificationsPage() {
   const { data: certs } = await supabase
     .from("certifications")
     .select(
-      `id, cert_number, issued_at, expires_at,
-       cert_types ( name ),
-       class_sessions ( id )`
+      `id, cert_number, notes, issued_at, expires_at,
+       cert_types ( name, issuing_body, validity_months ),
+       class_sessions ( starts_at, class_types ( name ) )`
     )
     .eq("customer_id", user.id)
     .order("expires_at", { ascending: false });
@@ -41,7 +41,8 @@ export default async function CertificationsPage() {
     now.getTime() + 60 * 24 * 60 * 60 * 1000
   );
 
-  const all = (certs ?? []) as CertificationRecord[];
+  // Cast via unknown — Supabase infers array shapes for joined tables without generated DB types.
+  const all = (certs ?? []) as unknown as CertificationRecord[];
 
   const active = all.filter((c) => new Date(c.expires_at) >= now);
   const expired = all.filter((c) => new Date(c.expires_at) < now);
