@@ -26,10 +26,12 @@ export default async function OrdersPage() {
   const { data: orders } = await supabase
     .from("orders")
     .select(
-      `id, status, total_amount, tracking_number, created_at,
+      `id, status, total_amount, tracking_number,
+       shipping_name, shipping_address, shipping_city, shipping_state, shipping_zip,
+       created_at,
        order_items (
-         quantity, price_at_purchase,
-         product_variants ( size, products ( name ) )
+         id, quantity, price_at_purchase,
+         product_variants ( size, products ( name, image_url ) )
        )`
     )
     .eq("customer_id", user.id)
@@ -39,7 +41,8 @@ export default async function OrdersPage() {
     <div>
       <OrdersPageHeader />
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <OrdersList orders={(orders ?? []) as OrderRecord[]} />
+        {/* Cast via unknown — Supabase infers array shapes for joined tables without generated DB types. */}
+        <OrdersList orders={(orders ?? []) as unknown as OrderRecord[]} />
       </div>
     </div>
   );

@@ -95,7 +95,8 @@ async function fetchRecentOrder(
     .order("created_at", { ascending: false })
     .limit(1)
     .single();
-  return (data as RecentOrderWidgetType | null) ?? null;
+  // Cast via unknown — Supabase infers array shapes for joined tables without generated DB types.
+  return (data as unknown as RecentOrderWidgetType | null) ?? null;
 }
 
 /** Renders the customer dashboard overview with four data widgets. */
