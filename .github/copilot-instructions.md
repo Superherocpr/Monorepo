@@ -188,7 +188,56 @@ accepts user input — think about validation before you write it, not after.
 
 ---
 
-## The Three-Question Check
+## 5. Task Summary
+
+After completing any task — a page, a component, an API route, or a group of related
+files — always end your response with a plain English summary of what you just did.
+
+**Format:**
+
+```
+---
+Done. Here's what was built:
+
+[2–5 sentences. No jargon. No bullet lists. Write it as if explaining to someone
+who isn't a developer — what exists now that didn't before, what it does, and
+anything they should be aware of before moving on.]
+```
+
+**Rules:**
+- Plain English only. No technical terms unless unavoidable, and if used, explain them.
+- No bullet lists. Write in sentences.
+- Keep it short — 2 to 5 sentences maximum.
+- Focus on what the user can now DO, not what code was written.
+- If any TODOs were left or anything needs follow-up, mention it here.
+- If a security threat was logged at level 6 or below during this task, mention it
+  briefly: "One low/medium security note was logged in Building/threats.md."
+
+**Example — good:**
+```
+Done. Here's what was built:
+
+The schedule page now shows all upcoming approved classes, grouped by date. Customers
+can filter by class type or date range using the buttons at the top. Each class card
+shows the time, location, price, and how many spots are left — and the Book Now button
+takes them straight to checkout for that class. One medium security note was logged
+in Building/threats.md.
+```
+
+**Example — bad:**
+```
+Done. Here's what was built:
+
+Implemented ScheduleClient.tsx as a client component with useState hooks for filter
+state. Server-side data fetching in page.tsx using Supabase with approval_status
+and active filters applied. Spots remaining computed from bookings join.
+```
+
+The bad example describes code. The good example describes what the user has.
+
+---
+
+## The Four-Question Check
 
 Before writing any new code — function, component, type, or route — ask:
 
