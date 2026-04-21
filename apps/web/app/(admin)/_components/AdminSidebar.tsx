@@ -173,7 +173,7 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
       </aside>
 
       {/* ── Desktop sidebar ── */}
-      <aside className="hidden lg:flex flex-col w-60 shrink-0 bg-white border-r border-gray-200 min-h-screen">
+      <aside className="hidden lg:flex flex-col w-60 shrink-0 bg-white border-r border-gray-200 sticky top-0 h-screen">
         <div className="px-4 py-5 border-b border-gray-100">
           <span className="text-lg font-bold text-gray-900">Superhero CPR</span>
           <span className="block text-xs text-gray-400 mt-0.5">Admin</span>
