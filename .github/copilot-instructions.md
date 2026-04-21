@@ -101,6 +101,93 @@ or any other shared type inline in a component file. Check `types/` first.
 
 ---
 
+## 4. Security Review
+
+Every file you write or modify must be considered through a security lens before
+you finish. This is not optional — it is part of the definition of done for every task.
+
+### What to look for
+
+Examine your code for any of the following. This list is not exhaustive — use judgment.
+
+**Authentication & Authorization**
+- Endpoints that perform sensitive actions without verifying the caller's identity
+- Role checks that can be bypassed (e.g. checking role client-side only)
+- Admin routes accessible to non-admin roles
+- Missing `archived` or `deactivated` checks that allow blocked accounts through
+
+**Input & Data**
+- User-supplied input used in database queries without validation (SQL injection risk)
+- User-supplied input rendered as HTML without sanitization (XSS risk)
+- File uploads that don't validate type, size, or content
+- API endpoints that accept and use arbitrary fields from the request body
+
+**Secrets & Credentials**
+- Environment variables referenced in client-side code that should be server-only
+- API keys, tokens, or secrets that could be exposed in logs, error messages, or responses
+- OAuth tokens stored or transmitted insecurely
+
+**Business Logic**
+- Operations that can be repeated to cause unintended effects (double charge, double booking)
+- Ownership checks missing — can user A access or modify user B's data?
+- Amounts or quantities that come from the client and are trusted without server-side verification
+- Webhook handlers that don't verify the payload came from the expected source
+
+**Infrastructure**
+- S3 URLs or file paths that expose internal structure or allow traversal
+- Error messages that leak stack traces, table names, or internal logic to the client
+- Rate limiting absent on public-facing endpoints that could be abused
+
+---
+
+### How to log a threat
+
+When you identify a reasonable vulnerability, you must:
+
+1. **Log it in `Building/threats.md`** using the format defined in that file
+2. **Assign a threat level from 0–10:**
+   - 0–3: Low — minor issue, low exploitability or low impact
+   - 4–6: Medium — should be fixed before launch
+   - 7–10: High — must be fixed, do not proceed past this task
+3. **If the threat level is 7 or above**, stop and alert the user immediately with this message:
+
+```
+⚠️ SECURITY ALERT — Threat Level [X]/10
+
+A high-severity vulnerability was identified in [file].
+
+Threat: [one sentence description]
+Attack vector: [how it could be exploited]
+
+This has been logged in Building/threats.md as THREAT-[NNN].
+This should be resolved before continuing development.
+```
+
+4. **If the threat level is 6 or below**, log it silently and continue. The user
+   reviews `Building/threats.md` at their own cadence.
+
+---
+
+### What counts as "reasonable"
+
+Do not log theoretical or highly improbable vulnerabilities. A threat is reasonable if:
+- It could be exploited by a motivated attacker with basic knowledge
+- It involves real data, real money, or real user accounts in this application
+- The attack vector is realistic given how the application is used
+
+Do not log: SSL/TLS configuration, OS-level hardening, third-party library CVEs,
+or anything outside the application code itself. Those are infrastructure concerns.
+
+---
+
+### Security is not a separate pass
+
+Do not finish writing a file and then review it for security afterward as a separate
+step. Consider security as you write. If you're about to write an endpoint that
+accepts user input — think about validation before you write it, not after.
+
+---
+
 ## The Three-Question Check
 
 Before writing any new code — function, component, type, or route — ask:
@@ -108,6 +195,7 @@ Before writing any new code — function, component, type, or route — ask:
 1. **Is this documented?** Will a human understand it without asking me?
 2. **Does this make something else obsolete?** If yes, have I deleted that thing?
 3. **Does this already exist?** Am I about to write a duplicate?
+4. **Is this secure?** Have I considered the attack surface of what I just wrote?
 
-If you can answer all three correctly, write the code.
+If you can answer all four correctly, write the code.
 If you cannot, fix the gap before proceeding.
