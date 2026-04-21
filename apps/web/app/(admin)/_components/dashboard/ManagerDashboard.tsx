@@ -151,7 +151,7 @@ export default function ManagerDashboard({
         {todaySessions.length > 0 && (
           <div className="bg-white border border-gray-200 rounded-lg p-6">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-              Today's Classes
+              Today's Class Sessions
             </h2>
             <ul className="space-y-3">
               {todaySessions.map((session) => (

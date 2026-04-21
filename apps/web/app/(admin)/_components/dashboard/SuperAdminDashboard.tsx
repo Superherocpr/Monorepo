@@ -96,7 +96,7 @@ export default function SuperAdminDashboard({
 
         <div className="bg-white border border-gray-200 rounded-lg p-5">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            Classes This Month
+            Class Sessions This Month
           </p>
           <p className="text-3xl font-bold text-gray-900 mt-1">
             {quickStats.classesThisMonth}

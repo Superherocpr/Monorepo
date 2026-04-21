@@ -26,7 +26,7 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["instructor", "manager", "super_admin", "inspector"],
   },
   {
-    label: "My Classes",
+    label: "My Class Sessions",
     href: "/admin/sessions",
     roles: ["instructor"],
   },
@@ -46,12 +46,12 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["instructor"],
   },
   {
-    label: "Classes",
+    label: "Class Sessions",
     href: "/admin/sessions",
     roles: ["manager", "super_admin"],
   },
   {
-    label: "Approvals",
+    label: "Session Approvals",
     href: "/admin/sessions/approvals",
     roles: ["manager", "super_admin"],
   },
