@@ -349,7 +349,7 @@ export default function GradingClient({ session, students, presetGrades }: Props
                               : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
                           }`}
                         >
-                          {preset.value} — {preset.label}
+                          {preset.value}
                         </button>
                       );
                     })}
