@@ -45,7 +45,6 @@ export async function POST(
     .from("profiles")
     .update({
       archived: true,
-      archived_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq("id", customerId)

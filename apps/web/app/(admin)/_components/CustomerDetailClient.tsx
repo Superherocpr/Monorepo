@@ -36,9 +36,7 @@ interface CustomerProfile {
   zip: string | null;
   role: UserRole;
   archived: boolean;
-  archived_at: string | null;
   created_at: string;
-  customer_notes: string | null;
 }
 
 /** A booking row with joined session, instructor, location, and payment data. */
@@ -326,9 +324,7 @@ export default function CustomerDetailClient({
   const [logPaymentError, setLogPaymentError] = useState<string | null>(null);
 
   // ── Notes tab state ─────────────────────────────────────────────────────────
-  const [notesValue, setNotesValue] = useState(
-    initialProfile.customer_notes ?? ""
-  );
+  const [notesValue, setNotesValue] = useState("");
   const [notesSaving, setNotesSaving] = useState(false);
 
   // ── Archive account (super admin only) ──────────────────────────────────────
@@ -1207,11 +1203,6 @@ export default function CustomerDetailClient({
                 <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
                   Archived
                 </span>
-                {initialProfile.archived_at && (
-                  <span className="text-xs text-gray-400">
-                    Archived on {fmtDate(initialProfile.archived_at)}
-                  </span>
-                )}
               </>
             ) : (
               <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">

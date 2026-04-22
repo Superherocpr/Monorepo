@@ -56,7 +56,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
     supabase
       .from("profiles")
       .select(
-        "id, first_name, last_name, email, phone, address, city, state, zip, role, archived, archived_at, created_at, customer_notes"
+        "id, first_name, last_name, email, phone, address, city, state, zip, role, archived, created_at"
       )
       .eq("id", customerId)
       .single(),
@@ -151,8 +151,34 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       .order("name", { ascending: true }),
   ]);
 
+  // Log query errors to the server terminal to aid debugging.
+  if (profileResult.error) {
+    console.error("[CustomerDetail] profile query error:", profileResult.error);
+  }
+  if (bookingsResult.error) {
+    console.error("[CustomerDetail] bookings query error:", bookingsResult.error);
+  }
+  if (certificationsResult.error) {
+    console.error("[CustomerDetail] certifications query error:", certificationsResult.error);
+  }
+  if (ordersResult.error) {
+    console.error("[CustomerDetail] orders query error:", ordersResult.error);
+  }
+  if (paymentsResult.error) {
+    console.error("[CustomerDetail] payments query error:", paymentsResult.error);
+  }
+  if (availableSessionsResult.error) {
+    console.error("[CustomerDetail] availableSessions query error:", availableSessionsResult.error);
+  }
+  if (certTypesResult.error) {
+    console.error("[CustomerDetail] certTypes query error:", certTypesResult.error);
+  }
+
   // If the profile doesn't exist or isn't a customer, redirect back.
   if (!profileResult.data || profileResult.data.role !== "customer") {
+    console.error(
+      `[CustomerDetail] redirect — customerId="${customerId}" data=${JSON.stringify(profileResult.data)} error=${JSON.stringify(profileResult.error)}`
+    );
     redirect("/admin/customers");
   }
 
