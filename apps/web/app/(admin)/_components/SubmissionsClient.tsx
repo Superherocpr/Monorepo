@@ -7,10 +7,10 @@
  * the reply form. Used by: app/(admin)/admin/contact/page.tsx
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Mail, RefreshCw, Send, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Mail, RefreshCw, Search, Send, X } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -137,6 +137,17 @@ export default function SubmissionsClient({
   const [fromFilter, setFromFilter] = useState(filters.from ?? "");
   const [toFilter, setToFilter] = useState(filters.to ?? "");
 
+  // ── Client-side text search (filters the already-loaded list in real time) ─
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Sync filter inputs when the server re-renders with new filter props after
+  // router.push() — useState only initializes from props on first mount.
+  useEffect(() => {
+    setTypeFilter(filters.type ?? "");
+    setFromFilter(filters.from ?? "");
+    setToFilter(filters.to ?? "");
+  }, [filters.type, filters.from, filters.to]);
+
   // ── Accordion state ────────────────────────────────────────────────────────
   /** ID of the currently expanded submission (only one open at a time). */
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -158,6 +169,11 @@ export default function SubmissionsClient({
   const [submissions, setSubmissions] = useState<SubmissionWithReplies[]>(
     initialSubmissions
   );
+
+  // Sync submission list when the server re-renders with new filtered results.
+  useEffect(() => {
+    setSubmissions(initialSubmissions);
+  }, [initialSubmissions]);
 
   // ── URL helpers ────────────────────────────────────────────────────────────
 
@@ -337,9 +353,23 @@ export default function SubmissionsClient({
     }
   }
 
+  // ── Client-side search filtering ────────────────────────────────────────────
+  // Matches name, email, phone, and message body — case-insensitive.
+  const displayedSubmissions = searchQuery.trim()
+    ? submissions.filter((s) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          s.name.toLowerCase().includes(q) ||
+          s.email.toLowerCase().includes(q) ||
+          (s.phone ?? "").toLowerCase().includes(q) ||
+          s.message.toLowerCase().includes(q)
+        );
+      })
+    : submissions;
+
   // ── Split submissions into two sections ────────────────────────────────────
-  const unanswered = submissions.filter((s) => !s.replied);
-  const replied = submissions.filter((s) => s.replied);
+  const unanswered = displayedSubmissions.filter((s) => !s.replied);
+  const replied = displayedSubmissions.filter((s) => s.replied);
 
   // ── Pill button helper ────────────────────────────────────────────────────
 
@@ -369,6 +399,28 @@ export default function SubmissionsClient({
           </p>
         </div>
       )}
+
+      {/* ── Search bar ──────────────────────────────────────────────────────── */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <input
+          type="search"
+          placeholder="Search by name, email, phone, or message… (set Status to All for best results)"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-4 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            aria-label="Clear search"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
 
       {/* ── Filter bar ──────────────────────────────────────────────────────── */}
       <form
@@ -470,21 +522,27 @@ export default function SubmissionsClient({
       </form>
 
       {/* ── Submissions list ─────────────────────────────────────────────────── */}
-      {submissions.length === 0 ? (
+      {displayedSubmissions.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 py-16 text-center">
           <Mail className="mb-3 h-10 w-10 text-gray-300" />
           <p className="text-sm text-gray-500">
-            {hasActiveFilters
+            {searchQuery.trim()
+              ? `No submissions match "${searchQuery}".`
+              : hasActiveFilters
               ? "No submissions match your filters."
               : "No contact submissions yet."}
           </p>
-          {hasActiveFilters && (
-            <Link
-              href="/admin/contact"
+          {(hasActiveFilters || searchQuery.trim()) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                if (hasActiveFilters) router.push("/admin/contact");
+              }}
               className="mt-2 text-sm text-red-600 hover:underline"
             >
-              Clear filters
-            </Link>
+              Clear {searchQuery.trim() && hasActiveFilters ? "search and filters" : searchQuery.trim() ? "search" : "filters"}
+            </button>
           )}
         </div>
       ) : (
