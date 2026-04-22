@@ -16,6 +16,8 @@ interface NavItem {
   label: string;
   href: string;
   roles: UserRole[];
+  /** Optional section heading rendered above this item as a visual grouping label. */
+  sectionLabel?: string;
 }
 
 /** Full nav config — items are filtered to the current user's role at render time. */
@@ -90,6 +92,12 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["super_admin"],
   },
   { label: "Analytics", href: "/admin/analytics", roles: ["super_admin"] },
+  {
+    label: "Payment Account",
+    href: "/admin/profile/payment",
+    roles: ["instructor", "super_admin"],
+    sectionLabel: "Profile",
+  },
 ];
 
 interface AdminSidebarProps {
@@ -115,6 +123,12 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
 
           return (
             <li key={`${item.label}-${item.href}`}>
+              {/* Section label — rendered above the first item in a new group */}
+              {item.sectionLabel && (
+                <p className="px-4 pt-4 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  {item.sectionLabel}
+                </p>
+              )}
               <Link
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}

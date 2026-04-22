@@ -57,6 +57,18 @@ export default async function AdminLayout({
 
   const role = profile.role as UserRole;
 
+  // Check if instructor has a connected payment account.
+  // Only run this query for instructors — other roles don't need it.
+  // TODO: replace with full onboarding flow when ready
+  let showPaymentBanner = false;
+  if (role === "instructor") {
+    const { count } = await supabase
+      .from("instructor_payment_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("instructor_id", user.id);
+    showPaymentBanner = !count || count === 0;
+  }
+
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/*
@@ -77,6 +89,20 @@ export default async function AdminLayout({
           lastName={profile.last_name}
           role={role}
         />
+        {/* Instructor onboarding banner — shown until a payment account is connected */}
+        {showPaymentBanner && (
+          <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center justify-between gap-4">
+            <p className="text-sm text-amber-800 font-medium">
+              Connect a payment account to start sending invoices.
+            </p>
+            <a
+              href="/admin/profile/payment"
+              className="shrink-0 text-sm font-semibold text-amber-900 hover:text-amber-700 underline underline-offset-2 transition-colors"
+            >
+              Set Up Payment Account →
+            </a>
+          </div>
+        )}
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
