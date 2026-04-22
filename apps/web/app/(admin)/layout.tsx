@@ -1,7 +1,9 @@
 /**
  * Layout for all /admin/* routes.
- * Handles auth guard: redirects unauthenticated users and non-staff to /.
- * Provides the shared sidebar + top bar chrome for all admin pages.
+ * Handles auth guard: redirects unauthenticated users, non-staff, archived, and
+ * deactivated accounts to /. Provides the shared sidebar + top bar chrome.
+ * Injects a dark mode flash-prevention script that reads localStorage before
+ * first paint so dark mode users don't see a flash of light mode.
  * Used by: every page under app/(admin)/
  */
 
@@ -19,7 +21,10 @@ const STAFF_ROLES: UserRole[] = [
   "inspector",
 ];
 
-/** Wraps all /admin/* pages with auth guard, sidebar, and top bar. */
+/**
+ * Wraps all /admin/* pages with auth guard, sidebar, and top bar.
+ * Redirects if: not logged in, not a staff role, archived, or deactivated.
+ */
 export default async function AdminLayout({
   children,
 }: {
@@ -34,14 +39,17 @@ export default async function AdminLayout({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("first_name, last_name, role, archived")
+    .select("first_name, last_name, role, archived, deactivated")
     .eq("id", user.id)
     .single();
 
-  // Redirect archived staff or non-staff users
+  // Redirect archived, deactivated, or non-staff users immediately.
+  // The deactivated check here closes the JWT-window gap described in THREAT-018 —
+  // a deactivated staff member with an active session is bounced at the layout level.
   if (
     !profile ||
     profile.archived ||
+    profile.deactivated ||
     !STAFF_ROLES.includes(profile.role as UserRole)
   ) {
     redirect("/");
@@ -50,7 +58,18 @@ export default async function AdminLayout({
   const role = profile.role as UserRole;
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/*
+       * Dark mode flash prevention: reads localStorage before first paint and
+       * adds the 'dark' class to <html> if the user's preference is dark.
+       * Must be a dangerouslySetInnerHTML script — next/script beforeInteractive
+       * is not supported inside layouts in the App Router.
+       */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.classList.add('dark')}catch(e){}})();`,
+        }}
+      />
       <AdminSidebar role={role} />
       <div className="flex flex-col flex-1 min-w-0">
         <AdminTopBar
