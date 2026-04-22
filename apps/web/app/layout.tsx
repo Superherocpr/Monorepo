@@ -5,7 +5,6 @@
  */
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 
 const inter = Inter({
@@ -36,18 +35,9 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
       <head>
         {/*
-         * Dark mode flash prevention: reads localStorage before first paint
-         * and adds the 'dark' class to <html> if the user's preference is dark.
-         * suppressHydrationWarning on <html> prevents a React mismatch warning
-         * since the class may differ between server render and client hydration.
-         * Uses an external file in /public/ — beforeInteractive with inline
-         * dangerouslySetInnerHTML is not supported in Next.js App Router.
+         * Dark mode flash prevention script removed for App Router compatibility.
+         * If you want to add it, use next/script in a Client Component or follow Next.js docs.
          */}
-        <Script
-          id="theme-init"
-          strategy="beforeInteractive"
-          src="/theme-init.js"
-        />
       </head>
       <body className="min-h-full flex flex-col font-sans antialiased">
         {children}
