@@ -272,13 +272,18 @@ export default function CustomerDetailClient({
   const [profileValues, setProfileValues] = useState({
     first_name: initialProfile.first_name,
     last_name: initialProfile.last_name,
-    email: initialProfile.email,
     phone: initialProfile.phone ?? "",
     address: initialProfile.address ?? "",
     city: initialProfile.city ?? "",
     state: initialProfile.state ?? "",
     zip: initialProfile.zip ?? "",
   });
+
+  // Email gets its own explicit-save flow so a typo can't accidentally
+  // trigger a Supabase confirmation email on blur.
+  const [emailDraft, setEmailDraft] = useState(initialProfile.email);
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
   const [fieldSaving, setFieldSaving] = useState<string | null>(null);
   const [passwordResetMsg, setPasswordResetMsg] = useState<string | null>(null);
   const [passwordResetSending, setPasswordResetSending] = useState(false);
@@ -349,6 +354,33 @@ export default function CustomerDetailClient({
   }
 
   // ── Profile field save on blur ───────────────────────────────────────────────
+
+  /**
+   * Saves the email address explicitly when the user clicks "Update Email".
+   * A separate flow from other fields to prevent accidental Supabase
+   * confirmation emails being triggered by a blur event.
+   */
+  async function handleSaveEmail() {
+    const trimmed = emailDraft.trim();
+    if (!trimmed || trimmed === initialProfile.email) return;
+    setEmailSaving(true);
+    setEmailMsg(null);
+    try {
+      const res = await fetch(`/api/customers/${initialProfile.id}/update-profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field: "email", value: trimmed }),
+      });
+      if (res.ok) {
+        setEmailMsg(`Confirmation sent to ${trimmed}. The address will update once confirmed.`);
+        router.refresh();
+      } else {
+        setEmailMsg("Failed to update email. Please try again.");
+      }
+    } finally {
+      setEmailSaving(false);
+    }
+  }
 
   /**
    * Saves a single profile field when the user leaves the input (blur).
@@ -1257,12 +1289,47 @@ export default function CustomerDetailClient({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <EditableField field="first_name" label="First name" />
           <EditableField field="last_name" label="Last name" />
-          <EditableField
-            field="email"
-            label="Email"
-            type="email"
-            note="Supabase will send a confirmation to the new email address"
-          />
+
+          {/* Email — explicit save button to prevent accidental confirmation emails */}
+          <div className="sm:col-span-2">
+            <label htmlFor="email" className={labelClass}>
+              Email
+              {emailSaving && (
+                <span className="ml-2 text-xs text-gray-400">Saving…</span>
+              )}
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="email"
+                type="email"
+                value={emailDraft}
+                onChange={(e) => {
+                  setEmailDraft(e.target.value);
+                  setEmailMsg(null);
+                }}
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={handleSaveEmail}
+                disabled={emailSaving || emailDraft.trim() === initialProfile.email}
+                className="shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Update Email
+              </button>
+            </div>
+            {emailMsg ? (
+              <p className="mt-1 flex items-center gap-1 text-xs text-green-700">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {emailMsg}
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-amber-600">
+                Supabase will send a confirmation to the new address before updating.
+              </p>
+            )}
+          </div>
+
           <EditableField field="phone" label="Phone" />
           <div className="sm:col-span-2">
             <EditableField field="address" label="Address" />
