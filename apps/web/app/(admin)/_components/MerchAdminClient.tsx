@@ -53,6 +53,12 @@ interface StockAdjustRow {
   newQty: number;
 }
 
+/** Result of uploading a product image through the upload API route. */
+interface UploadImageResult {
+  url: string | null;
+  error: string | null;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
@@ -301,9 +307,16 @@ export default function MerchAdminClient({
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
     if (!file) return;
-    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    const allowed = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
+    ];
     if (!allowed.includes(file.type)) {
-      setFormError("Image must be JPG, PNG, or WEBP.");
+      setFormError("Image must be JPG, PNG, WEBP, HEIC, or HEIF.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
@@ -390,9 +403,9 @@ export default function MerchAdminClient({
    * Uploads an image file to S3 via the API route.
    * Returns the public URL of the uploaded image.
    * @param file - The image File to upload.
-   * @returns The public S3 URL, or null on failure.
+   * @returns Upload result with either URL or an error message.
    */
-  const uploadImage = useCallback(async (file: File): Promise<string | null> => {
+  const uploadImage = useCallback(async (file: File): Promise<UploadImageResult> => {
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -400,11 +413,23 @@ export default function MerchAdminClient({
         method: "POST",
         body: formData,
       });
-      if (!res.ok) return null;
       const data = await res.json();
-      return data.url ?? null;
+      if (!res.ok) {
+        const detail =
+          typeof data.detail === "string" && data.detail.trim()
+            ? ` (${data.detail})`
+            : "";
+        return {
+          url: null,
+          error:
+            typeof data.error === "string"
+              ? `${data.error}${detail}`
+              : `Image upload failed.${detail}`,
+        };
+      }
+      return { url: data.url ?? null, error: null };
     } catch {
-      return null;
+      return { url: null, error: "Image upload request failed." };
     }
   }, []);
 
@@ -445,12 +470,12 @@ export default function MerchAdminClient({
       let imageUrl: string | null = form.existingImageUrl;
       if (form.imageFile) {
         const uploaded = await uploadImage(form.imageFile);
-        if (!uploaded) {
-          setFormError("Image upload failed. Please try again.");
+        if (!uploaded.url) {
+          setFormError(uploaded.error ?? "Image upload failed. Please try again.");
           setFormSaving(false);
           return;
         }
-        imageUrl = uploaded;
+        imageUrl = uploaded.url;
       }
 
       const payload = {
@@ -996,7 +1021,7 @@ function ProductFormBody({
       {/* Image */}
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
-          Product Image (JPG, PNG, WEBP — max 5MB)
+          Product Image (JPG, PNG, WEBP, HEIC, HEIF — max 5MB)
         </label>
         {/* Preview existing or newly selected image */}
         {(form.imagePreview ?? form.existingImageUrl) && (
@@ -1013,7 +1038,7 @@ function ProductFormBody({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif"
           onChange={onImageChange}
           className="block w-full text-sm text-gray-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-red-700 hover:file:bg-red-100"
         />

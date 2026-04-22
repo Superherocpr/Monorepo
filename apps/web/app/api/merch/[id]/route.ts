@@ -14,13 +14,15 @@
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * Validates that a string is a plausible UUID.
+ * Validates that a string is UUID-shaped (8-4-4-4-12 hex groups).
+ * We don't enforce version/variant bits here — Postgres rejects malformed UUIDs.
+ * The sole purpose is to block non-UUID strings from reaching the DB query.
  * @param id - The value to test.
  */
 function isUUID(id: unknown): id is string {
   return (
     typeof id === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
   );
 }
 

@@ -10,8 +10,17 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { createClient } from "@/lib/supabase/server";
 
+export const runtime = "nodejs";
+
 /** Allowed MIME types for product images. */
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+const ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+] as const;
 type AllowedType = (typeof ALLOWED_TYPES)[number];
 
 /** Maximum file size in bytes (5MB). */
@@ -40,6 +49,14 @@ function getS3Client(): S3Client {
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
     },
   });
+}
+
+/**
+ * Returns the configured S3 bucket name.
+ * Supports both AWS_S3_BUCKET_NAME (preferred) and AWS_S3_BUCKET (legacy).
+ */
+function getBucketName(): string | null {
+  return process.env.AWS_S3_BUCKET_NAME ?? process.env.AWS_S3_BUCKET ?? null;
 }
 
 export async function POST(request: Request) {
@@ -94,6 +111,23 @@ export async function POST(request: Request) {
 
   // ── Upload to S3 ──────────────────────────────────────────────────────────
   try {
+    const bucket = getBucketName();
+    if (
+      !bucket ||
+      !process.env.AWS_REGION ||
+      !process.env.AWS_ACCESS_KEY_ID ||
+      !process.env.AWS_SECRET_ACCESS_KEY
+    ) {
+      return Response.json(
+        {
+          success: false,
+          error:
+            "AWS S3 is not fully configured. Missing bucket, region, or credentials.",
+        },
+        { status: 500 }
+      );
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const safeName = sanitiseFilename(file.name);
     // Prefix with timestamp to avoid key collisions
@@ -102,19 +136,27 @@ export async function POST(request: Request) {
     const s3 = getS3Client();
     await s3.send(
       new PutObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET!,
+        Bucket: bucket,
         Key: key,
         Body: buffer,
         ContentType: file.type,
+        // No ACL — bucket has Object Ownership set to "Bucket owner enforced" which
+        // disables per-object ACLs. Public read is granted via the bucket policy on
+        // the merch/* prefix instead.
       })
     );
 
-    const url = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    const url = `https://${bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
     return Response.json({ success: true, url });
   } catch (err) {
     console.error("[upload-image] S3 upload failed:", err);
+    const detail = err instanceof Error ? err.message : "Unknown S3 error";
     return Response.json(
-      { success: false, error: "Image upload failed. Please try again." },
+      {
+        success: false,
+        error: "Image upload failed. Please try again.",
+        detail: process.env.NODE_ENV === "development" ? detail : undefined,
+      },
       { status: 500 }
     );
   }
