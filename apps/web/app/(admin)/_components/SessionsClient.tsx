@@ -8,7 +8,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import type { SessionWithMeta, InstructorOption } from "../../../admin/sessions/page";
+import type { SessionWithMeta, InstructorOption } from "../admin/sessions/page";
 import type { SessionApprovalStatus, SessionStatus } from "@/types/schedule";
 import type { UserRole } from "@/types/users";
 

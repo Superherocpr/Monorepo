@@ -125,7 +125,8 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
   const { data: rawPayments, count } = await query;
 
   // ── Post-fetch filters (nested column filters) ──────────────────────────────
-  let payments = rawPayments ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let payments: any[] = rawPayments ?? [];
 
   if (customerFilter) {
     const term = customerFilter.toLowerCase();
@@ -187,7 +188,8 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
     .order("last_name", { ascending: true });
 
   const pageData: PaymentsPageData = {
-    payments,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    payments: payments as unknown as any,
     totalCount: count ?? 0,
     totalPages,
     currentPage: page,

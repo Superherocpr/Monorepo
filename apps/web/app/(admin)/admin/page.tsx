@@ -123,7 +123,7 @@ export default async function AdminDashboardPage() {
       .map((session) => ({
         id: session.id,
         starts_at: session.starts_at,
-        class_types: session.class_types as { name: string } | null,
+        class_types: session.class_types as unknown as { name: string } | null,
         ungradedCount: (
           session.roster_records as Array<{ id: string; grade: number | null }>
         ).filter((r) => r.grade === null).length,
@@ -133,13 +133,13 @@ export default async function AdminDashboardPage() {
       <InstructorDashboard
         firstName={profile.first_name}
         todaySessions={
-          (rawTodaySessions ?? []) as Parameters<
+          (rawTodaySessions ?? []) as unknown as Parameters<
             typeof InstructorDashboard
           >[0]["todaySessions"]
         }
         pendingGrades={pendingGrades}
         pendingInvoices={
-          (pendingInvoices ?? []) as Parameters<
+          (pendingInvoices ?? []) as unknown as Parameters<
             typeof InstructorDashboard
           >[0]["pendingInvoices"]
         }
@@ -209,7 +209,7 @@ export default async function AdminDashboardPage() {
         id: string;
         cancelled: boolean;
       }>;
-      const instructor = session.profiles as {
+      const instructor = session.profiles as unknown as {
         first_name: string;
         last_name: string;
       } | null;
@@ -219,8 +219,8 @@ export default async function AdminDashboardPage() {
         ends_at: session.ends_at,
         max_capacity: session.max_capacity,
         enrolledCount: bookings.filter((b) => !b.cancelled).length,
-        class_types: session.class_types as { name: string } | null,
-        locations: session.locations as { name: string } | null,
+        class_types: session.class_types as unknown as { name: string } | null,
+        locations: session.locations as unknown as { name: string } | null,
         instructor,
       };
     });
@@ -230,11 +230,11 @@ export default async function AdminDashboardPage() {
       id: booking.id,
       created_at: booking.created_at,
       booking_source: booking.booking_source,
-      customer: booking.profiles as {
+      customer: booking.profiles as unknown as {
         first_name: string;
         last_name: string;
       } | null,
-      class_sessions: booking.class_sessions as {
+      class_sessions: booking.class_sessions as unknown as {
         starts_at: string;
         class_types: { name: string } | null;
       } | null,
@@ -243,7 +243,7 @@ export default async function AdminDashboardPage() {
     // Filter low stock variants to those actually at or below threshold
     const lowStockVariants: LowStockVariant[] = (rawLowStockVariants ?? [])
       .filter((v) => {
-        const product = v.products as {
+        const product = v.products as unknown as {
           id: string;
           name: string;
           low_stock_threshold: number;
@@ -251,7 +251,7 @@ export default async function AdminDashboardPage() {
         return product && v.stock_quantity <= product.low_stock_threshold;
       })
       .map((v) => {
-        const product = v.products as {
+        const product = v.products as unknown as {
           id: string;
           name: string;
           low_stock_threshold: number;
@@ -368,11 +368,11 @@ export default async function AdminDashboardPage() {
     // Build and sort a unified activity feed from the four recent-activity queries
     const activityItems: ActivityItem[] = [
       ...(recentBookingsActivity ?? []).map((b) => {
-        const customer = b.profiles as {
+        const customer = b.profiles as unknown as {
           first_name: string;
           last_name: string;
         } | null;
-        const classSession = b.class_sessions as {
+        const classSession = b.class_sessions as unknown as {
           class_types: { name: string } | null;
         } | null;
         return {
@@ -385,7 +385,7 @@ export default async function AdminDashboardPage() {
         };
       }),
       ...(recentPaymentsActivity ?? []).map((p) => {
-        const customer = p.profiles as {
+        const customer = p.profiles as unknown as {
           first_name: string;
           last_name: string;
         } | null;

@@ -82,8 +82,8 @@ export default async function RosterImportPage({ params }: PageProps) {
     id: session.id,
     starts_at: session.starts_at,
     max_capacity: session.max_capacity,
-    class_type_name: (session.class_types as { name: string } | null)?.name ?? "Class",
-    location_name: (session.locations as { name: string } | null)?.name ?? "Unknown Location",
+    class_type_name: (session.class_types as unknown as { name: string } | null)?.name ?? "Class",
+    location_name: (session.locations as unknown as { name: string } | null)?.name ?? "Unknown Location",
   };
 
   return (

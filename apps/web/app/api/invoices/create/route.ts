@@ -594,7 +594,7 @@ export async function POST(request: Request) {
   const { data: sessionData } = await adminClient
     .from("class_sessions")
     .select(`
-      id, max_capacity, instructor_id,
+      id, max_capacity, instructor_id, starts_at,
       class_types ( name ),
       locations ( name, city, state ),
       bookings ( id, cancelled ),

@@ -84,8 +84,13 @@ export async function GET(request: Request) {
       (b: { cancelled: boolean }) => !b.cancelled
     );
     const upcomingBookings = activeBookings.filter(
-      (b: { class_sessions: { starts_at: string } }) =>
-        new Date(b.class_sessions.starts_at) >= now
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (b: any) => {
+        const session = Array.isArray(b.class_sessions)
+          ? b.class_sessions[0]
+          : b.class_sessions;
+        return session && new Date(session.starts_at) >= now;
+      }
     );
     const activeCerts = customer.certifications.filter(
       (c: { expires_at: string }) => new Date(c.expires_at) >= now

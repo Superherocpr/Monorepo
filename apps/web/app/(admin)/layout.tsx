@@ -42,7 +42,7 @@ export default async function AdminLayout({
   if (
     !profile ||
     profile.archived ||
-    !STAFF_ROLES.includes(profile.role as AdminRole)
+    !STAFF_ROLES.includes(profile.role as UserRole)
   ) {
     redirect("/");
   }

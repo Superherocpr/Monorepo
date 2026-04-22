@@ -80,7 +80,7 @@ export default async function SessionsPage() {
   const sessions: SessionWithMeta[] = (rawSessions ?? []).map((s) => {
     const bookings = s.bookings as Array<{ id: string; cancelled: boolean }>;
     const enrolled = bookings.filter((b) => !b.cancelled).length;
-    const instructor = s.profiles as {
+    const instructor = s.profiles as unknown as {
       id: string;
       first_name: string;
       last_name: string;
@@ -96,8 +96,8 @@ export default async function SessionsPage() {
       max_capacity: s.max_capacity,
       created_at: s.created_at,
       spotsRemaining: s.max_capacity - enrolled,
-      class_types: s.class_types as { id: string; name: string } | null,
-      locations: s.locations as { name: string } | null,
+      class_types: s.class_types as unknown as { id: string; name: string } | null,
+      locations: s.locations as unknown as { name: string } | null,
       instructor,
     };
   });

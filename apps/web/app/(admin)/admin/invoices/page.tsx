@@ -87,7 +87,7 @@ export default async function InvoicesPage() {
   return (
     <main>
       <InvoicesClient
-        invoices={(invoices ?? []) as InvoiceRow[]}
+        invoices={(invoices ?? []) as unknown as InvoiceRow[]}
         instructors={instructors}
         userRole={role}
         userId={profile.id}

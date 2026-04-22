@@ -88,7 +88,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
       </div>
 
       <InvoiceDetailClient
-        invoice={invoice as InvoiceDetail}
+        invoice={invoice as unknown as InvoiceDetail}
         userRole={role}
         userId={profile.id}
       />

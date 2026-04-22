@@ -128,10 +128,10 @@ function parseCsvFile(file: File): Promise<string[][]> {
  * @returns A 2D array of strings where the first row is the header row.
  */
 async function parseExcelFile(file: File): Promise<string[][]> {
-  const rows = await readXlsxFile(file);
+  const rows = await readXlsxFile(file) as unknown as unknown[][];
   // read-excel-file returns typed values; convert everything to trimmed strings
   return rows.map((row) =>
-    row.map((cell) => (cell === null || cell === undefined ? "" : String(cell).trim()))
+    (row as unknown[]).map((cell) => (cell === null || cell === undefined ? "" : String(cell).trim()))
   );
 }
 

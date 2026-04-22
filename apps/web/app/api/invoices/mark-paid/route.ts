@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const sessionId = (invoice.class_sessions as { id: string } | null)?.id;
+  const sessionId = (invoice.class_sessions as unknown as { id: string } | null)?.id;
 
   if (!sessionId) {
     return Response.json(
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
   });
 
   // Send paid notification email to the instructor
-  const instructorProfile = invoice.profiles as {
+  const instructorProfile = invoice.profiles as unknown as {
     email: string;
     first_name: string;
     last_name: string;

@@ -37,6 +37,8 @@ interface CustomerProfile {
   role: UserRole;
   archived: boolean;
   created_at: string;
+  /** Internal admin notes — never visible to the customer. */
+  customer_notes: string | null;
 }
 
 /** A booking row with joined session, instructor, location, and payment data. */

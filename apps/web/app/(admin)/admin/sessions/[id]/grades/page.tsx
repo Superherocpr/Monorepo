@@ -66,8 +66,8 @@ export default async function GradesPage({ params }: PageProps) {
     id: rawSession.id,
     starts_at: rawSession.starts_at,
     status: rawSession.status as GradingSessionInfo["status"],
-    class_types: rawSession.class_types as { name: string } | null,
-    locations: rawSession.locations as { name: string } | null,
+    class_types: rawSession.class_types as unknown as { name: string } | null,
+    locations: rawSession.locations as unknown as { name: string } | null,
   };
 
   // Fetch roster records — grading source is roster_records only, not bookings

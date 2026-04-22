@@ -109,7 +109,7 @@ export async function POST(request: Request) {
   if (process.env.RESEND_API_KEY) {
     const resend = new Resend(process.env.RESEND_API_KEY);
 
-    const session = invoice.class_sessions as {
+    const session = invoice.class_sessions as unknown as {
       starts_at: string;
       class_types: { name: string } | null;
       locations: { name: string; city: string; state: string } | null;

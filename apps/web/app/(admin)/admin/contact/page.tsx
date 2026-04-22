@@ -124,7 +124,7 @@ export default async function ContactPage({
       </div>
 
       <SubmissionsClient
-        initialSubmissions={(submissions ?? []) as SubmissionWithReplies[]}
+        initialSubmissions={(submissions ?? []) as unknown as SubmissionWithReplies[]}
         filters={activeFilters}
         isZohoConnected={isZohoConnected}
         userRole={profile.role}

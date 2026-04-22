@@ -57,7 +57,7 @@ export default async function ApprovalsPage() {
     // Longest-waiting first; resubmissions may have been submitted long ago
     .order("updated_at", { ascending: true });
 
-  const sessions = (pendingSessions ?? []) as PendingSession[];
+  const sessions = (pendingSessions ?? []) as unknown as PendingSession[];
 
   // Resubmissions: sessions that were previously rejected — identified by a non-null rejection_reason.
   // A session that was never rejected will not have a rejection_reason set.

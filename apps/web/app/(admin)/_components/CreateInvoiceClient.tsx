@@ -139,6 +139,7 @@ export default function CreateInvoiceClient({
   sessions,
   preSelectedSessionId,
   instructorId,
+  instructors,
 }: CreateInvoiceClientProps) {
   // Resolve pre-selected session from the query param if provided
   const preSelected = preSelectedSessionId

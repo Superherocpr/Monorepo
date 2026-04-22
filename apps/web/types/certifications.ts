@@ -75,3 +75,49 @@ export interface CertificationWidgetItem {
   cert_number: string | null;
   cert_types: { name: string };
 }
+
+/**
+ * A certification record as returned by the admin certifications page query.
+ * Includes customer profile, cert type, and optional originating session.
+ * Used exclusively in CertificationsClient on the admin certifications page.
+ */
+export interface CertificationAdminRecord {
+  id: string;
+  issued_at: string;
+  expires_at: string;
+  cert_number: string | null;
+  notes: string | null;
+  reminder_sent: boolean;
+  /** Nullable — certs issued manually have no session. */
+  session_id: string | null;
+  profiles: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+  cert_types: {
+    id: string;
+    name: string;
+    issuing_body: string | null;
+    validity_months: number;
+  };
+  class_sessions: {
+    starts_at: string;
+    class_types: { name: string };
+  } | null;
+}
+
+/**
+ * A cert_type row with a computed count of certifications issued for that type.
+ * Used in the Cert Types tab of the admin certifications page.
+ */
+export interface CertTypeAdminRow {
+  id: string;
+  name: string;
+  description: string | null;
+  validity_months: number;
+  issuing_body: string | null;
+  active: boolean;
+  certCount: number;
+}

@@ -61,11 +61,16 @@ export async function GET(
   }
 
   // Format for dropdown consumption
-  const formatted = (bookings ?? []).map((b) => ({
-    id: b.id,
-    session_name: b.class_sessions.class_types.name,
-    session_date: b.class_sessions.starts_at,
-  }));
+  const formatted = (bookings ?? []).map((b) => {
+    // Supabase types the FK join as array; at runtime it's a single object
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = b.class_sessions as unknown as any;
+    return {
+      id: b.id,
+      session_name: session?.class_types?.name ?? "Class",
+      session_date: session?.starts_at ?? "",
+    };
+  });
 
   return Response.json({ success: true, bookings: formatted });
 }
