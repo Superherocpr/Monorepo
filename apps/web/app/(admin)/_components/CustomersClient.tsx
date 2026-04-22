@@ -403,9 +403,9 @@ export default function CustomersClient({
           </div>
         ) : (
           <>
-            {/* Desktop table */}
-            <div className="hidden overflow-hidden rounded-lg border border-gray-200 md:block">
-              <table className="min-w-full divide-y divide-gray-200">
+            {/* Scrollable table — horizontal scroll on small screens */}
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="min-w-[640px] w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -499,70 +499,6 @@ export default function CustomersClient({
                 </tbody>
               </table>
             </div>
-
-            {/* Mobile card list */}
-            <ul className="space-y-3 md:hidden">
-              {filtered.map((customer) => {
-                const cert = certBadge(
-                  customer.activeCertsCount,
-                  customer.hasExpiringSoon
-                );
-                return (
-                  <li key={customer.id}>
-                    <Link
-                      href={`/admin/customers/${customer.id}`}
-                      className="block rounded-lg border border-gray-200 bg-white p-4 hover:border-red-300 hover:bg-red-50"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {customer.first_name} {customer.last_name}
-                          </p>
-                          <p className="mt-0.5 text-sm text-gray-500">
-                            {customer.email}
-                          </p>
-                          {customer.phone && (
-                            <p className="text-xs text-gray-400">
-                              {customer.phone}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          {customer.archived ? (
-                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
-                              Archived
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                              Active
-                            </span>
-                          )}
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cert.className}`}
-                          >
-                            {cert.label}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-3 text-xs text-gray-500">
-                        <span>
-                          {customer.totalBookingsCount}{" "}
-                          {customer.totalBookingsCount !== 1
-                            ? "bookings"
-                            : "booking"}
-                        </span>
-                        {customer.upcomingBookingsCount > 0 && (
-                          <span className="rounded-full bg-blue-100 px-2 py-0.5 font-semibold text-blue-700">
-                            Upcoming
-                          </span>
-                        )}
-                        <span>Joined {formatJoinDate(customer.created_at)}</span>
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
           </>
         )}
       </div>

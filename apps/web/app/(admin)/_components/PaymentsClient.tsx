@@ -629,9 +629,9 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
         </div>
       ) : (
         <>
-          {/* Desktop table */}
-          <div className="mb-4 hidden overflow-hidden rounded-lg border border-gray-200 bg-white md:block">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
+          {/* Scrollable table for all screen sizes */}
+          <div className="mb-4 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <table className="min-w-[1050px] w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50">
                 <tr>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -753,63 +753,6 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
               </tbody>
             </table>
           </div>
-
-          {/* Mobile card list */}
-          <ul className="mb-4 space-y-3 md:hidden">
-            {payments.map((pmt) => {
-              const session = pmt.booking?.class_sessions ?? null;
-              return (
-                <li
-                  key={pmt.id}
-                  className="rounded-lg border border-gray-200 bg-white p-4"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      {pmt.customer ? (
-                        <Link
-                          href={`/admin/customers/${pmt.customer.id}`}
-                          className="font-semibold text-gray-900 hover:text-red-600"
-                        >
-                          {pmt.customer.first_name} {pmt.customer.last_name}
-                        </Link>
-                      ) : (
-                        <span className="text-sm font-semibold text-gray-400">
-                          Unknown customer
-                        </span>
-                      )}
-                      {session && (
-                        <p className="mt-0.5 text-xs text-gray-500">
-                          {session.class_types.name} ·{" "}
-                          {fmtDate(session.starts_at)}
-                        </p>
-                      )}
-                      <p className="mt-0.5 text-xs text-gray-400">
-                        {fmtDateTime(pmt.created_at)}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="text-sm font-semibold text-gray-900">
-                        {fmtCurrency(pmt.amount)}
-                      </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${typeBadgeClass(pmt.payment_type)}`}
-                      >
-                        {typeLabel(pmt.payment_type)}
-                      </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${statusBadgeClass(pmt.status)}`}
-                      >
-                        {pmt.status}
-                      </span>
-                    </div>
-                  </div>
-                  {pmt.notes && (
-                    <p className="mt-2 text-xs text-gray-400">{pmt.notes}</p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
 
           {/* Pagination */}
           {totalPages > 1 && (
