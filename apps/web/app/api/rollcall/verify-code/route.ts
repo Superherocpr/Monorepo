@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   // Find instructor with this daily_access_code
   const { data: instructor } = await supabase
     .from("profiles")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, access_code_generated_at")
     .eq("daily_access_code", code)
     .eq("role", "instructor")
     // Deactivated instructors should not be findable
@@ -43,6 +43,23 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (!instructor) {
+    return Response.json({ valid: false }, { status: 200 });
+  }
+
+  // Reject codes generated on a previous UTC day — stale codes must not remain valid
+  if (instructor.access_code_generated_at) {
+    const generatedDate = new Date(instructor.access_code_generated_at);
+    const todayUTC = new Date();
+    const codeIsFromToday =
+      generatedDate.getUTCFullYear() === todayUTC.getUTCFullYear() &&
+      generatedDate.getUTCMonth() === todayUTC.getUTCMonth() &&
+      generatedDate.getUTCDate() === todayUTC.getUTCDate();
+
+    if (!codeIsFromToday) {
+      return Response.json({ valid: false }, { status: 200 });
+    }
+  } else {
+    // No generated_at timestamp means the code was never properly set — reject it
     return Response.json({ valid: false }, { status: 200 });
   }
 

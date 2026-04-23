@@ -5,6 +5,7 @@
  */
 
 import Link from "next/link";
+import RollcallCodeWidget from "./RollcallCodeWidget";
 
 /** A single class session happening today for this instructor. */
 interface TodaySession {
@@ -103,28 +104,7 @@ export default function InstructorDashboard({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Widget: Daily Rollcall Code ── */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-            Today's Rollcall Code
-          </h2>
-          {dailyAccessCode ? (
-            <p
-              className="text-5xl font-mono font-bold text-red-600 tracking-widest"
-              aria-label={`Today's rollcall code: ${dailyAccessCode}`}
-            >
-              {dailyAccessCode}
-            </p>
-          ) : (
-            <p className="text-gray-400 text-sm">No code generated yet.</p>
-          )}
-          <p className="text-xs text-gray-400 mt-2">
-            Students enter this at{" "}
-            <Link href="/rollcall" className="underline hover:text-gray-600">
-              /rollcall
-            </Link>{" "}
-            to check in.
-          </p>
-        </div>
+        <RollcallCodeWidget initialCode={dailyAccessCode} />
 
         {/* ── Widget: Today's Classes ── */}
         {todaySessions.length > 0 && (
