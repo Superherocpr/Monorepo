@@ -30,7 +30,9 @@ export async function POST(_request: Request) {
     .eq("id", user.id)
     .single();
 
-  if (!profile || profile.role !== "instructor" || profile.deactivated) {
+  // super_admins are also instructors and may need to refresh their code
+  const isInstructor = profile.role === "instructor" || profile.role === "super_admin";
+  if (!profile || !isInstructor || profile.deactivated) {
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }
 

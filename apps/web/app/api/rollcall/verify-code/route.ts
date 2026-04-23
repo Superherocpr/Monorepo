@@ -37,7 +37,8 @@ export async function POST(request: Request) {
     .from("profiles")
     .select("id, first_name, last_name, access_code_generated_at")
     .eq("daily_access_code", code)
-    .eq("role", "instructor")
+    // super_admins are also instructors and may teach classes
+    .in("role", ["instructor", "super_admin"])
     // Deactivated instructors should not be findable
     .eq("deactivated", false)
     .maybeSingle();

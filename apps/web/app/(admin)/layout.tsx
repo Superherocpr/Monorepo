@@ -58,10 +58,10 @@ export default async function AdminLayout({
   const role = profile.role as UserRole;
 
   // Check if instructor has a connected payment account.
-  // Only run this query for instructors — other roles don't need it.
+  // Runs for instructors AND super_admins, who are also instructors.
   // TODO: replace with full onboarding flow when ready
   let showPaymentBanner = false;
-  if (role === "instructor") {
+  if (role === "instructor" || role === "super_admin") {
     const { count } = await supabase
       .from("instructor_payment_accounts")
       .select("id", { count: "exact", head: true })

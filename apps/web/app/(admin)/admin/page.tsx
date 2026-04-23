@@ -158,6 +158,8 @@ export default async function AdminDashboardPage() {
       { data: rawRecentBookings },
       { count: unansweredContactCount },
       { data: rawLowStockVariants },
+      // super_admins are also instructors — fetch their daily code
+      { data: selfProfile },
     ] = await Promise.all([
       supabase
         .from("class_sessions")
@@ -201,6 +203,9 @@ export default async function AdminDashboardPage() {
         .from("product_variants")
         .select("id, size, stock_quantity, products ( id, name, low_stock_threshold )")
         .order("stock_quantity"),
+
+      // Daily access code — only relevant for super_admin (instructors fetch this above)
+      supabase.from("profiles").select("daily_access_code").eq("id", user.id).single(),
     ]);
 
     // Derive enrolledCount from non-cancelled bookings per session
@@ -427,6 +432,7 @@ export default async function AdminDashboardPage() {
           invoiceRevenueThisMonth,
         }}
         recentActivity={activityItems}
+        dailyAccessCode={selfProfile?.daily_access_code ?? null}
       />
     );
   }

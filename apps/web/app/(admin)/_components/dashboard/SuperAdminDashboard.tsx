@@ -7,6 +7,7 @@
 import ManagerDashboard, {
   type ManagerDashboardProps,
 } from "./ManagerDashboard";
+import RollcallCodeWidget from "./RollcallCodeWidget";
 
 /** The four top-level stats shown in the quick stats strip. */
 export interface QuickStats {
@@ -27,6 +28,8 @@ export interface ActivityItem {
 export interface SuperAdminDashboardProps extends ManagerDashboardProps {
   quickStats: QuickStats;
   recentActivity: ActivityItem[];
+  /** Daily rollcall code — super_admins are also instructors. */
+  dailyAccessCode: string | null;
 }
 
 /** Icon labels per activity type — text-based since we're keeping deps minimal. */
@@ -75,6 +78,7 @@ function formatCurrency(amount: number): string {
 export default function SuperAdminDashboard({
   quickStats,
   recentActivity,
+  dailyAccessCode,
   ...managerProps
 }: SuperAdminDashboardProps) {
   return (
@@ -120,6 +124,11 @@ export default function SuperAdminDashboard({
             {formatCurrency(quickStats.invoiceRevenueThisMonth)}
           </p>
         </div>
+      </div>
+
+      {/* ── Rollcall Code (super_admin is also an instructor) ── */}
+      <div className="lg:w-1/2">
+        <RollcallCodeWidget initialCode={dailyAccessCode} />
       </div>
 
       {/* ── Recent Activity Feed ── */}

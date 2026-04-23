@@ -37,7 +37,8 @@ export async function POST(request: Request) {
   const { data: instructors, error: fetchError } = await adminSupabase
     .from("profiles")
     .select("id")
-    .eq("role", "instructor")
+    // super_admins are also instructors and need daily codes
+    .in("role", ["instructor", "super_admin"])
     .eq("deactivated", false);
 
   if (fetchError || !instructors) {
