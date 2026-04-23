@@ -3,7 +3,8 @@
 /**
  * SettingsClient component
  * Full client component owning all state and mutations for the settings page.
- * Sections: Appearance (dark mode), Class Types, Preset Grades, Zoho Mail.
+ * Sections: Appearance (dark mode), Class Types, Preset Grades, Zoho Mail,
+ *           Instructor Payment Routing.
  * Used by: /admin/settings/page.tsx
  */
 
@@ -11,11 +12,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import ClassTypePanel from "./ClassTypePanel";
-import type { ClassType, PresetGrade } from "../page";
+import type { ClassType, PresetGrade, InstructorRoutingRow } from "../page";
 
 interface SettingsClientProps {
   classTypes: ClassType[];
   presetGrades: PresetGrade[];
+  instructors: InstructorRoutingRow[];
   zohoConnected: boolean;
   zohoEmail: string | null;
   /** Value of the ?zoho= query param — "connected" | "error" | null */
@@ -57,6 +59,7 @@ interface EditingGrade {
 const SettingsClient: React.FC<SettingsClientProps> = ({
   classTypes: initialClassTypes,
   presetGrades: initialPresetGrades,
+  instructors: initialInstructors,
   zohoConnected: initialZohoConnected,
   zohoEmail,
   zohoParam,
@@ -102,6 +105,62 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   // ── Zoho ───────────────────────────────────────────────────────────────────
   const [zohoConnected, setZohoConnected] = useState(initialZohoConnected);
   const [disconnectingZoho, setDisconnectingZoho] = useState(false);
+
+  // ── Instructor payment routing ─────────────────────────────────────────────
+  const [instructors, setInstructors] = useState<InstructorRoutingRow[]>(initialInstructors);
+  // Tracks which instructor row's toggle is currently saving — disables that row's buttons
+  const [savingRoutingId, setSavingRoutingId] = useState<string | null>(null);
+
+  /**
+   * Updates an instructor's payment_routing preference. Optimistically applies
+   * the change, then rolls back on error.
+   * @param instructorId - UUID of the instructor profile to update.
+   * @param next - New routing value.
+   */
+  async function handleRoutingChange(
+    instructorId: string,
+    next: "instructor" | "business"
+  ) {
+    const previous = instructors.find((i) => i.id === instructorId)?.payment_routing;
+    if (!previous || previous === next) return;
+
+    setSavingRoutingId(instructorId);
+    setInstructors((prev) =>
+      prev.map((i) => (i.id === instructorId ? { ...i, payment_routing: next } : i))
+    );
+
+    try {
+      const res = await fetch(`/api/settings/instructor-routing/${instructorId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_routing: next }),
+      });
+
+      if (!res.ok) {
+        // Roll back on failure
+        setInstructors((prev) =>
+          prev.map((i) =>
+            i.id === instructorId ? { ...i, payment_routing: previous } : i
+          )
+        );
+        showToast("error", "Failed to update payment routing.");
+        return;
+      }
+
+      const updated = instructors.find((i) => i.id === instructorId);
+      const name = updated ? `${updated.first_name} ${updated.last_name}` : "instructor";
+      showToast("success", `Payment routing updated for ${name}.`);
+    } catch {
+      setInstructors((prev) =>
+        prev.map((i) =>
+          i.id === instructorId ? { ...i, payment_routing: previous } : i
+        )
+      );
+      showToast("error", "Failed to update payment routing.");
+    } finally {
+      setSavingRoutingId(null);
+    }
+  }
 
   // ── Toast ──────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<Toast | null>(null);
@@ -769,6 +828,113 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
             </div>
           )}
         </div>
+      </section>
+
+      <div className="border-t border-gray-200 dark:border-gray-700" />
+
+      {/* ── Section 5: Instructor Payment Routing ──────────────────────────── */}
+      <section aria-labelledby="section-routing">
+        <div className="mb-4">
+          <h2
+            id="section-routing"
+            className="text-lg font-semibold text-gray-900 dark:text-white"
+          >
+            Instructor Payment Routing
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            Control where online booking payments are sent for each instructor. Defaults
+            to the instructor&apos;s own PayPal account when one is connected.
+          </p>
+        </div>
+
+        {instructors.length === 0 ? (
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 text-sm text-gray-500 dark:text-gray-400">
+            No active instructors found.
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700">
+            {instructors.map((inst) => {
+              const fallbackActive =
+                inst.payment_routing === "instructor" && !inst.has_active_paypal;
+              const businessActive = inst.payment_routing === "business";
+              const isSaving = savingRoutingId === inst.id;
+
+              return (
+                <div key={inst.id} className="p-5 flex flex-col gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {inst.first_name} {inst.last_name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {inst.email}
+                      </p>
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <span
+                          className={`inline-block h-2 w-2 rounded-full ${
+                            inst.has_active_paypal ? "bg-green-500" : "bg-gray-300"
+                          }`}
+                          aria-hidden
+                        />
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {inst.has_active_paypal ? "PayPal connected" : "No PayPal"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Pill toggle */}
+                    <div
+                      role="radiogroup"
+                      aria-label="Payment routing"
+                      className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-full p-0.5 shrink-0"
+                    >
+                      <button
+                        role="radio"
+                        aria-checked={inst.payment_routing === "instructor"}
+                        onClick={() => handleRoutingChange(inst.id, "instructor")}
+                        disabled={isSaving}
+                        className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-colors disabled:opacity-50 ${
+                          inst.payment_routing === "instructor"
+                            ? "bg-white dark:bg-gray-900 text-red-600 shadow-sm"
+                            : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                        }`}
+                      >
+                        Instructor PayPal
+                      </button>
+                      <button
+                        role="radio"
+                        aria-checked={inst.payment_routing === "business"}
+                        onClick={() => handleRoutingChange(inst.id, "business")}
+                        disabled={isSaving}
+                        className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-colors disabled:opacity-50 ${
+                          inst.payment_routing === "business"
+                            ? "bg-white dark:bg-gray-900 text-red-600 shadow-sm"
+                            : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                        }`}
+                      >
+                        Business PayPal
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Inline warnings */}
+                  {fallbackActive && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded px-3 py-1.5">
+                      Will fall back to business PayPal until this instructor connects a
+                      PayPal account at <code>/admin/profile/payment</code>.
+                    </p>
+                  )}
+                  {businessActive && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Online booking payments always go to the business account for this
+                      instructor.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* Instructor payment account note */}

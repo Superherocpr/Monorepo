@@ -34,6 +34,17 @@ export interface PresetGrade {
   label: string;
 }
 
+/** An instructor row used by the Instructor Payment Routing section. */
+export interface InstructorRoutingRow {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  payment_routing: "instructor" | "business";
+  /** True if the instructor has at least one active PayPal account connected. */
+  has_active_paypal: boolean;
+}
+
 /**
  * Server component — fetches settings data and passes it to SettingsClient.
  * Redirects non-super-admins to /admin.
@@ -61,8 +72,8 @@ export default async function SettingsPage({
     redirect("/admin");
   }
 
-  // Fetch class types and preset grades in parallel
-  const [{ data: classTypes }, { data: presetGrades }] = await Promise.all([
+  // Fetch class types, preset grades, and instructor routing data in parallel
+  const [{ data: classTypes }, { data: presetGrades }, { data: instructorRows }] = await Promise.all([
     supabase
       .from("class_types")
       .select("id, name, description, duration_minutes, max_capacity, price, active")
@@ -71,7 +82,31 @@ export default async function SettingsPage({
       .from("preset_grades")
       .select("id, value, label")
       .order("value"),
+    // super_admin profiles also instruct — include them so their routing can be set
+    supabase
+      .from("profiles")
+      .select(
+        "id, first_name, last_name, email, payment_routing, role, instructor_payment_accounts ( platform, is_active )"
+      )
+      .in("role", ["instructor", "super_admin"])
+      .eq("deactivated", false)
+      .order("last_name"),
   ]);
+
+  // Reduce the joined accounts to a single boolean per instructor for the UI
+  const instructors: InstructorRoutingRow[] = (instructorRows ?? []).map((row) => {
+    const accounts =
+      (row.instructor_payment_accounts as { platform: string; is_active: boolean }[] | null) ?? [];
+    const hasPayPal = accounts.some((a) => a.platform === "paypal" && a.is_active);
+    return {
+      id: row.id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      email: row.email,
+      payment_routing: (row.payment_routing as "instructor" | "business") ?? "instructor",
+      has_active_paypal: hasPayPal,
+    };
+  });
 
   // Check Zoho connection status — account ID is only set when connected
   const zohoAccountId = await getSetting("zoho_account_id");
@@ -84,6 +119,7 @@ export default async function SettingsPage({
     <SettingsClient
       classTypes={(classTypes ?? []) as ClassType[]}
       presetGrades={(presetGrades ?? []) as PresetGrade[]}
+      instructors={instructors}
       zohoConnected={Boolean(zohoAccountId)}
       zohoEmail={zohoEmail}
       zohoParam={zohoParam}

@@ -92,7 +92,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
     .select(
       `
       id, amount, status, payment_type,
-      paypal_transaction_id, notes, created_at, logged_by,
+      paypal_transaction_id, notes, routing_note, created_at, logged_by,
       customer:profiles!customer_id (
         id, first_name, last_name, email
       ),

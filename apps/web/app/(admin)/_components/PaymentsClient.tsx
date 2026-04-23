@@ -24,6 +24,7 @@ interface PaymentRow {
   payment_type: string;
   paypal_transaction_id: string | null;
   notes: string | null;
+  routing_note: string | null;
   created_at: string;
   logged_by: string | null;
   customer: {
@@ -129,6 +130,19 @@ function fmtCurrency(amount: number): string {
     style: "currency",
     currency: "USD",
   }).format(amount);
+}
+
+/**
+ * Returns a Tailwind text-color class for a payments.routing_note value.
+ * Green = routed to instructor as intended.
+ * Amber = fallback occurred (instructor wanted but no PayPal connected).
+ * Gray  = intentional business routing or unknown note.
+ * @param note - The routing_note string from the payments row.
+ */
+function routingNoteClass(note: string): string {
+  if (note.includes("instructor PayPal")) return "text-green-600";
+  if (note.includes("instructor has no")) return "text-amber-600";
+  return "text-gray-400";
 }
 
 /**
@@ -745,6 +759,14 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
                         )}
                         {pmt.notes && (
                           <p className="text-xs text-gray-400">{pmt.notes}</p>
+                        )}
+                        {pmt.routing_note && (
+                          <p
+                            className={`text-xs ${routingNoteClass(pmt.routing_note)}`}
+                            title="Payment routing audit note"
+                          >
+                            {pmt.routing_note}
+                          </p>
                         )}
                       </td>
                     </tr>

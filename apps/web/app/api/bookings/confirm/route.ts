@@ -13,6 +13,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { getPayPalAccessToken } from "@/lib/paypal";
+import { resolvePaymentRouting } from "@/lib/resolve-payment-routing";
 import { Resend } from "resend";
 
 const PAYPAL_API_BASE =
@@ -147,7 +148,12 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Failed to create booking" }, { status: 500 });
   }
 
-  // Step 4: Create payment record
+  // Step 4: Create payment record (with routing audit note)
+  // Routing is resolved here independently of order creation — the order was
+  // already created with the correct PayPal-Auth-Assertion, but we record the
+  // routing decision again on the payment row for the audit trail.
+  const routing = await resolvePaymentRouting(supabase, sessionId);
+
   await supabase
     .from("payments")
     .insert({
@@ -157,6 +163,7 @@ export async function POST(request: Request) {
       status: "completed",
       payment_type: "online",
       paypal_transaction_id: paypalTransactionId,
+      routing_note: routing.routingNote,
     });
 
   // Step 5: Send booking confirmation + payment receipt email
@@ -180,6 +187,13 @@ export async function POST(request: Request) {
       hour12: true,
     });
 
+    // Derive a human-readable "Payment processed by" label from the routing note.
+    // "Routed to instructor PayPal — Danny Hedgeman" → "Danny Hedgeman via PayPal"
+    // Anything else (business or fallback) → "Superhero CPR via PayPal"
+    const paymentProcessor = routing.instructorPayPalAccountId
+      ? `${routing.routingNote.replace("Routed to instructor PayPal — ", "")} via PayPal`
+      : "Superhero CPR via PayPal";
+
     await resend.emails
       .send({
         from: "Superhero CPR <noreply@superherocpr.com>",
@@ -195,6 +209,7 @@ export async function POST(request: Request) {
             <tr><td><strong>Time:</strong></td><td>${formattedTime}</td></tr>
             <tr><td><strong>Location:</strong></td><td>${locationName}<br>${locationAddress}<br>${locationCity}, ${locationState} ${locationZip}</td></tr>
             <tr><td><strong>Amount paid:</strong></td><td>$${(amount as number).toFixed(2)}</td></tr>
+            <tr><td><strong>Payment processed by:</strong></td><td>${paymentProcessor}</td></tr>
             <tr><td><strong>Transaction ID:</strong></td><td>${paypalTransactionId ?? "N/A"}</td></tr>
           </table>
           <p>Please arrive a few minutes early. Wear comfortable clothing.</p>
