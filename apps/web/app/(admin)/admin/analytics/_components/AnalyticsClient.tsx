@@ -33,6 +33,8 @@ import {
   AlertTriangle,
   Download,
   CheckCircle2,
+  ChevronDown,
+  LayoutDashboard,
 } from "lucide-react";
 import type { AnalyticsData } from "./analyticsData";
 import { OverviewCard } from "./OverviewCard";
@@ -108,19 +110,34 @@ function EmptyState({ icon: Icon }: { icon: React.ComponentType<{ className?: st
 
 // ── Section heading ───────────────────────────────────────────────────────────
 
-/** Renders a labelled section heading with a Lucide icon. */
+/** Renders a collapsible section heading button with a Lucide icon and chevron indicator. */
 function SectionHeading({
   icon: Icon,
   label,
+  isCollapsed,
+  onToggle,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
+  isCollapsed: boolean;
+  onToggle: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 mb-4">
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex items-center gap-2 w-full text-left mb-4 group"
+      aria-expanded={!isCollapsed}
+    >
       <Icon className="w-5 h-5 text-red-600" />
-      <h2 className="text-lg font-semibold text-gray-900">{label}</h2>
-    </div>
+      <h2 className="text-lg font-semibold text-gray-900 flex-1">{label}</h2>
+      <ChevronDown
+        className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+          isCollapsed ? "-rotate-90" : ""
+        }`}
+        aria-hidden="true"
+      />
+    </button>
   );
 }
 
@@ -220,6 +237,20 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
   const [customTo, setCustomTo] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Tracks which sections are collapsed — all collapsed by default
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
+    overview: true,
+    revenue: true,
+    classes: true,
+    students: true,
+    invoices: true,
+    merch: true,
+  });
+
+  /** Toggles the collapsed state for a named section. */
+  const toggleSection = useCallback((key: string) => {
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   /**
    * Fetches fresh analytics data for a given range and updates state.
@@ -366,27 +397,43 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
       </div>
 
       {/* ── Section 1: Overview strip ─────────────────────────────────── */}
-      <div
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10"
-        aria-label="Overview metrics"
-      >
-        {isPending ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="animate-pulse bg-gray-100 rounded-lg h-24" />
-          ))
-        ) : (
-          <>
-            <OverviewCard label="Total Revenue" card={data.totalRevenue} currency />
-            <OverviewCard label="Online Booking Revenue" card={data.onlineRevenue} currency />
-            <OverviewCard label="Invoice Revenue" card={data.invoiceRevenue} currency />
-            <OverviewCard label="Students Trained" card={data.studentsTrained} />
-          </>
-        )}
+      <div className="mb-10">
+        <SectionHeading
+          icon={LayoutDashboard}
+          label="Overview"
+          isCollapsed={!!collapsed["overview"]}
+          onToggle={() => toggleSection("overview")}
+        />
+        <div className={collapsed["overview"] ? "hidden" : ""}>
+          <div
+            className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+            aria-label="Overview metrics"
+          >
+            {isPending ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="animate-pulse bg-gray-100 rounded-lg h-24" />
+              ))
+            ) : (
+              <>
+                <OverviewCard label="Total Revenue" card={data.totalRevenue} currency />
+                <OverviewCard label="Online Booking Revenue" card={data.onlineRevenue} currency />
+                <OverviewCard label="Invoice Revenue" card={data.invoiceRevenue} currency />
+                <OverviewCard label="Students Trained" card={data.studentsTrained} />
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── Section 2: Revenue ───────────────────────────────────────── */}
       <div className="mb-10">
-        <SectionHeading icon={TrendingUp} label="Revenue" />
+        <SectionHeading
+          icon={TrendingUp}
+          label="Revenue"
+          isCollapsed={!!collapsed["revenue"]}
+          onToggle={() => toggleSection("revenue")}
+        />
+        <div className={collapsed["revenue"] ? "hidden" : ""}>
 
         {/* Revenue over time — full width */}
         <Card className="mb-4">
@@ -453,11 +500,18 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             )}
           </Card>
         </div>
+        </div>
       </div>
 
       {/* ── Section 3: Classes ───────────────────────────────────────── */}
       <div className="mb-10">
-        <SectionHeading icon={BarChart2} label="Classes" />
+        <SectionHeading
+          icon={BarChart2}
+          label="Classes"
+          isCollapsed={!!collapsed["classes"]}
+          onToggle={() => toggleSection("classes")}
+        />
+        <div className={collapsed["classes"] ? "hidden" : ""}>
 
         {/* Classes per month — full width */}
         <Card className="mb-4">
@@ -551,11 +605,18 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             </Card>
           </div>
         </div>
+        </div>
       </div>
 
       {/* ── Section 4: Students ──────────────────────────────────────── */}
       <div className="mb-10">
-        <SectionHeading icon={Users} label="Students" />
+        <SectionHeading
+          icon={Users}
+          label="Students"
+          isCollapsed={!!collapsed["students"]}
+          onToggle={() => toggleSection("students")}
+        />
+        <div className={collapsed["students"] ? "hidden" : ""}>
 
         {/* New vs returning / cert renewal */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
@@ -630,11 +691,18 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             </div>
           )}
         </Card>
+        </div>
       </div>
 
       {/* ── Section 5: Invoices ──────────────────────────────────────── */}
       <div className="mb-10">
-        <SectionHeading icon={FileText} label="Invoices" />
+        <SectionHeading
+          icon={FileText}
+          label="Invoices"
+          isCollapsed={!!collapsed["invoices"]}
+          onToggle={() => toggleSection("invoices")}
+        />
+        <div className={collapsed["invoices"] ? "hidden" : ""}>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           {/* Conversion rate */}
@@ -739,11 +807,18 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             )}
           </Card>
         </div>
+        </div>
       </div>
 
       {/* ── Section 6: Merch ─────────────────────────────────────────── */}
       <div className="mb-10">
-        <SectionHeading icon={ShoppingBag} label="Merch" />
+        <SectionHeading
+          icon={ShoppingBag}
+          label="Merch"
+          isCollapsed={!!collapsed["merch"]}
+          onToggle={() => toggleSection("merch")}
+        />
+        <div className={collapsed["merch"] ? "hidden" : ""}>
 
         {/* Merch revenue over time — full width */}
         <Card className="mb-4">
@@ -834,6 +909,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             All variants above low stock threshold.
           </div>
         )}
+        </div>
       </div>
     </div>
   );
