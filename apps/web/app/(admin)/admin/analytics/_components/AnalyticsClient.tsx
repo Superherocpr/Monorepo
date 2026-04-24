@@ -791,9 +791,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
                     innerRadius={60}
                     outerRadius={100}
                     dataKey="value"
-                    label={({ name, percent }: { name: string; percent: number }) =>
-                      `${name} ${Math.round(percent * 100)}%`
-                    }
+                    label={(props) => `${props.name ?? ""} ${Math.round((props.percent ?? 0) * 100)}%`}
                     labelLine={false}
                   >
                     {invoicePieData.map((_entry, i) => (
