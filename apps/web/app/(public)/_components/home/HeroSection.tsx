@@ -46,19 +46,62 @@ export default async function HeroSection() {
 
   return (
     <section
-      className="relative flex items-center justify-center min-h-screen px-4 text-center"
+      className="relative flex items-center justify-center min-h-screen px-4 text-center overflow-hidden"
       aria-label="Hero"
     >
       {/*
-       * TODO: replace this placeholder background with the final CPR/first-aid hero image.
-       * Save image to /public/images/hero-bg.jpg and update the className below.
+       * Hero background — comic book city skyline.
+       * background-size is fixed (not cover) so the image never scales with the container;
+       * it stays at its natural pixel size and is centered.
        */}
       <div
-        className="absolute inset-0 bg-gray-900"
+        className="absolute inset-0"
+        style={{
+          backgroundImage: "url('/images/144645544_10167552.jpg')",
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "center center",
+          backgroundSize: "auto",
+          backgroundColor: "#f5a623", // fallback that matches the image's amber sky
+        }}
         aria-hidden="true"
       />
       {/* Dark overlay for text readability */}
       <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
+
+      {/*
+       * Female hero — anchored to the left edge.
+       * translateY(50%) pushes the image down so only the top half is visible;
+       * overflow-hidden on the section clips the rest.
+       */}
+      <div
+        className="absolute bottom-0 left-0 pointer-events-none select-none"
+        style={{ transform: "translateY(50%)" }}
+        aria-hidden="true"
+      >
+        <img
+          src="/images/Her_CPR.png"
+          alt=""
+          className="h-[85vh] w-auto object-contain"
+        />
+      </div>
+
+      {/*
+       * Male hero — anchored to the right edge.
+       * scaleX(-1) mirrors him so he faces left, toward the female hero.
+       * Same translateY(50%) crop logic as the female.
+       */}
+      <div
+        className="absolute bottom-0 right-0 pointer-events-none select-none"
+        style={{ transform: "translateY(50%)" }}
+        aria-hidden="true"
+      >
+        <img
+          src="/images/Him_CPR.png"
+          alt=""
+          className="h-[85vh] w-auto object-contain"
+          style={{ transform: "scaleX(-1)" }}
+        />
+      </div>
 
       <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center gap-6">
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-tight">
