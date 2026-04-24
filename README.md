@@ -58,7 +58,7 @@ Each environment has its own Supabase project and S3 bucket. Environment variabl
 
 **1. Clone and install**
 ```bash
-git clone <repo-url>
+git clone https://github.com/Superherocpr/Monorepo.git
 cd Monorepo/apps/web
 npm install
 ```

@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Font family — Inter loaded via next/font/google, referenced by CSS var */
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+
+  /*
+   * Dark mode is class-based (toggled via JS on document.documentElement).
+   * See DESIGN-SYSTEM.md §6 for dark mode strategy.
+   */
+}
+
+/*
+ * Dark mode class strategy.
+ * The admin layout injects a script in <head> to read localStorage['theme']
+ * and add/remove the 'dark' class on <html> before first paint.
+ */
+@variant dark (&:where(.dark, .dark *));
+
+/* Smooth scroll for anchor links — e.g. /classes#bls from the home page */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-white text-gray-900 antialiased;
+}
+
+.dark body {
+  @apply bg-gray-950 text-white;
+}
