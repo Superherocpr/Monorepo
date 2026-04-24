@@ -60,7 +60,7 @@ export async function PATCH(
   // ── Restore Supabase auth login ────────────────────────────────────────────
   // ban_duration: '0' lifts any active ban — the user can log in again
   const adminSupabase = await createAdminClient();
-  await adminSupabase.auth.admin.updateUser(targetId, { ban_duration: "0" });
+  await adminSupabase.auth.admin.updateUserById(targetId, { ban_duration: "0" });
 
   return Response.json({ success: true });
 }
