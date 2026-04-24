@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
         hostname: "superherocpr-assets-staging.s3.us-east-2.amazonaws.com",
         pathname: "/**",
       },
+      {
+        // Placeholder images used in staging/seed data only — not for production
+        protocol: "https",
+        hostname: "placehold.co",
+        pathname: "/**",
+      },
     ],
   },
 };
