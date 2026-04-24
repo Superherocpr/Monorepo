@@ -25,8 +25,8 @@ export default function NewSubmissionsSection({ sessions }: NewSubmissionsSectio
       <h2 className="text-lg font-semibold text-gray-900 mb-4">New Submissions</h2>
       <div className="space-y-4">
         {sessions.map((session) => {
-          const waitTime = getWaitTime(session.updated_at);
-          const isLongWait = isWaitOver24Hours(session.updated_at);
+          const waitTime = getWaitTime(session.created_at);
+          const isLongWait = isWaitOver24Hours(session.created_at);
           return (
             <ApprovalCard
               key={session.id}

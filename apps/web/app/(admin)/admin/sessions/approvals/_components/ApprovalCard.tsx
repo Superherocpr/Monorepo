@@ -12,8 +12,8 @@ export interface PendingSession {
   id: string;
   starts_at: string;
   ends_at: string;
-  /** ISO string of the last update — used to compute wait time. */
-  updated_at: string;
+  /** ISO string of when the session was submitted — used to compute wait time. */
+  created_at: string;
   rejection_reason: string | null;
   class_types: { name: string } | null;
   /** Instructor profile joined as `profiles`. */

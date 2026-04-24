@@ -34,8 +34,8 @@ export default function ResubmissionsSection({ sessions }: ResubmissionsSectionP
 
       <div className="space-y-4">
         {sessions.map((session) => {
-          const waitTime = getWaitTime(session.updated_at);
-          const isLongWait = isWaitOver24Hours(session.updated_at);
+          const waitTime = getWaitTime(session.created_at);
+          const isLongWait = isWaitOver24Hours(session.created_at);
           return (
             <ApprovalCard
               key={session.id}

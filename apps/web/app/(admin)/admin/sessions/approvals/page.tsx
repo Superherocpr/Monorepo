@@ -48,14 +48,14 @@ export default async function ApprovalsPage() {
   const { data: pendingSessions } = await supabase
     .from("class_sessions")
     .select(`
-      id, starts_at, ends_at, rejection_reason, updated_at,
+      id, starts_at, ends_at, rejection_reason, created_at,
       class_types ( name ),
       profiles ( first_name, last_name ),
       locations ( name, city, state )
     `)
     .eq("approval_status", "pending_approval")
-    // Longest-waiting first; resubmissions may have been submitted long ago
-    .order("updated_at", { ascending: true });
+    // Longest-waiting first; class_sessions has no updated_at column — ordered by created_at
+    .order("created_at", { ascending: true });
 
   const sessions = (pendingSessions ?? []) as unknown as PendingSession[];
 
