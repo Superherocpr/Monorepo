@@ -43,15 +43,19 @@ export default function BookPaymentPage() {
 
   /**
    * Called by PayPalOneTimePaymentButton createOrder callback.
-   * Calls our server to create the PayPal order and returns { orderId }.
+   * Calls our server to create the PayPal order (with routing resolved server-side
+   * to either the instructor's PayPal or the business PayPal) and returns { orderId }.
    */
   async function handlePayPalCreate() {
-    if (!store?.sessionDetails) throw new Error("No session selected");
+    if (!store?.sessionDetails || !store.sessionId) throw new Error("No session selected");
 
     const response = await fetch("/api/paypal/create-booking-order", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        // sessionId is required server-side to resolve payment routing —
+        // the merchant ID is never trusted from the client
+        sessionId: store.sessionId,
         amount: store.sessionDetails.price,
         className: store.sessionDetails.className,
       }),
