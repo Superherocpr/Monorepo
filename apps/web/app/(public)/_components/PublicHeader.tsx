@@ -59,15 +59,19 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 3-column grid ensures the nav is always centered relative to the full header width,
             regardless of the logo and auth section having different widths. */}
-        <div className="grid grid-cols-3 items-center h-16">
+        <div className="grid grid-cols-3 items-center h-20">
 
-          {/* Logo — TODO: replace text with actual logo image once brand assets are ready */}
+          {/* Logo — horizontal brand image at /public/images/SHCPRTextTemplate.png */}
           <Link
             href="/"
-            className="flex items-center gap-1 font-extrabold text-lg tracking-tight hover:opacity-80 transition-opacity"
+            className="flex items-center"
+            aria-label="Superhero CPR home"
           >
-            <span className="text-red-600">Superhero</span>
-            <span className="text-gray-900 dark:text-white">CPR</span>
+            <img
+              src="/images/SHCPRTextTemplate.png"
+              alt="Superhero CPR"
+              className="h-[72px] w-auto object-contain"
+            />
           </Link>
 
           {/* Desktop nav links — centered column */}
