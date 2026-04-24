@@ -31,7 +31,7 @@ export default async function SocialFeedSection() {
             See what's happening at Superhero CPR on Facebook
           </p>
           <a
-            href="https://www.facebook.com/Super-Hero-CPR-298899580537162/"
+            href="https://www.facebook.com/1HeroWay"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm font-medium text-red-600 hover:text-red-700 transition-colors duration-150"
