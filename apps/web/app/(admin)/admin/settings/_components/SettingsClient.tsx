@@ -162,6 +162,39 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
     }
   }
 
+  // ── Social feed refresh ───────────────────────────────────────────────────
+  const [refreshingFeed, setRefreshingFeed] = useState(false);
+  const [lastRefreshCount, setLastRefreshCount] = useState<number | null>(null);
+
+  /**
+   * Calls POST /api/social/refresh to pull the latest photo posts from
+   * Facebook and populate the social_feed_cache table.
+   * Side effects: updates social_feed_cache rows in the database.
+   */
+  async function handleRefreshFeed() {
+    setRefreshingFeed(true);
+    setLastRefreshCount(null);
+    try {
+      const res = await fetch("/api/social/refresh", { method: "POST" });
+      const json = (await res.json()) as { upserted?: number; error?: string; message?: string };
+      if (!res.ok) {
+        showToast("error", json.error ?? "Failed to refresh social feed.");
+        return;
+      }
+      setLastRefreshCount(json.upserted ?? 0);
+      showToast(
+        "success",
+        json.upserted
+          ? `Social feed updated — ${json.upserted} post${json.upserted !== 1 ? "s" : ""} cached.`
+          : "No new photo posts found on the Facebook page."
+      );
+    } catch {
+      showToast("error", "Failed to refresh social feed.");
+    } finally {
+      setRefreshingFeed(false);
+    }
+  }
+
   // ── Toast ──────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<Toast | null>(null);
 
@@ -942,6 +975,43 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         Instructors manage their payment account connections from their own profile
         settings.
       </div>
+
+      {/* ── Section 6: Social Feed ─────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Social Feed
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            The Facebook photo strip on the home page is powered by a cache that
+            refreshes automatically every day. Use this button to pull the latest
+            posts immediately.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleRefreshFeed}
+            disabled={refreshingFeed}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors duration-150"
+          >
+            {refreshingFeed ? "Refreshing…" : "Refresh Feed Now"}
+          </button>
+          {lastRefreshCount !== null && (
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {lastRefreshCount} post{lastRefreshCount !== 1 ? "s" : ""} cached
+            </span>
+          )}
+        </div>
+
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          The feed also refreshes automatically at 3:00 AM UTC daily via a
+          scheduled job. Requires{" "}
+          <code className="font-mono">FACEBOOK_PAGE_ACCESS_TOKEN</code> and{" "}
+          <code className="font-mono">FACEBOOK_PAGE_ID</code> to be set in the
+          environment.
+        </p>
+      </section>
 
       {/* Class type add/edit panel */}
       <ClassTypePanel
