@@ -6,11 +6,30 @@
  * Used by: AnalyticsClient.tsx (all Recharts chart components)
  */
 
-import type { TooltipProps } from "recharts";
-import type { ValueType, NameType } from "recharts/types/component/DefaultTooltipContent";
+/**
+ * A single entry in the tooltip payload, as injected by Recharts at runtime.
+ * Defined explicitly here to avoid depending on Recharts' frequently-changed internal types.
+ */
+interface PayloadEntry {
+  name?: string;
+  value?: string | number;
+  color?: string;
+}
 
-interface Props extends TooltipProps<ValueType, NameType> {
-  /** Format values as currency (prepends $). Default false. */
+/**
+ * Props for ChartTooltip.
+ * active, payload, and label are injected by Recharts at runtime when used as
+ * <Tooltip content={<ChartTooltip />} />. They are optional because TypeScript
+ * cannot verify what Recharts injects at the call site.
+ */
+interface Props {
+  /** Whether the tooltip is currently visible. Injected by Recharts. */
+  active?: boolean;
+  /** Data entries to display. Injected by Recharts. */
+  payload?: PayloadEntry[];
+  /** The x-axis label for this data point. Injected by Recharts. */
+  label?: string | number;
+  /** Format values as USD currency. Default false. */
   currency?: boolean;
 }
 
