@@ -475,7 +475,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
                   <XAxis type="number" tick={{ fontSize: 11, fill: GRAY }} tickFormatter={(v: number) => `$${v.toLocaleString()}`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: GRAY }} width={100} />
                   <Tooltip content={<ChartTooltip currency />} />
-                  <Bar dataKey="revenue" name="Revenue" fill={RED} radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, formatter: (v: number) => `$${v.toLocaleString()}` }} />
+                  <Bar dataKey="revenue" name="Revenue" fill={RED} radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, formatter: (v: unknown) => `$${Number(v).toLocaleString()}` }} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -494,7 +494,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
                   <XAxis type="number" tick={{ fontSize: 11, fill: GRAY }} tickFormatter={(v: number) => `$${v.toLocaleString()}`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: GRAY }} width={120} />
                   <Tooltip content={<ChartTooltip currency />} />
-                  <Bar dataKey="revenue" name="Revenue" fill={BLUE} radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, formatter: (v: number) => `$${v.toLocaleString()}` }} />
+                  <Bar dataKey="revenue" name="Revenue" fill={BLUE} radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, formatter: (v: unknown) => `$${Number(v).toLocaleString()}` }} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -548,7 +548,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
                   <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: GRAY }} tickFormatter={(v: number) => `${v}%`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: GRAY }} width={100} />
                   <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="avgPct" name="Avg capacity %" radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, formatter: (v: number) => `${v}%` }}>
+                  <Bar dataKey="avgPct" name="Avg capacity %" radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, formatter: (v: unknown) => `${v}%` }}>
                     {data.capacityUtilisation.map((entry, i) => (
                       <Cell key={i} fill={capacityColor(entry.avgPct)} />
                     ))}
@@ -877,7 +877,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
                   <XAxis type="number" tick={{ fontSize: 11, fill: GRAY }} tickFormatter={(v: number) => `$${v.toLocaleString()}`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: GRAY }} width={120} />
                   <Tooltip content={<ChartTooltip currency />} />
-                  <Bar dataKey="revenue" name="Revenue" fill={AMBER} radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, formatter: (v: number) => `$${v.toLocaleString()}` }} />
+                  <Bar dataKey="revenue" name="Revenue" fill={AMBER} radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, formatter: (v: unknown) => `$${Number(v).toLocaleString()}` }} />
                 </BarChart>
               </ResponsiveContainer>
             )}
