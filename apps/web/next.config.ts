@@ -15,6 +15,13 @@ const nextConfig: NextConfig = {
         hostname: "placehold.co",
         pathname: "/**",
       },
+      {
+        // Facebook CDN — images are served from deeply nested subdomains (e.g. scontent-mia5-2.xx.fbcdn.net)
+        // ** matches any number of subdomain levels
+        protocol: "https",
+        hostname: "**.fbcdn.net",
+        pathname: "/**",
+      },
     ],
   },
 };

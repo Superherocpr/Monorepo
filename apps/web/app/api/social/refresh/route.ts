@@ -6,6 +6,8 @@
  * Fetches the 12 most recent photo posts from the Facebook page and upserts
  * them into social_feed_cache. Existing posts are updated in place via
  * ON CONFLICT on facebook_post_id, so captions and photo URLs stay current.
+ * Also removes legacy seeded rows (facebook_post_id like "FB-%") so the
+ * homepage never mixes placeholder data with real Facebook content.
  *
  * Returns:
  *   200 { upserted: number }              — success
@@ -78,6 +80,18 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     if (error) {
       console.error("[social/refresh] DB upsert failed:", error.message);
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+
+    // Remove legacy seeded placeholder rows to avoid broken/non-real post links
+    // after the feed has been connected to Facebook.
+    const { error: cleanupError } = await supabase
+      .from("social_feed_cache")
+      .delete()
+      .like("facebook_post_id", "FB-%");
+
+    if (cleanupError) {
+      console.error("[social/refresh] Seed-row cleanup failed:", cleanupError.message);
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
 
