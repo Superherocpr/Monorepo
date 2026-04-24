@@ -80,7 +80,9 @@ export async function POST(request: Request) {
     .lte("starts_at", todayEnd.toISOString())
     .order("starts_at");
 
-  const sessionRows = (sessions ?? []) as SessionRow[];
+  // Nested to-one relations (class_types, locations) are typed as arrays by Supabase
+  // typegen, but at runtime they are single objects. Cast through unknown to bridge.
+  const sessionRows = (sessions ?? []) as unknown as SessionRow[];
 
   const formatted = sessionRows.map((s) => ({
     id: s.id,

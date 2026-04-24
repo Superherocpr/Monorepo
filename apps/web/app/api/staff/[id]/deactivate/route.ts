@@ -85,7 +85,7 @@ export async function PATCH(
   // ── Block Supabase auth login ──────────────────────────────────────────────
   // ban_duration: 'none' means an indefinite ban — the user cannot log in
   const adminSupabase = await createAdminClient();
-  await adminSupabase.auth.admin.updateUser(targetId, { ban_duration: "none" });
+  await adminSupabase.auth.admin.updateUserById(targetId, { ban_duration: "none" });
 
   return Response.json({ success: true });
 }

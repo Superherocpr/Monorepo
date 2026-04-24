@@ -341,7 +341,9 @@ export async function fetchAnalyticsData(
   const classTypeRevMap = new Map<string, number>();
   safeBookings.forEach((b) => {
     if (!paymentBookingIds.has(b.id as string)) return;
-    const session = b.class_sessions as { class_types: { name: string } | null } | null;
+    // Supabase typegen reports nested to-one relations as arrays in TS, but at runtime
+    // they are a single object (or null). Cast through unknown to bridge the gap.
+    const session = b.class_sessions as unknown as { class_types: { name: string } | null } | null;
     const typeName = session?.class_types?.name ?? "Unknown";
     const payment = safePayments.find((p) => p.booking_id === b.id);
     if (!payment) return;
@@ -357,7 +359,8 @@ export async function fetchAnalyticsData(
     .filter((inv) => inv.status === "paid")
     .forEach((inv) => {
       const iid = inv.instructor_id as string;
-      const iprofile = inv.profiles as { first_name: string; last_name: string } | null;
+      // Nested to-one relation typed as array by Supabase typegen; runtime is single object.
+      const iprofile = inv.profiles as unknown as { first_name: string; last_name: string } | null;
       const name = iprofile
         ? `${iprofile.first_name} ${iprofile.last_name}`
         : (profileMap.get(iid) ?? "Unknown");
@@ -385,7 +388,8 @@ export async function fetchAnalyticsData(
   safeSessions.forEach((s) => {
     const sessionBookings = safeBookings.filter((b) => b.session_id === s.id);
     const fillPct = s.max_capacity > 0 ? (sessionBookings.length / s.max_capacity) * 100 : 0;
-    const ct = s.class_types as { name: string } | null;
+    // Nested to-one relation typed as array by Supabase typegen; runtime is single object.
+    const ct = s.class_types as unknown as { name: string } | null;
     const typeName = ct?.name ?? "Unknown";
     const existing = capacityByType.get(typeName) ?? { totalPct: 0, sessionCount: 0 };
     existing.totalPct += fillPct;
@@ -495,7 +499,8 @@ export async function fetchAnalyticsData(
   // ── Instructor invoice counts ─────────────────────────────────────────────
   const instructorInvoiceCountMap = new Map<string, number>();
   safeInvoices.forEach((inv) => {
-    const iprofile = inv.profiles as { first_name: string; last_name: string } | null;
+    // Nested to-one relation typed as array by Supabase typegen; runtime is single object.
+    const iprofile = inv.profiles as unknown as { first_name: string; last_name: string } | null;
     const iid = inv.instructor_id as string;
     const name = iprofile
       ? `${iprofile.first_name} ${iprofile.last_name}`
@@ -522,7 +527,8 @@ export async function fetchAnalyticsData(
   // ── Merch products ────────────────────────────────────────────────────────
   const productMap = new Map<string, { units: number; revenue: number }>();
   safeOrderItems.forEach((item) => {
-    const variant = item.product_variants as { products: { name: string } | null } | null;
+    // Nested to-one relation typed as array by Supabase typegen; runtime is single object.
+    const variant = item.product_variants as unknown as { products: { name: string } | null } | null;
     const productName = variant?.products?.name ?? "Unknown";
     const existing = productMap.get(productName) ?? { units: 0, revenue: 0 };
     existing.units += Number(item.quantity);
