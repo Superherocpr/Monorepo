@@ -33,18 +33,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
-      {/*
-       * Dark mode flash prevention: reads localStorage before first paint
-       * and adds the 'dark' class to <html> if the user's preference is dark.
-       * suppressHydrationWarning on <html> prevents a React mismatch warning
-       * since the class may differ between server render and client hydration.
-       */}
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{if(localStorage.getItem('theme')==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();`,
-          }}
-        />
+        {/*
+         * Dark mode flash prevention script removed for App Router compatibility.
+         * If you want to add it, use next/script in a Client Component or follow Next.js docs.
+         */}
       </head>
       <body className="min-h-full flex flex-col font-sans antialiased">
         {children}

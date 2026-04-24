@@ -6,7 +6,6 @@
  * Used by: app/(public)/page.tsx
  */
 
-import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import type { SocialFeedPost } from "@/types/social";
 
@@ -31,7 +30,7 @@ export default async function SocialFeedSection() {
             See what's happening at Superhero CPR on Facebook
           </p>
           <a
-            href="https://www.facebook.com/Super-Hero-CPR-298899580537162/"
+            href="https://www.facebook.com/1HeroWay"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm font-medium text-red-600 hover:text-red-700 transition-colors duration-150"
@@ -59,12 +58,13 @@ export default async function SocialFeedSection() {
                   className="relative shrink-0 w-36 h-36 md:w-44 md:h-44 rounded-lg overflow-hidden group"
                   aria-label={photo.caption ?? "Superhero CPR Facebook post"}
                 >
-                  <Image
+                  {/* Facebook CDN URLs are signed and occasionally fail through the Next image optimizer. */}
+                  <img
                     src={photo.photo_url}
                     alt={photo.caption ?? "Superhero CPR class photo"}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
-                    sizes="(max-width: 768px) 144px, 176px"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                    decoding="async"
                   />
                   {/* Hover overlay */}
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">

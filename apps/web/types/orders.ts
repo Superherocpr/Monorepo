@@ -34,6 +34,44 @@ export interface OrderRecord {
 }
 
 /**
+ * Full order record with joined customer and items — used on the admin orders page.
+ * The `profiles` field is the customer, joined via the customer_id foreign key.
+ */
+export interface AdminOrderRecord {
+  id: string;
+  status: "pending" | "paid" | "shipped" | "delivered" | "cancelled";
+  total_amount: number;
+  paypal_transaction_id: string | null;
+  shipping_name: string;
+  shipping_address: string;
+  shipping_city: string;
+  shipping_state: string;
+  shipping_zip: string;
+  tracking_number: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  profiles: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+  order_items: {
+    id: string;
+    quantity: number;
+    price_at_purchase: number;
+    product_variants: {
+      size: string;
+      products: {
+        name: string;
+        image_url: string | null;
+      };
+    };
+  }[];
+}
+
+/**
  * Minimal order shape used in the dashboard recent order widget.
  */
 export interface RecentOrderWidget {
