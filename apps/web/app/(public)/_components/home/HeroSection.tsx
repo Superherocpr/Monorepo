@@ -61,7 +61,7 @@ export default async function HeroSection() {
           backgroundRepeat: "no-repeat",
           backgroundPosition: "center center",
           backgroundSize: "auto",
-          backgroundColor: "#f5a623", // fallback that matches the image's amber sky
+          backgroundColor: "#c45000", // rich deep orange
         }}
         aria-hidden="true"
       />
