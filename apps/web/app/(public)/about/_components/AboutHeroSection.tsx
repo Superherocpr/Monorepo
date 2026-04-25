@@ -9,7 +9,7 @@ export default function AboutHeroSection() {
   return (
     <section
       className="relative text-center px-4 py-20 overflow-hidden"
-      style={{ backgroundColor: "#c45000" }}
+      style={{ backgroundColor: "#1a5c2e" }}
     >
       {/* TODO: replace placeholder with final about page character image */}
       <div
@@ -18,9 +18,10 @@ export default function AboutHeroSection() {
         aria-hidden="true"
       >
         <img
-          src="/images/Her_CPR.png"
+          src="/images/MainFemaleHero1_white.svg"
           alt=""
           className="h-[700px] w-auto object-contain"
+          style={{ transform: "scaleX(-1)" }}
         />
       </div>
 

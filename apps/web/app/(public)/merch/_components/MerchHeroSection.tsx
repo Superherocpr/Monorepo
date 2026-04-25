@@ -14,7 +14,7 @@ export default function MerchHeroSection() {
       {/* Character — anchored left, waist-high crop */}
       <div
         className="absolute bottom-0 left-0 pointer-events-none select-none"
-        style={{ transform: "translateY(50%)" }}
+        style={{ transform: "translateY(calc(50% + 10px))" }}
         aria-hidden="true"
       >
         <img
