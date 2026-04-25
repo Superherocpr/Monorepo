@@ -20,7 +20,7 @@ export default function AboutHeroSection() {
         <img
           src="/images/Her_CPR.png"
           alt=""
-          className="h-[85vh] w-auto object-contain"
+          className="h-[700px] w-auto object-contain"
         />
       </div>
 

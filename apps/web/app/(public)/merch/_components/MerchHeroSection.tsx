@@ -9,18 +9,19 @@ export default function MerchHeroSection() {
   return (
     <section
       className="relative text-center px-4 py-16 overflow-hidden"
-      style={{ backgroundColor: "#c45000" }}
+      style={{ backgroundColor: "#d4a000" }}
     >
-      {/* TODO: replace placeholder with final merch page character image */}
+      {/* Character — anchored left, waist-high crop */}
       <div
-        className="absolute bottom-0 right-0 pointer-events-none select-none"
+        className="absolute bottom-0 left-0 pointer-events-none select-none"
         style={{ transform: "translateY(50%)" }}
         aria-hidden="true"
       >
         <img
-          src="/images/Her_CPR.png"
+          src="/images/MainMaleHero1.svg"
           alt=""
-          className="h-[85vh] w-auto object-contain"
+          className="h-[700px] w-auto object-contain"
+          style={{ transform: "scaleX(-1)" }}
         />
       </div>
 
