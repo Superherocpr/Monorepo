@@ -61,17 +61,18 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
             regardless of the logo and auth section having different widths. */}
         <div className="grid grid-cols-3 items-center h-20">
 
-          {/* Logo — horizontal brand image at /public/images/SHCPRTextTemplate.png */}
+          {/* Brand name — Comic Book font, matches footer style */}
           <Link
             href="/"
             className="flex items-center"
             aria-label="Superhero CPR home"
           >
-            <img
-              src="/images/SHCPRTextTemplate.png"
-              alt="Superhero CPR"
-              className="h-[72px] w-auto object-contain"
-            />
+            <span
+              className="text-2xl font-bold tracking-tight"
+              style={{ fontFamily: "'Comic Book', sans-serif" }}
+            >
+              <span className="text-gray-900">SuperHero</span><span className="text-red-500">CPR</span>
+            </span>
           </Link>
 
           {/* Desktop nav links — centered column */}
