@@ -27,7 +27,7 @@ export default async function SocialFeedSection() {
             Follow Along
           </h2>
           <p className="text-gray-600 text-sm mb-3">
-            See what's happening at Superhero CPR on Facebook
+            See what's happening at SuperHeroCPR on Facebook
           </p>
           <a
             href="https://www.facebook.com/1HeroWay"
@@ -56,12 +56,12 @@ export default async function SocialFeedSection() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="relative shrink-0 w-36 h-36 md:w-44 md:h-44 rounded-lg overflow-hidden group"
-                  aria-label={photo.caption ?? "Superhero CPR Facebook post"}
+                  aria-label={photo.caption ?? "SuperHeroCPR Facebook post"}
                 >
                   {/* Facebook CDN URLs are signed and occasionally fail through the Next image optimizer. */}
                   <img
                     src={photo.photo_url}
-                    alt={photo.caption ?? "Superhero CPR class photo"}
+                    alt={photo.caption ?? "SuperHeroCPR class photo"}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                     decoding="async"

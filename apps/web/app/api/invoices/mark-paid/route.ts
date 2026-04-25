@@ -126,14 +126,14 @@ export async function POST(request: Request) {
   if (process.env.RESEND_API_KEY && instructorProfile?.email) {
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: "Superhero CPR <noreply@superherocpr.com>",
+      from: "SuperHeroCPR <noreply@superherocpr.com>",
       to: instructorProfile.email,
       subject: `Invoice ${invoice.invoice_number} marked as paid`,
       html: `
         <p>Hi ${instructorProfile.first_name},</p>
         <p>Invoice <strong>${invoice.invoice_number}</strong> for ${invoice.recipient_name} has been marked as paid.</p>
         <p>${invoice.student_count} student spot${(invoice.student_count as number) !== 1 ? "s" : ""} have been reserved for the class.</p>
-        <p>— Superhero CPR</p>
+        <p>— SuperHeroCPR</p>
       `,
     });
   }

@@ -81,7 +81,7 @@ export function PublicFooter() {
 
         {/* Bottom bar */}
         <div className="mt-10 pt-6 border-t border-gray-800 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-gray-500">
-          <p>© {year} Superhero CPR. All rights reserved.</p>
+          <p>© {year} SuperHeroCPR. All rights reserved.</p>
           <p>American Heart Association Authorized Training Center</p>
         </div>
       </div>

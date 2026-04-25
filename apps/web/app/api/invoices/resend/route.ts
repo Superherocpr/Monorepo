@@ -133,9 +133,9 @@ export async function POST(request: Request) {
       : "$0.00";
 
     await resend.emails.send({
-      from: "Superhero CPR <noreply@superherocpr.com>",
+      from: "SuperHeroCPR <noreply@superherocpr.com>",
       to: newEmail,
-      subject: `Invoice ${invoice.invoice_number} from Superhero CPR`,
+      subject: `Invoice ${invoice.invoice_number} from SuperHeroCPR`,
       html: `
         <h1>Invoice ${invoice.invoice_number}</h1>
         <p>Hello ${invoice.recipient_name},</p>
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
         </table>
         ${invoice.notes ? `<p style="margin-top:16px;color:#555">Note: ${invoice.notes}</p>` : ""}
         <p style="margin-top:24px">Payment platform: ${invoice.payment_platform}</p>
-        <p>— Superhero CPR</p>
+        <p>— SuperHeroCPR</p>
       `,
     });
   }

@@ -65,7 +65,7 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
           <Link
             href="/"
             className="flex items-center"
-            aria-label="Superhero CPR home"
+            aria-label="SuperHeroCPR home"
           >
             <span
               className="text-2xl font-bold tracking-tight"

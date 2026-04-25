@@ -10,7 +10,7 @@ import SettingsPageHeader from "./_components/SettingsPageHeader";
 import SettingsClient from "./_components/SettingsClient";
 
 export const metadata = {
-  title: "Account Settings | Superhero CPR",
+  title: "Account Settings | SuperHeroCPR",
 };
 
 /** Fetches the customer's profile and renders the interactive settings form. */

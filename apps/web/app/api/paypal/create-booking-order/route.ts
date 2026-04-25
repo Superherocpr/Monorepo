@@ -73,7 +73,7 @@ export async function POST(request: Request) {
           currency_code: "USD",
           value: amount.toFixed(2),
         },
-        description: `Superhero CPR — ${className}`,
+        description: `SuperHeroCPR — ${className}`,
       },
     ],
   };

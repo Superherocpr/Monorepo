@@ -189,14 +189,14 @@ export async function POST(request: Request) {
 
     // Derive a human-readable "Payment processed by" label from the routing note.
     // "Routed to instructor PayPal — Danny Hedgeman" → "Danny Hedgeman via PayPal"
-    // Anything else (business or fallback) → "Superhero CPR via PayPal"
+    // Anything else (business or fallback) → "SuperHeroCPR via PayPal"
     const paymentProcessor = routing.instructorPayPalAccountId
       ? `${routing.routingNote.replace("Routed to instructor PayPal — ", "")} via PayPal`
-      : "Superhero CPR via PayPal";
+      : "SuperHeroCPR via PayPal";
 
     await resend.emails
       .send({
-        from: "Superhero CPR <noreply@superherocpr.com>",
+        from: "SuperHeroCPR <noreply@superherocpr.com>",
         to: customerEmail,
         subject: `Booking Confirmed — ${className} on ${formattedDate}`,
         html: `
@@ -214,7 +214,7 @@ export async function POST(request: Request) {
           </table>
           <p>Please arrive a few minutes early. Wear comfortable clothing.</p>
           <p>Questions? Reply to this email or call us at (813) 966-3969.</p>
-          <p>See you in class!<br>— The Superhero CPR Team</p>
+          <p>See you in class!<br>— The SuperHeroCPR Team</p>
         `,
       })
       .catch((err: unknown) => {

@@ -12,7 +12,7 @@ import type { UserRole, PaymentPlatform } from "@/types/users";
 import PaymentAccountClient from "./_components/PaymentAccountClient";
 
 export const metadata: Metadata = {
-  title: "Payment Account | Superhero CPR Admin",
+  title: "Payment Account | SuperHeroCPR Admin",
 };
 
 /** Shape of a connected payment account returned to the client — no tokens. */

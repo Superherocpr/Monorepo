@@ -29,12 +29,12 @@ export default function AhaAffiliationSection() {
               organization focused on heart disease and stroke. AHA
               certification is the gold standard recognized by employers,
               hospitals, and healthcare organizations nationwide. When you
-              train with Superhero CPR, you receive official AHA
+              train with SuperHeroCPR, you receive official AHA
               certification — the same standard required by healthcare
               professionals.
             </p>
             <p className="text-sm text-gray-500">
-              Superhero CPR is an authorized American Heart Association
+              SuperHeroCPR is an authorized American Heart Association
               Training Site.
             </p>
           </div>

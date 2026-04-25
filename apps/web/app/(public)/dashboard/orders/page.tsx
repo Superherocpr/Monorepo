@@ -11,7 +11,7 @@ import OrdersList from "./_components/OrdersList";
 import type { OrderRecord } from "@/types/orders";
 
 export const metadata = {
-  title: "My Orders | Superhero CPR",
+  title: "My Orders | SuperHeroCPR",
 };
 
 /** Renders the orders page with a full history of the customer's merch purchases. */

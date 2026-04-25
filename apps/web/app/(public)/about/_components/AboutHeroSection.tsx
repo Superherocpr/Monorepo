@@ -16,7 +16,7 @@ export default function AboutHeroSection() {
           Saving Lives Is Our Passion
         </h1>
         <p className="text-gray-300 text-lg leading-relaxed">
-          Superhero CPR was founded on one simple belief — everyone deserves to
+          SuperHeroCPR was founded on one simple belief — everyone deserves to
           know how to save a life. We bring American Heart Association
           certification training directly to you, wherever you are.
         </p>

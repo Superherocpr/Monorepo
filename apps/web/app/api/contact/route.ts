@@ -106,7 +106,7 @@ export async function POST(request: Request) {
   // Notification email to business — intentionally fire-and-forget; errors are logged
   const businessEmailPromise = resend.emails
     .send({
-      from: "Superhero CPR Website <noreply@superherocpr.com>",
+      from: "SuperHeroCPR Website <noreply@superherocpr.com>",
       to: "info@superherocpr.com",
       subject: `New Contact Form Submission — ${inquiryType.trim()}`,
       html: `
@@ -128,9 +128,9 @@ export async function POST(request: Request) {
   // Auto-reply to submitter
   const autoReplyPromise = resend.emails
     .send({
-      from: "Superhero CPR <noreply@superherocpr.com>",
+      from: "SuperHeroCPR <noreply@superherocpr.com>",
       to: email.trim(),
-      subject: "We received your message — Superhero CPR",
+      subject: "We received your message — SuperHeroCPR",
       html: `
         <h1>Thanks for reaching out, ${safeFirstName}!</h1>
         <p>We received your message and will get back to you within 1 business day.</p>
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
           <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
           <li>Email: <a href="mailto:info@superherocpr.com">info@superherocpr.com</a></li>
         </ul>
-        <p>— The Superhero CPR Team</p>
+        <p>— The SuperHeroCPR Team</p>
       `,
     })
     .catch((err: unknown) =>

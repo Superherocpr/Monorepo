@@ -108,17 +108,17 @@ export async function POST(request: Request) {
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: "Superhero CPR <noreply@superherocpr.com>",
+      from: "SuperHeroCPR <noreply@superherocpr.com>",
       to: email.toLowerCase(),
-      subject: "Welcome to Superhero CPR!",
+      subject: "Welcome to SuperHeroCPR!",
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
           <h1 style="color: #dc2626;">Welcome, ${firstName}!</h1>
           <p>You've been checked in for today's class. Great to have you!</p>
-          <p>Your Superhero CPR account is now active. You can view your certifications
+          <p>Your SuperHeroCPR account is now active. You can view your certifications
           and booking history at
           <a href="https://superherocpr.com/dashboard">superherocpr.com/dashboard</a>.</p>
-          <p>— The Superhero CPR Team</p>
+          <p>— The SuperHeroCPR Team</p>
         </div>
       `,
     });

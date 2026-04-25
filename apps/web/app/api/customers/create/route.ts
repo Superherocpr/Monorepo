@@ -139,15 +139,15 @@ export async function POST(request: Request) {
   if (process.env.RESEND_API_KEY && setupLink) {
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: "Superhero CPR <noreply@superherocpr.com>",
+      from: "SuperHeroCPR <noreply@superherocpr.com>",
       to: email.toLowerCase(),
-      subject: "Set up your Superhero CPR account",
+      subject: "Set up your SuperHeroCPR account",
       html: `
-        <h1>Welcome to Superhero CPR, ${firstName.trim()}!</h1>
+        <h1>Welcome to SuperHeroCPR, ${firstName.trim()}!</h1>
         <p>An account has been created for you. Click the link below to set your password and activate your account.</p>
         <p><a href="${setupLink}">Set My Password →</a></p>
         <p>This link expires in 24 hours.</p>
-        <p>— The Superhero CPR Team</p>
+        <p>— The SuperHeroCPR Team</p>
       `,
     });
   }

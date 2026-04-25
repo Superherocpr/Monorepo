@@ -14,7 +14,7 @@ import ExpiredCertificationsList from "./_components/ExpiredCertificationsList";
 import type { CertificationRecord } from "@/types/certifications";
 
 export const metadata = {
-  title: "My Certifications | Superhero CPR",
+  title: "My Certifications | SuperHeroCPR",
 };
 
 /** Renders the certifications page with active and expired groups, plus renewal banner. */

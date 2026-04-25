@@ -1,5 +1,5 @@
 /**
- * /about page — the human face of Superhero CPR.
+ * /about page — the human face of SuperHeroCPR.
  * Introduces the lead instructor, supporting instructors, mission, and AHA affiliation.
  * All sections are server components except InstructorTeamSection (also server).
  */
@@ -15,7 +15,7 @@ import AboutCtaSection from "./_components/AboutCtaSection";
 export const metadata: Metadata = {
   title: "About Us",
   description:
-    "Meet the team behind Superhero CPR — licensed American Heart Association instructors with real-world experience in Fire, EMS, and Emergency Room response.",
+    "Meet the team behind SuperHeroCPR — licensed American Heart Association instructors with real-world experience in Fire, EMS, and Emergency Room response.",
 };
 
 /** Renders the full /about page. */

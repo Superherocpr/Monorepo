@@ -13,7 +13,7 @@ export default function MerchHeroSection() {
           Gear Up
         </p>
         <h1 className="text-4xl font-bold tracking-tight text-white mb-4">
-          Superhero CPR Merch
+          SuperHeroCPR Merch
         </h1>
         <p className="text-gray-300 text-lg leading-relaxed">
           Rep the mission. Every purchase helps spread the word about CPR awareness.

@@ -259,9 +259,9 @@ export async function POST(request: Request) {
     // Confirmation to customer
     resend.emails
       .send({
-        from: "Superhero CPR <noreply@superherocpr.com>",
+        from: "SuperHeroCPR <noreply@superherocpr.com>",
         to: shippingInfo.email,
-        subject: "Your Superhero CPR Order is Confirmed!",
+        subject: "Your SuperHeroCPR Order is Confirmed!",
         html: `
           <h1>Order Confirmed!</h1>
           <p>Thanks for your order. Here's a summary:</p>
@@ -281,7 +281,7 @@ export async function POST(request: Request) {
           </p>
           <p>Transaction ID: ${safeTransactionId}</p>
           <p>Questions? Contact us at info@superherocpr.com or (813) 966-3969.</p>
-          <p>— The Superhero CPR Team</p>
+          <p>— The SuperHeroCPR Team</p>
         `,
       })
       .catch((err: unknown) =>
@@ -291,7 +291,7 @@ export async function POST(request: Request) {
     // Notification to business
     resend.emails
       .send({
-        from: "Superhero CPR Website <noreply@superherocpr.com>",
+        from: "SuperHeroCPR Website <noreply@superherocpr.com>",
         to: "info@superherocpr.com",
         subject: `New Merch Order — $${totalNum.toFixed(2)}`,
         html: `

@@ -17,7 +17,7 @@ import type { CertificationWidgetItem } from "@/types/certifications";
 import type { RecentOrderWidget as RecentOrderWidgetType } from "@/types/orders";
 
 export const metadata = {
-  title: "My Dashboard | Superhero CPR",
+  title: "My Dashboard | SuperHeroCPR",
 };
 
 /**

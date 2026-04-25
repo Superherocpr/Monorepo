@@ -324,7 +324,7 @@ export default function RollcallPage() {
   // ── Step 4b: Create account (new student) ────────────────────────────────
 
   /**
-   * Creates a new Superhero CPR account, adds the student to the roster,
+   * Creates a new SuperHeroCPR account, adds the student to the roster,
    * and sends a welcome email.
    */
   async function handleRegister() {
@@ -668,7 +668,7 @@ export default function RollcallPage() {
           <p className="text-gray-400 text-sm">You&apos;re already checked in for this class!</p>
         ) : isNewUser ? (
           <p className="text-gray-500 text-sm">
-            Welcome to Superhero CPR! A welcome email is on its way.
+            Welcome to SuperHeroCPR! A welcome email is on its way.
           </p>
         ) : (
           <p className="text-gray-500 text-sm">

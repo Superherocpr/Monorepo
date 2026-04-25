@@ -213,7 +213,7 @@ export async function POST(request: Request) {
     if (submittedByEmail) {
       await resend.emails
         .send({
-          from: "Superhero CPR <noreply@superherocpr.com>",
+          from: "SuperHeroCPR <noreply@superherocpr.com>",
           to: submittedByEmail,
           subject: `Your roster for invoice ${invoiceRef} has been received`,
           html: `
@@ -225,7 +225,7 @@ export async function POST(request: Request) {
                <a href="https://superherocpr.com/submit-roster">superherocpr.com/submit-roster</a>
                using the same invoice number.</p>
             <p>Invoice number: <strong>${invoiceRef}</strong></p>
-            <p>— The Superhero CPR Team</p>
+            <p>— The SuperHeroCPR Team</p>
           `,
         })
         .catch((err: unknown) => {
@@ -236,7 +236,7 @@ export async function POST(request: Request) {
     // Manager notification so staff know a new roster is ready to import
     await resend.emails
       .send({
-        from: "Superhero CPR <noreply@superherocpr.com>",
+        from: "SuperHeroCPR <noreply@superherocpr.com>",
         to: "info@superherocpr.com",
         subject: `Roster submitted — Invoice ${invoiceRef}`,
         html: `

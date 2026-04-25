@@ -11,7 +11,7 @@ import type { Metadata } from "next";
 import ArchivedClient from "./_components/ArchivedClient";
 
 export const metadata: Metadata = {
-  title: "Archived Accounts | Superhero CPR Admin",
+  title: "Archived Accounts | SuperHeroCPR Admin",
 };
 
 /** Shape of an archived customer passed to the client component. */

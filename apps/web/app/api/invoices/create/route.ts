@@ -449,7 +449,7 @@ async function sendInvoiceEmail(params: {
 
   const html = `
     <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Invoice from Superhero CPR</h1>
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Invoice from SuperHeroCPR</h1>
       <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Invoice number: <strong>${params.invoiceNumber}</strong></p>
 
       <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
@@ -486,13 +486,13 @@ async function sendInvoiceEmail(params: {
 
       <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
       <p style="font-size:12px;color:#9ca3af;">
-        This invoice was sent by a Superhero CPR instructor. For questions, reply to this email.
+        This invoice was sent by a SuperHeroCPR instructor. For questions, reply to this email.
       </p>
     </div>
   `;
 
   await resend.emails.send({
-    from: "Superhero CPR <noreply@superherocpr.com>",
+    from: "SuperHeroCPR <noreply@superherocpr.com>",
     to: params.recipientEmail,
     subject: `Invoice ${params.invoiceNumber} — ${params.className} on ${formattedDate}`,
     html,

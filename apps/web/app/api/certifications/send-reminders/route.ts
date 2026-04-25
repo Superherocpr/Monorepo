@@ -96,7 +96,7 @@ export async function POST(_request: Request) {
 
     try {
       await resend.emails.send({
-        from: "Superhero CPR <noreply@superherocpr.com>",
+        from: "SuperHeroCPR <noreply@superherocpr.com>",
         to: profileData.email,
         subject: "Your CPR Certification Expires Soon",
         html: `
@@ -105,7 +105,7 @@ export async function POST(_request: Request) {
           <strong>${daysRemaining} day${daysRemaining !== 1 ? "s" : ""}</strong>.</p>
           <p>Book a renewal class today to stay certified.</p>
           <a href="https://superherocpr.com/book">Book a Renewal Class →</a>
-          <p>— The Superhero CPR Team</p>
+          <p>— The SuperHeroCPR Team</p>
         `,
       });
 

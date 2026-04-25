@@ -72,16 +72,16 @@ export async function POST(
   if (process.env.RESEND_API_KEY) {
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: "Superhero CPR <noreply@superherocpr.com>",
+      from: "SuperHeroCPR <noreply@superherocpr.com>",
       to: customer.email,
-      subject: "Reset your Superhero CPR password",
+      subject: "Reset your SuperHeroCPR password",
       html: `
         <h1>Password Reset</h1>
         <p>Hi ${customer.first_name},</p>
-        <p>A staff member has sent you a password reset link. Click below to set a new password for your Superhero CPR account.</p>
+        <p>A staff member has sent you a password reset link. Click below to set a new password for your SuperHeroCPR account.</p>
         <p><a href="${linkData.properties.action_link}">Reset My Password →</a></p>
         <p>This link expires in 24 hours. If you did not expect this email, you can safely ignore it.</p>
-        <p>— The Superhero CPR Team</p>
+        <p>— The SuperHeroCPR Team</p>
       `,
     });
   }

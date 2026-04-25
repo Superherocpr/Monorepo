@@ -16,8 +16,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Superhero CPR | AHA-Certified CPR Training in Tampa, FL",
-    template: "%s | Superhero CPR",
+    default: "SuperHeroCPR | AHA-Certified CPR Training in Tampa, FL",
+    template: "%s | SuperHeroCPR",
   },
   description:
     "AHA-certified CPR, BLS, and First Aid training in Tampa, Florida. Book a class today.",

@@ -151,11 +151,11 @@ export async function POST(request: Request) {
     : "";
 
   await resend.emails.send({
-    from: "Superhero CPR <noreply@superherocpr.com>",
+    from: "SuperHeroCPR <noreply@superherocpr.com>",
     to: email,
-    subject: "You've been invited to join Superhero CPR",
+    subject: "You've been invited to join SuperHeroCPR",
     html: `
-      <h1>Welcome to the Superhero CPR team, ${escapeHtml(firstName.trim())}!</h1>
+      <h1>Welcome to the SuperHeroCPR team, ${escapeHtml(firstName.trim())}!</h1>
       ${safeMessage}
       <p>Your account has been created with the role of <strong>${escapeHtml(roleLabel)}</strong>.</p>
       <p>Click the link below to set your password and activate your account.</p>
@@ -168,7 +168,7 @@ export async function POST(request: Request) {
              <!-- TODO: instructor onboarding flow — remove this manual reminder when onboarding is built -->`
           : ""
       }
-      <p>— The Superhero CPR Team</p>
+      <p>— The SuperHeroCPR Team</p>
     `,
   });
 

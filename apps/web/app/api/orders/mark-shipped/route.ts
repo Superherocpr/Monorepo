@@ -113,12 +113,12 @@ export async function POST(request: Request) {
           : "";
 
       await resend.emails.send({
-        from: "Superhero CPR <noreply@superherocpr.com>",
+        from: "SuperHeroCPR <noreply@superherocpr.com>",
         to: customer.email,
-        subject: "Your Superhero CPR order has shipped!",
+        subject: "Your SuperHeroCPR order has shipped!",
         html: `
           <h1>Your order is on the way, ${customer.first_name}!</h1>
-          <p>Your Superhero CPR order has shipped.</p>
+          <p>Your SuperHeroCPR order has shipped.</p>
           <p><strong>Tracking number:</strong> ${trackingNumber.trim()}</p>
           ${carrierLine}
           <h3>Your order:</h3>
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
           </table>
           <p style="margin-top:12px"><strong>Order Total: $${(order.total_amount as number).toFixed(2)}</strong></p>
           <p>Shipping to: ${order.shipping_name}, ${order.shipping_city}, ${order.shipping_state}</p>
-          <p>— The Superhero CPR Team</p>
+          <p>— The SuperHeroCPR Team</p>
         `,
       });
     } catch (emailErr) {
