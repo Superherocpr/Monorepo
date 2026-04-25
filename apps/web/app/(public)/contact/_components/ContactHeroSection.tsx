@@ -9,16 +9,15 @@ export default function ContactHeroSection() {
   return (
     <section
       className="relative text-center px-4 py-16 overflow-hidden"
-      style={{ backgroundColor: "#c45000" }}
+      style={{ backgroundColor: "#0a5a8a" }}
     >
-      {/* TODO: replace placeholder with final contact page character image */}
       <div
-        className="absolute bottom-0 right-0 pointer-events-none select-none"
+        className="absolute bottom-0 left-0 pointer-events-none select-none"
         style={{ transform: "translateY(50%)" }}
         aria-hidden="true"
       >
         <img
-          src="/images/Her_CPR.png"
+          src="/images/MainMaleHero2.svg"
           alt=""
           className="h-[700px] w-auto object-contain"
         />
