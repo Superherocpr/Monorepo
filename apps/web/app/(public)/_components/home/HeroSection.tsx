@@ -99,7 +99,6 @@ export default async function HeroSection() {
           src="/images/Him_CPR.png"
           alt=""
           className="h-[85vh] w-auto object-contain"
-          style={{ transform: "scaleX(-1)" }}
         />
       </div>
 
