@@ -20,7 +20,7 @@ export default async function SocialFeedSection() {
     .limit(8);
 
   return (
-    <section className="py-20 px-4 bg-gray-50">
+    <section className="pt-10 pb-20 px-4 bg-gray-50">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 mb-2">
