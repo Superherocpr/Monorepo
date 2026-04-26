@@ -120,9 +120,14 @@ export async function POST(request: Request) {
   }
 
   // ── Generate password setup link ───────────────────────────────────────────
+  // redirect_to points at /setup-password so the invite link lands on our
+  // dedicated password-setup page rather than the homepage.
   const { data: linkData, error: linkError } = await adminSupabase.auth.admin.generateLink({
     type: "recovery",
     email,
+    options: {
+      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL}/setup-password`,
+    },
   });
 
   if (linkError || !linkData?.properties?.action_link) {
