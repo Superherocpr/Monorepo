@@ -272,7 +272,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                                   <td align="center" style="padding:0;Margin:0;font-size:0px"><img class="adapt-img" src="https://superherocpr.com/wp-content/uploads/2015/10/chest-and-hands.jpg" alt style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="270" height="280"></td>
                                 </tr>
                                 <tr>
-                                  <td align="left" style="padding:0;Margin:0;padding-bottom:10px;padding-top:15px"><h3 style="Margin:0;line-height:24px;font-size:20px;color:#333333"><strong>Our Instructors</strong></h3></td>
+                                  <td align="left" style="padding:0;Margin:0;padding-bottom:10px;padding-top:15px"><h3 style="Margin:0;line-height:24px;font-size:20px;color:#e1261d"><strong style="color:#e1261d">Our Instructors</strong></h3></td>
                                 </tr>
                                 <tr>
                                   <td class="es-m-txt-c" align="left" style="padding:0;Margin:0;padding-bottom:20px"><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">There's a saying, "<strong><em><span>Those who can't do, teach</span></em></strong>". Well, here at <strong><span>SuperHeroCPR</span></strong> our instructors not only teach, but they <strong><span>do</span></strong>! in fact, they "do" regularly.</p><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">You can trust that the information is not only <strong><span>up-to-date</span></strong> in theory but also in practice. And we get A LOT of practice. With <strong><em><span>THOUSANDS</span></em></strong> <em><span>of documented CPR performances</span></em> on real patients, we do, did, and done!!</p><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">Now it's <strong><span>YOUR</span></strong> time to <a target="_blank" href="https://superherocpr.com/" style="text-decoration:underline;color:#333333;font-size:14px">JOIN US!</a> We need your help to keep your family safe.</p></td>
@@ -282,7 +282,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                                 </tr>
                               </table>
                             </td>
-                            <td class="es-right" cellspacing="0" cellpadding="0" align="right" style="float:right">
+                            <table class="es-right" cellspacing="0" cellpadding="0" align="right" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;float:right">
                               <tr>
                                 <td class="es-m-p20b" align="left" style="padding:0;Margin:0;width:270px">
                                   <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
@@ -290,7 +290,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                                       <td align="center" style="padding:0;Margin:0;font-size:0px"><img class="adapt-img" src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/29811603252019707.jpg" alt style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="270" height="188"></td>
                                     </tr>
                                     <tr>
-                                      <td align="left" style="padding:0;Margin:0;padding-bottom:10px;padding-top:15px"><h3 style="Margin:0;line-height:24px;font-size:20px;color:#333333"><strong>The JUST - US League</strong></h3></td>
+                                      <td align="left" style="padding:0;Margin:0;padding-bottom:10px;padding-top:15px"><h3 style="Margin:0;line-height:24px;font-size:20px;color:#e1261d"><strong style="color:#e1261d">The JUST - US League</strong></h3></td>
                                     </tr>
                                     <tr>
                                       <td class="es-m-txt-c" align="left" style="padding:0;Margin:0;padding-bottom:20px"><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">The <strong><span>JUST - US League</span></strong> is an <em><span>elite group</span></em> of super-secret, highly intelligent, extremely special individuals, not like you or me.</p><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">So I guess <strong><em><span>&nbsp;it's not-so-super-secret&nbsp;</span></em></strong>and <strong><span>they are exactly like you and me</span></strong>. But they <em><span>are </span></em><strong><em><span>SPECIAL</span></em></strong>. Why?...</p><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">Because <strong><span>they made the choice to become a hero</span></strong>. Always <strong><span>&nbsp;ready to save a life</span></strong> if there is a cardiac emergency. <strong><em><span>Will you stand with them?</span></em></strong></p></td>
@@ -301,10 +301,79 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                                   </table>
                                 </td>
                               </tr>
-                            </td>
+                            </table>
                           </tr>
                         </table>
                       </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Small image grid + Young Heroes (restored from template) -->
+            <table cellpadding="0" cellspacing="0" class="es-content" align="center" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;table-layout:fixed !important;width:100%">
+              <tr style="border-collapse:collapse">
+                <td align="center" style="padding:0;Margin:0">
+                  <table class="es-content-body" cellspacing="0" cellpadding="0" bgcolor="#ffffff" align="center" style="background-color:#FFFFFF;width:600px">
+                    <tr style="border-collapse:collapse">
+                      <td align="left" style="padding:20px;Margin:0">
+                        <!--[if mso]><table style="width:560px" cellpadding="0" cellspacing="0"><tr><td style="width:145px" valign="top"><![endif]-->
+                        <table class="es-left" cellspacing="0" cellpadding="0" align="left" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;float:left">
+                          <tr style="border-collapse:collapse">
+                            <td align="left" style="padding:0;Margin:0;width:125px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr style="border-collapse:collapse">
+                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/11491603258010118.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
+                                </tr>
+                              </table>
+                            </td>
+                            <td style="padding:0;Margin:0;width:20px"></td>
+                            <td align="left" style="padding:0;Margin:0;width:125px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr style="border-collapse:collapse">
+                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/22921603258025841.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                          <tr style="border-collapse:collapse">
+                            <td align="left" style="padding:0;Margin:0;width:125px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr style="border-collapse:collapse">
+                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/1251603258042066.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
+                                </tr>
+                              </table>
+                            </td>
+                            <td style="padding:0;Margin:0;width:20px"></td>
+                            <td align="left" style="padding:0;Margin:0;width:125px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr style="border-collapse:collapse">
+                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/18391603258153322.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                        <!--[if mso]></td><td style="width:125px"></td><td style="width:125px" valign="top"><![endif]-->
+                        <table class="es-right" cellspacing="0" cellpadding="0" align="right" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;float:right">
+                          <tr style="border-collapse:collapse">
+                            <td class="es-m-p20b" align="left" style="padding:0;Margin:0;width:270px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr style="border-collapse:collapse">
+                                  <td align="left" style="padding:0;Margin:0;padding-top:5px"><h2 style="Margin:0;line-height:26px;font-size:22px;color:#e1261d"><strong style="color:#e1261d">Young Heroes<span style="font-size:24px"></span>!</strong></h2></td>
+                                </tr>
+                                <tr style="border-collapse:collapse">
+                                  <td class="es-m-txt-c" align="left" style="padding:0;Margin:0;padding-top:10px;padding-bottom:10px"><p style="Margin:0;line-height:21px;color:#000000;font-size:14px">There's one thing the <strong>JUST - US League</strong> doesn't have... and thats <em><strong>SIDE-KICKS!</strong></em><br><br>These <strong>HEROES</strong> might be young, but they <strong>DON'T</strong> play second fiddle. They are equipped with the skills <em><strong>to save a life!</strong></em></p></td>
+                                </tr>
+                                <tr style="border-collapse:collapse">
+                                  <td class="es-m-txt-c" align="left" style="padding:0;Margin:0"><p style="Margin:0;line-height:21px;color:#333333;font-size:14px"><u>Learn</u><a href="https://superherocpr.com" target="_blank" style="text-decoration:underline;color:#333333;font-size:14px">&nbsp;More +</a></p></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                        <!--[if mso]></td></tr></table><![endif]--></td>
                     </tr>
                   </table>
                 </td>
