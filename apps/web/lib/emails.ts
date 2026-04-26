@@ -995,7 +995,7 @@ export function bookingConfirmationEmail({
   amount: number;
   paymentProcessor: string;
   transactionId: string | null;
-  instructorName: string;
+  instructorName?: string | null;
 }): EmailContent {
   const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
     weekday: "long",
@@ -1010,8 +1010,10 @@ export function bookingConfirmationEmail({
     hour12: true,
   });
 
-  const safeInstructorName = escapeHtml(instructorName.trim());
-  const instructorRow = `<tr><td><strong>Instructor:</strong></td><td>${safeInstructorName}</td></tr>`;
+  const safeInstructorName = instructorName ? escapeHtml(instructorName.trim()) : null;
+  const instructorRow = safeInstructorName
+    ? `<tr><td><strong>Instructor:</strong></td><td>${safeInstructorName}</td></tr>`
+    : "";
 
   return {
     subject: `Booking Confirmed — ${className} on ${formattedDate}`,
@@ -1089,7 +1091,7 @@ export function invoiceEmail({
   locationName: string;
   locationCity: string;
   locationState: string;
-  instructorName: string;
+  instructorName?: string | null;
   notes: string | null;
   paymentLink: string | null;
 }): EmailContent {
@@ -1105,10 +1107,12 @@ export function invoiceEmail({
     currency: "USD",
   }).format(totalAmount);
 
-  const instructorRow = `<tr>
+  const instructorRow = instructorName
+    ? `<tr>
         <td style="padding:6px 0;color:#6b7280;font-size:14px;">Instructor:</td>
         <td style="padding:6px 0;font-size:14px;">${escapeHtml(instructorName.trim())}</td>
-       </tr>`;
+       </tr>`
+    : "";
 
   const companyRow = companyName
     ? `<tr>

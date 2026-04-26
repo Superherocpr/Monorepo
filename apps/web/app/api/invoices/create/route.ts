@@ -447,7 +447,7 @@ export async function POST(request: Request) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role, email")
+    .select("id, role, email, first_name, last_name")
     .eq("id", user.id)
     .single();
 
@@ -526,6 +526,30 @@ export async function POST(request: Request) {
   // Step 3: Get the instructor's active payment account
   const instructorId =
     profile.role === "instructor" ? profile.id : sessionData.instructor_id;
+
+  // Resolve the instructor's display name for the invoice email.
+  // If the calling user IS the instructor, use their own profile.
+  // If a super_admin is creating on behalf of an instructor, fetch that profile.
+  let instructorName: string | null = null;
+  if (profile.role === "instructor") {
+    instructorName =
+      [(profile as { first_name?: string | null; last_name?: string | null }).first_name,
+       (profile as { first_name?: string | null; last_name?: string | null }).last_name]
+        .filter(Boolean)
+        .join(" ") || null;
+  } else {
+    const { data: instructorProfile } = await adminClient
+      .from("profiles")
+      .select("first_name, last_name")
+      .eq("id", instructorId)
+      .single();
+    instructorName = instructorProfile
+      ? [(instructorProfile as { first_name?: string | null; last_name?: string | null }).first_name,
+         (instructorProfile as { first_name?: string | null; last_name?: string | null }).last_name]
+          .filter(Boolean)
+          .join(" ") || null
+      : null;
+  }
 
   const { data: paymentAccount } = await adminClient
     .from("instructor_payment_accounts")
@@ -640,6 +664,7 @@ export async function POST(request: Request) {
       locationName,
       locationCity,
       locationState,
+      instructorName,
       notes: notes as string | null,
       paymentLink,
     });

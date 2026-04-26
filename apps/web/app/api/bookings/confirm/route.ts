@@ -195,6 +195,9 @@ export async function POST(request: Request) {
       amount: amount as number,
       paymentProcessor,
       transactionId: paypalTransactionId,
+      // Instructor name is not available in this route without an extra DB query;
+      // the field is optional and the email is complete without it.
+      instructorName: null,
     });
 
     await resend.emails
