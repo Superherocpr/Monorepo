@@ -43,7 +43,7 @@ async function cancelOnPlatform(
         },
         body: JSON.stringify({
           subject: "Invoice cancelled",
-          note: "Cancelled via Superhero CPR",
+          note: "Cancelled via SuperHeroCPR",
         }),
       }
     );

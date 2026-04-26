@@ -13,7 +13,7 @@ import CancelledBookingsList from "./_components/CancelledBookingsList";
 import type { BookingRecord } from "@/types/bookings";
 
 export const metadata = {
-  title: "My Bookings | Superhero CPR",
+  title: "My Bookings | SuperHeroCPR",
 };
 
 /** Renders the customer's full booking history split into upcoming, past, and cancelled groups. */

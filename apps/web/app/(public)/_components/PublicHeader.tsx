@@ -57,21 +57,31 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
   return (
     <header className="bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-800 sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* 3-column grid ensures the nav is always centered relative to the full header width,
-            regardless of the logo and auth section having different widths. */}
-        <div className="grid grid-cols-3 items-center h-16">
+        {/* Relative container so the nav can be absolutely centered on the page.
+            Logo sits left in flow, auth sits right via ml-auto, and the nav is pinned
+            to the exact horizontal center regardless of their differing widths. */}
+        <div className="relative flex items-center h-20">
 
-          {/* Logo — TODO: replace text with actual logo image once brand assets are ready */}
+          {/* Brand name — Comic Book font, matches footer style */}
           <Link
             href="/"
-            className="flex items-center gap-1 font-extrabold text-lg tracking-tight hover:opacity-80 transition-opacity"
+            className="flex items-center"
+            aria-label="SuperHeroCPR home"
           >
-            <span className="text-red-600">Superhero</span>
-            <span className="text-gray-900 dark:text-white">CPR</span>
+            <span
+              className="text-2xl font-bold tracking-tight"
+              style={{ fontFamily: "'Comic Book', sans-serif" }}
+            >
+              <span className="text-gray-900">SuperHero</span><span className="text-red-500">CPR</span>
+            </span>
           </Link>
 
-          {/* Desktop nav links — centered column */}
-          <nav className="hidden md:flex items-center justify-center gap-6" aria-label="Main navigation">
+          {/* Desktop nav links — absolutely centered so they're always at the true
+              midpoint of the header, independent of logo/auth widths. */}
+          <nav
+            className="hidden md:flex items-center gap-6 absolute left-1/2 -translate-x-1/2"
+            aria-label="Main navigation"
+          >
             {NAV_LINKS.map(({ label, href }) => (
               <Link
                 key={href}
@@ -88,10 +98,9 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
             ))}
           </nav>
 
-          {/* Desktop auth actions — right-aligned */}
-          <div className="hidden md:flex items-center justify-end gap-4">
+          {/* Desktop auth actions — pushed to the far right */}
+          <div className="hidden md:flex items-center ml-auto gap-4">
             {isAuthenticated ? (
-              <>
                 <Link
                   href="/dashboard"
                   className={[
@@ -103,14 +112,6 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
                 >
                   Dashboard
                 </Link>
-                <button
-                  onClick={handleSignOut}
-                  disabled={signingOut}
-                  className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors duration-150 disabled:opacity-50"
-                >
-                  {signingOut ? "Signing out…" : "Sign Out"}
-                </button>
-              </>
             ) : (
               <Link
                 href="/signin"
@@ -121,9 +122,9 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
             )}
           </div>
 
-          {/* Mobile hamburger toggle — spans cols 2+3 and right-aligns on mobile */}
+          {/* Mobile hamburger toggle — pushed to the far right */}
           <button
-            className="md:hidden col-span-2 flex justify-end p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+            className="md:hidden ml-auto flex justify-end p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
@@ -161,22 +162,13 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
             {/* Mobile auth actions */}
             <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-1">
               {isAuthenticated ? (
-                <>
-                  <Link
-                    href="/dashboard"
-                    onClick={() => setMobileOpen(false)}
-                    className="py-2 px-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
-                  >
-                    Dashboard
-                  </Link>
-                  <button
-                    onClick={handleSignOut}
-                    disabled={signingOut}
-                    className="text-left py-2 px-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-                  >
-                    {signingOut ? "Signing out…" : "Sign Out"}
-                  </button>
-                </>
+                <Link
+                  href="/dashboard"
+                  onClick={() => setMobileOpen(false)}
+                  className="py-2 px-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+                >
+                  Dashboard
+                </Link>
               ) : (
                 <Link
                   href="/signin"

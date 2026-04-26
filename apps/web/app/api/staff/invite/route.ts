@@ -10,16 +10,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { OWNER_EMAIL } from "@/lib/constants";
 import { Resend } from "resend";
-
-/** Sanitizes a string for safe inclusion in an HTML email body. */
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+import { staffInviteEmail } from "@/lib/emails";
 
 /**
  * Creates a new staff account, sends a password setup email.
@@ -129,9 +120,14 @@ export async function POST(request: Request) {
   }
 
   // ── Generate password setup link ───────────────────────────────────────────
+  // redirect_to points at /setup-password so the invite link lands on our
+  // dedicated password-setup page rather than the homepage.
   const { data: linkData, error: linkError } = await adminSupabase.auth.admin.generateLink({
     type: "recovery",
     email,
+    options: {
+      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL}/setup-password`,
+    },
   });
 
   if (linkError || !linkData?.properties?.action_link) {
@@ -145,31 +141,19 @@ export async function POST(request: Request) {
   const roleLabel =
     role === "instructor" ? "Instructor" : role === "manager" ? "Manager" : "Inspector";
 
-  // Sanitize user-provided personalMessage before inserting into HTML
-  const safeMessage = personalMessage?.trim()
-    ? `<p>${escapeHtml(personalMessage.trim())}</p>`
-    : "";
+  const { subject, html } = staffInviteEmail({
+    firstName: firstName.trim(),
+    personalMessage: personalMessage ?? null,
+    roleLabel,
+    actionLink: linkData.properties.action_link,
+    isInstructor: role === "instructor",
+  });
 
   await resend.emails.send({
-    from: "Superhero CPR <noreply@superherocpr.com>",
+    from: process.env.RESEND_FROM_EMAIL!,
     to: email,
-    subject: "You've been invited to join Superhero CPR",
-    html: `
-      <h1>Welcome to the Superhero CPR team, ${escapeHtml(firstName.trim())}!</h1>
-      ${safeMessage}
-      <p>Your account has been created with the role of <strong>${escapeHtml(roleLabel)}</strong>.</p>
-      <p>Click the link below to set your password and activate your account.</p>
-      <p><a href="${linkData.properties.action_link}">Set My Password →</a></p>
-      <p>This link expires in 24 hours.</p>
-      ${
-        role === "instructor"
-          ? `<p><strong>Important:</strong> Once you log in, you'll need to connect a payment account
-             before you can send invoices. Visit Admin → Settings → Payment to get set up.</p>
-             <!-- TODO: instructor onboarding flow — remove this manual reminder when onboarding is built -->`
-          : ""
-      }
-      <p>— The Superhero CPR Team</p>
-    `,
+    subject,
+    html,
   });
 
   return Response.json({ success: true });

@@ -5,7 +5,6 @@
  */
 
 import Link from "next/link";
-import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 
 /** Renders the "Meet Your Instructor" two-column section. */
@@ -25,25 +24,18 @@ export default async function AboutInstructorSection() {
     : "Our Lead Instructor";
 
   return (
-    <section className="py-20 px-4 bg-white">
+    <section className="pt-20 pb-10 px-4 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-stretch justify-center max-w-4xl mx-auto">
 
-          {/* Photo */}
-          <div className="flex justify-center lg:justify-start">
-            {/*
-             * TODO: replace with real instructor photo.
-             * Save to /public/images/lead-instructor.jpg and update src below.
-             */}
-            <div className="relative w-64 h-64 lg:w-80 lg:h-80 rounded-2xl overflow-hidden bg-gray-200">
-              <Image
-                src="/images/lead-instructor.jpg"
-                alt={`${instructorName}, lead CPR instructor`}
-                fill
-                className="object-cover"
-                sizes="(max-width: 1024px) 256px, 320px"
-              />
-            </div>
+          {/* Photo — hidden on mobile when layout stacks to single column */}
+          <div className="hidden lg:flex justify-center lg:justify-end">
+            <img
+              src="/images/Untitled-2.jpg"
+              alt={`${instructorName}, lead CPR instructor`}
+              className="w-auto object-contain"
+              style={{ height: "75%" }}
+            />
           </div>
 
           {/* Text */}

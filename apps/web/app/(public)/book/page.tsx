@@ -10,7 +10,7 @@ import BookSessionSelector from "./_components/BookSessionSelector";
 import type { ScheduleSession, ClassTypeOption } from "@/types/schedule";
 
 export const metadata: Metadata = {
-  title: "Book a Class — Superhero CPR",
+  title: "Book a Class — SuperHeroCPR",
   description:
     "Select an upcoming CPR certification class and book your spot online.",
 };

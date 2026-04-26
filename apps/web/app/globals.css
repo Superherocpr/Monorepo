@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Comic Book custom font — used for brand name in footer */
+@font-face {
+  font-family: 'Comic Book';
+  src: url('/fonts/Comic Book.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme inline {
   /* Font family — Inter loaded via next/font/google, referenced by CSS var */
   --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;

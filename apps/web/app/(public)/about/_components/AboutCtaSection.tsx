@@ -15,7 +15,7 @@ export default function AboutCtaSection() {
           Ready to Become Certified?
         </h2>
         <p className="text-red-100 text-lg leading-relaxed">
-          Join thousands of students who have trained with Superhero CPR.
+          Join thousands of students who have trained with SuperHeroCPR.
           Classes available weekdays, evenings, and weekends.
         </p>
         <div className="flex flex-col sm:flex-row items-center gap-4">

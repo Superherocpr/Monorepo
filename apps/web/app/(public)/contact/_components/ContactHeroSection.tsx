@@ -7,8 +7,30 @@
 /** Renders the "Get In Touch" hero header. */
 export default function ContactHeroSection() {
   return (
-    <section className="bg-gray-900 py-16 text-center px-4">
-      <div className="max-w-3xl mx-auto">
+    <section
+      className="relative text-center px-4 py-16 overflow-hidden"
+      style={{ backgroundColor: "#0a5a8a" }}
+    >
+      <div
+        className="absolute bottom-0 left-0 pointer-events-none select-none"
+        style={{ transform: "translateY(50%)" }}
+        aria-hidden="true"
+      >
+        <img
+          src="/images/MainMaleHero2.svg"
+          alt=""
+          className="h-[700px] w-auto object-contain"
+        />
+      </div>
+
+      {/* Radial gradient — darkens center for text readability, fades to transparent at edges */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: "radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.25) 55%, transparent 100%)" }}
+        aria-hidden="true"
+      />
+
+      <div className="relative z-10 max-w-3xl mx-auto">
         <p className="text-red-500 text-sm font-semibold uppercase tracking-widest mb-3">
           Get In Touch
         </p>

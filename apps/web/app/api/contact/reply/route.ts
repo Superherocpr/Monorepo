@@ -104,7 +104,7 @@ export async function POST(request: Request) {
 
   // ── Send email via Zoho Mail API ───────────────────────────────────────────
   const zohoPayload = {
-    fromAddress: "info@superherocpr.com",
+    fromAddress: "contact@superherocpr.com",
     toAddress: submission.email,
     subject: subject.trim(),
     content: emailBody.trim(),

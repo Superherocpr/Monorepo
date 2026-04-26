@@ -28,8 +28,8 @@ export function PublicFooter() {
 
           {/* Brand */}
           <div>
-            <p className="text-white font-extrabold text-lg tracking-tight mb-2">
-              <span className="text-red-500">Superhero</span> CPR
+            <p className="text-white font-extrabold text-lg tracking-tight mb-2" style={{ fontFamily: "'Comic Book', sans-serif" }}>
+              <span className="text-white">SuperHero</span><span className="text-red-500">CPR</span>
             </p>
             <p className="text-sm leading-relaxed">
               AHA-certified CPR, BLS, and First Aid training in Tampa, Florida.
@@ -37,21 +37,29 @@ export function PublicFooter() {
             </p>
           </div>
 
-          {/* Nav links */}
+          {/* Nav links — split into two columns of 3 */}
           <div>
             <p className="text-white text-sm font-semibold mb-3">Quick Links</p>
-            <ul className="flex flex-col gap-2">
-              {FOOTER_LINKS.map(({ label, href }) => (
-                <li key={href}>
-                  <Link
-                    href={href}
-                    className="text-sm hover:text-white transition-colors duration-150"
-                  >
-                    {label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <div className="flex gap-8">
+              <ul className="flex flex-col gap-2">
+                {FOOTER_LINKS.slice(0, 3).map(({ label, href }) => (
+                  <li key={href}>
+                    <Link href={href} className="text-sm hover:text-white transition-colors duration-150">
+                      {label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <ul className="flex flex-col gap-2">
+                {FOOTER_LINKS.slice(3).map(({ label, href }) => (
+                  <li key={href}>
+                    <Link href={href} className="text-sm hover:text-white transition-colors duration-150">
+                      {label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
           {/* Contact info */}
@@ -61,10 +69,10 @@ export function PublicFooter() {
               <li>Tampa Bay Area, Florida</li>
               <li>
                 <a
-                  href="mailto:info@superherocpr.com"
+                  href="mailto:contact@superherocpr.com"
                   className="hover:text-white transition-colors duration-150"
                 >
-                  info@superherocpr.com
+                  contact@superherocpr.com
                 </a>
               </li>
             </ul>
@@ -73,7 +81,7 @@ export function PublicFooter() {
 
         {/* Bottom bar */}
         <div className="mt-10 pt-6 border-t border-gray-800 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-gray-500">
-          <p>© {year} Superhero CPR. All rights reserved.</p>
+          <p>© {year} SuperHeroCPR. All rights reserved.</p>
           <p>American Heart Association Authorized Training Center</p>
         </div>
       </div>

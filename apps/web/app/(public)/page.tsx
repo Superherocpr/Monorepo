@@ -1,5 +1,5 @@
 /**
- * / (home page) — the main public-facing landing page for Superhero CPR.
+ * / (home page) — the main public-facing landing page for SuperHeroCPR.
  * Server component. Each section independently fetches its own data.
  */
 
@@ -13,7 +13,7 @@ import SocialFeedSection from "./_components/home/SocialFeedSection";
 import FinalCtaSection from "./_components/home/FinalCtaSection";
 
 export const metadata: Metadata = {
-  title: "CPR Certification Classes — Tampa Bay | Superhero CPR",
+  title: "CPR Certification Classes — Tampa Bay | SuperHeroCPR",
   description:
     "American Heart Association CPR certification classes in Tampa Bay. On-location training from a licensed AHA instructor with thousands of real-world patients.",
 };

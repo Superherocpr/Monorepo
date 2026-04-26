@@ -79,6 +79,7 @@ export async function GET(request: Request) {
   };
 
   if (tokenData.error || !tokenData.access_token || !tokenData.refresh_token) {
+    console.error("Zoho token exchange response:", JSON.stringify(tokenData));
     const reason = encodeURIComponent(tokenData.error ?? "missing_tokens");
     redirect(`/admin/settings?zoho=error&reason=${reason}`);
   }

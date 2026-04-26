@@ -177,7 +177,7 @@ function ChartSkeleton() {
  */
 function exportCSV(data: AnalyticsData, rangeStart: string, rangeEnd: string) {
   const rows: string[][] = [
-    ["Superhero CPR Analytics Export"],
+    ["SuperHeroCPR Analytics Export"],
     [`Range: ${rangeStart.slice(0, 10)} to ${rangeEnd.slice(0, 10)}`],
     [],
     ["Revenue Summary"],

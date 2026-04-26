@@ -9,6 +9,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import { accountDeletedEmail } from "@/lib/emails";
 
 /** Archives the authenticated customer's account and sends a confirmation email. */
 export async function POST() {
@@ -51,18 +52,12 @@ export async function POST() {
 
   // Send account deletion confirmation email — non-fatal if this fails
   if (profile) {
+    const { subject, html } = accountDeletedEmail({ firstName: profile.first_name });
     await resend.emails.send({
-      from: "Superhero CPR <noreply@superherocpr.com>",
+      from: process.env.RESEND_FROM_EMAIL!,
       to: profile.email,
-      subject: "Your Superhero CPR account has been deleted",
-      html: `
-        <h1>Account Deleted</h1>
-        <p>Hi ${profile.first_name},</p>
-        <p>Your Superhero CPR account has been successfully deleted. You will no longer be able to log in.</p>
-        <p>Your certification history has been preserved for our records.</p>
-        <p>If you believe this was a mistake or wish to restore your account, please contact us at <a href="mailto:info@superherocpr.com">info@superherocpr.com</a> or call (813) 966-3969.</p>
-        <p>— The Superhero CPR Team</p>
-      `,
+      subject,
+      html,
     });
   }
 

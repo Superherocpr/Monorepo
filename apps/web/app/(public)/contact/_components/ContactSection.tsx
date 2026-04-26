@@ -71,7 +71,7 @@ export default function ContactSection() {
       setSubmitted(true);
     } catch {
       setSubmitError(
-        "Something went wrong. Please try again or email us directly at info@superherocpr.com"
+        "Something went wrong. Please try again or email us directly at contact@superherocpr.com"
       );
     } finally {
       setSubmitting(false);
@@ -103,10 +103,10 @@ export default function ContactSection() {
             label="Email Us"
           >
             <a
-              href="mailto:info@superherocpr.com"
+              href="mailto:contact@superherocpr.com"
               className="text-gray-700 hover:text-red-600 transition-colors duration-150 font-medium break-all"
             >
-              info@superherocpr.com
+              contact@superherocpr.com
             </a>
             <p className="text-sm text-gray-500 mt-1">
               We typically respond within 1 business day.

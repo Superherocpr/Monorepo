@@ -22,6 +22,7 @@
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import { invoiceEmail } from "@/lib/emails";
 import type { PaymentPlatform } from "@/types/users";
 
 // ---------------------------------------------------------------------------
@@ -366,140 +367,6 @@ async function createOnPlatform(
 }
 
 // ---------------------------------------------------------------------------
-// Email sender
-// ---------------------------------------------------------------------------
-
-/**
- * Sends the invoice email via Resend.
- * Silently skips if RESEND_API_KEY is not configured (dev environments).
- * Group invoices include a link to the /submit-roster page so the company can
- * pre-register their attendees before class day.
- */
-async function sendInvoiceEmail(params: {
-  invoiceNumber: string;
-  recipientName: string;
-  recipientEmail: string;
-  invoiceType: "individual" | "group";
-  companyName: string | null;
-  studentCount: number;
-  totalAmount: number;
-  className: string;
-  classDate: string;
-  locationName: string;
-  locationCity: string;
-  locationState: string;
-  notes: string | null;
-  paymentLink: string | null;
-  sessionId: string;
-}): Promise<void> {
-  if (!process.env.RESEND_API_KEY) return;
-
-  const resend = new Resend(process.env.RESEND_API_KEY);
-
-  const formattedDate = new Date(params.classDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-
-  const formattedAmount = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(params.totalAmount);
-
-  const paymentRow = params.paymentLink
-    ? `<tr>
-        <td style="padding:6px 0;color:#6b7280;font-size:14px;">Pay here:</td>
-        <td style="padding:6px 0;font-size:14px;"><a href="${params.paymentLink}" style="color:#dc2626;">${params.paymentLink}</a></td>
-       </tr>`
-    : "";
-
-  const rosterSection =
-    params.invoiceType === "group"
-      ? `<hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
-         <p style="font-size:14px;color:#374151;font-weight:600;">Submitting your student roster</p>
-         <p style="font-size:14px;color:#6b7280;">
-           If you have a list of staff attending this class, you can submit it in advance to save time on class day.
-           This is only needed if you have multiple attendees and want to pre-register them.
-         </p>
-         <p style="font-size:14px;color:#6b7280;">Your invoice number: <strong>${params.invoiceNumber}</strong></p>
-         <p>
-           <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://superherocpr.com"}/submit-roster?invoice=${params.invoiceNumber}"
-              style="display:inline-block;background:#dc2626;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:600;">
-             Submit Your Roster →
-           </a>
-         </p>
-         <p style="font-size:12px;color:#9ca3af;">Note: Individual students do not need to submit a roster.</p>`
-      : "";
-
-  const companyRow = params.companyName
-    ? `<tr>
-        <td style="padding:6px 0;color:#6b7280;font-size:14px;">Company:</td>
-        <td style="padding:6px 0;font-size:14px;">${params.companyName}</td>
-       </tr>`
-    : "";
-
-  const notesRow = params.notes
-    ? `<tr>
-        <td style="padding:6px 0;color:#6b7280;font-size:14px;vertical-align:top;">Note:</td>
-        <td style="padding:6px 0;font-size:14px;">${params.notes}</td>
-       </tr>`
-    : "";
-
-  const html = `
-    <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Invoice from Superhero CPR</h1>
-      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Invoice number: <strong>${params.invoiceNumber}</strong></p>
-
-      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
-        <tr>
-          <td style="padding:6px 0;color:#6b7280;font-size:14px;">To:</td>
-          <td style="padding:6px 0;font-size:14px;font-weight:600;">${params.recipientName}</td>
-        </tr>
-        ${companyRow}
-        <tr>
-          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Class:</td>
-          <td style="padding:6px 0;font-size:14px;">${params.className}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Date:</td>
-          <td style="padding:6px 0;font-size:14px;">${formattedDate}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Location:</td>
-          <td style="padding:6px 0;font-size:14px;">${params.locationName}, ${params.locationCity}, ${params.locationState}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Students:</td>
-          <td style="padding:6px 0;font-size:14px;">${params.studentCount}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Amount:</td>
-          <td style="padding:6px 0;font-size:16px;font-weight:700;color:#111827;">${formattedAmount}</td>
-        </tr>
-        ${notesRow}
-        ${paymentRow}
-      </table>
-
-      ${rosterSection}
-
-      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
-      <p style="font-size:12px;color:#9ca3af;">
-        This invoice was sent by a Superhero CPR instructor. For questions, reply to this email.
-      </p>
-    </div>
-  `;
-
-  await resend.emails.send({
-    from: "Superhero CPR <noreply@superherocpr.com>",
-    to: params.recipientEmail,
-    subject: `Invoice ${params.invoiceNumber} — ${params.className} on ${formattedDate}`,
-    html,
-  });
-}
-
-// ---------------------------------------------------------------------------
 // Route handler
 // ---------------------------------------------------------------------------
 
@@ -580,7 +447,7 @@ export async function POST(request: Request) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role, email")
+    .select("id, role, email, first_name, last_name")
     .eq("id", user.id)
     .single();
 
@@ -659,6 +526,30 @@ export async function POST(request: Request) {
   // Step 3: Get the instructor's active payment account
   const instructorId =
     profile.role === "instructor" ? profile.id : sessionData.instructor_id;
+
+  // Resolve the instructor's display name for the invoice email.
+  // If the calling user IS the instructor, use their own profile.
+  // If a super_admin is creating on behalf of an instructor, fetch that profile.
+  let instructorName: string | null = null;
+  if (profile.role === "instructor") {
+    instructorName =
+      [(profile as { first_name?: string | null; last_name?: string | null }).first_name,
+       (profile as { first_name?: string | null; last_name?: string | null }).last_name]
+        .filter(Boolean)
+        .join(" ") || null;
+  } else {
+    const { data: instructorProfile } = await adminClient
+      .from("profiles")
+      .select("first_name, last_name")
+      .eq("id", instructorId)
+      .single();
+    instructorName = instructorProfile
+      ? [(instructorProfile as { first_name?: string | null; last_name?: string | null }).first_name,
+         (instructorProfile as { first_name?: string | null; last_name?: string | null }).last_name]
+          .filter(Boolean)
+          .join(" ") || null
+      : null;
+  }
 
   const { data: paymentAccount } = await adminClient
     .from("instructor_payment_accounts")
@@ -759,23 +650,31 @@ export async function POST(request: Request) {
   ]);
 
   // Step 7: Send the invoice email to the recipient
-  await sendInvoiceEmail({
-    invoiceNumber: invoice.invoice_number,
-    recipientName: recipientName as string,
-    recipientEmail: recipientEmail as string,
-    invoiceType: invoiceType as "individual" | "group",
-    companyName: companyName as string | null,
-    studentCount: studentCount as number,
-    totalAmount: totalAmount as number,
-    className,
-    classDate: sessionData.starts_at as string,
-    locationName,
-    locationCity,
-    locationState,
-    notes: notes as string | null,
-    paymentLink,
-    sessionId: sessionId as string,
-  });
+  if (process.env.RESEND_API_KEY) {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const { subject, html } = invoiceEmail({
+      invoiceNumber: invoice.invoice_number,
+      recipientName: recipientName as string,
+      invoiceType: invoiceType as "individual" | "group",
+      companyName: companyName as string | null,
+      studentCount: studentCount as number,
+      totalAmount: totalAmount as number,
+      className,
+      classDate: sessionData.starts_at as string,
+      locationName,
+      locationCity,
+      locationState,
+      instructorName,
+      notes: notes as string | null,
+      paymentLink,
+    });
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL!,
+      to: recipientEmail as string,
+      subject,
+      html,
+    });
+  }
 
   return Response.json({
     success: true,

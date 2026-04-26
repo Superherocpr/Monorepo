@@ -12,7 +12,7 @@ import ContactFaqTeaser from "./_components/ContactFaqTeaser";
 export const metadata: Metadata = {
   title: "Contact Us",
   description:
-    "Get in touch with Superhero CPR. Questions about CPR classes, group bookings, or corporate training in the Tampa Bay area.",
+    "Get in touch with SuperHeroCPR. Questions about CPR classes, group bookings, or corporate training in the Tampa Bay area.",
 };
 
 /** Renders the full /contact page. */
