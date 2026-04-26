@@ -98,31 +98,31 @@ export async function POST(request: Request) {
     firstName: name.trim().split(" ")[0],
   });
 
-  // Notification email to business — intentionally fire-and-forget; errors are logged
-  const businessEmailPromise = resend.emails
-    .send({
+  // Notification email to business
+  const [businessResult, autoReplyResult] = await Promise.all([
+    resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
-      to: "info@superherocpr.com",
+      to: process.env.OWNER_EMAIL ?? "info@superherocpr.com",
       subject: businessEmail.subject,
       html: businessEmail.html,
-    })
-    .catch((err: unknown) =>
-      console.error("[contact] Failed to send business notification email:", err)
-    );
-
-  // Auto-reply to submitter
-  const autoReplyPromise = resend.emails
-    .send({
+    }),
+    resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
       to: email.trim(),
       subject: autoReply.subject,
       html: autoReply.html,
-    })
-    .catch((err: unknown) =>
-      console.error("[contact] Failed to send auto-reply email:", err)
-    );
+    }),
+  ]);
 
-  await Promise.all([businessEmailPromise, autoReplyPromise]);
+  // Log any Resend errors so they appear in server logs / Amplify CloudWatch.
+  // The Resend SDK resolves (not rejects) on API-level errors, so .catch() alone
+  // would miss these. Failures are non-fatal — the submission is already stored.
+  if (businessResult.error) {
+    console.error("[contact] Business notification email failed:", businessResult.error);
+  }
+  if (autoReplyResult.error) {
+    console.error("[contact] Auto-reply email failed:", autoReplyResult.error);
+  }
 
   return NextResponse.json({ success: true });
 }

@@ -108,9 +108,12 @@ export default async function SettingsPage({
     };
   });
 
-  // Check Zoho connection status — account ID is only set when connected
-  const zohoAccountId = await getSetting("zoho_account_id");
-  const zohoEmail = await getSetting("zoho_connected_email");
+  // Check Zoho connection status using the durable credentials needed to refresh.
+  const [zohoAccountId, zohoRefreshToken, zohoEmail] = await Promise.all([
+    getSetting("zoho_account_id"),
+    getSetting("zoho_refresh_token"),
+    getSetting("zoho_connected_email"),
+  ]);
 
   const params = await searchParams;
   const zohoParam = params.zoho ?? null;
@@ -120,7 +123,7 @@ export default async function SettingsPage({
       classTypes={(classTypes ?? []) as ClassType[]}
       presetGrades={(presetGrades ?? []) as PresetGrade[]}
       instructors={instructors}
-      zohoConnected={Boolean(zohoAccountId)}
+      zohoConnected={Boolean(zohoAccountId && zohoRefreshToken)}
       zohoEmail={zohoEmail}
       zohoParam={zohoParam}
     />
