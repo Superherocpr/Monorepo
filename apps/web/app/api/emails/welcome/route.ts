@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   const { subject, html } = welcomeEmail({ firstName });
 
   await resend.emails.send({
-    from: "SuperHeroCPR <noreply@superherocpr.com>",
+    from: process.env.RESEND_FROM_EMAIL!,
     to: email,
     subject,
     html,

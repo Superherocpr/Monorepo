@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     const resend = new Resend(process.env.RESEND_API_KEY);
     const { subject, html } = rollcallWelcomeEmail({ firstName });
     await resend.emails.send({
-      from: "SuperHeroCPR <noreply@superherocpr.com>",
+      from: process.env.RESEND_FROM_EMAIL!,
       to: email.toLowerCase(),
       subject,
       html,

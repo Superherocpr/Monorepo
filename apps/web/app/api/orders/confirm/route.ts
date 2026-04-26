@@ -259,7 +259,7 @@ export async function POST(request: Request) {
     // Confirmation to customer
     resend.emails
       .send({
-        from: "SuperHeroCPR <noreply@superherocpr.com>",
+        from: process.env.RESEND_FROM_EMAIL!,
         to: shippingInfo.email,
         subject: "Your SuperHeroCPR Order is Confirmed!",
         html: `
@@ -291,7 +291,7 @@ export async function POST(request: Request) {
     // Notification to business
     resend.emails
       .send({
-        from: "SuperHeroCPR Website <noreply@superherocpr.com>",
+        from: process.env.RESEND_FROM_EMAIL!,
         to: "info@superherocpr.com",
         subject: `New Merch Order — $${totalNum.toFixed(2)}`,
         html: `

@@ -54,7 +54,7 @@ export async function POST() {
   if (profile) {
     const { subject, html } = accountDeletedEmail({ firstName: profile.first_name });
     await resend.emails.send({
-      from: "SuperHeroCPR <noreply@superherocpr.com>",
+      from: process.env.RESEND_FROM_EMAIL!,
       to: profile.email,
       subject,
       html,

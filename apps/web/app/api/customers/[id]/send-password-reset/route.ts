@@ -77,7 +77,7 @@ export async function POST(
       actionLink: linkData.properties.action_link,
     });
     await resend.emails.send({
-      from: "SuperHeroCPR <noreply@superherocpr.com>",
+      from: process.env.RESEND_FROM_EMAIL!,
       to: customer.email,
       subject,
       html,

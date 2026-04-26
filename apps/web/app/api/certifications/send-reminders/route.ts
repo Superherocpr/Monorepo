@@ -102,7 +102,7 @@ export async function POST(_request: Request) {
         daysRemaining,
       });
       await resend.emails.send({
-        from: "SuperHeroCPR <noreply@superherocpr.com>",
+        from: process.env.RESEND_FROM_EMAIL!,
         to: profileData.email,
         subject,
         html,

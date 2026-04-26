@@ -115,7 +115,7 @@ export async function POST(request: Request) {
       });
 
       await resend.emails.send({
-        from: "SuperHeroCPR <noreply@superherocpr.com>",
+        from: process.env.RESEND_FROM_EMAIL!,
         to: customer.email,
         subject,
         html,

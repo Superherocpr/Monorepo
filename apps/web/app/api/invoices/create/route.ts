@@ -644,7 +644,7 @@ export async function POST(request: Request) {
       paymentLink,
     });
     await resend.emails.send({
-      from: "SuperHeroCPR <noreply@superherocpr.com>",
+      from: process.env.RESEND_FROM_EMAIL!,
       to: recipientEmail as string,
       subject,
       html,

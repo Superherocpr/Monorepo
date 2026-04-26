@@ -213,7 +213,7 @@ export async function POST(request: Request) {
     if (submittedByEmail) {
       await resend.emails
         .send({
-          from: "SuperHeroCPR <noreply@superherocpr.com>",
+          from: process.env.RESEND_FROM_EMAIL!,
           to: submittedByEmail,
           subject: `Your roster for invoice ${invoiceRef} has been received`,
           html: `
@@ -236,7 +236,7 @@ export async function POST(request: Request) {
     // Manager notification so staff know a new roster is ready to import
     await resend.emails
       .send({
-        from: "SuperHeroCPR <noreply@superherocpr.com>",
+        from: process.env.RESEND_FROM_EMAIL!,
         to: "info@superherocpr.com",
         subject: `Roster submitted — Invoice ${invoiceRef}`,
         html: `

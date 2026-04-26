@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       studentCount: invoice.student_count as number,
     });
     await resend.emails.send({
-      from: "SuperHeroCPR <noreply@superherocpr.com>",
+      from: process.env.RESEND_FROM_EMAIL!,
       to: instructorProfile.email,
       subject,
       html,

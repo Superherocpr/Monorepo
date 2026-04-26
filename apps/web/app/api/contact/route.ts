@@ -101,7 +101,7 @@ export async function POST(request: Request) {
   // Notification email to business — intentionally fire-and-forget; errors are logged
   const businessEmailPromise = resend.emails
     .send({
-      from: "SuperHeroCPR Website <noreply@superherocpr.com>",
+      from: process.env.RESEND_FROM_EMAIL!,
       to: "info@superherocpr.com",
       subject: businessEmail.subject,
       html: businessEmail.html,
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
   // Auto-reply to submitter
   const autoReplyPromise = resend.emails
     .send({
-      from: "SuperHeroCPR <noreply@superherocpr.com>",
+      from: process.env.RESEND_FROM_EMAIL!,
       to: email.trim(),
       subject: autoReply.subject,
       html: autoReply.html,
