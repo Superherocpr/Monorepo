@@ -121,85 +121,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
       <table class="es-wrapper" width="100%" cellspacing="0" cellpadding="0" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;padding:0;Margin:0;width:100%;height:100%;background-repeat:repeat;background-position:center top;background-color:#FFFFFF">
         <tr style="border-collapse:collapse">
           <td valign="top" style="padding:0;Margin:0">
-            <table class="es-content" cellspacing="0" cellpadding="0" align="center" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;table-layout:fixed !important;width:100%">
-              <tr style="border-collapse:collapse">
-                <td class="es-adaptive" align="center" style="padding:0;Margin:0">
-                  <table class="es-content-body" cellspacing="0" cellpadding="0" align="center" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;background-color:#FFFFFF;width:600px">
-                    <tr style="border-collapse:collapse">
-                      <td align="left" style="Margin:0;padding-top:10px;padding-bottom:10px;padding-left:20px;padding-right:20px">
-                        <table class="es-left" cellspacing="0" cellpadding="0" align="left" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;float:left">
-                          <tr style="border-collapse:collapse">
-                            <td align="left" style="padding:0;Margin:0;width:268px">
-                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px">
-                                <tr style="border-collapse:collapse">
-                                  <td class="es-infoblock es-m-txt-c" align="left" style="padding:0;Margin:0;line-height:14px;font-size:12px;color:#CCCCCC"><p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:14px;color:#CCCCCC;font-size:12px">COPYRIGHT © 2025 ALL RIGHTS RESERVED</p></td>
-                                </tr>
-                              </table>
-                            </td>
-                          </tr>
-                        </table>
-                        <table class="es-right" cellspacing="0" cellpadding="0" align="right" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;float:right">
-                          <tr style="border-collapse:collapse">
-                            <td align="left" style="padding:0;Margin:0;width:272px">
-                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px">
-                                <tr style="border-collapse:collapse">
-                                  <td class="es-infoblock es-m-txt-c" align="right" style="padding:0;Margin:0;line-height:14px;font-size:12px;color:#CCCCCC"><p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:14px;color:#CCCCCC;font-size:12px"><a href="http://#" target="_blank" style="-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;text-decoration:underline;color:#CCCCCC;font-size:12px">View in browser</a></p></td>
-                                </tr>
-                              </table>
-                            </td>
-                          </tr>
-                        </table>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Header / Hero -->
-            <table class="es-header" cellspacing="0" cellpadding="0" align="center" style="table-layout:fixed !important;width:100%;background-color:transparent;background-repeat:repeat;background-position:center top">
-              <tr>
-                <td class="es-adaptive" align="center" style="padding:0;Margin:0">
-                  <table class="es-header-body" cellspacing="0" cellpadding="0" align="center" style="background-color:transparent;width:600px">
-                    <tr>
-                      <td style="Margin:0;padding-top:15px;padding-bottom:20px;padding-left:20px;padding-right:20px;background-color:#ffffff" bgcolor="#ffffff" align="left">
-                        <table class="es-left" cellspacing="0" cellpadding="0" align="left" style="float:left">
-                          <tr>
-                            <td class="es-m-p0r" valign="top" align="center" style="padding:0;Margin:0;width:174px">
-                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
-                                <tr>
-                                  <td class="es-m-p0l es-m-txt-c" align="center" style="padding:0;Margin:0;font-size:0px"><a href="https://viewstripo.email/" target="_blank" style="text-decoration:underline;color:#333333;font-size:14px"><img src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/94931603222224192.gif" alt style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="154" height="53"></a></td>
-                                </tr>
-                              </table>
-                            </td>
-                          </tr>
-                        </table>
-                        <table cellspacing="0" cellpadding="0" align="right">
-                          <tr>
-                            <td align="left" style="padding:0;Margin:0;width:366px">
-                              <table style="border-left:2px solid #808080;border-right:2px solid #808080;border-top:2px solid #808080;border-bottom:2px solid #808080" width="100%" cellspacing="0" cellpadding="0" role="presentation">
-                                <tr>
-                                  <td style="padding:0;Margin:0">
-                                    <table class="es-menu" width="100%" cellspacing="0" cellpadding="0" role="presentation">
-                                      <tr class="links">
-                                        <td style="Margin:0;padding-left:5px;padding-right:5px;padding-top:18px;padding-bottom:18px;border:0" width="25.00%" bgcolor="#ffffff" align="center"><a target="_blank" style="display:block;color:#e1261d;font-size:14px" href="https://superherocpr.com">Stories</a></td>
-                                        <td class="es-mobile-hidden" style="Margin:0;padding-left:5px;padding-right:5px;padding-top:18px;padding-bottom:18px;border:0" width="25.00%" bgcolor="#ffffff" align="center"><a target="_blank" style="display:block;color:#e1261d;font-size:14px" href="https://superherocpr.com">Certification</a></td>
-                                        <td style="Margin:0;padding-left:5px;padding-right:5px;padding-top:18px;padding-bottom:18px;border:0" width="25.00%" bgcolor="#ffffff" align="center"><a target="_blank" style="display:block;color:#e1261d;font-size:14px" href="https://superherocpr.com/#book">Renew</a></td>
-                                        <td style="Margin:0;padding-left:5px;padding-right:5px;padding-top:18px;padding-bottom:18px;border:0" width="25.00%" bgcolor="#ffffff" align="center"><a target="_blank" style="display:block;color:#e1261d;font-size:14px" href="https://superherocpr.com">For Kids</a></td>
-                                      </tr>
-                                    </table>
-                                  </td>
-                                </tr>
-                              </table>
-                            </td>
-                          </tr>
-                        </table>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
+            <!-- Header content removed: copyright, view-in-browser link, logo image and menu removed to rely on global wrapper banner -->
 
             <!-- Main content from Welcome Hero (brand normalized) -->
             <table class="es-content" cellspacing="0" cellpadding="0" align="center" style="table-layout:fixed !important;width:100%">
@@ -405,7 +327,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                                   </td>
                                 </tr>
                                 <tr>
-                                  <td align="center" style="padding:0;Margin:0;padding-top:10px;padding-bottom:10px"><p style="Margin:0;color:#FFFFFF;font-size:14px">© 2025&nbsp;SuperHeroCPR</p></td>
+                                  <td align="center" style="padding:0;Margin:0;padding-top:10px;padding-bottom:10px"><p style="Margin:0;color:#FFFFFF;font-size:14px">© ${new Date().getFullYear()}&nbsp;SuperHeroCPR</p></td>
                                 </tr>
                               </table>
                             </td>
