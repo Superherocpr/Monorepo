@@ -66,16 +66,298 @@ export function welcomeEmail({ firstName }: { firstName: string }): EmailContent
  * @param firstName - The student's first name.
  */
 export function rollcallWelcomeEmail({ firstName }: { firstName: string }): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
+
+  const content = `
+    <style type="text/css">
+#outlook a { padding:0; }
+.ExternalClass { width:100%; }
+.ExternalClass, .ExternalClass p, .ExternalClass span, .ExternalClass font, .ExternalClass td, .ExternalClass div { line-height:100%; }
+.es-button { mso-style-priority:100!important; text-decoration:none!important; }
+a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!important; font-size:inherit!important; font-family:inherit!important; font-weight:inherit!important; line-height:inherit!important; }
+.es-desk-hidden { display:none; float:left; overflow:hidden; width:0; max-height:0; line-height:0; mso-hide:all; }
+[data-ogsb] .es-button { border-width:0!important; padding:5px 30px 5px 30px!important; }
+@media only screen and (max-width:600px) {
+  p, ul li, ol li, a { line-height:150%!important }
+  h1 { font-size:30px!important; text-align:center; line-height:120%!important }
+  h2 { font-size:26px!important; text-align:center; line-height:120%!important }
+  h3 { font-size:20px!important; text-align:center; line-height:120%!important }
+  .es-menu td a { font-size:13px!important }
+  .es-header-body p, .es-header-body ul li, .es-header-body ol li, .es-header-body a { font-size:16px!important }
+  .es-content-body p, .es-content-body ul li, .es-content-body ol li, .es-content-body a { font-size:16px!important }
+  .es-footer-body p, .es-footer-body ul li, .es-footer-body ol li, .es-footer-body a { font-size:16px!important }
+  .es-infoblock p, .es-infoblock ul li, .es-infoblock ol li, .es-infoblock a { font-size:12px!important }
+  *[class="gmail-fix"] { display:none!important }
+  .es-m-txt-c, .es-m-txt-c h1, .es-m-txt-c h2, .es-m-txt-c h3 { text-align:center!important }
+  .es-m-txt-r, .es-m-txt-r h1, .es-m-txt-r h2, .es-m-txt-r h3 { text-align:right!important }
+  .es-m-txt-l, .es-m-txt-l h1, .es-m-txt-l h2, .es-m-txt-l h3 { text-align:left!important }
+  .es-m-txt-r img, .es-m-txt-c img, .es-m-txt-l img { display:inline!important }
+  .es-button-border { display:block!important }
+  .es-btn-fw { border-width:10px 0px!important; text-align:center!important }
+  .es-adaptive table, .es-btn-fw, .es-btn-fw-brdr, .es-left, .es-right { width:100%!important }
+  .es-content table, .es-header table, .es-footer table, .es-content, .es-footer, .es-header { width:100%!important; max-width:600px!important }
+  .es-adapt-td { display:block!important; width:100%!important }
+  .adapt-img { width:100%!important; height:auto!important }
+  .es-m-p0 { padding:0px!important }
+  .es-m-p0r { padding-right:0px!important }
+  .es-m-p0l { padding-left:0px!important }
+  .es-m-p0t { padding-top:0px!important }
+  .es-m-p0b { padding-bottom:0!important }
+  .es-m-p20b { padding-bottom:20px!important }
+  .es-mobile-hidden, .es-hidden { display:none!important }
+  tr.es-desk-hidden, td.es-desk-hidden, table.es-desk-hidden { width:auto!important; overflow:visible!important; float:none!important; max-height:inherit!important; line-height:inherit!important }
+  tr.es-desk-hidden { display:table-row!important }
+  table.es-desk-hidden { display:table!important }
+  td.es-desk-menu-hidden { display:table-cell!important }
+  .es-menu td { width:1%!important }
+  table.es-table-not-adapt, .esd-block-html table { width:auto!important }
+  table.es-social { display:inline-block!important }
+  table.es-social td { display:inline-block!important }
+  a.es-button, button.es-button { font-size:16px!important; display:block!important; border-width:10px 0px 10px 0px!important }
+}
+    </style>
+
+    <div class="es-wrapper-color" style="background-color:#FFFFFF">
+      <table class="es-wrapper" width="100%" cellspacing="0" cellpadding="0" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;padding:0;Margin:0;width:100%;height:100%;background-repeat:repeat;background-position:center top;background-color:#FFFFFF">
+        <tr style="border-collapse:collapse">
+          <td valign="top" style="padding:0;Margin:0">
+            <table class="es-content" cellspacing="0" cellpadding="0" align="center" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;table-layout:fixed !important;width:100%">
+              <tr style="border-collapse:collapse">
+                <td class="es-adaptive" align="center" style="padding:0;Margin:0">
+                  <table class="es-content-body" cellspacing="0" cellpadding="0" align="center" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;background-color:#FFFFFF;width:600px">
+                    <tr style="border-collapse:collapse">
+                      <td align="left" style="Margin:0;padding-top:10px;padding-bottom:10px;padding-left:20px;padding-right:20px">
+                        <table class="es-left" cellspacing="0" cellpadding="0" align="left" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;float:left">
+                          <tr style="border-collapse:collapse">
+                            <td align="left" style="padding:0;Margin:0;width:268px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px">
+                                <tr style="border-collapse:collapse">
+                                  <td class="es-infoblock es-m-txt-c" align="left" style="padding:0;Margin:0;line-height:14px;font-size:12px;color:#CCCCCC"><p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:14px;color:#CCCCCC;font-size:12px">COPYRIGHT © 2025 ALL RIGHTS RESERVED</p></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                        <table class="es-right" cellspacing="0" cellpadding="0" align="right" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;float:right">
+                          <tr style="border-collapse:collapse">
+                            <td align="left" style="padding:0;Margin:0;width:272px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px">
+                                <tr style="border-collapse:collapse">
+                                  <td class="es-infoblock es-m-txt-c" align="right" style="padding:0;Margin:0;line-height:14px;font-size:12px;color:#CCCCCC"><p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:14px;color:#CCCCCC;font-size:12px"><a href="http://#" target="_blank" style="-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;text-decoration:underline;color:#CCCCCC;font-size:12px">View in browser</a></p></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Header / Hero -->
+            <table class="es-header" cellspacing="0" cellpadding="0" align="center" style="table-layout:fixed !important;width:100%;background-color:transparent;background-repeat:repeat;background-position:center top">
+              <tr>
+                <td class="es-adaptive" align="center" style="padding:0;Margin:0">
+                  <table class="es-header-body" cellspacing="0" cellpadding="0" align="center" style="background-color:transparent;width:600px">
+                    <tr>
+                      <td style="Margin:0;padding-top:15px;padding-bottom:20px;padding-left:20px;padding-right:20px;background-color:#ffffff" bgcolor="#ffffff" align="left">
+                        <table class="es-left" cellspacing="0" cellpadding="0" align="left" style="float:left">
+                          <tr>
+                            <td class="es-m-p0r" valign="top" align="center" style="padding:0;Margin:0;width:174px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr>
+                                  <td class="es-m-p0l es-m-txt-c" align="center" style="padding:0;Margin:0;font-size:0px"><a href="https://viewstripo.email/" target="_blank" style="text-decoration:underline;color:#333333;font-size:14px"><img src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/94931603222224192.gif" alt style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="154" height="53"></a></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                        <table cellspacing="0" cellpadding="0" align="right">
+                          <tr>
+                            <td align="left" style="padding:0;Margin:0;width:366px">
+                              <table style="border-left:2px solid #808080;border-right:2px solid #808080;border-top:2px solid #808080;border-bottom:2px solid #808080" width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr>
+                                  <td style="padding:0;Margin:0">
+                                    <table class="es-menu" width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                      <tr class="links">
+                                        <td style="Margin:0;padding-left:5px;padding-right:5px;padding-top:18px;padding-bottom:18px;border:0" width="25.00%" bgcolor="#ffffff" align="center"><a target="_blank" style="display:block;color:#e1261d;font-size:14px" href="https://superherocpr.com">Stories</a></td>
+                                        <td class="es-mobile-hidden" style="Margin:0;padding-left:5px;padding-right:5px;padding-top:18px;padding-bottom:18px;border:0" width="25.00%" bgcolor="#ffffff" align="center"><a target="_blank" style="display:block;color:#e1261d;font-size:14px" href="https://superherocpr.com">Certification</a></td>
+                                        <td style="Margin:0;padding-left:5px;padding-right:5px;padding-top:18px;padding-bottom:18px;border:0" width="25.00%" bgcolor="#ffffff" align="center"><a target="_blank" style="display:block;color:#e1261d;font-size:14px" href="https://superherocpr.com/#book">Renew</a></td>
+                                        <td style="Margin:0;padding-left:5px;padding-right:5px;padding-top:18px;padding-bottom:18px;border:0" width="25.00%" bgcolor="#ffffff" align="center"><a target="_blank" style="display:block;color:#e1261d;font-size:14px" href="https://superherocpr.com">For Kids</a></td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Main content from Welcome Hero (brand normalized) -->
+            <table class="es-content" cellspacing="0" cellpadding="0" align="center" style="table-layout:fixed !important;width:100%">
+              <tr>
+                <td align="center" style="padding:0;Margin:0">
+                  <table class="es-content-body" cellspacing="0" cellpadding="0" bgcolor="#ffffff" align="center" style="background-color:#FFFFFF;width:600px">
+                    <tr>
+                      <td align="left" bgcolor="#ffffff" style="padding:0;Margin:0;padding-top:20px;padding-left:20px;padding-right:20px;background-color:#ffffff">
+                        <table width="100%" cellspacing="0" cellpadding="0">
+                          <tr>
+                            <td valign="top" align="center" style="padding:0;Margin:0;width:560px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0"><p style="Margin:0;line-height:21px;color:#333333;font-size:14px"><strong>SuperHeroCPR</strong></p></td>
+                                </tr>
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0"><h2 style="Margin:0;line-height:29px;font-size:24px;color:#e1261d">Welcomes You New Hero!</h2></td>
+                                </tr>
+                                <tr>
+                                  <td class="es-m-txt-c" align="left" style="padding:0;Margin:0;padding-top:10px"><h1 style="font-size:22px;margin:8px 0">Welcome, ${safeFirstName}!</h1><p style="Margin:0;line-height:21px;color:#000000;font-size:14px">Today you have taken an important step. Getting educated on proper CPR practices is the first step to saving the life of someone choking, having a heart attack or any other cardio or pulmonary problems.</p></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Image / CTA -->
+            <table cellpadding="0" cellspacing="0" class="es-content" align="center" style="width:100%">
+              <tr>
+                <td align="center" style="padding:0;Margin:0">
+                  <table bgcolor="#ffffff" class="es-content-body" align="center" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF;width:600px">
+                    <tr>
+                      <td align="left" style="padding:0;Margin:0;padding-top:20px;padding-left:20px;padding-right:20px">
+                        <table cellpadding="0" cellspacing="0" width="100%">
+                          <tr>
+                            <td align="center" valign="top" style="padding:0;Margin:0;width:560px">
+                              <table cellpadding="0" cellspacing="0" width="100%" role="presentation">
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0"><a target="_blank" href="https://youtu.be/JeIjJqi6WuM" style="text-decoration:underline;color:#333333;font-size:14px"><img class="adapt-img" src="https://obwshc.stripocdn.email/content/guids/videoImgGuid/images/93271603261079653.png" alt="Welcome New Heroes!" width="560" title="Welcome New Heroes!" height="315" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Two column feature area -->
+            <table class="es-content" cellspacing="0" cellpadding="0" align="center">
+              <tr>
+                <td align="center" style="padding:0;Margin:0">
+                  <table class="es-content-body" cellspacing="0" cellpadding="0" bgcolor="#ffffff" align="center" style="background-color:#FFFFFF;width:600px">
+                    <tr>
+                      <td align="left" style="padding:20px;Margin:0">
+                        <table class="es-left" cellspacing="0" cellpadding="0" align="left" style="float:left">
+                          <tr>
+                            <td class="es-m-p20b" align="left" style="padding:0;Margin:0;width:270px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0;font-size:0px"><img class="adapt-img" src="https://superherocpr.com/wp-content/uploads/2015/10/chest-and-hands.jpg" alt style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="270" height="280"></td>
+                                </tr>
+                                <tr>
+                                  <td align="left" style="padding:0;Margin:0;padding-bottom:10px;padding-top:15px"><h3 style="Margin:0;line-height:24px;font-size:20px;color:#333333"><strong>Our Instructors</strong></h3></td>
+                                </tr>
+                                <tr>
+                                  <td class="es-m-txt-c" align="left" style="padding:0;Margin:0;padding-bottom:20px"><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">There's a saying, "<strong><em><span>Those who can't do, teach</span></em></strong>". Well, here at <strong><span>SuperHeroCPR</span></strong> our instructors not only teach, but they <strong><span>do</span></strong>! in fact, they "do" regularly.</p><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">You can trust that the information is not only <strong><span>up-to-date</span></strong> in theory but also in practice. And we get A LOT of practice. With <strong><em><span>THOUSANDS</span></em></strong> <em><span>of documented CPR performances</span></em> on real patients, we do, did, and done!!</p><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">Now it's <strong><span>YOUR</span></strong> time to <a target="_blank" href="https://superherocpr.com/" style="text-decoration:underline;color:#333333;font-size:14px">JOIN US!</a> We need your help to keep your family safe.</p></td>
+                                </tr>
+                                <tr>
+                                  <td align="left" style="padding:0;Margin:0"><span class="es-button-border" style="border-style:solid;border-color:#808080;background:#FFFFFF;border-width:2px;display:inline-block;border-radius:0px;width:auto"><a href="https://superherocpr.com" class="es-button" target="_blank" style="color:#cc0000;font-size:16px;border-style:solid;border-color:#FFFFFF;border-width:5px 30px 5px 30px;display:inline-block;background:#FFFFFF;border-radius:0px;font-weight:bold;line-height:19px;width:auto;text-align:center">Join Us</a></span></td>
+                                </tr>
+                              </table>
+                            </td>
+                            <td class="es-right" cellspacing="0" cellpadding="0" align="right" style="float:right">
+                              <tr>
+                                <td class="es-m-p20b" align="left" style="padding:0;Margin:0;width:270px">
+                                  <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                    <tr>
+                                      <td align="center" style="padding:0;Margin:0;font-size:0px"><img class="adapt-img" src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/29811603252019707.jpg" alt style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="270" height="188"></td>
+                                    </tr>
+                                    <tr>
+                                      <td align="left" style="padding:0;Margin:0;padding-bottom:10px;padding-top:15px"><h3 style="Margin:0;line-height:24px;font-size:20px;color:#333333"><strong>The JUST - US League</strong></h3></td>
+                                    </tr>
+                                    <tr>
+                                      <td class="es-m-txt-c" align="left" style="padding:0;Margin:0;padding-bottom:20px"><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">The <strong><span>JUST - US League</span></strong> is an <em><span>elite group</span></em> of super-secret, highly intelligent, extremely special individuals, not like you or me.</p><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">So I guess <strong><em><span>&nbsp;it's not-so-super-secret&nbsp;</span></em></strong>and <strong><span>they are exactly like you and me</span></strong>. But they <em><span>are </span></em><strong><em><span>SPECIAL</span></em></strong>. Why?...</p><p style="Margin:0;line-height:21px;color:#333333;font-size:14px">Because <strong><span>they made the choice to become a hero</span></strong>. Always <strong><span>&nbsp;ready to save a life</span></strong> if there is a cardiac emergency. <strong><em><span>Will you stand with them?</span></em></strong></p></td>
+                                    </tr>
+                                    <tr>
+                                      <td align="left" style="padding:0;Margin:0"><span class="es-button-border" style="border-style:solid;border-color:#808080;background:#f0f0f0;border-width:2px;display:inline-block;border-radius:0px;width:auto"><a href="https://superherocpr.com" class="es-button" target="_blank" style="color:#E1261D;font-size:16px;border-style:solid;border-color:#FFFFFF;border-width:5px 30px 5px 30px;display:inline-block;background:#FFFFFF;border-radius:0px;font-weight:bold;line-height:19px;width:auto;text-align:center">JUST-US</a></span></td>
+                                    </tr>
+                                  </table>
+                                </td>
+                              </tr>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Footer -->
+            <table cellpadding="0" cellspacing="0" class="es-footer" align="center" style="width:100%;background-color:transparent;background-repeat:repeat;background-position:center top">
+              <tr>
+                <td align="center" style="padding:0;Margin:0">
+                  <table class="es-footer-body" style="background-color:#333333;width:600px" cellspacing="0" cellpadding="0" bgcolor="#333333" align="center">
+                    <tr>
+                      <td align="left" style="padding:20px;Margin:0">
+                        <table width="100%" cellspacing="0" cellpadding="0">
+                          <tr>
+                            <td valign="top" align="center" style="padding:0;Margin:0;width:560px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0"><h3 style="Margin:0;line-height:30px;font-size:20px;color:#ffffff">Let's get social!</h3></td>
+                                </tr>
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0;padding-top:10px;padding-bottom:10px;font-size:0px">
+                                    <table class="es-table-not-adapt es-social" cellspacing="0" cellpadding="0" role="presentation">
+                                      <tr>
+                                        <td valign="top" align="center" style="padding:0;Margin:0;padding-right:20px"><a href="https://www.facebook.com/1HeroWay/" style="text-decoration:underline;color:#FFFFFF;font-size:14px"><img title="Facebook" src="https://obwshc.stripocdn.email/content/assets/img/social-icons/logo-gray/facebook-logo-gray.png" alt="Fb" width="32" height="32" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
+                                        <td valign="top" align="center" style="padding:0;Margin:0"><a href="https://www.youtube.com/channel/UCuRG_ZiO1WoOXZxyRzgTDxA" style="text-decoration:underline;color:#FFFFFF;font-size:14px"><img title="Youtube" src="https://obwshc.stripocdn.email/content/assets/img/social-icons/logo-gray/youtube-logo-gray.png" alt="Yt" width="32" height="32" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0;padding-top:10px;padding-bottom:10px"><p style="Margin:0;color:#FFFFFF;font-size:14px">© 2025&nbsp;SuperHeroCPR</p></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+
   return {
     subject: "Welcome to SuperHeroCPR!",
-    html: wrapEmail(`
-      <h1>Welcome, ${firstName}!</h1>
-      <p>You've been checked in for today's class. Great to have you!</p>
-      <p>Your SuperHeroCPR account is now active. You can view your certifications
-      and booking history at
-      <a href="https://superherocpr.com/dashboard">superherocpr.com/dashboard</a>.</p>
-      <p>— The SuperHeroCPR Team</p>
-    `),
+    html: wrapEmail(content),
   };
 }
 
