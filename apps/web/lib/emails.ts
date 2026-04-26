@@ -653,16 +653,183 @@ export function certReminderEmail({
   certName: string;
   daysRemaining: number;
 }): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
+  const safeCertName = escapeHtml(certName.trim());
+  const dayText = `${daysRemaining} day${daysRemaining !== 1 ? "s" : ""}`;
+
+  const content = `
+    <style type="text/css">
+#outlook a { padding:0; }
+.ExternalClass { width:100%; }
+.ExternalClass, .ExternalClass p, .ExternalClass span, .ExternalClass font, .ExternalClass td, .ExternalClass div { line-height:100%; }
+.es-button { mso-style-priority:100!important; text-decoration:none!important; }
+a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!important; font-size:inherit!important; font-family:inherit!important; font-weight:inherit!important; line-height:inherit!important; }
+.es-desk-hidden { display:none; float:left; overflow:hidden; width:0; max-height:0; line-height:0; mso-hide:all; }
+[data-ogsb] .es-button { border-width:0!important; padding:5px 30px 5px 30px!important; }
+@media only screen and (max-width:600px) {
+  p, ul li, ol li, a { line-height:150%!important }
+  h1 { font-size:30px!important; text-align:center; line-height:120%!important }
+  h2 { font-size:26px!important; text-align:center; line-height:120%!important }
+  h3 { font-size:20px!important; text-align:center; line-height:120%!important }
+  .es-menu td a { font-size:13px!important }
+  .es-header-body p, .es-header-body ul li, .es-header-body ol li, .es-header-body a { font-size:16px!important }
+  .es-content-body p, .es-content-body ul li, .es-content-body ol li, .es-content-body a { font-size:16px!important }
+  .es-footer-body p, .es-footer-body ul li, .es-footer-body ol li, .es-footer-body a { font-size:16px!important }
+  .es-infoblock p, .es-infoblock ul li, .es-infoblock ol li, .es-infoblock a { font-size:12px!important }
+  *[class="gmail-fix"] { display:none!important }
+  .es-m-txt-c, .es-m-txt-c h1, .es-m-txt-c h2, .es-m-txt-c h3 { text-align:center!important }
+  .es-m-txt-r, .es-m-txt-r h1, .es-m-txt-r h2, .es-m-txt-r h3 { text-align:right!important }
+  .es-m-txt-l, .es-m-txt-l h1, .es-m-txt-l h2, .es-m-txt-l h3 { text-align:left!important }
+  .es-m-txt-r img, .es-m-txt-c img, .es-m-txt-l img { display:inline!important }
+  .es-button-border { display:block!important }
+  .es-btn-fw { border-width:10px 0px!important; text-align:center!important }
+  .es-adaptive table, .es-btn-fw, .es-btn-fw-brdr, .es-left, .es-right { width:100%!important }
+  .es-content table, .es-header table, .es-footer table, .es-content, .es-footer, .es-header { width:100%!important; max-width:600px!important }
+  .es-adapt-td { display:block!important; width:100%!important }
+  .adapt-img { width:100%!important; height:auto!important }
+  .es-m-p0 { padding:0px!important }
+  .es-m-p0r { padding-right:0px!important }
+  .es-m-p0l { padding-left:0px!important }
+  .es-m-p0t { padding-top:0px!important }
+  .es-m-p0b { padding-bottom:0!important }
+  .es-m-p20b { padding-bottom:20px!important }
+  .es-mobile-hidden, .es-hidden { display:none!important }
+  tr.es-desk-hidden, td.es-desk-hidden, table.es-desk-hidden { width:auto!important; overflow:visible!important; float:none!important; max-height:inherit!important; line-height:inherit!important }
+  tr.es-desk-hidden { display:table-row!important }
+  table.es-desk-hidden { display:table!important }
+  td.es-desk-menu-hidden { display:table-cell!important }
+  .es-menu td { width:1%!important }
+  table.es-table-not-adapt, .esd-block-html table { width:auto!important }
+  table.es-social { display:inline-block!important }
+  table.es-social td { display:inline-block!important }
+  a.es-button, button.es-button { font-size:16px!important; display:block!important; border-width:10px 0px 10px 0px!important }
+}
+    </style>
+
+    <div class="es-wrapper-color" style="background-color:#FFFFFF">
+      <table class="es-wrapper" width="100%" cellspacing="0" cellpadding="0" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px;padding:0;Margin:0;width:100%;height:100%;background-repeat:repeat;background-position:center top;background-color:#FFFFFF">
+        <tr style="border-collapse:collapse">
+          <td valign="top" style="padding:0;Margin:0">
+
+            <!-- Main hero (top infoblock and header removed to rely on global wrapper banner) -->
+            <table class="es-content" cellspacing="0" cellpadding="0" align="center" style="table-layout:fixed !important;width:100%">
+              <tr>
+                <td align="center" style="padding:0;Margin:0">
+                  <table class="es-content-body" cellspacing="0" cellpadding="0" bgcolor="#ffffff" align="center" style="background-color:#FFFFFF;width:600px">
+                    <tr>
+                      <td align="left" bgcolor="#ffffff" style="padding:0;Margin:0;padding-top:20px;padding-left:20px;padding-right:20px;background-color:#ffffff">
+                        <table width="100%" cellspacing="0" cellpadding="0">
+                          <tr>
+                            <td valign="top" align="center" style="padding:0;Margin:0;width:560px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0"><p style="Margin:0;line-height:21px;color:#333333;font-size:14px"><strong>SuperHeroCPR</strong></p></td>
+                                </tr>
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0"><h2 style="Margin:0;line-height:29px;font-size:24px;color:#e1261d">Hi ${safeFirstName}, Your Certification Expires Soon!</h2></td>
+                                </tr>
+                                <tr>
+                                  <td class="es-m-txt-c" align="left" style="padding:0;Margin:0;padding-top:10px"><p style="Margin:0;line-height:21px;color:#000000;font-size:14px;margin-top:8px">But we've got you covered, Hero! We are ready with up-to-date guidelines and best practices from the American Heart Association, delivered with the easy-to-learn approach of SuperHeroCPR.</p></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Image / CTA -->
+            <table cellpadding="0" cellspacing="0" class="es-content" align="center" style="width:100%">
+              <tr>
+                <td align="center" style="padding:0;Margin:0">
+                  <table bgcolor="#ffffff" class="es-content-body" align="center" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF;width:600px">
+                    <tr>
+                      <td align="left" style="padding:0;Margin:0;padding-top:20px;padding-left:20px;padding-right:20px">
+                        <table cellpadding="0" cellspacing="0" width="100%">
+                          <tr>
+                            <td align="center" valign="top" style="padding:0;Margin:0;width:560px">
+                              <table cellpadding="0" cellspacing="0" width="100%" role="presentation">
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0"><a target="_blank" href="https://apps.apple.com/us/app/cpr-super-hero/id1527298859" style="text-decoration:underline;color:#333333;font-size:14px"><img class="adapt-img" src="https://obwshc.stripocdn.email/content/guids/CABINET_7baf845b7c19c5a1d2035b63f9dc2b5a/images/76741620341738726.jpg" alt="Renew" width="560" title="Renew" height="280" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
+                                </tr>
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0;padding-bottom:18px"><h2 style="Margin:0;line-height:29px;font-size:20px;color:#e1261d">Book Your Class Before Your Certification Expires!</h2></td>
+                                </tr>
+                                <tr>
+                                  <td class="es-m-txt-c" align="center" style="padding:0;Margin:0;padding-bottom:18px;padding-left:36px;padding-right:36px">
+                                    <p style="Margin:0 0 10px 0;line-height:22px;color:#333333;font-size:15px">You are part of the <strong><u>JUST - US League</u></strong>.</p>
+                                    <p style="Margin:0;line-height:22px;color:#333333;font-size:15px">Your ${safeCertName} certification expires in <strong>${dayText}</strong>. Book a renewal class today to stay certified.</p>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0;padding-top:18px;padding-bottom:24px">
+                                    <span class="es-button-border" style="border-style:solid;border-color:#808080;background:#FFFFFF;border-width:2px;display:inline-block;border-radius:4px;width:auto">
+                                      <a href="https://superherocpr.com/#book" class="es-button es-button-1" target="_blank" style="color:#E1261D;font-size:16px;border-style:solid;border-color:#FFFFFF;border-width:12px 20px;display:inline-block;background:#FFFFFF;border-radius:4px;font-weight:bold;line-height:19px;text-align:center">BOOK NOW</a>
+                                    </span>
+                                  </td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Footer -->
+            <table cellpadding="0" cellspacing="0" class="es-footer" align="center" style="width:100%;background-color:transparent;background-repeat:repeat;background-position:center top">
+              <tr>
+                <td align="center" style="padding:0;Margin:0">
+                  <table class="es-footer-body" style="background-color:#333333;width:600px" cellspacing="0" cellpadding="0" bgcolor="#333333" align="center">
+                    <tr>
+                      <td align="left" style="padding:20px;Margin:0">
+                        <table width="100%" cellspacing="0" cellpadding="0">
+                          <tr>
+                            <td valign="top" align="center" style="padding:0;Margin:0;width:560px">
+                              <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0"><h3 style="Margin:0;line-height:30px;font-size:20px;color:#ffffff">Let's get social!</h3></td>
+                                </tr>
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0;padding-top:10px;padding-bottom:10px;font-size:0px">
+                                    <table class="es-table-not-adapt es-social" cellspacing="0" cellpadding="0" role="presentation">
+                                      <tr>
+                                        <td valign="top" align="center" style="padding:0;Margin:0;padding-right:20px"><a href="https://www.facebook.com/1HeroWay/" style="text-decoration:underline;color:#FFFFFF;font-size:14px"><img title="Facebook" src="https://obwshc.stripocdn.email/content/assets/img/social-icons/logo-gray/facebook-logo-gray.png" alt="Fb" width="32" height="32" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
+                                        <td valign="top" align="center" style="padding:0;Margin:0"><a href="https://www.youtube.com/channel/UCuRG_ZiO1WoOXZxyRzgTDxA" style="text-decoration:underline;color:#FFFFFF;font-size:14px"><img title="Youtube" src="https://obwshc.stripocdn.email/content/assets/img/social-icons/logo-gray/youtube-logo-gray.png" alt="Yt" width="32" height="32" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td align="center" style="padding:0;Margin:0;padding-top:10px;padding-bottom:10px"><p style="Margin:0;color:#FFFFFF;font-size:14px">© ${new Date().getFullYear()}&nbsp;SuperHeroCPR</p></td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+
   return {
     subject: "Your CPR Certification Expires Soon",
-    html: wrapEmail(`
-      <h1>Your certification is expiring soon, ${firstName}!</h1>
-      <p>Your <strong>${certName}</strong> certification expires in
-      <strong>${daysRemaining} day${daysRemaining !== 1 ? "s" : ""}</strong>.</p>
-      <p>Book a renewal class today to stay certified.</p>
-      <a href="https://superherocpr.com/book">Book a Renewal Class →</a>
-      <p>— The SuperHeroCPR Team</p>
-    `),
+    html: wrapEmail(content),
   };
 }
 
