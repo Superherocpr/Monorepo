@@ -15,6 +15,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import { customerSetupEmail } from "@/lib/emails";
 
 /** Basic email format check — not a substitute for server-side validation but catches obvious garbage. */
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -138,17 +139,12 @@ export async function POST(request: Request) {
   // Silently skipped if RESEND_API_KEY is not set (local dev without email).
   if (process.env.RESEND_API_KEY && setupLink) {
     const resend = new Resend(process.env.RESEND_API_KEY);
+    const { subject, html } = customerSetupEmail({ firstName: firstName.trim(), setupLink });
     await resend.emails.send({
       from: "SuperHeroCPR <noreply@superherocpr.com>",
       to: email.toLowerCase(),
-      subject: "Set up your SuperHeroCPR account",
-      html: `
-        <h1>Welcome to SuperHeroCPR, ${firstName.trim()}!</h1>
-        <p>An account has been created for you. Click the link below to set your password and activate your account.</p>
-        <p><a href="${setupLink}">Set My Password →</a></p>
-        <p>This link expires in 24 hours.</p>
-        <p>— The SuperHeroCPR Team</p>
-      `,
+      subject,
+      html,
     });
   }
 

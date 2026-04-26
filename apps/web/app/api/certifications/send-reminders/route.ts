@@ -10,6 +10,7 @@
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import { certReminderEmail } from "@/lib/emails";
 
 /**
  * Sends batch cert expiry reminders to eligible customers.
@@ -95,18 +96,16 @@ export async function POST(_request: Request) {
     if (!profileData?.email || !certTypeData?.name) continue;
 
     try {
+      const { subject, html } = certReminderEmail({
+        firstName: profileData.first_name,
+        certName: certTypeData.name,
+        daysRemaining,
+      });
       await resend.emails.send({
         from: "SuperHeroCPR <noreply@superherocpr.com>",
         to: profileData.email,
-        subject: "Your CPR Certification Expires Soon",
-        html: `
-          <h1>Your certification is expiring soon, ${profileData.first_name}!</h1>
-          <p>Your <strong>${certTypeData.name}</strong> certification expires in
-          <strong>${daysRemaining} day${daysRemaining !== 1 ? "s" : ""}</strong>.</p>
-          <p>Book a renewal class today to stay certified.</p>
-          <a href="https://superherocpr.com/book">Book a Renewal Class →</a>
-          <p>— The SuperHeroCPR Team</p>
-        `,
+        subject,
+        html,
       });
 
       // Mark the cert as reminded immediately after a successful send

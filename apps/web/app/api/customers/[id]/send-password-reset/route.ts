@@ -9,6 +9,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import { passwordResetEmail } from "@/lib/emails";
 
 /**
  * Sends a password reset email to the specified customer.
@@ -71,18 +72,15 @@ export async function POST(
   // ── Send email via Resend ──────────────────────────────────────────────────
   if (process.env.RESEND_API_KEY) {
     const resend = new Resend(process.env.RESEND_API_KEY);
+    const { subject, html } = passwordResetEmail({
+      firstName: customer.first_name,
+      actionLink: linkData.properties.action_link,
+    });
     await resend.emails.send({
       from: "SuperHeroCPR <noreply@superherocpr.com>",
       to: customer.email,
-      subject: "Reset your SuperHeroCPR password",
-      html: `
-        <h1>Password Reset</h1>
-        <p>Hi ${customer.first_name},</p>
-        <p>A staff member has sent you a password reset link. Click below to set a new password for your SuperHeroCPR account.</p>
-        <p><a href="${linkData.properties.action_link}">Reset My Password →</a></p>
-        <p>This link expires in 24 hours. If you did not expect this email, you can safely ignore it.</p>
-        <p>— The SuperHeroCPR Team</p>
-      `,
+      subject,
+      html,
     });
   }
 

@@ -11,17 +11,8 @@
 
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { contactNotificationEmail, contactAutoReplyEmail } from "@/lib/emails";
 import { createClient } from "@/lib/supabase/server";
-
-/** Escapes HTML special characters in a string to prevent injection into email HTML. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#x27;");
-}
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -95,31 +86,25 @@ export async function POST(request: Request) {
 
   const resend = new Resend(process.env.RESEND_API_KEY);
 
-  // Escape all user-supplied values before inserting into HTML
-  const safeName = escapeHtml(name.trim());
-  const safeEmail = escapeHtml(email.trim());
-  const safePhone = escapeHtml(phoneValue ?? "Not provided");
-  const safeInquiryType = escapeHtml(inquiryType.trim());
-  const safeMessage = escapeHtml(message.trim()).replace(/\n/g, "<br>");
-  const safeFirstName = escapeHtml(name.trim().split(" ")[0]);
+  const businessEmail = contactNotificationEmail({
+    name: name.trim(),
+    email: email.trim(),
+    phone: phoneValue,
+    inquiryType: inquiryType.trim(),
+    message: message.trim(),
+  });
+
+  const autoReply = contactAutoReplyEmail({
+    firstName: name.trim().split(" ")[0],
+  });
 
   // Notification email to business — intentionally fire-and-forget; errors are logged
   const businessEmailPromise = resend.emails
     .send({
       from: "SuperHeroCPR Website <noreply@superherocpr.com>",
       to: "info@superherocpr.com",
-      subject: `New Contact Form Submission — ${inquiryType.trim()}`,
-      html: `
-        <h2>New contact form submission</h2>
-        <table>
-          <tr><td><strong>Name:</strong></td><td>${safeName}</td></tr>
-          <tr><td><strong>Email:</strong></td><td>${safeEmail}</td></tr>
-          <tr><td><strong>Phone:</strong></td><td>${safePhone}</td></tr>
-          <tr><td><strong>Inquiry type:</strong></td><td>${safeInquiryType}</td></tr>
-        </table>
-        <h3>Message:</h3>
-        <p>${safeMessage}</p>
-      `,
+      subject: businessEmail.subject,
+      html: businessEmail.html,
     })
     .catch((err: unknown) =>
       console.error("[contact] Failed to send business notification email:", err)
@@ -130,17 +115,8 @@ export async function POST(request: Request) {
     .send({
       from: "SuperHeroCPR <noreply@superherocpr.com>",
       to: email.trim(),
-      subject: "We received your message — SuperHeroCPR",
-      html: `
-        <h1>Thanks for reaching out, ${safeFirstName}!</h1>
-        <p>We received your message and will get back to you within 1 business day.</p>
-        <p>If your matter is urgent, you can also reach us at:</p>
-        <ul>
-          <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
-          <li>Email: <a href="mailto:info@superherocpr.com">info@superherocpr.com</a></li>
-        </ul>
-        <p>— The SuperHeroCPR Team</p>
-      `,
+      subject: autoReply.subject,
+      html: autoReply.html,
     })
     .catch((err: unknown) =>
       console.error("[contact] Failed to send auto-reply email:", err)

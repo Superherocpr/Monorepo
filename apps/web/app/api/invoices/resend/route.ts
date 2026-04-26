@@ -10,6 +10,7 @@
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import { invoiceResendEmail } from "@/lib/emails";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -115,42 +116,25 @@ export async function POST(request: Request) {
       locations: { name: string; city: string; state: string } | null;
     } | null;
 
-    const className = session?.class_types?.name ?? "CPR Class";
-    const sessionDate = session?.starts_at
-      ? new Date(session.starts_at).toLocaleDateString("en-US", {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })
-      : "See your instructor for details";
-    const locationName = session?.locations?.name ?? "";
-    const locationCity = session?.locations?.city ?? "";
-    const locationState = session?.locations?.state ?? "";
-
-    const amount = typeof invoice.total_amount === "number"
-      ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(invoice.total_amount)
-      : "$0.00";
+    const { subject, html } = invoiceResendEmail({
+      invoiceNumber: invoice.invoice_number,
+      recipientName: invoice.recipient_name,
+      className: session?.class_types?.name ?? "CPR Class",
+      sessionDate: session?.starts_at ?? null,
+      locationName: session?.locations?.name ?? "",
+      locationCity: session?.locations?.city ?? "",
+      locationState: session?.locations?.state ?? "",
+      studentCount: invoice.student_count,
+      totalAmount: typeof invoice.total_amount === "number" ? invoice.total_amount : null,
+      notes: invoice.notes ?? null,
+      paymentPlatform: invoice.payment_platform ?? null,
+    });
 
     await resend.emails.send({
       from: "SuperHeroCPR <noreply@superherocpr.com>",
       to: newEmail,
-      subject: `Invoice ${invoice.invoice_number} from SuperHeroCPR`,
-      html: `
-        <h1>Invoice ${invoice.invoice_number}</h1>
-        <p>Hello ${invoice.recipient_name},</p>
-        <p>Please find your invoice for the upcoming CPR class below.</p>
-        <table style="border-collapse:collapse;width:100%;max-width:500px">
-          <tr><td style="padding:8px;color:#555">Class</td><td style="padding:8px;font-weight:bold">${className}</td></tr>
-          <tr><td style="padding:8px;color:#555">Date</td><td style="padding:8px">${sessionDate}</td></tr>
-          <tr><td style="padding:8px;color:#555">Location</td><td style="padding:8px">${locationName}, ${locationCity}, ${locationState}</td></tr>
-          <tr><td style="padding:8px;color:#555">Students</td><td style="padding:8px">${invoice.student_count}</td></tr>
-          <tr><td style="padding:8px;color:#555;font-weight:bold">Total Due</td><td style="padding:8px;font-weight:bold;font-size:18px">${amount}</td></tr>
-        </table>
-        ${invoice.notes ? `<p style="margin-top:16px;color:#555">Note: ${invoice.notes}</p>` : ""}
-        <p style="margin-top:24px">Payment platform: ${invoice.payment_platform}</p>
-        <p>— SuperHeroCPR</p>
-      `,
+      subject,
+      html,
     });
   }
 
