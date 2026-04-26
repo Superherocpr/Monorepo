@@ -502,7 +502,89 @@ export function invoiceResendEmail({
   };
 }
 
-// ── 13. Invoice email (new invoice sent to recipient) ─────────────────────────
+// ── 13. Booking confirmation + payment receipt ────────────────────────────────
+
+/**
+ * Sent to a customer immediately after their online booking payment is captured.
+ * Includes class details, location, amount paid, and transaction ID.
+ * Triggered by: POST /api/bookings/confirm
+ * @param firstName         - Customer's first name (falls back to "there" if null).
+ * @param className         - Name of the booked class.
+ * @param startsAt          - ISO date-time string for the class start.
+ * @param locationName      - Venue name.
+ * @param locationAddress   - Street address.
+ * @param locationCity      - City.
+ * @param locationState     - State.
+ * @param locationZip       - ZIP code.
+ * @param amount            - Amount paid in dollars.
+ * @param paymentProcessor  - Human-readable payment processor label (e.g. "SuperHeroCPR via PayPal").
+ * @param transactionId     - PayPal capture transaction ID (null if unavailable).
+ */
+export function bookingConfirmationEmail({
+  firstName,
+  className,
+  startsAt,
+  locationName,
+  locationAddress,
+  locationCity,
+  locationState,
+  locationZip,
+  amount,
+  paymentProcessor,
+  transactionId,
+}: {
+  firstName: string | null;
+  className: string;
+  startsAt: string;
+  locationName: string;
+  locationAddress: string;
+  locationCity: string;
+  locationState: string;
+  locationZip: string;
+  amount: number;
+  paymentProcessor: string;
+  transactionId: string | null;
+}): EmailContent {
+  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  return {
+    subject: `Booking Confirmed — ${className} on ${formattedDate}`,
+    html: wrapEmail(`
+      <h1>You're booked!</h1>
+      <p>Hi ${firstName ?? "there"},</p>
+      <p>Your booking for <strong>${className}</strong> has been confirmed. Here are your details:</p>
+      <table cellpadding="6">
+        <tr><td><strong>Class:</strong></td><td>${className}</td></tr>
+        <tr><td><strong>Date:</strong></td><td>${formattedDate}</td></tr>
+        <tr><td><strong>Time:</strong></td><td>${formattedTime}</td></tr>
+        <tr>
+          <td style="vertical-align:top"><strong>Location:</strong></td>
+          <td>${locationName}<br>${locationAddress}<br>${locationCity}, ${locationState} ${locationZip}</td>
+        </tr>
+        <tr><td><strong>Amount paid:</strong></td><td>$${amount.toFixed(2)}</td></tr>
+        <tr><td><strong>Payment processed by:</strong></td><td>${paymentProcessor}</td></tr>
+        <tr><td><strong>Transaction ID:</strong></td><td>${transactionId ?? "N/A"}</td></tr>
+      </table>
+      <p>Please arrive a few minutes early. Wear comfortable clothing.</p>
+      <p>Questions? Reply to this email or call us at (813) 966-3969.</p>
+      <p>See you in class!</p>
+      <p>— The SuperHeroCPR Team</p>
+    `),
+  };
+}
+
+// ── 14. Invoice email (new invoice sent to recipient) ─────────────────────────
 
 /**
  * Sent to the invoice recipient when a new invoice is created.

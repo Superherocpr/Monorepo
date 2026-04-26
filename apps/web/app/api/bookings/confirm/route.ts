@@ -15,6 +15,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getPayPalAccessToken } from "@/lib/paypal";
 import { resolvePaymentRouting } from "@/lib/resolve-payment-routing";
 import { Resend } from "resend";
+import { bookingConfirmationEmail } from "@/lib/emails";
 
 const PAYPAL_API_BASE =
   process.env.PAYPAL_API_BASE ?? "https://api-m.sandbox.paypal.com";
@@ -173,19 +174,7 @@ export async function POST(request: Request) {
     typeof customerEmail === "string" &&
     typeof startsAt === "string"
   ) {
-    // Instantiated inside the conditional so it never executes at build time
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
 
     // Derive a human-readable "Payment processed by" label from the routing note.
     // "Routed to instructor PayPal — Danny Hedgeman" → "Danny Hedgeman via PayPal"
@@ -194,28 +183,26 @@ export async function POST(request: Request) {
       ? `${routing.routingNote.replace("Routed to instructor PayPal — ", "")} via PayPal`
       : "SuperHeroCPR via PayPal";
 
+    const { subject, html } = bookingConfirmationEmail({
+      firstName: typeof customerFirstName === "string" ? customerFirstName : null,
+      className: typeof className === "string" ? className : "CPR Class",
+      startsAt,
+      locationName: typeof locationName === "string" ? locationName : "",
+      locationAddress: typeof locationAddress === "string" ? locationAddress : "",
+      locationCity: typeof locationCity === "string" ? locationCity : "",
+      locationState: typeof locationState === "string" ? locationState : "",
+      locationZip: typeof locationZip === "string" ? locationZip : "",
+      amount: amount as number,
+      paymentProcessor,
+      transactionId: paypalTransactionId,
+    });
+
     await resend.emails
       .send({
         from: "SuperHeroCPR <noreply@superherocpr.com>",
         to: customerEmail,
-        subject: `Booking Confirmed — ${className} on ${formattedDate}`,
-        html: `
-          <h1>You're booked!</h1>
-          <p>Hi ${customerFirstName ?? "there"},</p>
-          <p>Your booking for <strong>${className}</strong> has been confirmed. Here are your details:</p>
-          <table cellpadding="6">
-            <tr><td><strong>Class:</strong></td><td>${className}</td></tr>
-            <tr><td><strong>Date:</strong></td><td>${formattedDate}</td></tr>
-            <tr><td><strong>Time:</strong></td><td>${formattedTime}</td></tr>
-            <tr><td><strong>Location:</strong></td><td>${locationName}<br>${locationAddress}<br>${locationCity}, ${locationState} ${locationZip}</td></tr>
-            <tr><td><strong>Amount paid:</strong></td><td>$${(amount as number).toFixed(2)}</td></tr>
-            <tr><td><strong>Payment processed by:</strong></td><td>${paymentProcessor}</td></tr>
-            <tr><td><strong>Transaction ID:</strong></td><td>${paypalTransactionId ?? "N/A"}</td></tr>
-          </table>
-          <p>Please arrive a few minutes early. Wear comfortable clothing.</p>
-          <p>Questions? Reply to this email or call us at (813) 966-3969.</p>
-          <p>See you in class!<br>— The SuperHeroCPR Team</p>
-        `,
+        subject,
+        html,
       })
       .catch((err: unknown) => {
         console.error("Confirmation email failed (non-fatal):", err);
