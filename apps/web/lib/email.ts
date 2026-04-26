@@ -73,7 +73,7 @@ export function wrapEmail(content: string): string {
             <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 32px;border-radius:0 0 8px 8px;font-family:Arial,Helvetica,sans-serif;">
               <p style="margin:0 0 6px 0;font-size:13px;color:#6b7280;">Questions? We&rsquo;re here to help.</p>
               <p style="margin:0 0 4px 0;font-size:13px;color:#374151;">
-                <a href="mailto:info@superherocpr.com" style="color:#dc2626;text-decoration:none;">info@superherocpr.com</a>
+                <a href="mailto:contact@superherocpr.com" style="color:#dc2626;text-decoration:none;">contact@superherocpr.com</a>
                 &nbsp;&middot;&nbsp;
                 <a href="tel:+18139663969" style="color:#dc2626;text-decoration:none;">(813) 966-3969</a>
               </p>

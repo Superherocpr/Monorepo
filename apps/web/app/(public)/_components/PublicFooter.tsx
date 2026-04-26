@@ -69,10 +69,10 @@ export function PublicFooter() {
               <li>Tampa Bay Area, Florida</li>
               <li>
                 <a
-                  href="mailto:info@superherocpr.com"
+                  href="mailto:contact@superherocpr.com"
                   className="hover:text-white transition-colors duration-150"
                 >
-                  info@superherocpr.com
+                  contact@superherocpr.com
                 </a>
               </li>
             </ul>

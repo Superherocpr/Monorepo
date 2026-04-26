@@ -806,10 +806,10 @@ function ErrorState({ onRetry }: ErrorStateProps) {
       <p className="text-gray-700 text-sm leading-relaxed">
         Something went wrong. Please try again or contact us at{" "}
         <a
-          href="mailto:info@superherocpr.com"
+          href="mailto:contact@superherocpr.com"
           className="text-red-600 hover:underline"
         >
-          info@superherocpr.com
+          contact@superherocpr.com
         </a>
       </p>
       <button

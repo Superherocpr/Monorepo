@@ -355,7 +355,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
 // ── 3. Contact form — business notification ────────────────────────────────────
 
 /**
- * Sent to info@superherocpr.com when a visitor submits the public contact form.
+ * Sent to contact@superherocpr.com when a visitor submits the public contact form.
  * All user-supplied values are escaped before insertion.
  * Triggered by: POST /api/contact
  * @param name        - Submitter's full name.
@@ -418,7 +418,7 @@ export function contactAutoReplyEmail({ firstName }: { firstName: string }): Ema
       <p>If your matter is urgent, you can also reach us at:</p>
       <ul>
         <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
-        <li>Email: <a href="mailto:info@superherocpr.com">info@superherocpr.com</a></li>
+        <li>Email: <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a></li>
       </ul>
       <p>— The SuperHeroCPR Team</p>
     `),
@@ -441,7 +441,7 @@ export function accountDeletedEmail({ firstName }: { firstName: string }): Email
       <p>Your SuperHeroCPR account has been successfully deleted. You will no longer be able to log in.</p>
       <p>Your certification history has been preserved for our records.</p>
       <p>If you believe this was a mistake or wish to restore your account, please contact us at
-        <a href="mailto:info@superherocpr.com">info@superherocpr.com</a> or call (813) 966-3969.
+        <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a> or call (813) 966-3969.
       </p>
       <p>— The SuperHeroCPR Team</p>
     `),

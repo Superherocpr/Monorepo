@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   const [businessResult, autoReplyResult] = await Promise.all([
     resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
-      to: process.env.OWNER_EMAIL ?? "info@superherocpr.com",
+      to: "contact@superherocpr.com",
       subject: businessEmail.subject,
       html: businessEmail.html,
     }),

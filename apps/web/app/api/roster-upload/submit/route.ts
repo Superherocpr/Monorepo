@@ -237,7 +237,7 @@ export async function POST(request: Request) {
     await resend.emails
       .send({
         from: process.env.RESEND_FROM_EMAIL!,
-        to: "info@superherocpr.com",
+        to: "contact@superherocpr.com",
         subject: `Roster submitted — Invoice ${invoiceRef}`,
         html: `
           <p>A customer has submitted a roster.</p>

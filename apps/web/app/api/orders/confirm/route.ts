@@ -280,7 +280,7 @@ export async function POST(request: Request) {
             ${safeCity}, ${safeState} ${safeZip}
           </p>
           <p>Transaction ID: ${safeTransactionId}</p>
-          <p>Questions? Contact us at info@superherocpr.com or (813) 966-3969.</p>
+          <p>Questions? Contact us at contact@superherocpr.com or (813) 966-3969.</p>
           <p>— The SuperHeroCPR Team</p>
         `,
       })
@@ -292,7 +292,7 @@ export async function POST(request: Request) {
     resend.emails
       .send({
         from: process.env.RESEND_FROM_EMAIL!,
-        to: "info@superherocpr.com",
+        to: "contact@superherocpr.com",
         subject: `New Merch Order — $${totalNum.toFixed(2)}`,
         html: `
           <h2>New merch order received</h2>
