@@ -113,6 +113,7 @@ export default async function Page() {
     locationName: "Main Street Training Center",
     locationCity: "Tampa",
     locationState: "FL",
+    instructorName: "Dana Morgan",
     studentCount: 8,
     totalAmount: 1200,
     notes: "Please pay within 7 days",
@@ -133,6 +134,7 @@ export default async function Page() {
     locationName: "Main Street Training Center",
     locationCity: "Tampa",
     locationState: "FL",
+    instructorName: "Dana Morgan",
     notes: "Bring a list of attendees.",
     paymentLink: "https://pay.superherocpr.com/invoice/INV-1003",
   });
@@ -151,6 +153,7 @@ export default async function Page() {
     amount: 79.0,
     paymentProcessor: "SuperHeroCPR via PayPal",
     transactionId: "PAYPAL-CAPTURE-12345",
+    instructorName: "Dana Morgan",
   });
   previews.push({ id: "booking-confirm", name: "Booking Confirmation", subject: booking.subject, src: b64(booking.html) });
 

@@ -711,6 +711,7 @@ export function invoicePaidEmail({
  * @param locationName    - Venue name.
  * @param locationCity    - Venue city.
  * @param locationState   - Venue state.
+ * @param instructorName  - Instructor's full name.
  * @param studentCount    - Number of students on the invoice.
  * @param totalAmount     - Invoice total in dollars (null if unavailable).
  * @param notes           - Optional notes on the invoice.
@@ -724,6 +725,7 @@ export function invoiceResendEmail({
   locationName,
   locationCity,
   locationState,
+  instructorName,
   studentCount,
   totalAmount,
   notes,
@@ -736,6 +738,7 @@ export function invoiceResendEmail({
   locationName: string;
   locationCity: string;
   locationState: string;
+  instructorName?: string | null;
   studentCount: number;
   totalAmount: number | null;
   notes: string | null;
@@ -755,6 +758,11 @@ export function invoiceResendEmail({
       ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(totalAmount)
       : "$0.00";
 
+  const safeInstructorName = instructorName ? escapeHtml(instructorName.trim()) : null;
+  const instructorRow = safeInstructorName
+    ? `<tr><td style="padding:8px;color:#555">Instructor</td><td style="padding:8px;font-weight:bold">${safeInstructorName}</td></tr>`
+    : "";
+
   return {
     subject: `Invoice ${invoiceNumber} from SuperHeroCPR`,
     html: wrapEmail(`
@@ -765,6 +773,7 @@ export function invoiceResendEmail({
         <tr><td style="padding:8px;color:#555">Class</td><td style="padding:8px;font-weight:bold">${className}</td></tr>
         <tr><td style="padding:8px;color:#555">Date</td><td style="padding:8px">${formattedDate}</td></tr>
         <tr><td style="padding:8px;color:#555">Location</td><td style="padding:8px">${locationName}, ${locationCity}, ${locationState}</td></tr>
+        ${instructorRow}
         <tr><td style="padding:8px;color:#555">Students</td><td style="padding:8px">${studentCount}</td></tr>
         <tr><td style="padding:8px;color:#555;font-weight:bold">Total Due</td><td style="padding:8px;font-weight:bold;font-size:18px">${formattedAmount}</td></tr>
       </table>
@@ -782,6 +791,7 @@ export function invoiceResendEmail({
  * Includes class details, location, amount paid, and transaction ID.
  * Triggered by: POST /api/bookings/confirm
  * @param firstName         - Customer's first name (falls back to "there" if null).
+ * @param instructorName    - Instructor's full name.
  * @param className         - Name of the booked class.
  * @param startsAt          - ISO date-time string for the class start.
  * @param locationName      - Venue name.
@@ -805,6 +815,7 @@ export function bookingConfirmationEmail({
   amount,
   paymentProcessor,
   transactionId,
+  instructorName,
 }: {
   firstName: string | null;
   className: string;
@@ -817,6 +828,7 @@ export function bookingConfirmationEmail({
   amount: number;
   paymentProcessor: string;
   transactionId: string | null;
+  instructorName: string;
 }): EmailContent {
   const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
     weekday: "long",
@@ -830,6 +842,9 @@ export function bookingConfirmationEmail({
     minute: "2-digit",
     hour12: true,
   });
+
+  const safeInstructorName = escapeHtml(instructorName.trim());
+  const instructorRow = `<tr><td><strong>Instructor:</strong></td><td>${safeInstructorName}</td></tr>`;
 
   return {
     subject: `Booking Confirmed — ${className} on ${formattedDate}`,
@@ -845,6 +860,7 @@ export function bookingConfirmationEmail({
           <td style="vertical-align:top"><strong>Location:</strong></td>
           <td>${locationName}<br>${locationAddress}<br>${locationCity}, ${locationState} ${locationZip}</td>
         </tr>
+        ${instructorRow}
         <tr><td><strong>Amount paid:</strong></td><td>$${amount.toFixed(2)}</td></tr>
         <tr><td><strong>Payment processed by:</strong></td><td>${paymentProcessor}</td></tr>
         <tr><td><strong>Transaction ID:</strong></td><td>${transactionId ?? "N/A"}</td></tr>
@@ -877,6 +893,7 @@ export function bookingConfirmationEmail({
  * @param locationState  - Venue state.
  * @param notes          - Optional instructor notes.
  * @param paymentLink    - Direct payment URL (null if not provided).
+ * @param instructorName - Instructor's name.
  */
 export function invoiceEmail({
   invoiceNumber,
@@ -890,6 +907,7 @@ export function invoiceEmail({
   locationName,
   locationCity,
   locationState,
+  instructorName,
   notes,
   paymentLink,
 }: {
@@ -904,6 +922,7 @@ export function invoiceEmail({
   locationName: string;
   locationCity: string;
   locationState: string;
+  instructorName: string;
   notes: string | null;
   paymentLink: string | null;
 }): EmailContent {
@@ -918,6 +937,11 @@ export function invoiceEmail({
     style: "currency",
     currency: "USD",
   }).format(totalAmount);
+
+  const instructorRow = `<tr>
+        <td style="padding:6px 0;color:#6b7280;font-size:14px;">Instructor:</td>
+        <td style="padding:6px 0;font-size:14px;">${escapeHtml(instructorName.trim())}</td>
+       </tr>`;
 
   const companyRow = companyName
     ? `<tr>
@@ -985,6 +1009,7 @@ export function invoiceEmail({
           <td style="padding:6px 0;color:#6b7280;font-size:14px;">Location:</td>
           <td style="padding:6px 0;font-size:14px;">${locationName}, ${locationCity}, ${locationState}</td>
         </tr>
+        ${instructorRow}
         <tr>
           <td style="padding:6px 0;color:#6b7280;font-size:14px;">Students:</td>
           <td style="padding:6px 0;font-size:14px;">${studentCount}</td>
