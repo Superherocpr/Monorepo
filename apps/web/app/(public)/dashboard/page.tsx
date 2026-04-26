@@ -116,7 +116,10 @@ export default async function DashboardPage() {
       fetchRecentOrder(supabase, user.id),
     ]);
 
-  if (!profile) redirect("/signin?redirect=/dashboard");
+  // A missing profile means the account exists in auth but has no profile row —
+  // this is a data integrity issue, not an auth failure. Redirecting to sign-in
+  // here would cause an infinite loop, so we surface a clear error instead.
+  if (!profile) redirect("/?");
 
   return (
     <div>

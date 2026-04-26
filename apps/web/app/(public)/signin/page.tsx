@@ -53,8 +53,21 @@ function SignInForm() {
       return;
     }
 
-    // Honour an explicit redirect param, fall back to the dashboard
-    const redirectTo = searchParams.get("redirect") ?? "/dashboard";
+    // Fetch the user's role so staff are routed to the admin panel instead of
+    // the customer dashboard — which would loop if they have no customer profile.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user.id)
+      .single();
+
+    const staffRoles = ["instructor", "manager", "super_admin", "inspector"];
+    const isStaff = profile?.role && staffRoles.includes(profile.role);
+
+    // Staff always go to /admin. Non-staff honour the redirect param.
+    const redirectTo = isStaff
+      ? "/admin"
+      : (searchParams.get("redirect") ?? "/dashboard");
     router.push(redirectTo);
   }
 
