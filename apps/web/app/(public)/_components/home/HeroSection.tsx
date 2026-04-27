@@ -73,9 +73,13 @@ export default async function HeroSection() {
        * translateY(50%) pushes the image down so only the top half is visible;
        * overflow-hidden on the section clips the rest.
        */}
+      {/* translateX(min(0px, ...)) only fires on narrow viewports — it slides the image
+          further left so its center never passes 50vw-50px. On wide screens the min()
+          resolves to 0 and the image stays anchored to the left edge as normal.
+          The section's existing overflow-hidden clips any off-screen portion. */}
       <div
         className="absolute bottom-0 left-0 pointer-events-none select-none"
-        style={{ transform: "translateY(50%)" }}
+        style={{ transform: "translateX(min(0px, calc(50vw - 50% - 150px))) translateY(50%)" }}
         aria-hidden="true"
       >
         <img
@@ -90,9 +94,11 @@ export default async function HeroSection() {
        * scaleX(-1) mirrors him so he faces left, toward the female hero.
        * Same translateY(50%) crop logic as the female.
        */}
+      {/* translateX(max(0px, ...)) mirrors the female logic — slides the image
+          further right so its center never passes 50vw+50px on narrow viewports. */}
       <div
         className="absolute bottom-0 right-0 pointer-events-none select-none"
-        style={{ transform: "translateY(50%)" }}
+        style={{ transform: "translateX(max(0px, calc(50% + 150px - 50vw))) translateY(50%)" }}
         aria-hidden="true"
       >
         <img
