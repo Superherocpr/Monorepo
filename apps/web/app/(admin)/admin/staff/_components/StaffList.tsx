@@ -15,7 +15,7 @@ import type { UserRole } from "@/types/users";
 
 interface StaffListProps {
   staff: StaffMember[];
-  ownerEmail: string;
+  ownerEmails: string[];
   currentUserId: string;
   /** Called with a success message on any successful mutation — also triggers list refresh. */
   onSuccess: (message: string) => void;
@@ -67,7 +67,7 @@ function formatDeactivatedDate(dateStr: string): string {
  * Action buttons are hidden entirely for the owner email and the change-role button
  * is also hidden on the logged-in user's own row (prevents self-demotion).
  * @param staff - Filtered staff members to display.
- * @param ownerEmail - Protected owner email — no action buttons shown for this row.
+ * @param ownerEmails - Protected owner emails — no action buttons shown for these rows.
  * @param currentUserId - Logged-in user's ID — change-role hidden on own row.
  * @param onSuccess - Callback to show success toast and refresh the list.
  * @param onError - Callback to show an error toast.
@@ -75,7 +75,7 @@ function formatDeactivatedDate(dateStr: string): string {
  */
 const StaffList: React.FC<StaffListProps> = ({
   staff,
-  ownerEmail,
+  ownerEmails,
   currentUserId,
   onSuccess,
   onError,
@@ -328,8 +328,7 @@ const StaffList: React.FC<StaffListProps> = ({
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {staff.map((member) => {
-              const isOwner =
-                member.email.toLowerCase() === ownerEmail.toLowerCase();
+              const isOwner = ownerEmails.includes(member.email.toLowerCase());
               const fullName = `${member.first_name} ${member.last_name}`;
               return (
                 <tr key={member.id} className="hover:bg-gray-50 transition-colors">
@@ -386,8 +385,7 @@ const StaffList: React.FC<StaffListProps> = ({
       {/* ── Mobile cards ────────────────────────────────────────────────────── */}
       <div className="md:hidden space-y-3">
         {staff.map((member) => {
-          const isOwner =
-            member.email.toLowerCase() === ownerEmail.toLowerCase();
+          const isOwner = ownerEmails.includes(member.email.toLowerCase());
           const fullName = `${member.first_name} ${member.last_name}`;
           return (
             <div

@@ -9,7 +9,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { OWNER_EMAIL } from "@/lib/constants";
+import { OWNER_EMAILS } from "@/lib/constants";
 import StaffManagement from "./_components/StaffManagement";
 import type { UserRole } from "@/types/users";
 
@@ -51,7 +51,7 @@ export default async function StaffPage() {
   return (
     <StaffManagement
       staffMembers={staffMembers ?? []}
-      ownerEmail={OWNER_EMAIL}
+      ownerEmails={OWNER_EMAILS}
       currentUserId={user.id}
     />
   );

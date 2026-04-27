@@ -29,7 +29,7 @@ export interface StaffMember {
 
 interface StaffManagementProps {
   staffMembers: StaffMember[];
-  ownerEmail: string;
+  ownerEmails: string[];
   currentUserId: string;
 }
 
@@ -43,12 +43,12 @@ interface Toast {
  * Owns filter state, toast state, and invite panel visibility.
  * Refreshes staff data via router.refresh() after any mutation.
  * @param staffMembers - All staff profiles fetched server-side.
- * @param ownerEmail - Protected owner email — action buttons are hidden for this member.
+ * @param ownerEmails - Protected owner emails — action buttons are hidden for these members.
  * @param currentUserId - The logged-in super admin's user ID (prevents self-demotion).
  */
 const StaffManagement: React.FC<StaffManagementProps> = ({
   staffMembers,
-  ownerEmail,
+  ownerEmails,
   currentUserId,
 }) => {
   const router = useRouter();
@@ -122,7 +122,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
       {/* Staff list — table on desktop, cards on mobile */}
       <StaffList
         staff={filtered}
-        ownerEmail={ownerEmail}
+        ownerEmails={ownerEmails}
         currentUserId={currentUserId}
         onSuccess={(msg) => {
           showToast("success", msg);

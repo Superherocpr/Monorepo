@@ -8,7 +8,7 @@
  */
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { OWNER_EMAIL } from "@/lib/constants";
+import { OWNER_EMAILS } from "@/lib/constants";
 import { Resend } from "resend";
 import { staffInviteEmail } from "@/lib/emails";
 
@@ -62,8 +62,8 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Invalid role." }, { status: 400 });
   }
 
-  // Owner email is reserved — cannot be used for a new account
-  if (email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
+  // Owner emails are reserved — cannot be used for new accounts
+  if (OWNER_EMAILS.includes(email.toLowerCase())) {
     return Response.json({ success: false, error: "This email is reserved." }, { status: 409 });
   }
 

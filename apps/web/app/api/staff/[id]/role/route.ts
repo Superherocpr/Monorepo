@@ -7,7 +7,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { OWNER_EMAIL } from "@/lib/constants";
+import { OWNER_EMAILS } from "@/lib/constants";
 
 /**
  * Updates the role of a staff member by profile ID.
@@ -73,7 +73,7 @@ export async function PATCH(
   }
 
   // Normalize to lowercase — email addresses are case-insensitive per RFC 5321
-  if (target.email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
+  if (OWNER_EMAILS.includes(target.email.toLowerCase())) {
     return Response.json(
       { success: false, error: "The owner's role cannot be changed." },
       { status: 403 }
