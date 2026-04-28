@@ -12,6 +12,7 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { OWNER_EMAILS } from "@/lib/constants";
 import StaffManagement from "./_components/StaffManagement";
 import type { UserRole } from "@/types/users";
+import type { StaffMember } from "./_components/StaffManagement";
 
 export const metadata = { title: "Staff Management" };
 
@@ -38,36 +39,75 @@ export default async function StaffPage() {
     redirect("/admin");
   }
 
-  // Fetch all staff via the admin client so super admins can always see every
-  // staff profile regardless of RLS policy variations across environments.
+  // Try a full-column staff query first. If local schema is older, retry with
+  // a legacy column set and synthesize defaults used by the UI.
+  const fullSelect =
+    "id, first_name, last_name, email, phone, role, deactivated, deactivated_at, created_at";
+  const legacySelect = "id, first_name, last_name, email, role, created_at";
+
+  let staffMembers: StaffMember[] = [];
   const adminSupabase = await createAdminClient();
-  const { data: rawStaffMembers, error: staffError } = await adminSupabase
+  const { data: adminFull, error: adminFullError } = await adminSupabase
     .from("profiles")
-    .select(
-      "id, first_name, last_name, email, phone, role, deactivated, deactivated_at, created_at"
-    )
+    .select(fullSelect)
     .neq("role", "customer")
     .order("role")
     .order("last_name");
 
-  // Some older local schemas may not yet include phone/deactivated columns.
-  // If that query fails, fall back to a legacy column set and synthesize defaults.
-  let staffMembers = rawStaffMembers ?? [];
-  if (staffError) {
-    console.error("[admin/staff] Failed to fetch staff with full column set:", staffError);
-    const { data: legacyStaffMembers } = await adminSupabase
+  if (!adminFullError) {
+    staffMembers = (adminFull ?? []) as StaffMember[];
+  } else {
+    const { data: adminLegacy, error: adminLegacyError } = await adminSupabase
       .from("profiles")
-      .select("id, first_name, last_name, email, role, created_at")
+      .select(legacySelect)
       .neq("role", "customer")
       .order("role")
       .order("last_name");
 
-    staffMembers = (legacyStaffMembers ?? []).map((row) => ({
-      ...row,
-      phone: null,
-      deactivated: false,
-      deactivated_at: null,
-    }));
+    if (!adminLegacyError) {
+      staffMembers = (adminLegacy ?? []).map((row) => ({
+        ...row,
+        phone: null,
+        deactivated: false,
+        deactivated_at: null,
+      })) as StaffMember[];
+    } else {
+      // Final fallback: use the request-bound client in case service-role config
+      // is unavailable in the current environment.
+      const { data: anonFull, error: anonFullError } = await supabase
+        .from("profiles")
+        .select(fullSelect)
+        .neq("role", "customer")
+        .order("role")
+        .order("last_name");
+
+      if (!anonFullError) {
+        staffMembers = (anonFull ?? []) as StaffMember[];
+      } else {
+        const { data: anonLegacy, error: anonLegacyError } = await supabase
+          .from("profiles")
+          .select(legacySelect)
+          .neq("role", "customer")
+          .order("role")
+          .order("last_name");
+
+        if (!anonLegacyError) {
+          staffMembers = (anonLegacy ?? []).map((row) => ({
+            ...row,
+            phone: null,
+            deactivated: false,
+            deactivated_at: null,
+          })) as StaffMember[];
+        } else {
+          console.error("[admin/staff] Failed to fetch staff after all fallbacks.", {
+            adminFullError,
+            adminLegacyError,
+            anonFullError,
+            anonLegacyError,
+          });
+        }
+      }
+    }
   }
 
   return (
