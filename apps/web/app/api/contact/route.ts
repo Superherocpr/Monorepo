@@ -33,6 +33,7 @@ export async function POST(request: Request) {
   if (
     typeof name !== "string" || !name.trim() ||
     typeof email !== "string" || !email.trim() ||
+    typeof phone !== "string" || !phone.trim() ||
     typeof inquiryType !== "string" || !inquiryType.trim() ||
     typeof message !== "string" || !message.trim()
   ) {
@@ -51,8 +52,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const phoneValue =
-    typeof phone === "string" && phone.trim() ? phone.trim() : null;
+  const phoneValue = (phone as string).trim();
 
   // ── 1. Store in DB ──────────────────────────────────────────────────────────
   const supabase = await createClient();
