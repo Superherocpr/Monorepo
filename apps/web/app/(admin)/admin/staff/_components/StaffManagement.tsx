@@ -3,13 +3,14 @@
 /**
  * StaffManagement component
  * Renders the full staff management UI for /admin/staff.
- * Handles client-side filtering, toast notifications, invite panel open/close,
- * and passes action callbacks to StaffList for role changes and deactivation.
+ * Handles client-side filtering (status, role, search), toast notifications,
+ * invite panel open/close, and passes action callbacks to StaffList.
  * Used by: /admin/staff/page.tsx
  */
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Search, X } from "lucide-react";
 import FilterBar from "./FilterBar";
 import StaffList from "./StaffList";
 import InvitePanel from "./InvitePanel";
@@ -21,6 +22,7 @@ export interface StaffMember {
   first_name: string;
   last_name: string;
   email: string;
+  phone: string | null;
   role: Exclude<UserRole, "customer">;
   deactivated: boolean;
   deactivated_at: string | null;
@@ -54,6 +56,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState("All");
   const [roleFilter, setRoleFilter] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
   const [invitePanelOpen, setInvitePanelOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
 
@@ -78,7 +81,8 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
     router.refresh();
   }
 
-  // Client-side filter — all staff data is already loaded from the server
+  // Client-side filter — all staff data is already loaded from the server.
+  // Search matches against full name, email, and phone (case-insensitive).
   const filtered = staffMembers.filter((staff) => {
     const statusMatch =
       statusFilter === "All" ||
@@ -90,7 +94,13 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
       (roleFilter === "Manager" && staff.role === "manager") ||
       (roleFilter === "Super Admin" && staff.role === "super_admin") ||
       (roleFilter === "Inspector" && staff.role === "inspector");
-    return statusMatch && roleMatch;
+    const q = searchQuery.trim().toLowerCase();
+    const searchMatch =
+      !q ||
+      `${staff.first_name} ${staff.last_name}`.toLowerCase().includes(q) ||
+      staff.email.toLowerCase().includes(q) ||
+      (staff.phone ?? "").toLowerCase().includes(q);
+    return statusMatch && roleMatch && searchMatch;
   });
 
   return (
@@ -109,6 +119,28 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
         >
           + Invite Staff Member
         </button>
+      </div>
+
+      {/* Search bar — filters by name, email, or phone client-side */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          aria-label="Search staff"
+          placeholder="Search by name, email, or phone..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-9 text-sm text-gray-900 placeholder-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            aria-label="Clear search"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Status and role filters */}

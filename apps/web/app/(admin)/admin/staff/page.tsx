@@ -8,7 +8,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { OWNER_EMAILS } from "@/lib/constants";
 import StaffManagement from "./_components/StaffManagement";
 import type { UserRole } from "@/types/users";
@@ -38,15 +38,37 @@ export default async function StaffPage() {
     redirect("/admin");
   }
 
-  // Fetch all staff — active and deactivated — ordered by role then last name
-  const { data: staffMembers } = await supabase
+  // Fetch all staff via the admin client so super admins can always see every
+  // staff profile regardless of RLS policy variations across environments.
+  const adminSupabase = await createAdminClient();
+  const { data: rawStaffMembers, error: staffError } = await adminSupabase
     .from("profiles")
     .select(
-      "id, first_name, last_name, email, role, deactivated, deactivated_at, created_at"
+      "id, first_name, last_name, email, phone, role, deactivated, deactivated_at, created_at"
     )
-    .in("role", ["instructor", "manager", "super_admin", "inspector"])
+    .neq("role", "customer")
     .order("role")
     .order("last_name");
+
+  // Some older local schemas may not yet include phone/deactivated columns.
+  // If that query fails, fall back to a legacy column set and synthesize defaults.
+  let staffMembers = rawStaffMembers ?? [];
+  if (staffError) {
+    console.error("[admin/staff] Failed to fetch staff with full column set:", staffError);
+    const { data: legacyStaffMembers } = await adminSupabase
+      .from("profiles")
+      .select("id, first_name, last_name, email, role, created_at")
+      .neq("role", "customer")
+      .order("role")
+      .order("last_name");
+
+    staffMembers = (legacyStaffMembers ?? []).map((row) => ({
+      ...row,
+      phone: null,
+      deactivated: false,
+      deactivated_at: null,
+    }));
+  }
 
   return (
     <StaffManagement
