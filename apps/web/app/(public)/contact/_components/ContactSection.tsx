@@ -165,13 +165,14 @@ export default function ContactSection() {
                 />
               </FormField>
 
-              {/* Phone (optional) */}
-              <FormField label="Phone" id="contact-phone">
+              {/* Phone */}
+              <FormField label="Phone" id="contact-phone" required>
                 <input
                   id="contact-phone"
                   name="phone"
                   type="tel"
                   autoComplete="tel"
+                  required
                   value={form.phone}
                   onChange={handleChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"

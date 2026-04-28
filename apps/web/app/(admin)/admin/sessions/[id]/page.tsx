@@ -129,13 +129,14 @@ export default async function SessionDetailPage({ params }: PageProps) {
 
   const locations: LocationOption[] = (rawLocations ?? []) as LocationOption[];
 
-  // Fetch active instructors for the edit form — managers and super admins can reassign
+  // Fetch active staff for the edit form — managers and super admins can reassign.
+  // Any non-customer profile may be assigned as the session instructor.
   let instructors: InstructorOption[] = [];
   if (role === "manager" || role === "super_admin") {
     const { data: rawInstructors } = await supabase
       .from("profiles")
       .select("id, first_name, last_name")
-      .in("role", ["instructor", "manager", "super_admin"])
+      .neq("role", "customer")
       .eq("deactivated", false)
       .order("first_name");
     instructors = (rawInstructors ?? []) as InstructorOption[];
