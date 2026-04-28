@@ -66,14 +66,25 @@ export async function PATCH(
   }
 
   // ── Mark profile as deactivated ────────────────────────────────────────────
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .update({
-      deactivated: true,
-      deactivated_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", targetId);
+  // Compatibility fallback: some older local schemas may not yet have updated_at.
+  const nowIso = new Date().toISOString();
+  const updateAttempts = [
+    { deactivated: true, deactivated_at: nowIso, updated_at: nowIso },
+    { deactivated: true, deactivated_at: nowIso },
+  ];
+
+  let profileError: { message?: string } | null = null;
+  for (const payload of updateAttempts) {
+    const { error } = await supabase
+      .from("profiles")
+      .update(payload)
+      .eq("id", targetId);
+    if (!error) {
+      profileError = null;
+      break;
+    }
+    profileError = error;
+  }
 
   if (profileError) {
     return Response.json(
