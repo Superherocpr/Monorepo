@@ -6,6 +6,17 @@ applications:
         preBuild:
           commands:
             - npm ci
+            # AWS Amplify Hosting does NOT pass non-NEXT_PUBLIC_* env vars to the
+            # Next.js SSR Lambda at runtime — only at build time. To make server-only
+            # secrets (e.g. SUPABASE_SERVICE_ROLE_KEY, ZOHO_CLIENT_SECRET) available
+            # to Server Components and API routes at runtime, we must write them into
+            # .env.production during the build so Next.js inlines them into the
+            # standalone server bundle. Without this, createAdminClient() and any
+            # other code that reads server-only env vars throws at runtime.
+            - |
+              echo "Writing server-side env vars to .env.production for SSR runtime..."
+              env | grep -E '^(NEXT_PUBLIC_|SUPABASE_SERVICE_ROLE_KEY|PAYPAL_SECRET|PAYPAL_API_BASE|PAYPAL_WEBHOOK_ID|PAYPAL_COMMERCE_|OWNER_EMAIL|FACEBOOK_PAGE_ID|FACEBOOK_PAGE_ACCESS_TOKEN|ENCRYPTION_KEY|ZOHO_CLIENT_ID|ZOHO_CLIENT_SECRET|ZOHO_REDIRECT_URI|RESEND_API_KEY|RESEND_FROM_EMAIL|CRON_SECRET|SQUARE_|STRIPE_|VENMO_|S3_|AWS_S3_)=' >> .env.production
+              echo "Wrote $(wc -l < .env.production) env var lines (values redacted)."
         build:
           commands:
             - npm run build
