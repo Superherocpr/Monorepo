@@ -14,6 +14,7 @@ import { Search, X } from "lucide-react";
 import FilterBar from "./FilterBar";
 import StaffList from "./StaffList";
 import InvitePanel from "./InvitePanel";
+import BioEditPanel from "./BioEditPanel";
 import type { UserRole } from "@/types/users";
 
 /** A staff member as returned by the server component's Supabase query. */
@@ -27,6 +28,10 @@ export interface StaffMember {
   deactivated: boolean;
   deactivated_at: string | null;
   created_at: string;
+  /** Public S3 URL of the instructor's headshot. Null if no photo has been uploaded. */
+  bio_photo: string | null;
+  /** Plain-text bio paragraph shown on the /about page. Null if none written. */
+  bio_description: string | null;
 }
 
 interface StaffManagementProps {
@@ -58,6 +63,8 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
   const [roleFilter, setRoleFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [invitePanelOpen, setInvitePanelOpen] = useState(false);
+  // The staff member whose bio is being edited — null means the panel is closed
+  const [bioPanelMember, setBioPanelMember] = useState<StaffMember | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
 
   /**
@@ -162,6 +169,19 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
         }}
         onError={(msg) => showToast("error", msg)}
         onInvite={() => setInvitePanelOpen(true)}
+        onEditBio={(member) => setBioPanelMember(member)}
+      />
+
+      {/* Bio edit slide-in panel — opens when an instructor's Edit Bio is clicked */}
+      <BioEditPanel
+        member={bioPanelMember}
+        onClose={() => setBioPanelMember(null)}
+        onSuccess={(msg) => {
+          setBioPanelMember(null);
+          showToast("success", msg);
+          refreshList();
+        }}
+        onError={(msg) => showToast("error", msg)}
       />
 
       {/* Invite staff member slide-in panel */}

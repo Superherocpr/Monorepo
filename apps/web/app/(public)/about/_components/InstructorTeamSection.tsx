@@ -15,7 +15,7 @@ export default async function InstructorTeamSection() {
 
   const { data: instructors } = await supabase
     .from("profiles")
-    .select("id, first_name, last_name, bio_slug")
+    .select("id, first_name, last_name, bio_slug, bio_photo, bio_description")
     .eq("role", "instructor")
     .eq("is_lead_instructor", false)
     .order("last_name");
@@ -46,11 +46,11 @@ export default async function InstructorTeamSection() {
                 key={instructor.id}
                 className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm flex flex-col"
               >
-                {/* Photo */}
+                {/* Photo — use DB bio_photo if set, else fall back to markdown frontmatter */}
                 <div className="relative w-full aspect-square bg-gray-100">
-                  {bio?.frontmatter.photo ? (
+                  {(instructor.bio_photo ?? bio?.frontmatter.photo) ? (
                     <Image
-                      src={bio.frontmatter.photo}
+                      src={(instructor.bio_photo ?? bio?.frontmatter.photo)!}
                       alt={fullName}
                       fill
                       className="object-cover"
@@ -73,14 +73,19 @@ export default async function InstructorTeamSection() {
                     </p>
                   )}
 
-                  {bio?.contentHtml && (
+                  {/* Bio description — use DB bio_description if set, else fall back to markdown HTML */}
+                  {instructor.bio_description ? (
+                    <p className="text-sm text-gray-600 mt-2 whitespace-pre-wrap">
+                      {instructor.bio_description}
+                    </p>
+                  ) : bio?.contentHtml ? (
                     <div
                       className="prose prose-sm prose-gray max-w-none text-gray-600 mt-2"
                       dangerouslySetInnerHTML={{
                         __html: sanitizeHtml(bio.contentHtml),
                       }}
                     />
-                  )}
+                  ) : null}
                 </div>
               </div>
             );

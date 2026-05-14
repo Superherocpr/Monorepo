@@ -16,7 +16,7 @@ export default async function LeadInstructorSection() {
 
   const { data: instructor } = await supabase
     .from("profiles")
-    .select("first_name, last_name, bio_slug")
+    .select("first_name, last_name, bio_slug, bio_photo, bio_description")
     .eq("is_lead_instructor", true)
     .single();
 
@@ -45,12 +45,12 @@ export default async function LeadInstructorSection() {
 
           {/* Left column — photo, credentials, stats */}
           <div className="flex flex-col gap-6">
-            {/* Photo */}
+            {/* Photo — use DB bio_photo if set, else fall back to markdown frontmatter */}
             <div className="relative w-full aspect-square max-w-sm mx-auto lg:mx-0 rounded-xl overflow-hidden bg-gray-100">
-              {bio?.frontmatter.photo ? (
+              {(instructor.bio_photo ?? bio?.frontmatter.photo) ? (
                 // TODO: replace placeholder with actual instructor photo
                 <Image
-                  src={bio.frontmatter.photo}
+                  src={(instructor.bio_photo ?? bio?.frontmatter.photo)!}
                   alt={fullName}
                   fill
                   className="object-cover"
@@ -111,14 +111,20 @@ export default async function LeadInstructorSection() {
             )}
           </div>
 
-          {/* Right column — bio HTML */}
-          {bio?.contentHtml && (
-            <div
-              className="prose prose-gray max-w-none text-gray-700 leading-relaxed"
-              dangerouslySetInnerHTML={{
-                __html: sanitizeHtml(bio.contentHtml),
-              }}
-            />
+          {/* Right column — bio description from DB, falling back to markdown HTML */}
+          {(instructor.bio_description || bio?.contentHtml) && (
+            instructor.bio_description ? (
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {instructor.bio_description}
+              </p>
+            ) : (
+              <div
+                className="prose prose-gray max-w-none text-gray-700 leading-relaxed"
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeHtml(bio!.contentHtml),
+                }}
+              />
+            )
           )}
         </div>
       </div>
