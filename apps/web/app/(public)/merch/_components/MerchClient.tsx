@@ -437,13 +437,13 @@ function ProductCard({ product, onAddToCart }: ProductCardProps) {
   return (
     <article className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
       {/* Product image */}
-      <div className="relative aspect-square bg-gray-100">
+      <div className="relative aspect-square bg-white">
         {product.image_url ? (
           <Image
             src={product.image_url}
             alt={product.name}
             fill
-            className="object-cover"
+            className="object-contain p-3"
             sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
         ) : (
