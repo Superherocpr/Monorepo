@@ -4,19 +4,24 @@
  * Used by: app/(public)/about/page.tsx
  */
 
+import Image from "next/image";
+
 /** Renders the American Heart Association affiliation section. */
 export default function AhaAffiliationSection() {
   return (
     <section className="py-20 px-4 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
 
-          {/* Logo placeholder */}
-          <div className="flex items-center justify-center lg:justify-start">
-            {/* TODO: add official AHA logo asset to /public/images/aha-logo.png and replace this placeholder */}
-            <div className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 text-sm text-center px-4">
-              American Heart Association Logo
-            </div>
+          {/* AHA Authorized Training Site badge */}
+          <div className="flex items-center justify-center">
+            <Image
+              src="/images/aha-authorized-training-site.png"
+              alt="American Heart Association Authorized Training Site"
+              width={320}
+              height={120}
+              className="object-contain"
+            />
           </div>
 
           {/* Text */}
