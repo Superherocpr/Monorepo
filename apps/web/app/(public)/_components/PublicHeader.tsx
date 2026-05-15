@@ -7,9 +7,8 @@
  */
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 /** Primary nav links rendered in both desktop and mobile menus. */
 const NAV_LINKS = [
@@ -33,21 +32,7 @@ interface PublicHeaderProps {
  */
 export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
-
-  /**
-   * Signs the current user out via Supabase, then refreshes to clear server session state.
-   * Side effect: clears the Supabase auth cookie.
-   */
-  async function handleSignOut() {
-    setSigningOut(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
-  }
 
   /** Returns true when the given href is an exact match for the current pathname. */
   function isActive(href: string): boolean {

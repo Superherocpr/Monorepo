@@ -109,7 +109,6 @@ export default function InvoicesClient({
   invoices,
   instructors,
   userRole,
-  userId,
 }: InvoicesClientProps) {
   const isManager = userRole === "manager" || userRole === "super_admin";
   // Instructors and super admins can create invoices; managers cannot

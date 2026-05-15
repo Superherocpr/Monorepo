@@ -7,6 +7,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import Image from "next/image";
 import type { SocialFeedPost } from "@/types/social";
 
 /** Renders the "Follow Along" social media photo strip. */
@@ -27,7 +28,7 @@ export default async function SocialFeedSection() {
             Follow Along
           </h2>
           <p className="text-gray-600 text-sm mb-3">
-            See what's happening at SuperHeroCPR on Facebook
+            See what&apos;s happening at SuperHeroCPR on Facebook
           </p>
           <a
             href="https://www.facebook.com/1HeroWay"
@@ -58,13 +59,16 @@ export default async function SocialFeedSection() {
                   className="relative shrink-0 w-36 h-36 md:w-44 md:h-44 rounded-lg overflow-hidden group"
                   aria-label={photo.caption ?? "SuperHeroCPR Facebook post"}
                 >
-                  {/* Facebook CDN URLs are signed and occasionally fail through the Next image optimizer. */}
-                  <img
+                  {/* Facebook CDN URLs are signed and occasionally fail through the Next
+                      image optimizer — unoptimized bypasses the optimizer while still
+                      satisfying the no-img-element lint rule. */}
+                  <Image
                     src={photo.photo_url}
                     alt={photo.caption ?? "SuperHeroCPR class photo"}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                    decoding="async"
+                    unoptimized
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    sizes="(max-width: 768px) 144px, 176px"
                   />
                   {/* Hover overlay */}
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">

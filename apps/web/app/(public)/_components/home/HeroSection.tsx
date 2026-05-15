@@ -5,6 +5,7 @@
  */
 
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 
 /** Formats an ISO datetime to e.g. "Tuesday, April 22 at 9:00 AM". */
@@ -82,9 +83,11 @@ export default async function HeroSection() {
         style={{ transform: "translateX(min(0px, calc(50vw - 50% - 150px))) translateY(50%)" }}
         aria-hidden="true"
       >
-        <img
+        <Image
           src="/images/Her_CPR.png"
           alt=""
+          width={600}
+          height={850}
           className="h-[85vh] w-auto object-contain"
         />
       </div>
@@ -101,9 +104,11 @@ export default async function HeroSection() {
         style={{ transform: "translateX(max(0px, calc(50% + 150px - 50vw))) translateY(50%)" }}
         aria-hidden="true"
       >
-        <img
+        <Image
           src="/images/Him_CPR.png"
           alt=""
+          width={600}
+          height={850}
           className="h-[85vh] w-auto object-contain"
         />
       </div>

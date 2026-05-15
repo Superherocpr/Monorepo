@@ -9,7 +9,7 @@
  */
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -260,7 +260,6 @@ export default function CustomerDetailClient({
     availableSessions,
     certTypes,
     actorRole,
-    actorId,
   } = data;
 
   const router = useRouter();
@@ -335,8 +334,6 @@ export default function CustomerDetailClient({
   const [notesSaving, setNotesSaving] = useState(false);
 
   // ── Archive account (super admin only) ──────────────────────────────────────
-
-  const firstPanelInputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
 
   /**
    * Archives the customer account. Only callable by super admin.

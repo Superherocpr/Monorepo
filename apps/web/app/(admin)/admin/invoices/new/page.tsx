@@ -113,7 +113,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
             </p>
           </div>
           <Link
-            href="/admin/settings/payment"
+            href="/admin/profile/payment"
             className="rounded-md bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
           >
             Connect Payment Account

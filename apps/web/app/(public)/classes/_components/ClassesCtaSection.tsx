@@ -26,7 +26,7 @@ export default function ClassesCtaSection() {
             Book a Class
           </Link>
           <Link
-            href="/schedule"
+            href="/book"
             className="border-2 border-white text-white font-semibold px-6 py-3 rounded-lg hover:bg-red-600 transition-colors duration-150"
           >
             View Schedule

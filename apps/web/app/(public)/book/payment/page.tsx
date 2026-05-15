@@ -23,23 +23,22 @@ import type { BookingStore } from "@/lib/booking-store";
 /** Renders Step 4 — PayPal payment for the selected session. */
 export default function BookPaymentPage() {
   const router = useRouter();
-  const [store, setStore] = useState<BookingStore | null>(null);
+  // Initialize store once from localStorage. If required steps are missing, store is null.
+  const [store] = useState<BookingStore | null>(() => {
+    const s = getBookingStore();
+    return s.sessionId && s.customerId ? s : null;
+  });
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isFullError, setIsFullError] = useState(false);
 
   // Guards: redirect if required prior steps are incomplete
   useEffect(() => {
-    const s = getBookingStore();
-    if (!s.sessionId) {
-      router.replace("/book");
-      return;
+    if (!store) {
+      const s = getBookingStore();
+      if (!s.sessionId) router.replace("/book");
+      else router.replace("/book/details");
     }
-    if (!s.customerId) {
-      router.replace("/book/details");
-      return;
-    }
-    setStore(s);
-  }, [router]);
+  }, [store, router]);
 
   /**
    * Called by PayPalOneTimePaymentButton createOrder callback.

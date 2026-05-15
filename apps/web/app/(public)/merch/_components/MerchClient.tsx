@@ -73,15 +73,11 @@ interface MerchClientProps {
  * cart drawer, shipping form, and PayPal checkout.
  */
 export default function MerchClient({ products }: MerchClientProps) {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  // Initialize cart from localStorage using a lazy initializer (avoids set-state-in-effect).
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("cart");
   const [shippingForm, setShippingForm] = useState<ShippingForm>(EMPTY_SHIPPING);
-
-  // Load cart from localStorage on mount
-  useEffect(() => {
-    setCartItems(getCart());
-  }, []);
 
   // Persist cart to localStorage whenever it changes
   useEffect(() => {

@@ -28,7 +28,16 @@ export interface Profile {
   zip: string | null;
   role: UserRole;
   is_lead_instructor: boolean;
-  bio_slug: string | null;
+  /** Public S3 URL of the instructor's headshot. Null if no photo has been uploaded. */
+  bio_photo: string | null;
+  /** Plain-text bio paragraph shown on the /about page. Null if none has been written. */
+  bio_description: string | null;
+  /** Comma-separated credentials shown as checkmark items on the /about page (e.g. "AHA Instructor, BLS Provider"). Null if none entered. */
+  bio_credentials: string | null;
+  /** Years of experience displayed on the lead instructor stat block (e.g. "20"). Null hides the stat. */
+  bio_years_experience: string | null;
+  /** Students trained figure displayed on the lead instructor stat block (e.g. "5,000+"). Null hides the stat. */
+  bio_students_trained: string | null;
   daily_access_code: string | null;
   access_code_generated_at: string | null;
   archived: boolean;

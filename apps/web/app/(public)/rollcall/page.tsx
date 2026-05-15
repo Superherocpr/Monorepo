@@ -151,7 +151,7 @@ export default function RollcallPage() {
   // ── Step 2 / session selection state ─────────────────────────────────────
   const [sessions, setSessions] = useState<RollcallSession[]>([]);
   const [instructorName, setInstructorName] = useState("");
-  const [instructorId, setInstructorId] = useState("");
+  const [, setInstructorId] = useState("");
   const [selectedSession, setSelectedSession] = useState<RollcallSession | null>(null);
 
   // ── Step 3 state ──────────────────────────────────────────────────────────

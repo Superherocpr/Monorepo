@@ -246,7 +246,6 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
     cashCheckTotal,
     instructors,
     actorRole,
-    actorId,
     filters,
   } = data;
 

@@ -5,6 +5,7 @@
  */
 
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 
 /** Renders the "Meet Your Instructor" two-column section. */
@@ -30,9 +31,11 @@ export default async function AboutInstructorSection() {
 
           {/* Photo — hidden on mobile when layout stacks to single column */}
           <div className="hidden lg:flex justify-center lg:justify-end">
-            <img
+            <Image
               src="/images/Untitled-2.jpg"
               alt={`${instructorName}, lead CPR instructor`}
+              width={400}
+              height={500}
               className="w-auto object-contain"
               style={{ height: "75%" }}
             />
@@ -50,8 +53,8 @@ export default async function AboutInstructorSection() {
               With thousands of documented real-world CPR patients and active
               experience on the front lines of Fire, EMS, and Emergency Room
               response, our lead instructor brings unmatched real-world
-              knowledge to every class. This isn't just certification — it's
-              training that could save someone's life.
+              knowledge to every class. This isn&apos;t just certification — it&apos;s
+              training that could save someone&apos;s life.
             </p>
 
             {/* TODO: add AHA logo asset to /public/images/aha-logo.png */}

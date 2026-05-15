@@ -7,6 +7,8 @@
 /**
  * A student record on a class roster from the `roster_records` table.
  * May be created via roster import or walk-in rollcall registration.
+ * Address fields (address_1–zip) were added in migration 0009 to support
+ * Enrollware student CSV export. All address fields are nullable.
  */
 export interface RosterRecord {
   id: string;
@@ -17,6 +19,11 @@ export interface RosterRecord {
   email: string | null;
   phone: string | null;
   employer: string | null;
+  address_1: string | null;
+  address_2: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
   grade: number | null;
   confirmed: boolean;
   corrected: boolean;
