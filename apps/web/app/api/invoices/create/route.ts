@@ -673,6 +673,22 @@ export async function POST(request: Request) {
       to: recipientEmail as string,
       subject,
       html,
+      // Attach the roster template CSV for group invoices so the contact
+      // has it ready when they click "Submit Your Roster" in the email.
+      ...(invoiceType === "group" && {
+        attachments: [
+          {
+            filename: "roster-template.csv",
+            content: Buffer.from(
+              [
+                `"First Name","Last Name","Email","Phone","Employer"`,
+                `"Jane","Smith","jane.smith@example.com","555-867-5309","Acme Hospital"`,
+                `"John","Doe","john.doe@example.com","",""`,
+              ].join("\r\n")
+            ),
+          },
+        ],
+      }),
     });
   }
 

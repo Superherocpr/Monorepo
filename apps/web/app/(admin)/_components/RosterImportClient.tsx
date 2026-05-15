@@ -20,6 +20,7 @@
 import { useState, useRef, useCallback, useId } from "react";
 import Papa from "papaparse";
 import readXlsxFile from "read-excel-file/browser";
+import { Download } from "lucide-react";
 
 // ─── Exported types (consumed by page.tsx) ────────────────────────────────────
 
@@ -434,6 +435,27 @@ export default function RosterImportClient({
 
   // ── Render helpers ──
 
+  /**
+   * Triggers a client-side download of a pre-filled CSV template showing
+   * the expected column names and two sample rows. Instructors can open this
+   * in Excel or Google Sheets, fill it with their students, and re-upload.
+   */
+  function downloadTemplate() {
+    const rows = [
+      ["First Name", "Last Name", "Email", "Phone", "Employer"],
+      ["Jane", "Smith", "jane.smith@example.com", "555-867-5309", "Acme Hospital"],
+      ["John", "Doe", "john.doe@example.com", "", ""],
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "roster-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   /** Step indicator dots shown at the top of every step. */
   function StepIndicator() {
     const steps: { key: Step; label: string }[] = [
@@ -584,6 +606,18 @@ export default function RosterImportClient({
             {parseError}
           </p>
         )}
+
+        {/* Download template */}
+        <div className="mt-5 flex justify-end">
+          <button
+            onClick={downloadTemplate}
+            type="button"
+            className="inline-flex items-center gap-2 rounded-md bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+          >
+            <Download size={15} aria-hidden="true" />
+            Download Roster Template
+          </button>
+        </div>
       </div>
     );
   }

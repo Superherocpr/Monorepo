@@ -1144,7 +1144,7 @@ export function invoiceEmail({
          <p style="font-size:14px;color:#374151;font-weight:600;">Submitting your student roster</p>
          <p style="font-size:14px;color:#6b7280;">
            If you have a list of staff attending this class, you can submit it in advance to save time on class day.
-           This is only needed if you have multiple attendees and want to pre-register them.
+           This is only needed if you have multiple attendees to pre-register them. Attached to this email is the roster template CSV you should use to fill in your attendees.
          </p>
          <p style="font-size:14px;color:#6b7280;">Your invoice number: <strong>${invoiceNumber}</strong></p>
          <p>
