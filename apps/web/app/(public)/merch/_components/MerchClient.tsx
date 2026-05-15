@@ -413,8 +413,10 @@ interface ProductCardProps {
 /** Renders a single product card with size/quantity selector and Add to Cart. */
 function ProductCard({ product, onAddToCart }: ProductCardProps) {
   const sortedVariants = sortSizes(product.product_variants);
+  // Default to the first in-stock variant so the card is ready to add to cart
+  // without requiring an explicit size selection on load.
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    null
+    () => sortedVariants.find((v) => v.stock_quantity > 0)?.id ?? null
   );
   const [quantity, setQuantity] = useState(1);
   const [addedFeedback, setAddedFeedback] = useState(false);
