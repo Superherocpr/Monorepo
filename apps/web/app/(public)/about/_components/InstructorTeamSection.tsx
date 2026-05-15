@@ -6,28 +6,52 @@
 
 import Image from "next/image";
 import sanitizeHtml from "sanitize-html";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { getInstructorBio } from "@/lib/bios";
+
+/**
+ * Returns true if a photo source is safe to pass to next/image.
+ * Accepts root-relative paths and http/https absolute URLs.
+ * @param value - Candidate photo URL from DB or markdown frontmatter.
+ */
+function isRenderablePhotoSrc(value: string | null | undefined): value is string {
+  if (!value) return false;
+  if (value.startsWith("/")) return true;
+
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 /** Renders a responsive card grid of supporting instructors. Returns null if none exist. */
 export default async function InstructorTeamSection() {
-  const supabase = await createClient();
+  // Use the admin client so RLS policies on the profiles table do not block
+  // reads of public-facing instructor fields (name, photo, bio) for anonymous visitors.
+  const supabase = await createAdminClient();
 
-  const { data: instructors } = await supabase
+  const { data: instructors, error } = await supabase
     .from("profiles")
-    .select("id, first_name, last_name, bio_slug, bio_photo, bio_description")
+    .select("id, first_name, last_name, bio_photo, bio_description")
     .eq("role", "instructor")
     .eq("is_lead_instructor", false)
     .order("last_name");
 
+  if (error) {
+    console.error("[InstructorTeamSection] Failed to fetch instructors:", error.message);
+  }
+
   if (!instructors || instructors.length === 0) return null;
 
-  // Load each instructor's bio file in parallel — missing files return null
+  // Load each instructor's markdown bio file in parallel — slugged from name; missing files return null
   const instructorsWithBios = await Promise.all(
     instructors.map(async (instructor) => {
-      const bio = instructor.bio_slug
-        ? await getInstructorBio(instructor.bio_slug)
-        : null;
+      const slug = `${instructor.first_name}-${instructor.last_name}`
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "");
+      const bio = await getInstructorBio(slug);
       return { instructor, bio };
     })
   );
@@ -41,6 +65,10 @@ export default async function InstructorTeamSection() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {instructorsWithBios.map(({ instructor, bio }) => {
             const fullName = `${instructor.first_name} ${instructor.last_name}`;
+            const photoSrcCandidate = instructor.bio_photo ?? bio?.frontmatter.photo ?? null;
+            const photoSrc = isRenderablePhotoSrc(photoSrcCandidate)
+              ? photoSrcCandidate
+              : null;
             return (
               <div
                 key={instructor.id}
@@ -48,13 +76,14 @@ export default async function InstructorTeamSection() {
               >
                 {/* Photo — use DB bio_photo if set, else fall back to markdown frontmatter */}
                 <div className="relative w-full aspect-square bg-gray-100">
-                  {(instructor.bio_photo ?? bio?.frontmatter.photo) ? (
+                  {photoSrc ? (
                     <Image
-                      src={(instructor.bio_photo ?? bio?.frontmatter.photo)!}
+                      src={photoSrc}
                       alt={fullName}
                       fill
                       className="object-cover"
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      unoptimized
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-300 text-sm">

@@ -7,18 +7,41 @@
 import Image from "next/image";
 import { CheckCircle2 } from "lucide-react";
 import sanitizeHtml from "sanitize-html";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { getLeadInstructorBio } from "@/lib/bios";
+
+/**
+ * Returns true if a photo source is safe to pass to next/image.
+ * Accepts root-relative paths and http/https absolute URLs.
+ * @param value - Candidate photo URL from DB or markdown frontmatter.
+ */
+function isRenderablePhotoSrc(value: string | null | undefined): value is string {
+  if (!value) return false;
+  if (value.startsWith("/")) return true;
+
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 /** Renders the lead instructor card with photo, credentials, stats, and bio. */
 export default async function LeadInstructorSection() {
-  const supabase = await createClient();
+  // Use the admin client so RLS policies do not block reads of public-facing
+  // instructor fields (name, photo, bio) for anonymous visitors.
+  const supabase = await createAdminClient();
 
-  const { data: instructor } = await supabase
+  const { data: instructor, error } = await supabase
     .from("profiles")
-    .select("first_name, last_name, bio_slug, bio_photo, bio_description")
+    .select("first_name, last_name, bio_photo, bio_description")
     .eq("is_lead_instructor", true)
-    .single();
+    .maybeSingle();
+
+  if (error) {
+    console.error("[LeadInstructorSection] Failed to fetch lead instructor:", error.message);
+  }
 
   const bio = await getLeadInstructorBio();
 
@@ -37,6 +60,8 @@ export default async function LeadInstructorSection() {
   }
 
   const fullName = `${instructor.first_name} ${instructor.last_name}`;
+  const photoSrcCandidate = instructor.bio_photo ?? bio?.frontmatter.photo ?? null;
+  const photoSrc = isRenderablePhotoSrc(photoSrcCandidate) ? photoSrcCandidate : null;
 
   return (
     <section className="py-20 px-4 bg-white">
@@ -47,14 +72,15 @@ export default async function LeadInstructorSection() {
           <div className="flex flex-col gap-6">
             {/* Photo — use DB bio_photo if set, else fall back to markdown frontmatter */}
             <div className="relative w-full aspect-square max-w-sm mx-auto lg:mx-0 rounded-xl overflow-hidden bg-gray-100">
-              {(instructor.bio_photo ?? bio?.frontmatter.photo) ? (
+              {photoSrc ? (
                 // TODO: replace placeholder with actual instructor photo
                 <Image
-                  src={(instructor.bio_photo ?? bio?.frontmatter.photo)!}
+                  src={photoSrc}
                   alt={fullName}
                   fill
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, 384px"
+                  unoptimized
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">

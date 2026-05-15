@@ -267,8 +267,10 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
                   fill
                   className="object-cover"
                   sizes="128px"
-                  // unoptimized for S3 URLs and blob: URLs
-                  unoptimized={!!previewUrl}
+                  // Always unoptimized — this is a small admin panel thumbnail.
+                  // Bypasses Next.js image optimization so blob: preview URLs
+                  // and any S3 URL work without remotePatterns restrictions.
+                  unoptimized
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs text-center px-2">

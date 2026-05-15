@@ -4,6 +4,7 @@
  * DO NOT import this in any "use client" component — use lib/supabase/client.ts instead.
  */
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 /**
@@ -46,26 +47,10 @@ export async function createClient() {
  * @returns A Supabase admin client with full database access.
  */
 export async function createAdminClient() {
-  const cookieStore = await cookies();
-
-  return createServerClient(
+  // Service-role access should use the standard server SDK client.
+  // The SSR cookie client is intended for request-bound user sessions.
+  return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Safe to ignore in read-only render contexts.
-          }
-        },
-      },
-    }
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }

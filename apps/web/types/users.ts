@@ -28,7 +28,6 @@ export interface Profile {
   zip: string | null;
   role: UserRole;
   is_lead_instructor: boolean;
-  bio_slug: string | null;
   /** Public S3 URL of the instructor's headshot. Null if no photo has been uploaded. */
   bio_photo: string | null;
   /** Plain-text bio paragraph shown on the /about page. Null if none has been written. */
