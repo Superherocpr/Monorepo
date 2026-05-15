@@ -100,9 +100,17 @@ function SignInForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="signin-password" className="text-sm font-medium text-gray-700">
-          Password
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="signin-password" className="text-sm font-medium text-gray-700">
+            Password
+          </label>
+          <Link
+            href="/book/forgot-password"
+            className="text-xs text-red-600 hover:text-red-700 font-medium transition-colors duration-150"
+          >
+            Forgot password?
+          </Link>
+        </div>
         <input
           id="signin-password"
           type="password"

@@ -1202,3 +1202,47 @@ export function invoiceEmail({
     `),
   };
 }
+
+// ── 14. Self-service password reset ───────────────────────────────────────────
+
+/**
+ * Sent to a customer when they request a password reset themselves via
+ * /book/forgot-password. Uses a Supabase-generated recovery link that
+ * redirects to /book/reset-password after token exchange.
+ * Triggered by: POST /api/auth/reset-password
+ * @param actionLink - Supabase-generated password reset link.
+ */
+export function selfServicePasswordResetEmail({
+  actionLink,
+}: {
+  actionLink: string;
+}): EmailContent {
+  return {
+    subject: "Reset your SuperHeroCPR password",
+    html: wrapEmail(`
+      <h1>Password Reset Request</h1>
+      <p>We received a request to reset the password for your SuperHeroCPR account.</p>
+      <p>Click the button below to choose a new password. This link expires in <strong>24 hours</strong>.</p>
+
+      <p style="margin:24px 0;">
+        <a href="${actionLink}"
+           style="display:inline-block;background-color:#dc2626;color:#ffffff;font-weight:700;font-size:15px;padding:14px 28px;border-radius:8px;text-decoration:none;">
+          Reset My Password →
+        </a>
+      </p>
+
+      <p style="font-size:13px;color:#6b7280;">
+        If the button doesn&rsquo;t work, copy and paste this link into your browser:
+      </p>
+      <p style="font-size:13px;word-break:break-all;">
+        <a href="${actionLink}" style="color:#dc2626;">${actionLink}</a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:13px;color:#6b7280;">
+        If you didn&rsquo;t request a password reset, you can safely ignore this email.
+        Your password will not change unless you click the link above.
+      </p>
+    `),
+  };
+}

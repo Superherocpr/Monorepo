@@ -10,6 +10,7 @@ import {
   staffInviteEmail,
   customerSetupEmail,
   passwordResetEmail,
+  selfServicePasswordResetEmail,
   certReminderEmail,
   invoicePaidEmail,
   invoiceResendEmail,
@@ -92,9 +93,13 @@ export default async function Page() {
   const setup = customerSetupEmail({ firstName: "Alex", setupLink: "https://superherocpr.com/set-password?token=dev" });
   previews.push({ id: "customer-setup", name: "Customer Setup", subject: setup.subject, src: b64(setup.html) });
 
-  // 9) Password reset
+  // 9) Password reset (admin-initiated)
   const pw = passwordResetEmail({ firstName: "Alex", actionLink: "https://superherocpr.com/reset?token=dev" });
-  previews.push({ id: "password-reset", name: "Password Reset", subject: pw.subject, src: b64(pw.html) });
+  previews.push({ id: "password-reset", name: "Password Reset (Admin)", subject: pw.subject, src: b64(pw.html) });
+
+  // 9b) Password reset (self-service via /book/forgot-password)
+  const pwSelf = selfServicePasswordResetEmail({ actionLink: "https://superherocpr.com/book/reset-password#access_token=dev&type=recovery" });
+  previews.push({ id: "password-reset-self", name: "Password Reset (Self-Service)", subject: pwSelf.subject, src: b64(pwSelf.html) });
 
   // 10) Cert reminder
   const cert = certReminderEmail({ firstName: "Alex", certName: "BLS for Healthcare Providers", daysRemaining: 45 });
