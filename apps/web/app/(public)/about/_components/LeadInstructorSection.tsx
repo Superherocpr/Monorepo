@@ -35,7 +35,7 @@ export default async function LeadInstructorSection() {
 
   const { data: instructor, error } = await supabase
     .from("profiles")
-    .select("first_name, last_name, bio_photo, bio_description, bio_credentials")
+    .select("first_name, last_name, bio_photo, bio_description, bio_credentials, bio_years_experience, bio_students_trained")
     .eq("is_lead_instructor", true)
     .maybeSingle();
 
@@ -68,22 +68,26 @@ export default async function LeadInstructorSection() {
     ? instructor.bio_credentials.split(",").map((c) => c.trim()).filter(Boolean)
     : (bio?.frontmatter.credentials ?? []);
 
+  // Prefer DB stats over markdown frontmatter values.
+  const yearsExperience = instructor.bio_years_experience ?? bio?.frontmatter.years_experience?.toString() ?? null;
+  const studentsTrained = instructor.bio_students_trained ?? bio?.frontmatter.students_trained?.toString() ?? null;
+
   return (
     <section className="py-20 px-4 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
 
           {/* Left column — photo, credentials, stats */}
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6 items-center">
             {/* Photo — use DB bio_photo if set, else fall back to markdown frontmatter */}
-            <div className="relative w-full aspect-square max-w-sm mx-auto lg:mx-0 rounded-xl overflow-hidden bg-gray-100">
+            <div className="relative w-full aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-gray-100">
               {photoSrc ? (
                 // TODO: replace placeholder with actual instructor photo
                 <Image
                   src={photoSrc}
                   alt={fullName}
                   fill
-                  className="object-cover"
+                  className="object-cover object-top"
                   sizes="(max-width: 768px) 100vw, 384px"
                   unoptimized
                 />
@@ -95,7 +99,7 @@ export default async function LeadInstructorSection() {
             </div>
 
             {/* Name */}
-            <div>
+            <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-900">{fullName}</h2>
               {/* TODO: add AHA logo asset to /public/images/aha-logo.png */}
               <p className="text-sm text-red-600 font-semibold mt-1">
@@ -119,21 +123,21 @@ export default async function LeadInstructorSection() {
               </ul>
             )}
 
-            {/* Stats */}
-            {(bio?.frontmatter.years_experience || bio?.frontmatter.students_trained) && (
+            {/* Stats — DB values take priority over markdown frontmatter */}
+            {(yearsExperience || studentsTrained) && (
               <div className="flex gap-8">
-                {bio.frontmatter.years_experience && (
+                {yearsExperience && (
                   <div>
                     <p className="text-3xl font-extrabold text-red-600">
-                      {bio.frontmatter.years_experience}+
+                      {yearsExperience}+
                     </p>
                     <p className="text-sm text-gray-500">Years experience</p>
                   </div>
                 )}
-                {bio.frontmatter.students_trained && (
+                {studentsTrained && (
                   <div>
                     <p className="text-3xl font-extrabold text-red-600">
-                      {bio.frontmatter.students_trained}
+                      {studentsTrained}
                     </p>
                     <p className="text-sm text-gray-500">Students trained</p>
                   </div>
@@ -145,7 +149,7 @@ export default async function LeadInstructorSection() {
           {/* Right column — bio description from DB, falling back to markdown HTML */}
           {(instructor.bio_description || bio?.contentHtml) && (
             instructor.bio_description ? (
-              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap mx-auto max-w-prose">
                 {instructor.bio_description}
               </p>
             ) : (

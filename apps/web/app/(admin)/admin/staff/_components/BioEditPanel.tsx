@@ -52,6 +52,9 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
   const [description, setDescription] = useState("");
   // Credentials textarea value — comma-separated list, initialised from DB
   const [credentials, setCredentials] = useState("");
+  // Stat fields — only shown/used for the lead instructor, but stored for all staff
+  const [yearsExperience, setYearsExperience] = useState("");
+  const [studentsTrained, setStudentsTrained] = useState("");
   // The photo URL currently saved in the DB (shown as the current photo)
   const [savedPhotoUrl, setSavedPhotoUrl] = useState<string | null>(null);
   // A newly selected file that hasn't been uploaded yet
@@ -71,6 +74,8 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
     if (member) {
       setDescription(member.bio_description ?? "");
       setCredentials(member.bio_credentials ?? "");
+      setYearsExperience(member.bio_years_experience ?? "");
+      setStudentsTrained(member.bio_students_trained ?? "");
       setSavedPhotoUrl(member.bio_photo ?? null);
       setPendingFile(null);
       setPreviewUrl(null);
@@ -198,6 +203,8 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
           bio_photo: finalPhotoUrl,
           bio_description: description.trim() || null,
           bio_credentials: credentials.trim() || null,
+          bio_years_experience: yearsExperience.trim() || null,
+          bio_students_trained: studentsTrained.trim() || null,
         }),
       });
 
@@ -372,6 +379,43 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
               placeholder="e.g. Licensed AHA Instructor, BLS Provider, PALS Certified"
               className={`${inputClass} resize-y`}
             />
+          </div>
+
+          {/* Stats section — displayed in the lead instructor's stat block on the About page */}
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-1">Stats</p>
+            <p className="text-xs text-gray-500 mb-3">
+              Shown as large numbers on the About page (lead instructor only).
+              Leave blank to hide a stat.
+            </p>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label htmlFor="bio-years" className="block text-xs text-gray-600 mb-1">
+                  Years Experience
+                </label>
+                <input
+                  id="bio-years"
+                  type="text"
+                  value={yearsExperience}
+                  onChange={(e) => setYearsExperience(e.target.value)}
+                  placeholder="e.g. 20"
+                  className={inputClass}
+                />
+              </div>
+              <div className="flex-1">
+                <label htmlFor="bio-students" className="block text-xs text-gray-600 mb-1">
+                  Students Trained
+                </label>
+                <input
+                  id="bio-students"
+                  type="text"
+                  value={studentsTrained}
+                  onChange={(e) => setStudentsTrained(e.target.value)}
+                  placeholder="e.g. 5,000+"
+                  className={inputClass}
+                />
+              </div>
+            </div>
           </div>
         </div>
 

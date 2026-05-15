@@ -16,6 +16,10 @@ interface BioPayload {
   bio_description?: string | null;
   /** Comma-separated credentials shown as checkmark items on the /about page. Null clears credentials. */
   bio_credentials?: string | null;
+  /** Years of experience for the lead instructor stat block (e.g. "20"). Null hides the stat. */
+  bio_years_experience?: string | null;
+  /** Students trained figure for the lead instructor stat block (e.g. "5,000+"). Null hides the stat. */
+  bio_students_trained?: string | null;
 }
 
 export async function PATCH(
@@ -55,6 +59,8 @@ export async function PATCH(
   if ("bio_photo" in body) update.bio_photo = body.bio_photo ?? null;
   if ("bio_description" in body) update.bio_description = body.bio_description ?? null;
   if ("bio_credentials" in body) update.bio_credentials = body.bio_credentials ?? null;
+  if ("bio_years_experience" in body) update.bio_years_experience = body.bio_years_experience ?? null;
+  if ("bio_students_trained" in body) update.bio_students_trained = body.bio_students_trained ?? null;
 
   if (Object.keys(update).length === 0) {
     return Response.json(
