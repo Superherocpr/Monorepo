@@ -32,6 +32,8 @@ export interface StaffMember {
   bio_photo: string | null;
   /** Plain-text bio paragraph shown on the /about page. Null if none written. */
   bio_description: string | null;
+  /** Comma-separated credentials shown as checkmark items on the /about page. Null if none entered. */
+  bio_credentials: string | null;
 }
 
 interface StaffManagementProps {

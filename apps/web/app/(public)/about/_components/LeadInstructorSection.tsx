@@ -35,7 +35,7 @@ export default async function LeadInstructorSection() {
 
   const { data: instructor, error } = await supabase
     .from("profiles")
-    .select("first_name, last_name, bio_photo, bio_description")
+    .select("first_name, last_name, bio_photo, bio_description, bio_credentials")
     .eq("is_lead_instructor", true)
     .maybeSingle();
 
@@ -62,6 +62,11 @@ export default async function LeadInstructorSection() {
   const fullName = `${instructor.first_name} ${instructor.last_name}`;
   const photoSrcCandidate = instructor.bio_photo ?? bio?.frontmatter.photo ?? null;
   const photoSrc = isRenderablePhotoSrc(photoSrcCandidate) ? photoSrcCandidate : null;
+  // Parse DB credentials first; fall back to markdown frontmatter.
+  // Split on comma, trim whitespace, drop empty strings.
+  const credentialItems: string[] = instructor.bio_credentials
+    ? instructor.bio_credentials.split(",").map((c) => c.trim()).filter(Boolean)
+    : (bio?.frontmatter.credentials ?? []);
 
   return (
     <section className="py-20 px-4 bg-white">
@@ -98,10 +103,10 @@ export default async function LeadInstructorSection() {
               </p>
             </div>
 
-            {/* Credentials */}
-            {bio?.frontmatter.credentials && bio.frontmatter.credentials.length > 0 && (
+            {/* Credentials — DB credentials take priority over markdown frontmatter */}
+            {credentialItems.length > 0 && (
               <ul className="flex flex-col gap-2">
-                {bio.frontmatter.credentials.map((cred) => (
+                {credentialItems.map((cred) => (
                   <li key={cred} className="flex items-start gap-2 text-sm text-gray-700">
                     <CheckCircle2
                       className="text-red-600 mt-0.5 shrink-0"

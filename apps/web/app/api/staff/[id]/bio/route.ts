@@ -14,6 +14,8 @@ interface BioPayload {
   bio_photo?: string | null;
   /** Plain-text bio paragraph shown on the /about page. Null clears the description. */
   bio_description?: string | null;
+  /** Comma-separated credentials shown as checkmark items on the /about page. Null clears credentials. */
+  bio_credentials?: string | null;
 }
 
 export async function PATCH(
@@ -52,6 +54,7 @@ export async function PATCH(
   const update: Record<string, string | null> = {};
   if ("bio_photo" in body) update.bio_photo = body.bio_photo ?? null;
   if ("bio_description" in body) update.bio_description = body.bio_description ?? null;
+  if ("bio_credentials" in body) update.bio_credentials = body.bio_credentials ?? null;
 
   if (Object.keys(update).length === 0) {
     return Response.json(

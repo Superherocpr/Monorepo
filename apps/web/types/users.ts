@@ -32,6 +32,8 @@ export interface Profile {
   bio_photo: string | null;
   /** Plain-text bio paragraph shown on the /about page. Null if none has been written. */
   bio_description: string | null;
+  /** Comma-separated credentials shown as checkmark items on the /about page (e.g. "AHA Instructor, BLS Provider"). Null if none entered. */
+  bio_credentials: string | null;
   daily_access_code: string | null;
   access_code_generated_at: string | null;
   archived: boolean;

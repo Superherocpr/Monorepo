@@ -5,6 +5,7 @@
  */
 
 import Image from "next/image";
+import { CheckCircle2 } from "lucide-react";
 import sanitizeHtml from "sanitize-html";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getInstructorBio } from "@/lib/bios";
@@ -34,7 +35,7 @@ export default async function InstructorTeamSection() {
 
   const { data: instructors, error } = await supabase
     .from("profiles")
-    .select("id, first_name, last_name, bio_photo, bio_description")
+    .select("id, first_name, last_name, bio_photo, bio_description, bio_credentials")
     .eq("role", "instructor")
     .eq("is_lead_instructor", false)
     .order("last_name");
@@ -69,6 +70,11 @@ export default async function InstructorTeamSection() {
             const photoSrc = isRenderablePhotoSrc(photoSrcCandidate)
               ? photoSrcCandidate
               : null;
+            // Parse DB credentials first; fall back to markdown frontmatter.
+            // Split on comma, trim whitespace, drop empty strings.
+            const credentialItems: string[] = instructor.bio_credentials
+              ? instructor.bio_credentials.split(",").map((c) => c.trim()).filter(Boolean)
+              : (bio?.frontmatter.credentials ?? []);
             return (
               <div
                 key={instructor.id}
@@ -95,11 +101,22 @@ export default async function InstructorTeamSection() {
                 {/* Card body */}
                 <div className="p-5 flex flex-col gap-2 flex-1">
                   <h3 className="text-base font-semibold text-gray-900">{fullName}</h3>
+                  <p className="text-xs text-red-600 font-semibold">AHA Certified Instructor</p>
 
-                  {bio?.frontmatter.credentials && bio.frontmatter.credentials.length > 0 && (
-                    <p className="text-xs text-gray-500">
-                      {bio.frontmatter.credentials.join(", ")}
-                    </p>
+                  {/* Credentials — checkmark list from DB or markdown frontmatter */}
+                  {credentialItems.length > 0 && (
+                    <ul className="flex flex-col gap-1 mt-1">
+                      {credentialItems.map((cred) => (
+                        <li key={cred} className="flex items-start gap-2 text-xs text-gray-600">
+                          <CheckCircle2
+                            className="text-red-600 mt-0.5 shrink-0"
+                            size={13}
+                            aria-hidden="true"
+                          />
+                          {cred}
+                        </li>
+                      ))}
+                    </ul>
                   )}
 
                   {/* Bio description — use DB bio_description if set, else fall back to markdown HTML */}

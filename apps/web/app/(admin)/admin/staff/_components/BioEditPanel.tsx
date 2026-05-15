@@ -50,6 +50,8 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
 }) => {
   // Description textarea value — initialised from the member's current bio
   const [description, setDescription] = useState("");
+  // Credentials textarea value — comma-separated list, initialised from DB
+  const [credentials, setCredentials] = useState("");
   // The photo URL currently saved in the DB (shown as the current photo)
   const [savedPhotoUrl, setSavedPhotoUrl] = useState<string | null>(null);
   // A newly selected file that hasn't been uploaded yet
@@ -68,6 +70,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
   useEffect(() => {
     if (member) {
       setDescription(member.bio_description ?? "");
+      setCredentials(member.bio_credentials ?? "");
       setSavedPhotoUrl(member.bio_photo ?? null);
       setPendingFile(null);
       setPreviewUrl(null);
@@ -194,6 +197,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
         body: JSON.stringify({
           bio_photo: finalPhotoUrl,
           bio_description: description.trim() || null,
+          bio_credentials: credentials.trim() || null,
         }),
       });
 
@@ -344,6 +348,28 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
               onChange={(e) => setDescription(e.target.value)}
               rows={6}
               placeholder="Write a short bio for the About page…"
+              className={`${inputClass} resize-y`}
+            />
+          </div>
+
+          {/* Credentials section */}
+          <div>
+            <label
+              htmlFor="bio-credentials"
+              className="block text-sm font-semibold text-gray-700 mb-1"
+            >
+              Credentials
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              Each credential separated by a comma. These appear as checkmark items
+              under the instructor&apos;s name on the About page.
+            </p>
+            <textarea
+              id="bio-credentials"
+              value={credentials}
+              onChange={(e) => setCredentials(e.target.value)}
+              rows={3}
+              placeholder="e.g. Licensed AHA Instructor, BLS Provider, PALS Certified"
               className={`${inputClass} resize-y`}
             />
           </div>

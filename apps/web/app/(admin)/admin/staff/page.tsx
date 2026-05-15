@@ -42,7 +42,7 @@ export default async function StaffPage() {
   // Try a full-column staff query first. If local schema is older, retry with
   // a legacy column set and synthesize defaults used by the UI.
   const fullSelect =
-    "id, first_name, last_name, email, phone, role, deactivated, deactivated_at, created_at, bio_photo, bio_description";
+    "id, first_name, last_name, email, phone, role, deactivated, deactivated_at, created_at, bio_photo, bio_description, bio_credentials";
   const legacySelect = "id, first_name, last_name, email, role, created_at";
 
   let staffMembers: StaffMember[] = [];
@@ -72,6 +72,7 @@ export default async function StaffPage() {
         deactivated_at: null,
         bio_photo: null,
         bio_description: null,
+        bio_credentials: null,
       })) as StaffMember[];
     } else {
       // Final fallback: use the request-bound client in case service-role config
@@ -101,6 +102,7 @@ export default async function StaffPage() {
             deactivated_at: null,
             bio_photo: null,
             bio_description: null,
+            bio_credentials: null,
           })) as StaffMember[];
         } else {
           console.error("[admin/staff] Failed to fetch staff after all fallbacks.", {
