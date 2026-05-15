@@ -19,7 +19,8 @@ import type { BookingStore } from "@/lib/booking-store";
 /** Renders the sign-in step of the booking wizard. */
 export default function BookSignInPage() {
   const router = useRouter();
-  const [sessionDetails, setSessionDetails] = useState<BookingStore["sessionDetails"]>(null);
+  // Initialize session details from store on first render (avoids set-state-in-effect).
+  const [sessionDetails] = useState<BookingStore["sessionDetails"]>(() => getBookingStore().sessionDetails);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +28,7 @@ export default function BookSignInPage() {
 
   // Guard: redirect to /book if no session is selected
   useEffect(() => {
-    const store = getBookingStore();
-    if (!store.sessionId) {
-      router.replace("/book");
-      return;
-    }
-    setSessionDetails(store.sessionDetails);
+    if (!getBookingStore().sessionId) router.replace("/book");
   }, [router]);
 
   /**

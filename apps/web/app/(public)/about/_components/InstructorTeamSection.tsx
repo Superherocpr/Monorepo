@@ -73,7 +73,7 @@ export default async function InstructorTeamSection() {
             // Parse DB credentials first; fall back to markdown frontmatter.
             // Split on comma, trim whitespace, drop empty strings.
             const credentialItems: string[] = instructor.bio_credentials
-              ? instructor.bio_credentials.split(",").map((c) => c.trim()).filter(Boolean)
+              ? instructor.bio_credentials.split(",").map((c: string) => c.trim()).filter(Boolean)
               : (bio?.frontmatter.credentials ?? []);
             return (
               <div

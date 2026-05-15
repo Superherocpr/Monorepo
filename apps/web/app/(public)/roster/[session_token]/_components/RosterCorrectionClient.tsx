@@ -144,7 +144,6 @@ function EditField({
  * @param props - Session and roster data from the server page
  */
 export default function RosterCorrectionClient({
-  sessionId,
   classTypeName,
   startsAt,
   correctionWindowClosesAt,

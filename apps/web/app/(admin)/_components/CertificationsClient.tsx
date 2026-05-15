@@ -10,11 +10,8 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
-  Award,
   Bell,
   BellOff,
-  ChevronDown,
-  ChevronUp,
   Plus,
   Search,
   X,
@@ -1227,7 +1224,6 @@ export default function CertificationsClient({
             customerResults={customerResults}
             customerSearchLoading={customerSearchLoading}
             showCustomerDropdown={showCustomerDropdown}
-            setShowCustomerDropdown={setShowCustomerDropdown}
             onCustomerSelect={(c) => {
               setCertForm((prev) => ({
                 ...prev,
@@ -1284,7 +1280,6 @@ export default function CertificationsClient({
             customerResults={[]}
             customerSearchLoading={false}
             showCustomerDropdown={false}
-            setShowCustomerDropdown={() => undefined}
             onCustomerSelect={() => undefined}
           />
           {/* Reminder sent checkbox — can be manually reset */}
@@ -1452,7 +1447,6 @@ interface CertFormProps {
   customerResults: CustomerSearchResult[];
   customerSearchLoading: boolean;
   showCustomerDropdown: boolean;
-  setShowCustomerDropdown: (v: boolean) => void;
   onCustomerSelect: (c: CustomerSearchResult) => void;
 }
 
@@ -1467,7 +1461,6 @@ interface CertFormProps {
  * @param customerResults - Debounced customer search results
  * @param customerSearchLoading - Whether the customer search is in progress
  * @param showCustomerDropdown - Whether the customer dropdown is visible
- * @param setShowCustomerDropdown - Setter for dropdown visibility
  * @param onCustomerSelect - Called when a customer is selected from the dropdown
  */
 function CertForm({
@@ -1479,7 +1472,6 @@ function CertForm({
   customerResults,
   customerSearchLoading,
   showCustomerDropdown,
-  setShowCustomerDropdown,
   onCustomerSelect,
 }: CertFormProps) {
   return (

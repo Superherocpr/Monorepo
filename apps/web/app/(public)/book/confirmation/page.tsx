@@ -39,20 +39,17 @@ function formatTimeRange(startsAt: string, endsAt: string): string {
 /** Renders the booking confirmation screen (Step 5). */
 export default function BookConfirmationPage() {
   const router = useRouter();
-  const [details, setDetails] = useState<BookingStore["sessionDetails"]>(null);
-
-  // On mount: capture details before clearing the store.
-  // Guard against direct navigation with no prior booking.
-  useEffect(() => {
+  // Capture details on first render before the store is cleared (avoids set-state-in-effect).
+  const [details] = useState<BookingStore["sessionDetails"]>(() => {
     const store = getBookingStore();
-    if (!store.sessionId) {
-      router.replace("/book");
-      return;
-    }
-    // Capture before clearing — once cleared, the data is gone
-    setDetails(store.sessionDetails);
+    return store.sessionId ? store.sessionDetails : null;
+  });
+
+  // Guard and clear the store after details have been captured on initial render.
+  useEffect(() => {
+    if (!details) { router.replace("/book"); return; }
     clearBookingStore();
-  }, [router]);
+  }, [details, router]);
 
   return (
     <div className="min-h-screen bg-white">

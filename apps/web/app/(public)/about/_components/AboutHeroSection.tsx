@@ -4,6 +4,8 @@
  * Used by: app/(public)/about/page.tsx
  */
 
+import Image from "next/image";
+
 /** Renders the "Our Story" hero section header for the about page. */
 export default function AboutHeroSection() {
   return (
@@ -17,9 +19,11 @@ export default function AboutHeroSection() {
         style={{ transform: "translateY(50%)" }}
         aria-hidden="true"
       >
-        <img
+        <Image
           src="/images/MainFemaleHero1_white.svg"
           alt=""
+          width={467}
+          height={700}
           className="h-[700px] w-auto object-contain"
           style={{ transform: "scaleX(-1)" }}
         />

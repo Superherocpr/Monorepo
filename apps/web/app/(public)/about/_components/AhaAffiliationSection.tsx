@@ -30,7 +30,7 @@ export default function AhaAffiliationSection() {
               American Heart Association Certified
             </h2>
             <p className="text-gray-600 leading-relaxed">
-              The American Heart Association is the world's leading nonprofit
+              The American Heart Association is the world&apos;s leading nonprofit
               organization focused on heart disease and stroke. AHA
               certification is the gold standard recognized by employers,
               hospitals, and healthcare organizations nationwide. When you

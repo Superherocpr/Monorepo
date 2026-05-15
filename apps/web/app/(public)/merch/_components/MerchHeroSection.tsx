@@ -4,6 +4,8 @@
  * Used by: app/(public)/merch/page.tsx
  */
 
+import Image from "next/image";
+
 /** Renders the "Gear Up" hero header. */
 export default function MerchHeroSection() {
   return (
@@ -17,9 +19,11 @@ export default function MerchHeroSection() {
         style={{ transform: "translateY(calc(50% + 10px))" }}
         aria-hidden="true"
       >
-        <img
+        <Image
           src="/images/MainMaleHero1.svg"
           alt=""
+          width={467}
+          height={700}
           className="h-[700px] w-auto object-contain"
           style={{ transform: "scaleX(-1)" }}
         />

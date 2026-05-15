@@ -1,0 +1,188 @@
+/**
+ * POST /api/sessions
+ * Called by: CreateSessionClient (admin sessions/new form)
+ * Auth: Instructor, Manager, or Super Admin
+ *
+ * Creates a new class session by:
+ * 1. Verifying the caller is an authenticated staff member
+ * 2. Validating all required fields
+ * 3. Checking that class_type, location, and instructor exist and are valid
+ * 4. Inserting the new class_sessions record (approval_status defaults to pending_approval)
+ * 5. Returning the new session id for redirect
+ *
+ * Instructors may only create sessions for themselves.
+ * Managers and super admins may create sessions for any instructor.
+ */
+
+import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+
+/** Staff roles that are permitted to create sessions. */
+const ALLOWED_ROLES = ["instructor", "manager", "super_admin"] as const;
+
+/**
+ * Handles POST requests to create a new class session.
+ * Validates input, checks FK references, and inserts the record.
+ * @param request - Incoming Next.js API request.
+ * @returns JSON with `{ id }` on success, or an error message and status code.
+ */
+export async function POST(request: Request): Promise<Response> {
+  const supabase = await createClient();
+
+  // ── Auth ───────────────────────────────────────────────────────────────────
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !ALLOWED_ROLES.includes(profile.role as (typeof ALLOWED_ROLES)[number])) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const isInstructor = profile.role === "instructor";
+
+  // ── Parse body ─────────────────────────────────────────────────────────────
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  if (typeof body !== "object" || body === null) {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const {
+    class_type_id,
+    instructor_id,
+    location_id,
+    starts_at,
+    ends_at,
+    max_capacity,
+    notes,
+  } = body as Record<string, unknown>;
+
+  // ── Validate required fields ───────────────────────────────────────────────
+  if (
+    typeof class_type_id !== "string" || !class_type_id ||
+    typeof location_id !== "string" || !location_id ||
+    typeof starts_at !== "string" || !starts_at ||
+    typeof ends_at !== "string" || !ends_at ||
+    typeof max_capacity !== "number" || max_capacity < 1
+  ) {
+    return NextResponse.json(
+      { error: "Missing or invalid required fields." },
+      { status: 400 }
+    );
+  }
+
+  // Instructors are always their own instructor — reject attempts to impersonate.
+  // Managers/super admins must supply an instructor_id.
+  const resolvedInstructorId = isInstructor
+    ? profile.id
+    : typeof instructor_id === "string" && instructor_id
+    ? instructor_id
+    : null;
+
+  if (!resolvedInstructorId) {
+    return NextResponse.json(
+      { error: "instructor_id is required for manager and super admin." },
+      { status: 400 }
+    );
+  }
+
+  // ── Validate timestamps ────────────────────────────────────────────────────
+  const start = new Date(starts_at);
+  const end = new Date(ends_at);
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
+    return NextResponse.json(
+      { error: "ends_at must be after starts_at." },
+      { status: 400 }
+    );
+  }
+
+  // ── Verify class_type exists and is active ─────────────────────────────────
+  const { data: classType } = await supabase
+    .from("class_types")
+    .select("id")
+    .eq("id", class_type_id)
+    .eq("active", true)
+    .single();
+
+  if (!classType) {
+    return NextResponse.json(
+      { error: "Class type not found or inactive." },
+      { status: 400 }
+    );
+  }
+
+  // ── Verify location exists ─────────────────────────────────────────────────
+  const { data: location } = await supabase
+    .from("locations")
+    .select("id")
+    .eq("id", location_id)
+    .single();
+
+  if (!location) {
+    return NextResponse.json(
+      { error: "Location not found." },
+      { status: 400 }
+    );
+  }
+
+  // ── Verify instructor exists and is a staff member ─────────────────────────
+  // Only check if a non-instructor user supplied an instructor_id.
+  if (!isInstructor) {
+    const { data: instructor } = await supabase
+      .from("profiles")
+      .select("id, role")
+      .eq("id", resolvedInstructorId)
+      .in("role", ["instructor", "manager", "super_admin"])
+      .eq("deactivated", false)
+      .single();
+
+    if (!instructor) {
+      return NextResponse.json(
+        { error: "Instructor not found or inactive." },
+        { status: 400 }
+      );
+    }
+  }
+
+  // ── Insert the new session ─────────────────────────────────────────────────
+  const { data: newSession, error: insertError } = await supabase
+    .from("class_sessions")
+    .insert({
+      class_type_id,
+      instructor_id: resolvedInstructorId,
+      location_id,
+      starts_at,
+      ends_at,
+      max_capacity,
+      // notes is optional — only set if truthy to avoid storing empty strings
+      ...(typeof notes === "string" && notes.trim() ? { notes: notes.trim() } : {}),
+      // Defaults set by DB: status = 'scheduled', approval_status = 'pending_approval'
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !newSession) {
+    console.error("[POST /api/sessions] insert error:", insertError);
+    return NextResponse.json(
+      { error: "Failed to create session. Please try again." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ id: newSession.id }, { status: 201 });
+}

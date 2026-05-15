@@ -4,6 +4,8 @@
  * Used by: app/(public)/classes/page.tsx
  */
 
+import Image from "next/image";
+
 /** Renders the "Our Courses" hero section header. */
 export default function ClassesHeroSection() {
   return (
@@ -23,9 +25,11 @@ export default function ClassesHeroSection() {
         style={{ transform: "translateY(50%)" }}
         aria-hidden="true"
       >
-        <img
+        <Image
           src="/images/MainFemaleHero3.svg"
           alt=""
+          width={467}
+          height={700}
           className="h-[700px] w-auto object-contain"
         />
       </div>

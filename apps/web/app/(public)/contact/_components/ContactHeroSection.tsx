@@ -4,6 +4,8 @@
  * Used by: app/(public)/contact/page.tsx
  */
 
+import Image from "next/image";
+
 /** Renders the "Get In Touch" hero header. */
 export default function ContactHeroSection() {
   return (
@@ -16,9 +18,11 @@ export default function ContactHeroSection() {
         style={{ transform: "translateY(50%)" }}
         aria-hidden="true"
       >
-        <img
+        <Image
           src="/images/MainMaleHero2.svg"
           alt=""
+          width={467}
+          height={700}
           className="h-[700px] w-auto object-contain"
         />
       </div>
@@ -35,11 +39,11 @@ export default function ContactHeroSection() {
           Get In Touch
         </p>
         <h1 className="text-4xl font-bold tracking-tight text-white mb-4">
-          We'd Love to Hear From You
+          We&apos;d Love to Hear From You
         </h1>
         <p className="text-gray-300 text-lg leading-relaxed">
           Have a question about our classes? Interested in group or corporate
-          training? Reach out and we'll get back to you as soon as possible.
+          training? Reach out and we&apos;ll get back to you as soon as possible.
         </p>
       </div>
     </section>
