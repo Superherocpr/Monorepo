@@ -19,7 +19,7 @@ const VALUES = [
     title: "Gold Standard Training",
     // TODO: replace placeholder copy with final mission text
     description:
-      "We teach exclusively to American Heart Association standards — the most trusted name in emergency cardiovascular care.",
+      "We teach exclusively to the standards of the most trusted name in emergency cardiovascular care; the American Heart Association",
   },
   {
     icon: Home,

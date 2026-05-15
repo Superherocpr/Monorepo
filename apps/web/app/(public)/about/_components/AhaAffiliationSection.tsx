@@ -35,7 +35,7 @@ export default function AhaAffiliationSection() {
               certification is the gold standard recognized by employers,
               hospitals, and healthcare organizations nationwide. When you
               train with SuperHeroCPR, you receive official AHA
-              certification — the same standard required by healthcare
+              certification, the same standard required by healthcare
               professionals.
             </p>
             <p className="text-sm text-gray-500">

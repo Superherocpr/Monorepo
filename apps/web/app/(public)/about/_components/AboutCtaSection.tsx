@@ -25,12 +25,6 @@ export default function AboutCtaSection() {
           >
             Book a Class
           </Link>
-          <Link
-            href="/schedule"
-            className="text-white font-medium hover:text-red-100 transition-colors duration-150 underline underline-offset-4"
-          >
-            View the schedule
-          </Link>
         </div>
       </div>
     </section>
