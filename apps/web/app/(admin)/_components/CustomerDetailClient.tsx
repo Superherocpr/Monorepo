@@ -462,8 +462,9 @@ export default function CustomerDetailClient({
 
   /**
    * Saves the email address explicitly when the user clicks "Update Email".
-   * A separate flow from other fields to prevent accidental Supabase
-   * confirmation emails being triggered by a blur event.
+   * A separate flow from other fields to prevent an accidental blur from
+   * triggering a write. Updates both profiles.email and auth.users.email
+   * immediately — no confirmation email is sent (admin action).
    */
   async function handleSaveEmail() {
     const trimmed = emailDraft.trim();
@@ -476,11 +477,12 @@ export default function CustomerDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ field: "email", value: trimmed }),
       });
+      const json = await res.json();
       if (res.ok) {
-        setEmailMsg(`Confirmation sent to ${trimmed}. The address will update once confirmed.`);
+        setEmailMsg(`Email updated to ${trimmed}.`);
         router.refresh();
       } else {
-        setEmailMsg("Failed to update email. Please try again.");
+        setEmailMsg(json.error ?? "Failed to update email. Please try again.");
       }
     } finally {
       setEmailSaving(false);
@@ -1349,8 +1351,8 @@ export default function CustomerDetailClient({
                 {emailMsg}
               </p>
             ) : (
-              <p className="mt-1 text-xs text-amber-600">
-                Supabase will send a confirmation to the new address before updating.
+              <p className="mt-1 text-xs text-gray-400">
+                Updates both the login email and profile immediately.
               </p>
             )}
           </div>
