@@ -26,7 +26,14 @@ export default async function CertificationsPage() {
 
   if (!user) redirect("/signin?redirect=/dashboard/certifications");
 
-  const { data: certs } = await supabase
+  // Fetch the student's display name for the eCard — runs in parallel with the certs query
+  const [{ data: profile }, { data: certs }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("first_name, last_name")
+      .eq("id", user.id)
+      .single(),
+    supabase
     .from("certifications")
     .select(
       `id, cert_number, notes, issued_at, expires_at,
@@ -34,7 +41,12 @@ export default async function CertificationsPage() {
        class_sessions ( starts_at, class_types ( name ) )`
     )
     .eq("customer_id", user.id)
-    .order("expires_at", { ascending: false });
+      .order("expires_at", { ascending: false }),
+  ]);
+
+  const studentName = profile
+    ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim()
+    : "";
 
   const now = new Date();
   const sixtyDaysFromNow = new Date(
@@ -57,8 +69,8 @@ export default async function CertificationsPage() {
       <CertificationsPageHeader />
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
         {hasExpiringSoon && <RenewalCtaBanner />}
-        <ActiveCertificationsList certifications={active} />
-        <ExpiredCertificationsList certifications={expired} />
+        <ActiveCertificationsList certifications={active} studentName={studentName} />
+        <ExpiredCertificationsList certifications={expired} studentName={studentName} />
       </div>
     </div>
   );
