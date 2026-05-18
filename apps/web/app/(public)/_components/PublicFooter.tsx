@@ -5,6 +5,7 @@
  */
 
 import Link from "next/link";
+import { ChamberBadge } from "./ChamberBadge";
 
 const FOOTER_LINKS = [
   { label: "Home", href: "/" },
@@ -76,6 +77,11 @@ export function PublicFooter() {
                 </a>
               </li>
             </ul>
+
+            {/* Manatee Chamber of Commerce membership badge */}
+            <div className="mt-4">
+              <ChamberBadge />
+            </div>
           </div>
         </div>
 

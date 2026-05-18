@@ -24,6 +24,12 @@ const nextConfig: NextConfig = {
         hostname: "**.fbcdn.net",
         pathname: "/**",
       },
+      {
+        // ChamberMaster serves association logos from Azure Blob Storage.
+        protocol: "https",
+        hostname: "chambermaster.blob.core.windows.net",
+        pathname: "/**",
+      },
     ],
   },
 };
