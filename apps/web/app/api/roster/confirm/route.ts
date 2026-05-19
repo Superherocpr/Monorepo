@@ -5,9 +5,16 @@
  * Updates a roster_record as confirmed (and corrected if fields changed).
  * Also creates and links a booking record if a matching customer account exists.
  * Re-verifies the correction window on every call — enforced server-side.
+ *
+ * Device token model (THREAT-014):
+ *   On the first confirm, the server generates a UUID and locks it onto the
+ *   record. The client receives it in the response and stores it locally.
+ *   Subsequent edits must present the same token. The client-supplied token
+ *   on first call is ignored — the server is the only source of trust.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { randomUUID } from "crypto";
 
 /** The editable fields sent by the student. */
 interface UpdateFields {
@@ -35,9 +42,9 @@ export async function PATCH(request: Request) {
   };
 
   // ── Input validation ──────────────────────────────────────────────────────
+  // deviceToken is optional on first confirm — the server generates one then.
   if (
     !recordId ||
-    !deviceToken ||
     !updates?.firstName?.trim() ||
     !updates?.lastName?.trim() ||
     !updates?.email?.trim()
@@ -69,10 +76,17 @@ export async function PATCH(request: Request) {
     return Response.json({ success: false, error: "Record not found." }, { status: 404 });
   }
 
-  // ── 2. Verify device token ────────────────────────────────────────────────
-  // If another device has already claimed this record, reject.
-  if (record.device_token && record.device_token !== deviceToken) {
-    return Response.json({ success: false, error: "Device mismatch." }, { status: 403 });
+  // ── 2. Resolve / verify the device token (THREAT-014) ────────────────────
+  // First confirm: server mints a fresh UUID and ignores any client value.
+  // Subsequent edits: client-supplied token MUST match the stored one.
+  let effectiveToken: string;
+  if (!record.device_token) {
+    effectiveToken = randomUUID();
+  } else {
+    if (record.device_token !== deviceToken) {
+      return Response.json({ success: false, error: "Device mismatch." }, { status: 403 });
+    }
+    effectiveToken = record.device_token;
   }
 
   // ── 3. Verify correction window still open ────────────────────────────────
@@ -113,8 +127,9 @@ export async function PATCH(request: Request) {
       employer: updates.employer?.trim() || null,
       confirmed: true,
       corrected: hasChanges,
-      // Lock the device token — subsequent attempts from other devices will be rejected
-      device_token: deviceToken,
+      // Lock the (server-issued) device token so subsequent edits from other
+      // devices are rejected.
+      device_token: effectiveToken,
       updated_at: new Date().toISOString(),
     })
     .eq("id", recordId);
@@ -172,5 +187,5 @@ export async function PATCH(request: Request) {
     // and it will be linked at that point.
   }
 
-  return Response.json({ success: true });
+  return Response.json({ success: true, deviceToken: effectiveToken });
 }

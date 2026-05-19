@@ -23,6 +23,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import { invoiceEmail } from "@/lib/emails";
+import { decryptToken } from "@/lib/crypto";
 import type { PaymentPlatform } from "@/types/users";
 
 // ---------------------------------------------------------------------------
@@ -584,9 +585,21 @@ export async function POST(request: Request) {
 
   // Step 4: Attempt to create the invoice on the payment platform.
   // Best-effort — a failure here does not block DB record creation.
+  // Access token is decrypted in-memory just before the API call and is never
+  // logged or returned to the client.
+  let decryptedToken: string | null = null;
+  if (paymentAccount.access_token) {
+    try {
+      decryptedToken = decryptToken(paymentAccount.access_token as string);
+    } catch (err) {
+      console.error("[invoices/create] Failed to decrypt access token:", err);
+      decryptedToken = null;
+    }
+  }
+
   const { platformInvoiceId, paymentLink } = await createOnPlatform(
     paymentAccount.platform as PaymentPlatform,
-    paymentAccount.access_token as string | null,
+    decryptedToken,
     paymentAccount.platform_account_id as string | null,
     {
       recipientEmail: recipientEmail as string,

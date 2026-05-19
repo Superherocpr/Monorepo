@@ -2,8 +2,10 @@
  * POST /api/rollcall/checkin
  * Called by: /rollcall page — Step 4a (returning student sign-in)
  * Auth: None required — Supabase sign-in IS the verification
- * Signs the student in via password, then creates a roster_record for the session.
- * If they're already checked in, skips creation and confirms gracefully.
+ * Signs the student in via password, then creates a roster_record for the
+ * session. The student MUST have an existing (non-cancelled) booking for the
+ * session — unpaid walk-ups are rejected (THREAT-007). If already checked in,
+ * the call is a no-op that confirms gracefully.
  * Does NOT create a booking record — student already has one.
  */
 
@@ -65,9 +67,10 @@ export async function POST(request: Request) {
     });
   }
 
-  // ── 3. Find their existing booking for this session ──────────────────────
-  // A booking should exist since they paid (online or invoice).
-  // If not found, proceed anyway — instructor can reconcile manually.
+  // ── 3. Require an existing booking for this session (THREAT-007) ─────────
+  // A non-cancelled booking proves the student paid (online, invoice, or was
+  // added by an instructor). Without one, refuse the check-in — the instructor
+  // can add them via the admin tools after collecting payment.
   const { data: booking } = await supabase
     .from("bookings")
     .select("id")
@@ -75,6 +78,17 @@ export async function POST(request: Request) {
     .eq("customer_id", userId)
     .eq("cancelled", false)
     .maybeSingle();
+
+  if (!booking) {
+    return Response.json(
+      {
+        success: false,
+        error:
+          "No booking found for you in this class. Please pay first or see your instructor.",
+      },
+      { status: 403 }
+    );
+  }
 
   // ── 4. Fetch profile details for roster record ───────────────────────────
   const { data: profile } = await supabase
@@ -93,7 +107,7 @@ export async function POST(request: Request) {
   // ── 5. Create roster_record ──────────────────────────────────────────────
   const { error: insertError } = await supabase.from("roster_records").insert({
     session_id: sessionId,
-    booking_id: booking?.id ?? null,
+    booking_id: booking.id,
     first_name: profile.first_name,
     last_name: profile.last_name,
     email: email.toLowerCase(),

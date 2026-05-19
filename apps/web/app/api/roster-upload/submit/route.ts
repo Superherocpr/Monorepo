@@ -71,6 +71,64 @@ function isAcceptedFileType(file: File): boolean {
 }
 
 /**
+ * Verifies file content matches the claimed type via magic bytes (THREAT-012).
+ * Prevents an attacker from disguising arbitrary binaries (executables, scripts)
+ * behind a .csv/.xlsx extension. Reads the first 1KB only.
+ * @returns true when content is consistent with the file extension; false otherwise.
+ */
+async function verifyMagicBytes(file: File): Promise<boolean> {
+  const name = file.name.toLowerCase();
+  // Read enough bytes for header detection AND for CSV ASCII sampling.
+  const sampleSize = Math.min(file.size, 1024);
+  const head = new Uint8Array(await file.slice(0, sampleSize).arrayBuffer());
+
+  // XLSX = ZIP archive — header "PK\x03\x04"
+  if (name.endsWith(".xlsx")) {
+    return head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04;
+  }
+
+  // XLS = OLE compound document — header "D0 CF 11 E0 A1 B1 1A E1"
+  if (name.endsWith(".xls")) {
+    return (
+      head[0] === 0xd0 &&
+      head[1] === 0xcf &&
+      head[2] === 0x11 &&
+      head[3] === 0xe0 &&
+      head[4] === 0xa1 &&
+      head[5] === 0xb1 &&
+      head[6] === 0x1a &&
+      head[7] === 0xe1
+    );
+  }
+
+  // CSV — accept anything that is text (no NUL bytes, no non-text control chars
+  // besides tab/CR/LF) within the first 1KB. Strip BOM bytes if present.
+  if (name.endsWith(".csv")) {
+    let start = 0;
+    // UTF-8 BOM
+    if (head[0] === 0xef && head[1] === 0xbb && head[2] === 0xbf) start = 3;
+    for (let i = start; i < head.length; i++) {
+      const b = head[i];
+      if (b === 0) return false; // NUL byte → binary
+      // Allow common ASCII text (0x09 tab, 0x0a LF, 0x0d CR, 0x20-0x7e printable)
+      // and any high-bit byte (assume UTF-8 multibyte).
+      if (
+        b !== 0x09 &&
+        b !== 0x0a &&
+        b !== 0x0d &&
+        (b < 0x20 || b > 0x7e) &&
+        b < 0x80
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Receives a roster spreadsheet, validates it, uploads it to S3, records the
  * submission in the database, and sends confirmation + manager notification emails.
  * @param request - Multipart form data with file, invoiceId, sessionId, and optional submitter info.
@@ -136,6 +194,18 @@ export async function POST(request: Request) {
   if (file.size > MAX_SIZE_BYTES) {
     return Response.json(
       { success: false, error: "File too large. Maximum size is 10MB." },
+      { status: 400 }
+    );
+  }
+
+  // ── Validate file content via magic bytes (THREAT-012) ────────────────────
+  // Prevents disguised executables/binaries from being uploaded under .csv/.xlsx.
+  if (!(await verifyMagicBytes(file))) {
+    return Response.json(
+      {
+        success: false,
+        error: "File content does not match the file type. Please upload a real CSV or Excel file.",
+      },
       { status: 400 }
     );
   }
