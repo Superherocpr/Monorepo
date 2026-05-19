@@ -30,9 +30,9 @@ test.describe("Roll call page", () => {
       .first();
     await submitButton.click();
 
-    // An error or "invalid code" message must appear
+    // An error message must appear — rendered with role="alert" by ErrorMsg.
     await expect(
-      page.getByText(/invalid|not found|incorrect|try again/i)
+      page.getByRole("alert")
     ).toBeVisible({ timeout: 10_000 });
   });
 

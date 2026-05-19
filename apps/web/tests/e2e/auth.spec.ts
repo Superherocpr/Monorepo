@@ -75,14 +75,17 @@ test.describe("Forgot-password page", () => {
     await page.getByLabel("Email").fill("someone@example.com");
     await page.getByRole("button", { name: /send|reset/i }).click();
 
-    // A success/confirmation message should appear
+    // A success/confirmation message should appear — target the h1 to avoid
+    // matching "link" / "Quick Links" elsewhere on the page.
     await expect(
-      page.getByText(/check your email|sent|link/i)
+      page.getByRole("heading", { name: /check your email/i })
     ).toBeVisible({ timeout: 10_000 });
   });
 
   test("back to sign in link navigates correctly", async ({ page }) => {
-    const backLink = page.getByRole("link", { name: /back to sign in|sign in/i });
+    // Use exact:true to distinguish the body "Sign in" link (lowercase i) from
+    // the nav header "Sign In" button (uppercase I).
+    const backLink = page.getByRole("link", { name: "Sign in", exact: true });
     await expect(backLink).toBeVisible();
     await backLink.click();
     await expect(page).toHaveURL(/\/signin/);

@@ -47,21 +47,19 @@ test.describe("Merch page", () => {
       return;
     }
 
-    // Pick the first available (non-OOS) size button inside the first card
-    const sizeButton = firstCard
-      .getByRole("button", { name: /size/i })
-      .filter({ hasNot: page.locator('[aria-label*="out of stock"]') })
-      .first();
+    // Pick the first available (non-OOS) size button inside the first card.
+    // The ProductCard component auto-selects the first in-stock variant on mount,
+    // so Add to Cart is already enabled — clicking a size button here would
+    // toggle it off. We only need to confirm at least one in-stock variant exists.
+    const inStockButtons = firstCard.locator('button[aria-label*="Size"]:not([disabled])');
 
-    const sizeCount = await sizeButton.count();
+    const sizeCount = await inStockButtons.count();
     if (sizeCount === 0) {
       test.skip();
       return;
     }
 
-    await sizeButton.click();
-
-    // Add to cart
+    // Add to cart (variant was auto-selected at page load)
     const addButton = firstCard.getByRole("button", { name: /add to cart/i });
     await addButton.click();
 
@@ -81,16 +79,14 @@ test.describe("Merch page", () => {
     }
 
     const firstCard = page.locator("article").first();
-    const sizeButton = firstCard
-      .getByRole("button", { name: /size/i })
-      .first();
+    const inStockButtons = firstCard.locator('button[aria-label*="Size"]:not([disabled])');
 
-    if ((await sizeButton.count()) === 0) {
+    if ((await inStockButtons.count()) === 0) {
       test.skip();
       return;
     }
 
-    await sizeButton.click();
+    // ProductCard auto-selects the first in-stock variant — go straight to Add to Cart.
     await firstCard.getByRole("button", { name: /add to cart/i }).click();
 
     // Open the drawer
@@ -117,13 +113,13 @@ test.describe("Merch page", () => {
     }
 
     const firstCard = page.locator("article").first();
-    const sizeButton = firstCard.getByRole("button", { name: /size/i }).first();
-    if ((await sizeButton.count()) === 0) {
+    const inStockButtons = firstCard.locator('button[aria-label*="Size"]:not([disabled])');
+    if ((await inStockButtons.count()) === 0) {
       test.skip();
       return;
     }
 
-    await sizeButton.click();
+    // ProductCard auto-selects the first in-stock variant — go straight to Add to Cart.
     await firstCard.getByRole("button", { name: /add to cart/i }).click();
     await page.getByRole("button", { name: /open cart/i }).click();
     await page.getByRole("button", { name: /proceed to checkout/i }).click();

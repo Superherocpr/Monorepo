@@ -30,9 +30,9 @@ test.describe("Submit Roster page", () => {
   test("empty invoice submission shows validation error", async ({ page }) => {
     await page.goto("/submit-roster");
 
-    // Click through without entering anything
+    // Click through without entering anything — Step 1 button is "Find My Class"
     const nextButton = page
-      .getByRole("button", { name: /next|continue|submit/i })
+      .getByRole("button", { name: /next|continue|submit|find/i })
       .first();
     await nextButton.click();
 
@@ -58,13 +58,13 @@ test.describe("Submit Roster page", () => {
     await invoiceInput.fill("INV-DOES-NOT-EXIST-99999");
 
     const nextButton = page
-      .getByRole("button", { name: /next|continue|submit/i })
+      .getByRole("button", { name: /next|continue|submit|find/i })
       .first();
     await nextButton.click();
 
-    // The API should return an error and the page should show it
+    // The API returns "We couldn't find an invoice with that number."
     await expect(
-      page.getByText(/not found|invalid|no.*invoice|does not exist/i)
+      page.getByText(/couldn't find|not found|invalid|no.*invoice|does not exist/i)
     ).toBeVisible({ timeout: 10_000 });
   });
 });

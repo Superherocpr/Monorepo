@@ -100,8 +100,9 @@ test("submit-roster page loads", async ({ page }) => {
 test.describe("auth guard redirects", () => {
   test("unauthenticated /dashboard redirects to signin", async ({ page }) => {
     await page.goto("/dashboard");
-    // Should land somewhere that isn't the dashboard
-    await expect(page).not.toHaveURL(/\/dashboard/);
+    // Should redirect to signin. Note: the redirect URL contains ?redirect=/dashboard
+    // so we check for /signin rather than not.toHaveURL(/\/dashboard/).
+    await expect(page).toHaveURL(/\/signin/);
   });
 
   test("unauthenticated /admin redirects away", async ({ page }) => {

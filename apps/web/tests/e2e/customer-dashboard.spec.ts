@@ -19,14 +19,14 @@ test.describe("Customer dashboard", () => {
   test("my bookings page loads", async ({ page }) => {
     await page.goto("/dashboard/bookings");
     await expect(page).toHaveURL(/\/dashboard\/bookings/);
-    // Either a list of bookings or an empty state message
-    await expect(page.getByRole("heading")).toBeVisible();
+    // Target h1 specifically to avoid strict-mode violations with multiple headings.
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 
   test("my certifications page loads", async ({ page }) => {
     await page.goto("/dashboard/certifications");
     await expect(page).toHaveURL(/\/dashboard\/certifications/);
-    await expect(page.getByRole("heading")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 
   test("my orders page loads", async ({ page }) => {
