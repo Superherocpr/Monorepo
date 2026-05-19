@@ -16,6 +16,7 @@
 
 import Image from "next/image";
 import { formatCertificationDate, getCertConfig } from "@/lib/cert-utils";
+import CertECardCodeInput from "./CertECardCodeInput";
 import type { CertificationRecord } from "@/types/certifications";
 
 interface AHACertCardProps {
@@ -106,10 +107,14 @@ export default function AHACertCard({
             <p className="text-sm font-bold text-gray-900">
               eCard Code
             </p>
-            {/* cert_number is nullable — show em dash when not yet assigned */}
-            <p className="mt-1 text-sm text-gray-700">
-              {cert.cert_number ?? "—"}
-            </p>
+            {/* Inline editor — customers can enter their AHA eCard code here. Disabled for expired certs. */}
+            <div className="mt-1">
+              <CertECardCodeInput
+                certId={cert.id}
+                initialCode={cert.cert_number}
+                disabled={isExpired}
+              />
+            </div>
           </div>
         </div>
 
