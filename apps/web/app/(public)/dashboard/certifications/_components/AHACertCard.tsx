@@ -15,7 +15,7 @@
  */
 
 import Image from "next/image";
-import { getCertConfig } from "@/lib/cert-utils";
+import { formatCertificationDate, getCertConfig } from "@/lib/cert-utils";
 import type { CertificationRecord } from "@/types/certifications";
 
 interface AHACertCardProps {
@@ -27,15 +27,6 @@ interface AHACertCardProps {
    * "Expired" badge overlay to signal the cert is no longer valid.
    */
   isExpired?: boolean;
-}
-
-/** Formats an ISO date string as "April 1, 2024". */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 /** Renders a single certification as an AHA eCard-style display card. */
@@ -100,7 +91,7 @@ export default function AHACertCard({
               Issue Date
             </p>
             <p className="mt-1 text-sm text-gray-700">
-              {formatDate(cert.issued_at)}
+              {formatCertificationDate(cert.issued_at)}
             </p>
           </div>
           <div className="text-center px-2">
@@ -108,7 +99,7 @@ export default function AHACertCard({
               Renew By
             </p>
             <p className="mt-1 text-sm text-gray-700">
-              {formatDate(cert.expires_at)}
+              {formatCertificationDate(cert.expires_at)}
             </p>
           </div>
           <div className="text-center px-2">

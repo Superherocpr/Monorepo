@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import CertificationsPageHeader from "./_components/CertificationsPageHeader";
 import RenewalCtaBanner from "./_components/RenewalCtaBanner";
 import ActiveCertificationsList from "./_components/ActiveCertificationsList";
@@ -26,6 +26,14 @@ export default async function CertificationsPage() {
 
   if (!user) redirect("/signin?redirect=/dashboard/certifications");
 
+  // The `certifications` table has no SELECT RLS policy that allows a customer to read
+  // their own rows (only the admin policy is present), so the anon-key client returns
+  // an empty list even when the cert exists. We've already verified the caller via
+  // `getUser()` and we hard-scope the query with `.eq("customer_id", user.id)`, so
+  // reading certs via the service-role client is safe — no other tables are touched
+  // with it, and the user can only see their own records.
+  const adminSupabase = await createAdminClient();
+
   // Fetch the student's display name for the eCard — runs in parallel with the certs query
   const [{ data: profile }, { data: certs }] = await Promise.all([
     supabase
@@ -33,14 +41,14 @@ export default async function CertificationsPage() {
       .select("first_name, last_name")
       .eq("id", user.id)
       .single(),
-    supabase
-    .from("certifications")
-    .select(
-      `id, cert_number, notes, issued_at, expires_at,
-       cert_types ( name, issuing_body, validity_months ),
-       class_sessions ( starts_at, class_types ( name ) )`
-    )
-    .eq("customer_id", user.id)
+    adminSupabase
+      .from("certifications")
+      .select(
+        `id, cert_number, notes, issued_at, expires_at,
+         cert_types ( name, issuing_body, validity_months ),
+         class_sessions ( starts_at, class_types ( name ) )`
+      )
+      .eq("customer_id", user.id)
       .order("expires_at", { ascending: false }),
   ]);
 

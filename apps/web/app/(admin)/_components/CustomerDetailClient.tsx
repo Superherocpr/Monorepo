@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   CheckCircle2,
 } from "lucide-react";
+import { getCertificationDaysUntilExpiry } from "@/lib/cert-utils";
 import type { UserRole } from "@/types/users";
 
 // ── Data types ────────────────────────────────────────────────────────────────
@@ -178,9 +179,7 @@ function fmtTime(iso: string): string {
  * @param expiresAt - ISO date string for the expiry date.
  */
 function daysUntilExpiry(expiresAt: string): number {
-  const now = new Date();
-  const expiry = new Date(expiresAt);
-  return Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  return getCertificationDaysUntilExpiry(expiresAt);
 }
 
 /**

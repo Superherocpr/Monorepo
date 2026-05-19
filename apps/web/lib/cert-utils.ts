@@ -13,15 +13,112 @@
  * Color is one of 'green' | 'amber' | 'red' — use to select Tailwind classes.
  * @param expiresAt - ISO date string of the certification's expiry date
  */
+/**
+ * Parses a certification date string from the database into a local Date.
+ * Certification dates are stored as `date` columns, not timestamps, so using
+ * the built-in `Date("YYYY-MM-DD")` parser would treat them as UTC and shift
+ * the day in some timezones.
+ * @param dateStr - Stored certification date string (usually YYYY-MM-DD).
+ * @returns The equivalent local Date instance.
+ */
+function parseCertificationDate(dateStr: string): Date {
+  if (dateStr.includes("T")) {
+    return new Date(dateStr);
+  }
+
+  const [year, month, day] = dateStr.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return new Date(dateStr);
+  }
+
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * Returns the exact moment a certification should stop being treated as active.
+ * Date-only expiry values remain valid through the end of their calendar day.
+ * @param expiresAt - Stored certification expiry date string.
+ * @returns A local Date representing the certification's expiry cutoff.
+ */
+function getCertificationExpiryCutoff(expiresAt: string): Date {
+  const expiry = parseCertificationDate(expiresAt);
+
+  if (!expiresAt.includes("T")) {
+    expiry.setHours(23, 59, 59, 999);
+  }
+
+  return expiry;
+}
+
+/**
+ * Formats a stored certification date as a readable local calendar date.
+ * @param dateStr - Stored certification date string.
+ * @returns Display text like "April 1, 2024".
+ */
+export function formatCertificationDate(dateStr: string): string {
+  return parseCertificationDate(dateStr).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/**
+ * Returns how many days remain before a certification expires.
+ * A certification is valid through the full expiry date, so date-only values
+ * are measured against the end of that day.
+ * @param expiresAt - Stored certification expiry date string.
+ * @param now - Optional comparison point; defaults to the current time.
+ * @returns Days remaining until expiry, negative when already expired.
+ */
+export function getCertificationDaysUntilExpiry(
+  expiresAt: string,
+  now: Date = new Date()
+): number {
+  const expiry = getCertificationExpiryCutoff(expiresAt);
+  return Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Returns whether a certification is still active.
+ * @param expiresAt - Stored certification expiry date string.
+ * @param now - Optional comparison point; defaults to the current time.
+ * @returns True when the certification is valid at the given time.
+ */
+export function isCertificationActive(
+  expiresAt: string,
+  now: Date = new Date()
+): boolean {
+  return getCertificationExpiryCutoff(expiresAt).getTime() >= now.getTime();
+}
+
+/**
+ * Returns whether a certification is active and due to expire soon.
+ * @param expiresAt - Stored certification expiry date string.
+ * @param now - Optional comparison point; defaults to the current time.
+ * @param withinDays - Day threshold for "expiring soon".
+ * @returns True when the certification is active and expires within the threshold.
+ */
+export function isCertificationExpiringSoon(
+  expiresAt: string,
+  now: Date = new Date(),
+  withinDays: number = 90
+): boolean {
+  const daysRemaining = getCertificationDaysUntilExpiry(expiresAt, now);
+  return daysRemaining >= 0 && daysRemaining <= withinDays;
+}
+
+/**
+ * Returns a display label and color for a certification's expiry status.
+ * Color is one of 'green' | 'amber' | 'red' — use to select Tailwind classes.
+ * @param expiresAt - ISO date string of the certification's expiry date
+ */
 export function getCertStatus(expiresAt: string): {
   label: string;
   color: "green" | "amber" | "red";
 } {
-  const now = new Date();
-  const expiry = new Date(expiresAt);
-  const daysRemaining = Math.ceil(
-    (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const daysRemaining = getCertificationDaysUntilExpiry(expiresAt);
 
   if (daysRemaining < 0) {
     return { label: "Expired", color: "red" };
@@ -33,11 +130,7 @@ export function getCertStatus(expiresAt: string): {
     };
   }
   return {
-    label: `Expires ${new Date(expiresAt).toLocaleDateString("en-US", {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    })}`,
+    label: `Expires ${formatCertificationDate(expiresAt)}`,
     color: "green",
   };
 }
