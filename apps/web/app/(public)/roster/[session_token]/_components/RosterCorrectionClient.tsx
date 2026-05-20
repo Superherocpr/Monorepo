@@ -53,16 +53,20 @@ function deviceTokenKey(recordId: string): string {
 }
 
 /**
- * Gets or generates the device token for a given record. Stores it in
- * localStorage so this device is recognized on return visits.
+ * Reads the locally-stored device token for a record, if any.
+ * The server is the source of truth (THREAT-014) — it issues the token on
+ * first confirm and we send it back on subsequent edits.
  * @param recordId - The roster_record UUID
  */
-function getOrCreateDeviceToken(recordId: string): string {
-  const existing = localStorage.getItem(deviceTokenKey(recordId));
-  if (existing) return existing;
-  const newToken = crypto.randomUUID();
-  localStorage.setItem(deviceTokenKey(recordId), newToken);
-  return newToken;
+function getStoredDeviceToken(recordId: string): string | null {
+  return localStorage.getItem(deviceTokenKey(recordId));
+}
+
+/**
+ * Persists a device token returned by the server.
+ */
+function storeDeviceToken(recordId: string, token: string): void {
+  localStorage.setItem(deviceTokenKey(recordId), token);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -224,7 +228,7 @@ export default function RosterCorrectionClient({
     setSaving(true);
     setSaveError(null);
 
-    const deviceToken = getOrCreateDeviceToken(selectedRecord.id);
+    const deviceToken = getStoredDeviceToken(selectedRecord.id);
 
     try {
       const res = await fetch("/api/roster/confirm", {
@@ -243,7 +247,16 @@ export default function RosterCorrectionClient({
         }),
       });
 
-      const data = (await res.json()) as { success: boolean; error?: string };
+      const data = (await res.json()) as {
+        success: boolean;
+        error?: string;
+        deviceToken?: string;
+      };
+
+      // The server returns the canonical token on success — persist it.
+      if (data.success && data.deviceToken) {
+        storeDeviceToken(selectedRecord.id, data.deviceToken);
+      }
 
       if (!res.ok) {
         if (data.error === "Device mismatch.") {

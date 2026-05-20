@@ -442,7 +442,7 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
             {fmtCurrency(onlineInvoiceTotal)}
           </p>
           <p className="mt-0.5 text-sm text-gray-500">
-            Online &amp; Invoice — This Month
+            Online &amp; Invoice - This Month
           </p>
         </div>
         <div className="rounded-lg bg-gray-50 p-4">
@@ -450,7 +450,7 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
             {fmtCurrency(cashCheckTotal)}
           </p>
           <p className="mt-0.5 text-sm text-gray-500">
-            Cash &amp; Check — This Month
+            Cash &amp; Check - This Month
           </p>
         </div>
       </div>
@@ -696,7 +696,7 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
                             {pmt.customer.first_name} {pmt.customer.last_name}
                           </Link>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="text-gray-400">-</span>
                         )}
                         {pmt.customer?.email && (
                           <p className="text-xs text-gray-400">
@@ -715,13 +715,13 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
                             </p>
                           </>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="text-gray-400">-</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {instructor
                           ? `${instructor.first_name} ${instructor.last_name}`
-                          : "—"}
+                          : "-"}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-gray-900">
                         {fmtCurrency(pmt.amount)}

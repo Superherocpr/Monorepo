@@ -5,6 +5,7 @@
  */
 
 import Link from "next/link";
+import { ChamberBadge } from "./ChamberBadge";
 
 const FOOTER_LINKS = [
   { label: "Home", href: "/" },
@@ -37,8 +38,10 @@ export function PublicFooter() {
             </p>
           </div>
 
-          {/* Nav links — split into two columns of 3 */}
-          <div>
+          {/* Nav links — split into two columns of 3.
+              id="footer-quick-links" lets the legacy home page hide this entire column
+              (see LegacySitePage.tsx) without affecting any other page. */}
+          <div id="footer-quick-links">
             <p className="text-white text-sm font-semibold mb-3">Quick Links</p>
             <div className="flex gap-8">
               <ul className="flex flex-col gap-2">
@@ -76,13 +79,18 @@ export function PublicFooter() {
                 </a>
               </li>
             </ul>
+
+            {/* Manatee Chamber of Commerce membership badge */}
+            <div className="mt-4">
+              <ChamberBadge />
+            </div>
           </div>
         </div>
 
         {/* Bottom bar */}
         <div className="mt-10 pt-6 border-t border-gray-800 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-gray-500">
           <p>© {year} SuperHeroCPR. All rights reserved.</p>
-          <p>American Heart Association Authorized Training Center</p>
+          <p>American Heart Association Authorized Training Site</p>
         </div>
       </div>
     </footer>

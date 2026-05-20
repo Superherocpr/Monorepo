@@ -532,7 +532,7 @@ export default function SessionDetailClient({
               {session.class_types?.name ?? "Class Session"}
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              {formatDateTime(session.starts_at)} — {formatDateTime(session.ends_at)}
+              {formatDateTime(session.starts_at)} - {formatDateTime(session.ends_at)}
             </p>
           </div>
 
@@ -565,7 +565,7 @@ export default function SessionDetailClient({
             <p className="text-gray-800 mt-0.5">
               {session.instructor
                 ? `${session.instructor.first_name} ${session.instructor.last_name}`
-                : "—"}
+                : "-"}
             </p>
           </div>
           <div>
@@ -582,7 +582,7 @@ export default function SessionDetailClient({
                 </p>
               </div>
             ) : (
-              <p className="text-gray-800 mt-0.5">—</p>
+              <p className="text-gray-800 mt-0.5">-</p>
             )}
           </div>
           <div>
@@ -628,7 +628,7 @@ export default function SessionDetailClient({
                 }}
                 className="px-3 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-md hover:bg-amber-700 transition-colors"
               >
-                Confirm — Edit Anyway
+                Confirm - Edit Anyway
               </button>
               <button
                 type="button"
@@ -992,10 +992,10 @@ export default function SessionDetailClient({
                           <td className="px-6 py-2.5 font-medium text-gray-800">
                             {b.profiles
                               ? `${b.profiles.first_name} ${b.profiles.last_name}`
-                              : "—"}
+                              : "-"}
                           </td>
                           <td className="px-4 py-2.5 text-gray-600">
-                            {b.profiles?.email ?? "—"}
+                            {b.profiles?.email ?? "-"}
                           </td>
                           <td className="px-4 py-2.5">
                             <span
@@ -1005,10 +1005,10 @@ export default function SessionDetailClient({
                             </span>
                           </td>
                           <td className="px-4 py-2.5 text-gray-600">
-                            {b.payments[0]?.status ?? "—"}
+                            {b.payments[0]?.status ?? "-"}
                           </td>
                           <td className="px-4 py-2.5 text-gray-600">
-                            {b.grade ?? "—"}
+                            {b.grade ?? "-"}
                           </td>
                         </tr>
                       ))}
@@ -1019,16 +1019,16 @@ export default function SessionDetailClient({
                           {r.first_name} {r.last_name}
                         </td>
                         <td className="px-4 py-2.5 text-gray-600">
-                          {r.email ?? "—"}
+                          {r.email ?? "-"}
                         </td>
                         <td className="px-4 py-2.5">
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
                             roster
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-gray-400">—</td>
+                        <td className="px-4 py-2.5 text-gray-400">-</td>
                         <td className="px-4 py-2.5 text-gray-600">
-                          {r.grade ?? "—"}
+                          {r.grade ?? "-"}
                         </td>
                       </tr>
                     ))}

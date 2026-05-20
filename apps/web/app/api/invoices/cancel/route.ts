@@ -12,6 +12,7 @@
  */
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { decryptToken } from "@/lib/crypto";
 import type { PaymentPlatform } from "@/types/users";
 
 /** Type guard — ensures a value is a non-null object. */
@@ -165,11 +166,27 @@ export async function POST(request: Request) {
     );
   }
 
+  // Decrypt the access token in-memory immediately before the API call.
+  // Never log the decrypted value.
+  let decryptedToken: string;
+  try {
+    decryptedToken = decryptToken(paymentAccount.access_token);
+  } catch (err) {
+    console.error("[invoices/cancel] Failed to decrypt access token:", err);
+    return Response.json(
+      {
+        success: false,
+        error: "Could not access payment platform credentials. Please reconnect your account.",
+      },
+      { status: 500 }
+    );
+  }
+
   // Call the platform API first — only update our DB if it succeeds
   const platformSuccess = await cancelOnPlatform(
     invoice.payment_platform as PaymentPlatform,
     invoice.platform_invoice_id,
-    paymentAccount.access_token
+    decryptedToken
   );
 
   if (!platformSuccess) {

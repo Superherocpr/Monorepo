@@ -2,8 +2,9 @@
 
 /**
  * /book/forgot-password — Password reset request page.
- * Linked from the rollcall sign-in form ("Forgot password?").
- * Accepts the user's email address and triggers a Supabase password-reset email.
+ * Linked from the rollcall sign-in form ("Forgot password?") and the sign-in page.
+ * Accepts the user's email address and triggers a branded password-reset email
+ * via POST /api/auth/reset-password (server-side Resend, not Supabase's default template).
  * On success, shows a confirmation message asking the user to check their inbox.
  * The reset email links to /book/reset-password where the new password is set.
  * Used by: app/(public)/rollcall/page.tsx, app/(public)/signin/page.tsx
@@ -11,7 +12,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 
 /**
  * Renders a form for requesting a password-reset email.
@@ -27,9 +27,10 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Submits the email to Supabase to trigger a password-reset email.
-   * Shows the same success message whether or not the email exists in the system
-   * to prevent leaking which emails are registered (account enumeration).
+   * Submits the email to POST /api/auth/reset-password, which generates a
+   * Supabase recovery link server-side and sends our branded email via Resend.
+   * Always shows a success message regardless of whether the account exists —
+   * this prevents account enumeration.
    * @param e - Form submit event.
    */
   async function handleSubmit(e: React.FormEvent) {
@@ -43,23 +44,13 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
 
-    const supabase = createClient();
-    // redirectTo is the page the user lands on after clicking the email link.
-    // Supabase appends a hash with the recovery tokens — reset-password exchanges them.
-    const origin = window.location.origin;
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-      email.trim(),
-      { redirectTo: `${origin}/book/reset-password` }
-    );
+    await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim() }),
+    }).catch(() => {/* non-fatal — always show success */});
 
     setLoading(false);
-
-    if (resetError) {
-      setError(
-        resetError.message ?? "Something went wrong. Please try again."
-      );
-      return;
-    }
 
     // Always show success to prevent account enumeration.
     setSubmitted(true);

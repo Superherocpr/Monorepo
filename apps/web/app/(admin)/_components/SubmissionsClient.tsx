@@ -857,7 +857,7 @@ function SubmissionRow({
                   >
                     Attachments{" "}
                     <span className="font-normal text-gray-400">
-                      (PDF, DOC, DOCX, JPG, PNG — max 10MB each)
+                      (PDF, DOC, DOCX, JPG, PNG - max 10MB each)
                     </span>
                   </label>
                   <input

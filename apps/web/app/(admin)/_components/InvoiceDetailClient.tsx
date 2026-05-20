@@ -169,7 +169,7 @@ export default function InvoiceDetailClient({
   const session = invoice.class_sessions;
   const instructorName = invoice.profiles
     ? `${invoice.profiles.first_name} ${invoice.profiles.last_name}`
-    : "—";
+    : "-";
 
   /** Calls an invoice action API route and handles state updates. */
   async function callAction(
@@ -297,7 +297,7 @@ export default function InvoiceDetailClient({
                 <div>
                   <dt className="text-gray-500">Type</dt>
                   <dd className="font-medium text-gray-900">
-                    {session.class_types?.name ?? "—"}
+                    {session.class_types?.name ?? "-"}
                   </dd>
                 </div>
                 <div>
@@ -473,7 +473,7 @@ export default function InvoiceDetailClient({
                     disabled={loading}
                     className="flex-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50"
                   >
-                    {loading ? "Saving…" : "Confirm — Mark Paid"}
+                    {loading ? "Saving…" : "Confirm - Mark Paid"}
                   </button>
                 </div>
               </div>

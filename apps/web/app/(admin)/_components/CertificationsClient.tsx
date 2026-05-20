@@ -16,7 +16,11 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { getCertStatus } from "@/lib/cert-utils";
+import {
+  getCertificationDaysUntilExpiry,
+  getCertStatus,
+  isCertificationExpiringSoon,
+} from "@/lib/cert-utils";
 import type { CertificationAdminRecord, CertTypeAdminRow } from "@/types/certifications";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -99,11 +103,7 @@ function fmtDate(dateStr: string): string {
  * @param expiresAt - ISO date string
  */
 function isExpiringSoon(expiresAt: string): boolean {
-  const now = new Date();
-  const days = Math.ceil(
-    (new Date(expiresAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-  );
-  return days >= 0 && days <= 90;
+  return isCertificationExpiringSoon(expiresAt);
 }
 
 /** Returns blank add-cert form state. */
@@ -322,9 +322,7 @@ export default function CertificationsClient({
       if (certTypeFilter && c.cert_types.id !== certTypeFilter) return false;
       // Status filter
       if (statusFilter !== "all") {
-        const days = Math.ceil(
-          (new Date(c.expires_at).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-        );
+        const days = getCertificationDaysUntilExpiry(c.expires_at, now);
         if (statusFilter === "expired" && days >= 0) return false;
         if (statusFilter === "expiring" && (days < 0 || days > 90)) return false;
         if (statusFilter === "active" && days <= 90) return false;
@@ -1003,7 +1001,7 @@ export default function CertificationsClient({
                         <ExpiryBadge expiresAt={cert.expires_at} />
                       </td>
                       <td className="px-4 py-3 text-gray-600">
-                        {cert.cert_number ?? "—"}
+                        {cert.cert_number ?? "-"}
                       </td>
                       <td className="px-4 py-3">
                         <ReminderBadge sent={cert.reminder_sent} />
@@ -1086,7 +1084,7 @@ export default function CertificationsClient({
                   </div>
                   <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
                     <div>Issued: {fmtDate(cert.issued_at)}</div>
-                    <div>Cert #: {cert.cert_number ?? "—"}</div>
+                    <div>Cert #: {cert.cert_number ?? "-"}</div>
                     <div className="col-span-2">
                       <ReminderBadge sent={cert.reminder_sent} />
                     </div>
@@ -1268,7 +1266,7 @@ export default function CertificationsClient({
               Customer
             </label>
             <p className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-              {editingCert.profiles.first_name} {editingCert.profiles.last_name} — {editingCert.profiles.email}
+              {editingCert.profiles.first_name} {editingCert.profiles.last_name} - {editingCert.profiles.email}
             </p>
           </div>
           <CertForm

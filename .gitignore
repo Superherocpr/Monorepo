@@ -30,3 +30,8 @@ npm-debug.log*
 # Full env wildcard
 .env*
 !.env.example
+
+# Playwright
+apps/web/tests/.auth/
+apps/web/playwright-report/
+apps/web/test-results/

@@ -22,6 +22,10 @@ interface SettingsClientProps {
   zohoEmail: string | null;
   /** Value of the ?zoho= query param — "connected" | "error" | null */
   zohoParam: string | null;
+  /** Initial value of the legacy_site_enabled system_settings flag. */
+  legacySiteEnabled: boolean;
+  /** Whether the current user is a super_admin — gates the Legacy Site section. */
+  isSuperAdmin: boolean;
 }
 
 interface Toast {
@@ -55,6 +59,7 @@ interface EditingGrade {
  * @param zohoConnected - Whether a Zoho account is currently linked.
  * @param zohoEmail - The Zoho account email if connected.
  * @param zohoParam - The ?zoho= query param from OAuth redirects.
+ * @param isSuperAdmin - Whether the current user is a super_admin. Gates the Legacy Site section.
  */
 const SettingsClient: React.FC<SettingsClientProps> = ({
   classTypes: initialClassTypes,
@@ -63,6 +68,8 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   zohoConnected: initialZohoConnected,
   zohoEmail,
   zohoParam,
+  legacySiteEnabled: initialLegacySiteEnabled,
+  isSuperAdmin,
 }) => {
   const router = useRouter();
 
@@ -85,6 +92,54 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
     setIsDark(next);
     localStorage.setItem("theme", next ? "dark" : "light");
     document.documentElement.classList.toggle("dark", next);
+  }
+
+  // ── Legacy site flag ───────────────────────────────────────────────────────
+  // Persisted server-side in system_settings.legacy_site_enabled.
+  // When true, the public home page (/) renders the classic clone instead of the modern site.
+  const [legacySiteEnabled, setLegacySiteEnabled] = useState(initialLegacySiteEnabled);
+  const [savingLegacySite, setSavingLegacySite] = useState(false);
+
+  /**
+   * Toggles the legacy site flag. Calls POST /api/settings/legacy-site, persists
+   * to system_settings, and refreshes the router so any server components reading
+   * the flag pick up the new value. Rolls back optimistically on error.
+   * Side effects: writes to DB, shows a toast.
+   */
+  async function toggleLegacySite() {
+    if (savingLegacySite) return;
+    const next = !legacySiteEnabled;
+
+    // Optimistic update for instant UI feedback
+    setLegacySiteEnabled(next);
+    setSavingLegacySite(true);
+
+    try {
+      const res = await fetch("/api/settings/legacy-site", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.success) {
+        // Roll back on error
+        setLegacySiteEnabled(!next);
+        showToast("error", data?.error ?? "Failed to update legacy site setting.");
+      } else {
+        showToast(
+          "success",
+          next ? "Legacy site is now live on /." : "Modern site restored on /."
+        );
+        // Refresh server components so the home page picks up the new flag
+        router.refresh();
+      }
+    } catch {
+      setLegacySiteEnabled(!next);
+      showToast("error", "Something went wrong. Please try again.");
+    } finally {
+      setSavingLegacySite(false);
+    }
   }
 
   // ── Class types ────────────────────────────────────────────────────────────
@@ -439,6 +494,48 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
           Manage class offerings, grade presets, and system connections.
         </p>
       </div>
+
+      {/* ── Section: Legacy Site — super_admin only ──────────────────────── */}
+      {isSuperAdmin && <section aria-labelledby="section-legacy-site">
+        <h2
+          id="section-legacy-site"
+          className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
+        >
+          Legacy Site
+        </h2>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                Show Legacy Home Page
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                When enabled, the home page (/) shows the classic SuperheroCPR site.
+                When disabled, the modern site is shown.
+              </p>
+            </div>
+            {/* Toggle switch — role="switch" with aria-checked for accessibility */}
+            <button
+              role="switch"
+              aria-checked={legacySiteEnabled}
+              onClick={toggleLegacySite}
+              disabled={savingLegacySite}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 ${
+                legacySiteEnabled ? "bg-red-600" : "bg-gray-200"
+              }`}
+            >
+              <span className="sr-only">Toggle legacy site</span>
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  legacySiteEnabled ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </section>}
+
+      <div className="border-t border-gray-200 dark:border-gray-700" />
 
       {/* ── Section 1: Appearance ─────────────────────────────────────────── */}
       <section aria-labelledby="section-appearance">

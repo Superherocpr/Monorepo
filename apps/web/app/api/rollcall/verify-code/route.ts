@@ -1,10 +1,13 @@
 /**
  * POST /api/rollcall/verify-code
  * Called by: /rollcall page — Step 1 (auto-submits on 6-digit entry)
- * Auth: None — public endpoint
+ * Auth: None — public endpoint, IP-rate-limited (THREAT-009)
  * Looks up the instructor whose daily_access_code matches, then returns
  * their approved sessions for today. The code is instructor-specific and
  * regenerates at midnight, making accidental guessing negligible.
+ *
+ * Rate limit: 10 invalid-or-valid attempts per IP per hour. Blocks brute-
+ * force enumeration of the 6-digit code space (1M combinations).
  */
 
 import { createClient } from "@/lib/supabase/server";
@@ -16,12 +19,62 @@ interface SessionRow {
   locations: { name: string } | null;
 }
 
+/** Maximum verify attempts per IP per window. */
+const RATE_LIMIT_MAX = 10;
+/** Rolling rate-limit window length in ms (1 hour). */
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * In-process IP → { count, resetAt } map. Module-level so it survives across
+ * requests within the same server instance. Across serverless instances each
+ * has its own bucket — acceptable for a brute-force deterrent (effective
+ * limit is RATE_LIMIT_MAX × instanceCount).
+ */
+const attemptBuckets = new Map<string, { count: number; resetAt: number }>();
+
+/**
+ * Records one verify attempt for the given IP and reports whether the
+ * caller has exceeded the limit within the rolling window.
+ * @returns true when the request is allowed, false when over the limit.
+ */
+function recordAttempt(ip: string): boolean {
+  const now = Date.now();
+  const bucket = attemptBuckets.get(ip);
+  if (!bucket || bucket.resetAt < now) {
+    attemptBuckets.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  bucket.count += 1;
+  return bucket.count <= RATE_LIMIT_MAX;
+}
+
+/**
+ * Best-effort client IP extraction.
+ * Prefers the first X-Forwarded-For entry (Amplify/Vercel proxy header).
+ */
+function getClientIp(request: Request): string {
+  const fwd = request.headers.get("x-forwarded-for");
+  if (fwd) {
+    const first = fwd.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return request.headers.get("x-real-ip")?.trim() ?? "unknown";
+}
+
 /**
  * Verifies the 6-digit rollcall access code and returns today's sessions
  * for the matching instructor.
  * @param request - POST body: { code: string }
  */
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  if (!recordAttempt(ip)) {
+    return Response.json(
+      { valid: false, error: "Too many attempts. Try again later." },
+      { status: 429 }
+    );
+  }
+
   const supabase = await createClient();
 
   const body = await request.json();

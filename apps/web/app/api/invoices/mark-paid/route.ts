@@ -132,12 +132,22 @@ export async function POST(request: Request) {
       recipientName: invoice.recipient_name,
       studentCount: invoice.student_count as number,
     });
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
-      to: instructorProfile.email,
-      subject,
-      html,
-    });
+    // Non-fatal: the invoice is already marked paid and the bookings are
+    // created — a failed notification email shouldn't surface as a 5xx to
+    // the caller (Resend outages would otherwise reverse the mark-paid action).
+    await resend.emails
+      .send({
+        from: process.env.RESEND_FROM_EMAIL!,
+        to: instructorProfile.email,
+        subject,
+        html,
+      })
+      .catch((err: unknown) => {
+        console.error(
+          "[invoices/mark-paid] Notification email failed (non-fatal):",
+          err
+        );
+      });
   }
 
   return Response.json({ success: true });

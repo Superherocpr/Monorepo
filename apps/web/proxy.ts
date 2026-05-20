@@ -1,12 +1,12 @@
 /**
- * Next.js middleware — runs on every matched request in the Edge Runtime.
+ * Next.js proxy — runs on every matched request in the Edge Runtime.
  * Primary responsibility: refresh the Supabase session before any Server Component renders.
  *
  * Why this is required:
  * Server Components cannot write cookies (they are read-only in the render phase).
  * When a Supabase access token expires, the @supabase/ssr client needs to write a
  * refreshed token back to the cookie jar. The only place it can do this reliably is
- * middleware, which runs in the Edge Runtime where response cookies are writable.
+ * the proxy, which runs in the Edge Runtime where response cookies are writable.
  * Without this file, expired sessions cause auth.getUser() to return null on the
  * server — making every protected layout think the user is logged out and redirect
  * them back to /signin, creating an infinite redirect loop.
@@ -24,7 +24,7 @@ import type { NextRequest } from "next/server";
  * @param request - The incoming Next.js edge request.
  * @returns The response with refreshed session cookies set.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Start with a pass-through response. The Supabase client may replace this
   // with a new response object if it needs to write refreshed cookies.
   let supabaseResponse = NextResponse.next({ request });
@@ -38,7 +38,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          // Write the refreshed tokens to the request (so downstream middleware
+          // Write the refreshed tokens to the request (so downstream proxy
           // can read them) and to the response (so the browser receives them).
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)

@@ -413,8 +413,10 @@ interface ProductCardProps {
 /** Renders a single product card with size/quantity selector and Add to Cart. */
 function ProductCard({ product, onAddToCart }: ProductCardProps) {
   const sortedVariants = sortSizes(product.product_variants);
+  // Default to the first in-stock variant so the card is ready to add to cart
+  // without requiring an explicit size selection on load.
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    null
+    () => sortedVariants.find((v) => v.stock_quantity > 0)?.id ?? null
   );
   const [quantity, setQuantity] = useState(1);
   const [addedFeedback, setAddedFeedback] = useState(false);
@@ -435,13 +437,13 @@ function ProductCard({ product, onAddToCart }: ProductCardProps) {
   return (
     <article className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
       {/* Product image */}
-      <div className="relative aspect-square bg-gray-100">
+      <div className="relative aspect-square bg-white">
         {product.image_url ? (
           <Image
             src={product.image_url}
             alt={product.name}
             fill
-            className="object-cover"
+            className="object-contain p-3"
             sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
         ) : (

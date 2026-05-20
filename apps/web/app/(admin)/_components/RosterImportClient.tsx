@@ -20,6 +20,7 @@
 import { useState, useRef, useCallback, useId } from "react";
 import Papa from "papaparse";
 import readXlsxFile from "read-excel-file/browser";
+import { Download } from "lucide-react";
 
 // ─── Exported types (consumed by page.tsx) ────────────────────────────────────
 
@@ -434,6 +435,27 @@ export default function RosterImportClient({
 
   // ── Render helpers ──
 
+  /**
+   * Triggers a client-side download of a pre-filled CSV template showing
+   * the expected column names and two sample rows. Instructors can open this
+   * in Excel or Google Sheets, fill it with their students, and re-upload.
+   */
+  function downloadTemplate() {
+    const rows = [
+      ["First Name", "Last Name", "Email", "Phone", "Employer"],
+      ["Jane", "Smith", "jane.smith@example.com", "555-867-5309", "Acme Hospital"],
+      ["John", "Doe", "john.doe@example.com", "", ""],
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "roster-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   /** Step indicator dots shown at the top of every step. */
   function StepIndicator() {
     const steps: { key: Step; label: string }[] = [
@@ -584,6 +606,18 @@ export default function RosterImportClient({
             {parseError}
           </p>
         )}
+
+        {/* Download template */}
+        <div className="mt-5 flex justify-end">
+          <button
+            onClick={downloadTemplate}
+            type="button"
+            className="inline-flex items-center gap-2 rounded-md bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+          >
+            <Download size={15} aria-hidden="true" />
+            Download Roster Template
+          </button>
+        </div>
       </div>
     );
   }
@@ -596,7 +630,7 @@ export default function RosterImportClient({
     return (
       <div>
         <p className="mb-1 text-sm text-gray-600">
-          <span className="font-medium">{fileName}</span> —{" "}
+          <span className="font-medium">{fileName}</span> -{" "}
           {rawRows.length - 1} rows detected
         </p>
         <p className="mb-6 text-sm text-gray-500">
@@ -628,7 +662,7 @@ export default function RosterImportClient({
                   }
                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
-                  <option value="">— Not mapped —</option>
+                  <option value="">- Not mapped -</option>
                   {headers.map((h) => (
                     <option key={h} value={h}>
                       {h}
@@ -666,13 +700,13 @@ export default function RosterImportClient({
                       {fields.map((f) => {
                         const h = columnMap[f];
                         const idx = h ? headers.indexOf(h) : -1;
-                        const val = idx !== -1 ? (row[idx] ?? "") : "—";
+                        const val = idx !== -1 ? (row[idx] ?? "") : "-";
                         return (
                           <td
                             key={f}
                             className="px-3 py-2 text-gray-700 max-w-[120px] truncate"
                           >
-                            {val || <span className="text-gray-400">—</span>}
+                            {val || <span className="text-gray-400">-</span>}
                           </td>
                         );
                       })}
@@ -912,7 +946,7 @@ export default function RosterImportClient({
         </a>
         <h1 className="text-2xl font-bold text-gray-900">Import Roster</h1>
         <p className="mt-1 text-sm text-gray-600">
-          {session.class_type_name} —{" "}
+          {session.class_type_name} -{" "}
           {new Date(session.starts_at).toLocaleDateString("en-US", {
             weekday: "long",
             year: "numeric",

@@ -194,10 +194,10 @@ export default function InstructorDashboard({
                         {invoice.recipient_name}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {invoice.class_sessions?.class_types?.name ?? "—"} ·{" "}
+                        {invoice.class_sessions?.class_types?.name ?? "-"} ·{" "}
                         {invoice.class_sessions
                           ? formatDate(invoice.class_sessions.starts_at)
-                          : "—"}
+                          : "-"}
                       </p>
                     </div>
                     <div className="text-right shrink-0 ml-3">

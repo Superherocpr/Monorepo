@@ -53,7 +53,7 @@ export function welcomeEmail({ firstName }: { firstName: string }): EmailContent
         <a href="https://superherocpr.com/dashboard">superherocpr.com</a>.
       </p>
       <p>See you in class!</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -385,7 +385,7 @@ export function contactNotificationEmail({
   const safeMessage     = escapeHtml(message.trim()).replace(/\n/g, "<br>");
 
   return {
-    subject: `New Contact Form Submission — ${inquiryType.trim()}`,
+    subject: `New Contact Form Submission - ${inquiryType.trim()}`,
     html: wrapEmail(`
       <h2>New contact form submission</h2>
       <table>
@@ -411,7 +411,7 @@ export function contactAutoReplyEmail({ firstName }: { firstName: string }): Ema
   const safeFirstName = escapeHtml(firstName);
 
   return {
-    subject: "We received your message — SuperHeroCPR",
+    subject: "We received your message - SuperHeroCPR",
     html: wrapEmail(`
       <h1>Thanks for reaching out, ${safeFirstName}!</h1>
       <p>We received your message and will get back to you within 1 business day.</p>
@@ -420,7 +420,7 @@ export function contactAutoReplyEmail({ firstName }: { firstName: string }): Ema
         <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
         <li>Email: <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a></li>
       </ul>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -443,7 +443,7 @@ export function accountDeletedEmail({ firstName }: { firstName: string }): Email
       <p>If you believe this was a mistake or wish to restore your account, please contact us at
         <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a> or call (813) 966-3969.
       </p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -526,7 +526,7 @@ export function orderShippedEmail({
       </table>
       <p style="margin-top:12px"><strong>Order Total: $${totalAmount.toFixed(2)}</strong></p>
       <p>Shipping to: ${shippingName}, ${shippingCity}, ${shippingState}</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -575,7 +575,7 @@ export function staffInviteEmail({
       <p><a href="${actionLink}">Set My Password →</a></p>
       <p>This link expires in 24 hours.</p>
       ${instructorNote}
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -602,7 +602,7 @@ export function customerSetupEmail({
       <p>An account has been created for you. Click the link below to set your password and activate your account.</p>
       <p><a href="${setupLink}">Set My Password →</a></p>
       <p>This link expires in 24 hours.</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -630,7 +630,7 @@ export function passwordResetEmail({
       <p>A staff member has sent you a password reset link. Click below to set a new password for your SuperHeroCPR account.</p>
       <p><a href="${actionLink}">Reset My Password →</a></p>
       <p>This link expires in 24 hours. If you did not expect this email, you can safely ignore it.</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -860,7 +860,7 @@ export function invoicePaidEmail({
       <p>Hi ${firstName},</p>
       <p>Invoice <strong>${invoiceNumber}</strong> for ${recipientName} has been marked as paid.</p>
       <p>${studentCount} student spot${studentCount !== 1 ? "s" : ""} have been reserved for the class.</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -946,7 +946,7 @@ export function invoiceResendEmail({
       </table>
       ${notes ? `<p style="margin-top:16px;color:#555">Note: ${notes}</p>` : ""}
       <p style="margin-top:24px">Payment platform: ${paymentPlatform ?? "See your instructor"}</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -1016,7 +1016,7 @@ export function bookingConfirmationEmail({
     : "";
 
   return {
-    subject: `Booking Confirmed — ${className} on ${formattedDate}`,
+    subject: `Booking Confirmed - ${className} on ${formattedDate}`,
     html: wrapEmail(`
       <h1>You're booked!</h1>
       <p>Hi ${firstName ?? "there"},</p>
@@ -1144,7 +1144,7 @@ export function invoiceEmail({
          <p style="font-size:14px;color:#374151;font-weight:600;">Submitting your student roster</p>
          <p style="font-size:14px;color:#6b7280;">
            If you have a list of staff attending this class, you can submit it in advance to save time on class day.
-           This is only needed if you have multiple attendees and want to pre-register them.
+           This is only needed if you have multiple attendees to pre-register them. Attached to this email is the roster template CSV you should use to fill in your attendees.
          </p>
          <p style="font-size:14px;color:#6b7280;">Your invoice number: <strong>${invoiceNumber}</strong></p>
          <p>
@@ -1157,7 +1157,7 @@ export function invoiceEmail({
       : "";
 
   return {
-    subject: `Invoice ${invoiceNumber} — ${className} on ${formattedDate}`,
+    subject: `Invoice ${invoiceNumber} - ${className} on ${formattedDate}`,
     html: wrapEmail(`
       <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Invoice from SuperHeroCPR</h1>
       <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Invoice number: <strong>${invoiceNumber}</strong></p>
@@ -1198,6 +1198,50 @@ export function invoiceEmail({
       <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
       <p style="font-size:12px;color:#9ca3af;">
         This invoice was sent by a SuperHeroCPR instructor. For questions, reply to this email.
+      </p>
+    `),
+  };
+}
+
+// ── 14. Self-service password reset ───────────────────────────────────────────
+
+/**
+ * Sent to a customer when they request a password reset themselves via
+ * /book/forgot-password. Uses a Supabase-generated recovery link that
+ * redirects to /book/reset-password after token exchange.
+ * Triggered by: POST /api/auth/reset-password
+ * @param actionLink - Supabase-generated password reset link.
+ */
+export function selfServicePasswordResetEmail({
+  actionLink,
+}: {
+  actionLink: string;
+}): EmailContent {
+  return {
+    subject: "Reset your SuperHeroCPR password",
+    html: wrapEmail(`
+      <h1>Password Reset Request</h1>
+      <p>We received a request to reset the password for your SuperHeroCPR account.</p>
+      <p>Click the button below to choose a new password. This link expires in <strong>24 hours</strong>.</p>
+
+      <p style="margin:24px 0;">
+        <a href="${actionLink}"
+           style="display:inline-block;background-color:#dc2626;color:#ffffff;font-weight:700;font-size:15px;padding:14px 28px;border-radius:8px;text-decoration:none;">
+          Reset My Password →
+        </a>
+      </p>
+
+      <p style="font-size:13px;color:#6b7280;">
+        If the button doesn&rsquo;t work, copy and paste this link into your browser:
+      </p>
+      <p style="font-size:13px;word-break:break-all;">
+        <a href="${actionLink}" style="color:#dc2626;">${actionLink}</a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:13px;color:#6b7280;">
+        If you didn&rsquo;t request a password reset, you can safely ignore this email.
+        Your password will not change unless you click the link above.
       </p>
     `),
   };

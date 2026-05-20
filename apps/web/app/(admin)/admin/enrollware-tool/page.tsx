@@ -7,6 +7,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { localDayWindow } from "@/lib/enrollware-api-auth";
 import BookmarkletSetup from "./_components/BookmarkletSetup";
 import type { UserRole } from "@/types/users";
 
@@ -29,10 +30,9 @@ interface TodaySession {
 async function getTodaysSessions(profileId: string): Promise<TodaySession[]> {
   const admin = await createAdminClient();
 
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setUTCHours(23, 59, 59, 999);
+  // "Today" must be the business's local day, not UTC — otherwise after 8pm
+  // Eastern the window rolls forward and the day's classes disappear.
+  const { startIso, endIso } = localDayWindow(null);
 
   const { data: sessions } = await admin
     .from("class_sessions")
@@ -43,8 +43,8 @@ async function getTodaysSessions(profileId: string): Promise<TodaySession[]> {
        roster_records ( id )`
     )
     .eq("instructor_id", profileId)
-    .gte("starts_at", todayStart.toISOString())
-    .lte("starts_at", todayEnd.toISOString())
+    .gte("starts_at", startIso)
+    .lte("starts_at", endIso)
     .order("starts_at", { ascending: true });
 
   return (sessions ?? []).map((s) => {
@@ -67,12 +67,14 @@ async function getTodaysSessions(profileId: string): Promise<TodaySession[]> {
 /** Returns true if the instructor has an active enrollware-bookmarklet API key. */
 async function hasBookmarkletKey(profileId: string): Promise<boolean> {
   const admin = await createAdminClient();
+  // maybeSingle() — avoids a spurious "no rows" error log for users who have
+  // never generated a bookmarklet.
   const { data } = await admin
     .from("api_keys")
     .select("id")
     .eq("profile_id", profileId)
     .eq("label", "enrollware-bookmarklet")
-    .single();
+    .maybeSingle();
   return data !== null;
 }
 
@@ -107,10 +109,10 @@ export default async function EnrollwareToolPage() {
     hasBookmarkletKey(profile.id),
   ]);
 
-  // Use the existing NEXT_PUBLIC_BASE_URL env var for the bookmarklet fetch URL.
-  // Falls back to empty string if unset (bookmarklet will use a relative-looking path,
-  // which won't work cross-origin — the env var should always be set in production).
-  const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "";
+  // Bookmark needs an absolute URL so the fetch works cross-origin from
+  // enrollware.com. Fall back to the production domain if NEXT_PUBLIC_BASE_URL
+  // is unset, since a relative path here would silently break the bookmark.
+  const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">

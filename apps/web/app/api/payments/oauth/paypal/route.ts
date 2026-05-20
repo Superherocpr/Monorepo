@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { randomBytes } from "crypto";
+import { getPayPalConnectBase } from "@/lib/paypal";
 import type { UserRole } from "@/types/users";
 
 /** Roles permitted to connect payment accounts. */
@@ -53,7 +54,9 @@ export async function GET() {
   const clientId = process.env.PAYPAL_CLIENT_ID ?? "";
   const redirectUri = process.env.PAYPAL_REDIRECT_URI ?? "";
 
-  const url = new URL("https://www.paypal.com/connect");
+  // Derive the consent-screen base from PAYPAL_API_BASE so sandbox testing
+  // doesn't accidentally hit the live PayPal login screen (and vice versa).
+  const url = new URL(`${getPayPalConnectBase()}/connect`);
   url.searchParams.set("flowEntry", "static");
   url.searchParams.set("client_id", clientId);
   url.searchParams.set(

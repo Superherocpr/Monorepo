@@ -4,15 +4,16 @@
  * Auth: None required — PayPal order ID is verified by server-side capture
  *
  * 1. Validates required fields.
- * 2. Captures the PayPal order server-side via PayPal REST API (v9 requirement).
- * 3. Re-checks stock for all items (first-come-first-served, 409 if insufficient).
- * 4. Creates the orders record in Supabase.
- * 5. Creates all order_items records.
- * 6. Decrements stock_quantity on each product_variants row via atomic RPC.
- * 7. Sends order confirmation email to the customer (best-effort via Resend).
- * 8. Sends order notification email to the business (best-effort via Resend).
- *
- * Uses Supabase RPC for atomic stock decrement — see supabase/migrations/decrement_stock.sql
+ * 2. Re-fetches every cart variant from the DB and recomputes the order total
+ *    using authoritative DB prices. Rejects if the client-supplied total
+ *    deviates from the recomputed total by more than $0.01 (THREAT-003).
+ * 3. Captures the PayPal order server-side via PayPal REST API (v9 requirement).
+ * 4. Atomically reserves stock for each item via decrement_stock_if_available
+ *    RPC (THREAT-010). On failure, previously-reserved stock is released and
+ *    the PayPal capture is refunded.
+ * 5. Creates the orders + order_items records.
+ * 6. Sends order confirmation email to the customer (best-effort via Resend).
+ * 7. Sends order notification email to the business (best-effort via Resend).
  */
 
 import { NextResponse } from "next/server";
@@ -24,7 +25,11 @@ import type { CartItem } from "@/lib/cart-store";
 const PAYPAL_API_BASE =
   process.env.PAYPAL_API_BASE ?? "https://api-m.sandbox.paypal.com";
 
-// SHIPPING_RATE is handled client-side — not needed in this route
+/** Flat shipping rate — mirrors NEXT_PUBLIC_SHIPPING_RATE used client-side. */
+const SHIPPING_RATE = parseFloat(process.env.NEXT_PUBLIC_SHIPPING_RATE ?? "0");
+
+/** Acceptable rounding tolerance when comparing client/server totals. */
+const PRICE_TOLERANCE = 0.01;
 
 /** Escapes HTML special characters to prevent injection in email HTML. */
 function escapeHtml(value: string): string {
@@ -50,6 +55,31 @@ interface ShippingInfo {
   zip: string;
 }
 
+/**
+ * Issues a PayPal refund for a captured payment.
+ * Used when post-capture validation fails (e.g. inventory ran out, amount
+ * mismatch). Best-effort — caller logs failures for manual reconciliation.
+ * @param captureId - The PayPal capture id returned from /capture.
+ */
+async function refundCapture(captureId: string): Promise<void> {
+  const accessToken = await getPayPalAccessToken();
+  const res = await fetch(
+    `${PAYPAL_API_BASE}/v2/payments/captures/${captureId}/refund`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    }
+  );
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Refund failed: ${res.status} ${txt}`);
+  }
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 
@@ -64,8 +94,6 @@ export async function POST(request: Request) {
     paypalOrderId,
     cartItems,
     shipping,
-    subtotal,
-    shippingCost,
     total,
   } = body;
 
@@ -98,8 +126,91 @@ export async function POST(request: Request) {
   const shippingInfo = shipping as unknown as ShippingInfo;
   const items = cartItems as CartItem[];
 
-  // ── Step 2: Capture the PayPal order server-side ──────────────────────────
-  // v9 API requires server-side capture — the client only provides orderId
+  // ── Step 2: Server-side price recalculation (THREAT-003) ─────────────────
+  // Never trust the client's price/total values — re-fetch each variant from
+  // the DB and recompute. Reject if the client-supplied total drifts.
+  for (const item of items) {
+    if (
+      typeof item.variantId !== "string" ||
+      typeof item.quantity !== "number" ||
+      !Number.isInteger(item.quantity) ||
+      item.quantity < 1
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Invalid cart item" },
+        { status: 400 }
+      );
+    }
+  }
+
+  const supabase = await createClient();
+
+  const variantIds = items.map((i) => i.variantId);
+  const { data: variants } = await supabase
+    .from("product_variants")
+    .select("id, size, price, stock_quantity, products(name)")
+    .in("id", variantIds);
+
+  if (!variants || variants.length !== variantIds.length) {
+    return NextResponse.json(
+      { success: false, error: "One or more items are no longer available." },
+      { status: 409 }
+    );
+  }
+
+  // Build an authoritative price/stock map keyed by variant id.
+  const variantMap = new Map<
+    string,
+    { price: number; stock: number; productName: string; size: string }
+  >();
+  for (const v of variants as Array<{
+    id: string;
+    size: string;
+    price: number | string;
+    stock_quantity: number;
+    products: { name: string } | { name: string }[] | null;
+  }>) {
+    const prod = Array.isArray(v.products) ? v.products[0] : v.products;
+    variantMap.set(v.id, {
+      price: typeof v.price === "number" ? v.price : parseFloat(String(v.price)),
+      stock: v.stock_quantity,
+      productName: prod?.name ?? "Item",
+      size: v.size,
+    });
+  }
+
+  let serverSubtotal = 0;
+  for (const item of items) {
+    const v = variantMap.get(item.variantId);
+    if (!v) {
+      return NextResponse.json(
+        { success: false, error: "One or more items are no longer available." },
+        { status: 409 }
+      );
+    }
+    serverSubtotal += v.price * item.quantity;
+  }
+
+  const serverShipping = items.length > 0 ? SHIPPING_RATE : 0;
+  const serverTotal = serverSubtotal + serverShipping;
+
+  const clientTotal = typeof total === "number" ? total : parseFloat(String(total));
+  if (
+    !Number.isFinite(clientTotal) ||
+    Math.abs(clientTotal - serverTotal) > PRICE_TOLERANCE
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Pricing has changed. Please refresh and try again.",
+      },
+      { status: 409 }
+    );
+  }
+
+  // ── Step 3: Capture the PayPal order server-side ─────────────────────────
+  // v9 API requires server-side capture — the client only provides orderId.
+  // We capture AFTER price validation so a bad payload never charges the buyer.
   let paypalTransactionId: string;
   try {
     const accessToken = await getPayPalAccessToken();
@@ -125,13 +236,38 @@ export async function POST(request: Request) {
 
     const captureData = (await captureResponse.json()) as {
       purchase_units?: Array<{
-        payments?: { captures?: Array<{ id: string }> };
+        payments?: { captures?: Array<{ id: string; amount?: { value: string } }> };
       }>;
     };
 
-    paypalTransactionId =
-      captureData.purchase_units?.[0]?.payments?.captures?.[0]?.id ??
-      paypalOrderId;
+    const capture =
+      captureData.purchase_units?.[0]?.payments?.captures?.[0];
+    paypalTransactionId = capture?.id ?? paypalOrderId;
+
+    // Defence in depth: verify PayPal captured the expected amount.
+    // PayPal could in theory return a different value if order was modified.
+    if (capture?.amount?.value) {
+      const capturedAmount = parseFloat(capture.amount.value);
+      if (
+        Number.isFinite(capturedAmount) &&
+        Math.abs(capturedAmount - serverTotal) > PRICE_TOLERANCE
+      ) {
+        console.error(
+          "[orders/confirm] PayPal captured amount mismatch:",
+          capturedAmount,
+          "vs server total",
+          serverTotal
+        );
+        // Best-effort refund — logged for manual review either way.
+        await refundCapture(paypalTransactionId).catch((err) =>
+          console.error("[orders/confirm] Refund after amount mismatch failed:", err)
+        );
+        return NextResponse.json(
+          { success: false, error: "Payment amount mismatch — transaction reversed." },
+          { status: 502 }
+        );
+      }
+    }
   } catch (err) {
     console.error("[orders/confirm] PayPal capture error:", err);
     return NextResponse.json(
@@ -140,47 +276,52 @@ export async function POST(request: Request) {
     );
   }
 
-  const supabase = await createClient();
-
-  // ── Step 3: Re-check stock for all items ──────────────────────────────────
+  // ── Step 4: Atomically reserve stock for each item (THREAT-010) ──────────
+  // decrement_stock_if_available locks the row and decrements only if enough
+  // stock remains. On failure we release previously-reserved stock and refund.
+  const reserved: Array<{ variantId: string; quantity: number }> = [];
   for (const item of items) {
-    if (typeof item.variantId !== "string" || typeof item.quantity !== "number") {
-      return NextResponse.json(
-        { success: false, error: "Invalid cart item" },
-        { status: 400 }
+    const { data: ok, error: rpcErr } = await supabase.rpc(
+      "decrement_stock_if_available",
+      { p_variant_id: item.variantId, p_amount: item.quantity }
+    );
+    if (rpcErr || ok !== true) {
+      // Release any stock we already reserved in this loop.
+      for (const r of reserved) {
+        await supabase.rpc("restore_stock", {
+          p_variant_id: r.variantId,
+          p_amount: r.quantity,
+        });
+      }
+      // Refund the PayPal capture so the buyer is not charged for unavailable goods.
+      await refundCapture(paypalTransactionId).catch((err) =>
+        console.error("[orders/confirm] Refund after stock failure failed:", err)
       );
-    }
-
-    const { data: variant } = await supabase
-      .from("product_variants")
-      .select("stock_quantity")
-      .eq("id", item.variantId)
-      .single();
-
-    if (!variant || variant.stock_quantity < item.quantity) {
+      const v = variantMap.get(item.variantId);
       return NextResponse.json(
         {
           success: false,
-          error: `${item.productName} (${item.size}) is no longer available in the requested quantity.`,
+          error: `${v?.productName ?? "Item"} (${v?.size ?? ""}) sold out during checkout. Payment refunded.`,
         },
         { status: 409 }
       );
     }
+    reserved.push({ variantId: item.variantId, quantity: item.quantity });
   }
 
-  // ── Step 4: Resolve customer_id if logged in (optional) ──────────────────
+  // ── Step 5: Resolve customer_id if logged in (optional) ──────────────────
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const customerId = user?.id ?? null;
 
-  // ── Step 5: Create the order record ──────────────────────────────────────
+  // ── Step 6: Create the order record using server-computed total ──────────
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .insert({
       customer_id: customerId,
       status: "paid",
-      total_amount: typeof total === "number" ? total : parseFloat(String(total)),
+      total_amount: serverTotal,
       paypal_transaction_id: paypalTransactionId,
       shipping_name: shippingInfo.name.trim(),
       shipping_address: shippingInfo.address.trim(),
@@ -199,25 +340,19 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── Step 6: Create order_items + decrement stock ──────────────────────────
+  // ── Step 7: Create order_items using DB-authoritative prices ─────────────
   for (const item of items) {
+    const v = variantMap.get(item.variantId)!;
     const { error: itemError } = await supabase.from("order_items").insert({
       order_id: order.id,
       variant_id: item.variantId,
       quantity: item.quantity,
-      price_at_purchase: item.price,
+      price_at_purchase: v.price,
     });
-
     if (itemError) {
       console.error("[orders/confirm] Failed to insert order item:", itemError);
-      // Order is already created — continue to avoid partial order state
+      // Order already created — continue to avoid partial order state
     }
-
-    // Uses Supabase RPC for atomic stock decrement — greatest(..., 0) prevents negative stock
-    await supabase.rpc("decrement_stock", {
-      variant_id: item.variantId,
-      amount: item.quantity,
-    });
   }
 
   // ── Steps 7 & 8: Send emails (best-effort) ────────────────────────────────
@@ -230,11 +365,13 @@ export async function POST(request: Request) {
 
   const resend = new Resend(process.env.RESEND_API_KEY);
 
-  // Build item list HTML — escape all user-supplied values before interpolation
+  // Build item list HTML — escape all user-supplied values before interpolation.
+  // Prices use DB-authoritative values (variantMap) not client-supplied prices.
   const itemListHtml = items
     .map((item) => {
-      const name = escapeHtml(`${item.productName} (${item.size})`);
-      const lineTotal = (item.price * item.quantity).toFixed(2);
+      const v = variantMap.get(item.variantId)!;
+      const name = escapeHtml(`${v.productName} (${v.size})`);
+      const lineTotal = (v.price * item.quantity).toFixed(2);
       return `<tr><td>${name}</td><td>x${item.quantity}</td><td>$${lineTotal}</td></tr>`;
     })
     .join("");
@@ -246,14 +383,9 @@ export async function POST(request: Request) {
   const safeZip = escapeHtml(shippingInfo.zip);
   const safeEmail = escapeHtml(shippingInfo.email);
   const safeTransactionId = escapeHtml(paypalTransactionId);
-  const subtotalNum =
-    typeof subtotal === "number" ? subtotal : parseFloat(String(subtotal));
-  const shippingCostNum =
-    typeof shippingCost === "number"
-      ? shippingCost
-      : parseFloat(String(shippingCost));
-  const totalNum =
-    typeof total === "number" ? total : parseFloat(String(total));
+  const subtotalNum = serverSubtotal;
+  const shippingCostNum = serverShipping;
+  const totalNum = serverTotal;
 
   const emailPromises = [
     // Confirmation to customer

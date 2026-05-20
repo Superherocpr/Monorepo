@@ -35,9 +35,14 @@ export async function POST(request: NextRequest) {
 
   const auth = await validateEnrollwareKey(request);
   if (!auth.ok) {
-    return new Response(auth.response.body, {
+    // Re-wrap so CORS headers are present on the rejection
+    const body = await auth.response.text();
+    return new Response(body, {
       status: auth.response.status,
-      headers: { ...Object.fromEntries(auth.response.headers), ...cors },
+      headers: {
+        "Content-Type": auth.response.headers.get("Content-Type") ?? "application/json",
+        ...cors,
+      },
     });
   }
 
@@ -55,13 +60,16 @@ export async function POST(request: NextRequest) {
 
   const admin = await createAdminClient();
 
-  // Only update if the session belongs to the authenticated instructor —
-  // using .eq("instructor_id", profileId) as an ownership check in the same query.
-  const { error, count } = await admin
+  // Update only when the session belongs to the authenticated instructor.
+  // We chain .select("id") so the response includes the matched rows — that's
+  // the only reliable way to know whether the row existed and was ours
+  // (Supabase's plain update returns count: null without the count option).
+  const { data: updated, error } = await admin
     .from("class_sessions")
     .update({ enrollware_submitted: true })
     .eq("id", sessionId)
-    .eq("instructor_id", profileId);
+    .eq("instructor_id", profileId)
+    .select("id");
 
   if (error) {
     console.error("[enrollware/mark-submitted] Update error:", error.message);
@@ -71,8 +79,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // count === 0 means either the session doesn't exist or belongs to someone else
-  if (count === 0) {
+  // No matched row means the session doesn't exist or belongs to someone else
+  if (!updated || updated.length === 0) {
     return Response.json(
       { error: "Session not found or not authorized." },
       { status: 404, headers: cors }

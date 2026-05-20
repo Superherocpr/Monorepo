@@ -4,9 +4,14 @@
  * Auth: Manager and super_admin only
  * Updates a single editable field on the customer's profile.
  * Allowed fields: first_name, last_name, email, phone, address, city, state, zip
+ *
+ * Email is a special case: updating it writes to BOTH profiles.email AND
+ * auth.users.email (via the admin client). email_confirm: true skips the
+ * Supabase confirmation flow so the change takes effect immediately — appropriate
+ * for admin-initiated corrections.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /** Allowed profile fields that staff can edit on behalf of a customer. */
 const ALLOWED_FIELDS = new Set([
@@ -85,6 +90,28 @@ export async function PATCH(
 
   if (error) {
     return Response.json({ success: false, error: "Update failed." }, { status: 500 });
+  }
+
+  // ── Email: also update auth.users so the customer's login address changes ──
+  // Uses the service-role admin client so no confirmation email is sent —
+  // email_confirm: true marks the new address as verified immediately.
+  if (field === "email" && cleanValue) {
+    const adminClient = await createAdminClient();
+    const { error: authError } = await adminClient.auth.admin.updateUserById(
+      customerId,
+      { email: cleanValue, email_confirm: true }
+    );
+    if (authError) {
+      // The profiles row was already updated — roll it back to keep things in sync.
+      await supabase
+        .from("profiles")
+        .update({ email: body.value, updated_at: new Date().toISOString() })
+        .eq("id", customerId);
+      return Response.json(
+        { success: false, error: "Failed to update login email. Profile rolled back." },
+        { status: 500 }
+      );
+    }
   }
 
   return Response.json({ success: true });

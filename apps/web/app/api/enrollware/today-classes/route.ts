@@ -5,7 +5,12 @@
  *
  * Returns today's class sessions for the authenticated instructor, with joined
  * class type, location, instructor name, and full roster of students.
- * "Today" is defined as the current calendar date in UTC (00:00–23:59 UTC).
+ *
+ * "Today" is computed in the instructor's local timezone (passed as ?tz=<IANA>
+ * by the bookmarklet) — falling back to America/New_York (the business's
+ * Eastern timezone). This prevents the UTC-day-rollover bug where evening
+ * usage would otherwise miss the day's classes.
+ *
  * Classes already marked enrollware_submitted are included but flagged so the
  * bookmarklet UI can distinguish submitted from pending.
  *
@@ -17,6 +22,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import {
   validateEnrollwareKey,
   enrollwareCorsHeaders,
+  localDayWindow,
 } from "@/lib/enrollware-api-auth";
 
 export async function OPTIONS(request: NextRequest) {
@@ -34,20 +40,26 @@ export async function GET(request: NextRequest) {
   // Validate the Bearer API key
   const auth = await validateEnrollwareKey(request);
   if (!auth.ok) {
-    return new Response(auth.response.body, {
+    // Re-wrap the auth failure so we attach CORS headers without losing the
+    // original Content-Type / status from validateEnrollwareKey.
+    const body = await auth.response.text();
+    return new Response(body, {
       status: auth.response.status,
-      headers: { ...Object.fromEntries(auth.response.headers), ...cors },
+      headers: {
+        "Content-Type": auth.response.headers.get("Content-Type") ?? "application/json",
+        ...cors,
+      },
     });
   }
 
   const { profileId } = auth;
   const admin = await createAdminClient();
 
-  // Compute today's date window in UTC
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setUTCHours(23, 59, 59, 999);
+  // Resolve the local-day window for the instructor. The bookmarklet passes
+  // ?tz=<IANA> from the browser; otherwise we default to the business's
+  // Eastern timezone (see DEFAULT_INSTRUCTOR_TZ).
+  const tzParam = request.nextUrl.searchParams.get("tz");
+  const { startIso, endIso } = localDayWindow(tzParam);
 
   // Fetch today's sessions for this instructor with all data the bookmarklet needs.
   // roster_records are returned as a nested array via Supabase's foreign key relation.
@@ -65,8 +77,8 @@ export async function GET(request: NextRequest) {
        roster_records ( first_name, last_name, email, phone, address_1, address_2, city, state, zip )`
     )
     .eq("instructor_id", profileId)
-    .gte("starts_at", todayStart.toISOString())
-    .lte("starts_at", todayEnd.toISOString())
+    .gte("starts_at", startIso)
+    .lte("starts_at", endIso)
     .order("starts_at", { ascending: true });
 
   if (error) {
