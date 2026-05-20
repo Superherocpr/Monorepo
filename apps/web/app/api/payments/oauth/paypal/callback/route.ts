@@ -2,14 +2,21 @@
  * GET /api/payments/oauth/paypal/callback
  * Called by: PayPal — redirected here after instructor grants consent
  * Auth: must be a logged-in instructor or super_admin (session persists through OAuth redirect)
- * Exchanges the authorization code for tokens, fetches the PayPal account email,
- * stores encrypted tokens in instructor_payment_accounts, redirects to payment settings.
+ * Exchanges the authorization code for tokens, fetches the PayPal merchant
+ * payer_id from the userinfo endpoint, stores encrypted tokens + payer_id in
+ * instructor_payment_accounts, redirects to payment settings.
+ *
+ * The stored `platform_account_id` is the PayPal **payer ID** (a 13-char
+ * merchant identifier) — NOT the email — because the `PayPal-Auth-Assertion`
+ * header used to route booking funds requires `payer_id`. Storing the email
+ * here would cause every instructor-routed payment to fail with PAYER_ID_NOT_FOUND.
  */
 
 import { createClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { encryptToken } from "@/lib/crypto";
+import { getPayPalApiBase } from "@/lib/paypal";
 import type { UserRole } from "@/types/users";
 
 /** Roles permitted to connect payment accounts. */
@@ -66,7 +73,9 @@ export async function GET(request: Request) {
   const clientId = process.env.PAYPAL_CLIENT_ID ?? "";
   const clientSecret = process.env.PAYPAL_CLIENT_SECRET ?? "";
   const redirectUri = process.env.PAYPAL_REDIRECT_URI ?? "";
-  const apiBase = process.env.PAYPAL_API_BASE ?? "https://api-m.paypal.com";
+  // Use the unified env-derived base so token exchange targets the same
+  // environment (sandbox vs. live) as the consent screen the user just used.
+  const apiBase = getPayPalApiBase();
 
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
 
@@ -93,16 +102,42 @@ export async function GET(request: Request) {
     refresh_token: string;
   };
 
-  // ── Fetch the instructor's PayPal account identifier (email) ───────────────
-  const userInfoRes = await fetch(`${apiBase}/v1/oauth2/token/userinfo?schema=paypalv1.1`, {
-    headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    cache: "no-store",
-  });
+  // ── Fetch the instructor's PayPal merchant payer_id ──────────────────────
+  // The `paypalv1.1` schema returns the merchant identifiers directly:
+  //   - `payer_id`: the 13-char merchant ID (preferred — required by Auth-Assertion)
+  //   - `user_id`:  a URN of the form ".../identity/user/<payer_id>" (fallback)
+  //   - `emails`:   array of {value, primary} (NOT a valid auth-assertion identity)
+  // We MUST store the payer_id because PayPal-Auth-Assertion's `payer_id`
+  // claim only accepts a merchant ID; emails are rejected with PAYER_ID_NOT_FOUND.
+  const userInfoRes = await fetch(
+    `${apiBase}/v1/oauth2/token/userinfo?schema=paypalv1.1`,
+    {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      cache: "no-store",
+    }
+  );
 
   let platformAccountId: string | null = null;
   if (userInfoRes.ok) {
-    const userInfo = (await userInfoRes.json()) as { emails?: { value: string }[] };
-    platformAccountId = userInfo.emails?.[0]?.value ?? null;
+    const userInfo = (await userInfoRes.json()) as {
+      payer_id?: string;
+      user_id?: string;
+      emails?: { value: string; primary?: boolean }[];
+    };
+    if (userInfo.payer_id) {
+      platformAccountId = userInfo.payer_id;
+    } else if (userInfo.user_id) {
+      // Fallback — extract the payer_id from the trailing URN segment.
+      const segments = userInfo.user_id.split("/");
+      platformAccountId = segments[segments.length - 1] || null;
+    }
+    // Intentionally do NOT fall back to email — see comment above.
+  }
+
+  // If PayPal didn't return a usable merchant ID the account is useless for
+  // routing booking funds. Abort rather than silently storing garbage.
+  if (!platformAccountId) {
+    redirect("/admin/profile/payment?error=missing_payer_id");
   }
 
   // ── Store in DB — upsert on (instructor_id, platform) ─────────────────────
@@ -120,11 +155,11 @@ export async function GET(request: Request) {
     .select("id, is_active")
     .eq("instructor_id", profile.id)
     .eq("platform", "paypal")
-    .single();
+    .maybeSingle();
 
   if (existing) {
     // Reconnect — update tokens, preserve is_active status
-    await supabase
+    const { error: updateError } = await supabase
       .from("instructor_payment_accounts")
       .update({
         access_token: encryptToken(tokenData.access_token),
@@ -133,16 +168,28 @@ export async function GET(request: Request) {
         connected_at: new Date().toISOString(),
       })
       .eq("id", existing.id);
+
+    if (updateError) {
+      console.error("[oauth/paypal/callback] Update failed:", updateError);
+      redirect("/admin/profile/payment?error=db_write_failed");
+    }
   } else {
     // New connection
-    await supabase.from("instructor_payment_accounts").insert({
-      instructor_id: profile.id,
-      platform: "paypal",
-      access_token: encryptToken(tokenData.access_token),
-      refresh_token: encryptToken(tokenData.refresh_token),
-      platform_account_id: platformAccountId,
-      is_active: isFirstAccount,
-    });
+    const { error: insertError } = await supabase
+      .from("instructor_payment_accounts")
+      .insert({
+        instructor_id: profile.id,
+        platform: "paypal",
+        access_token: encryptToken(tokenData.access_token),
+        refresh_token: encryptToken(tokenData.refresh_token),
+        platform_account_id: platformAccountId,
+        is_active: isFirstAccount,
+      });
+
+    if (insertError) {
+      console.error("[oauth/paypal/callback] Insert failed:", insertError);
+      redirect("/admin/profile/payment?error=db_write_failed");
+    }
   }
 
   redirect("/admin/profile/payment?connected=paypal");

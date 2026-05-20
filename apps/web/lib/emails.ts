@@ -53,7 +53,7 @@ export function welcomeEmail({ firstName }: { firstName: string }): EmailContent
         <a href="https://superherocpr.com/dashboard">superherocpr.com</a>.
       </p>
       <p>See you in class!</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -385,7 +385,7 @@ export function contactNotificationEmail({
   const safeMessage     = escapeHtml(message.trim()).replace(/\n/g, "<br>");
 
   return {
-    subject: `New Contact Form Submission — ${inquiryType.trim()}`,
+    subject: `New Contact Form Submission - ${inquiryType.trim()}`,
     html: wrapEmail(`
       <h2>New contact form submission</h2>
       <table>
@@ -411,7 +411,7 @@ export function contactAutoReplyEmail({ firstName }: { firstName: string }): Ema
   const safeFirstName = escapeHtml(firstName);
 
   return {
-    subject: "We received your message — SuperHeroCPR",
+    subject: "We received your message - SuperHeroCPR",
     html: wrapEmail(`
       <h1>Thanks for reaching out, ${safeFirstName}!</h1>
       <p>We received your message and will get back to you within 1 business day.</p>
@@ -420,7 +420,7 @@ export function contactAutoReplyEmail({ firstName }: { firstName: string }): Ema
         <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
         <li>Email: <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a></li>
       </ul>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -443,7 +443,7 @@ export function accountDeletedEmail({ firstName }: { firstName: string }): Email
       <p>If you believe this was a mistake or wish to restore your account, please contact us at
         <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a> or call (813) 966-3969.
       </p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -526,7 +526,7 @@ export function orderShippedEmail({
       </table>
       <p style="margin-top:12px"><strong>Order Total: $${totalAmount.toFixed(2)}</strong></p>
       <p>Shipping to: ${shippingName}, ${shippingCity}, ${shippingState}</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -575,7 +575,7 @@ export function staffInviteEmail({
       <p><a href="${actionLink}">Set My Password →</a></p>
       <p>This link expires in 24 hours.</p>
       ${instructorNote}
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -602,7 +602,7 @@ export function customerSetupEmail({
       <p>An account has been created for you. Click the link below to set your password and activate your account.</p>
       <p><a href="${setupLink}">Set My Password →</a></p>
       <p>This link expires in 24 hours.</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -630,7 +630,7 @@ export function passwordResetEmail({
       <p>A staff member has sent you a password reset link. Click below to set a new password for your SuperHeroCPR account.</p>
       <p><a href="${actionLink}">Reset My Password →</a></p>
       <p>This link expires in 24 hours. If you did not expect this email, you can safely ignore it.</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -860,7 +860,7 @@ export function invoicePaidEmail({
       <p>Hi ${firstName},</p>
       <p>Invoice <strong>${invoiceNumber}</strong> for ${recipientName} has been marked as paid.</p>
       <p>${studentCount} student spot${studentCount !== 1 ? "s" : ""} have been reserved for the class.</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -946,7 +946,7 @@ export function invoiceResendEmail({
       </table>
       ${notes ? `<p style="margin-top:16px;color:#555">Note: ${notes}</p>` : ""}
       <p style="margin-top:24px">Payment platform: ${paymentPlatform ?? "See your instructor"}</p>
-      <p>— The SuperHeroCPR Team</p>
+      <p>- The SuperHeroCPR Team</p>
     `),
   };
 }
@@ -1016,7 +1016,7 @@ export function bookingConfirmationEmail({
     : "";
 
   return {
-    subject: `Booking Confirmed — ${className} on ${formattedDate}`,
+    subject: `Booking Confirmed - ${className} on ${formattedDate}`,
     html: wrapEmail(`
       <h1>You're booked!</h1>
       <p>Hi ${firstName ?? "there"},</p>
@@ -1157,7 +1157,7 @@ export function invoiceEmail({
       : "";
 
   return {
-    subject: `Invoice ${invoiceNumber} — ${className} on ${formattedDate}`,
+    subject: `Invoice ${invoiceNumber} - ${className} on ${formattedDate}`,
     html: wrapEmail(`
       <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Invoice from SuperHeroCPR</h1>
       <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Invoice number: <strong>${invoiceNumber}</strong></p>

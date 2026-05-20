@@ -13,8 +13,15 @@ const ALLOWED_ROLES: UserRole[] = ["instructor", "super_admin"];
 
 /**
  * Updates the active payment account for the logged-in instructor.
- * Step 1: Set all accounts for this instructor to is_active = false.
- * Step 2: Set the selected account to is_active = true.
+ * Step 1: Activate the requested account.
+ * Step 2: Deactivate every OTHER account for this instructor.
+ *
+ * Order matters: if step 2 ran first and step 1 then failed, the instructor
+ * would be left with ZERO active accounts — every subsequent booking would
+ * silently fall back to the business PayPal. With this ordering, a step 2
+ * failure leaves the user with both the new active account AND a stale one
+ * (audit-detectable + non-destructive) rather than nothing at all.
+ *
  * Only changes accounts belonging to the requesting instructor — ownership verified.
  * @param request - PATCH body: { accountId: string }
  */
@@ -57,20 +64,9 @@ export async function PATCH(request: Request) {
     return Response.json({ success: false, error: "Account not found." }, { status: 404 });
   }
 
-  // ── Step 1: Deactivate all accounts for this instructor ────────────────────
-  const { error: deactivateError } = await supabase
-    .from("instructor_payment_accounts")
-    .update({ is_active: false })
-    .eq("instructor_id", profile.id);
-
-  if (deactivateError) {
-    return Response.json(
-      { success: false, error: "Failed to update payment accounts." },
-      { status: 500 }
-    );
-  }
-
-  // ── Step 2: Activate the selected account ─────────────────────────────────
+  // ── Step 1: Activate the requested account FIRST ──────────────────────────
+  // If this succeeds, the instructor always has an active account by the end
+  // of the request, regardless of what happens in step 2.
   const { error: activateError } = await supabase
     .from("instructor_payment_accounts")
     .update({ is_active: true })
@@ -80,6 +76,23 @@ export async function PATCH(request: Request) {
     return Response.json(
       { success: false, error: "Failed to set active account." },
       { status: 500 }
+    );
+  }
+
+  // ── Step 2: Deactivate every OTHER account for this instructor ────────────
+  // Scoped with `.neq("id", accountId)` so the just-activated row is preserved
+  // even if this update races with another request.
+  const { error: deactivateError } = await supabase
+    .from("instructor_payment_accounts")
+    .update({ is_active: false })
+    .eq("instructor_id", profile.id)
+    .neq("id", accountId);
+
+  if (deactivateError) {
+    // Step 1 succeeded so the user has a valid active account — log but don't 500.
+    console.error(
+      "[payments/set-active] Failed to deactivate other accounts (non-fatal):",
+      deactivateError
     );
   }
 

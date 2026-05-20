@@ -68,7 +68,14 @@ export function getBookmarkletSource(apiBase: string): string {
 
   /** Fetches today's classes from the SuperheroCPR API. */
   function fetchTodaysClasses() {
-    return fetch(API_BASE + '/api/enrollware/today-classes', {
+    // Pass the browser's IANA timezone so the server can compute "today" in
+    // the instructor's local calendar — prevents the UTC-day-rollover bug
+    // where evening usage would otherwise return no classes.
+    var tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+    var url = API_BASE + '/api/enrollware/today-classes' +
+              (tz ? ('?tz=' + encodeURIComponent(tz)) : '');
+    return fetch(url, {
       headers: { 'Authorization': 'Bearer ' + __k }
     }).then(function(r) {
       return r.json().then(function(data) {
@@ -397,12 +404,24 @@ export function getBookmarkletSource(apiBase: string): string {
     };
 
     window.__SCPR_WATCH = function() {
-      // Use MutationObserver to detect when Enrollware's UpdatePanel renders
-      // the student list section after "Update Class" triggers an AJAX postback.
+      // Watch for Enrollware's UpdatePanel to render the student list section
+      // after "Update Class" triggers an AJAX postback. We scope the observer
+      // to the form container (not document.body) and skip attribute mutations
+      // — Enrollware pages fire thousands of attribute changes per second and
+      // observing them all locks up the browser.
+      var watchTarget = document.querySelector('form') || document.body;
+      var fired = false;
+
       var observer = new MutationObserver(function() {
+        if (fired) return;
         var studentPanel = document.getElementById('mainContent_studentPanel');
         if (studentPanel && studentPanel.offsetHeight > 0) {
+          fired = true;
           observer.disconnect();
+          if (window.__SCPR_WATCH_TIMEOUT) {
+            clearTimeout(window.__SCPR_WATCH_TIMEOUT);
+            window.__SCPR_WATCH_TIMEOUT = null;
+          }
           var storedData = sessionStorage.getItem('scpr_session_data');
           if (storedData) {
             try {
@@ -412,7 +431,14 @@ export function getBookmarkletSource(apiBase: string): string {
           }
         }
       });
-      observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+      observer.observe(watchTarget, { childList: true, subtree: true });
+
+      // Safety: give up after 2 minutes so the observer doesn't run forever
+      // if the instructor never clicks Update Class.
+      window.__SCPR_WATCH_TIMEOUT = setTimeout(function() {
+        if (!fired) observer.disconnect();
+      }, 120000);
+
       closePanel();
     };
   }

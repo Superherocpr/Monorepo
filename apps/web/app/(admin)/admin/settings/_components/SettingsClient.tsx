@@ -24,6 +24,8 @@ interface SettingsClientProps {
   zohoParam: string | null;
   /** Initial value of the legacy_site_enabled system_settings flag. */
   legacySiteEnabled: boolean;
+  /** Whether the current user is a super_admin — gates the Legacy Site section. */
+  isSuperAdmin: boolean;
 }
 
 interface Toast {
@@ -57,6 +59,7 @@ interface EditingGrade {
  * @param zohoConnected - Whether a Zoho account is currently linked.
  * @param zohoEmail - The Zoho account email if connected.
  * @param zohoParam - The ?zoho= query param from OAuth redirects.
+ * @param isSuperAdmin - Whether the current user is a super_admin. Gates the Legacy Site section.
  */
 const SettingsClient: React.FC<SettingsClientProps> = ({
   classTypes: initialClassTypes,
@@ -66,6 +69,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   zohoEmail,
   zohoParam,
   legacySiteEnabled: initialLegacySiteEnabled,
+  isSuperAdmin,
 }) => {
   const router = useRouter();
 
@@ -491,8 +495,8 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </p>
       </div>
 
-      {/* ── Section: Legacy Site ──────────────────────────────────────────── */}
-      <section aria-labelledby="section-legacy-site">
+      {/* ── Section: Legacy Site — super_admin only ──────────────────────── */}
+      {isSuperAdmin && <section aria-labelledby="section-legacy-site">
         <h2
           id="section-legacy-site"
           className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
@@ -529,7 +533,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
             </button>
           </div>
         </div>
-      </section>
+      </section>}
 
       <div className="border-t border-gray-200 dark:border-gray-700" />
 

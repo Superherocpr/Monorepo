@@ -327,7 +327,7 @@ export default function SessionsClient({
                             )}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {session.locations?.name ?? "—"}
+                            {session.locations?.name ?? "-"}
                           </p>
                           {isManager && session.instructor && (
                             <p className="text-sm text-gray-500">

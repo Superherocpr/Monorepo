@@ -129,6 +129,7 @@ export default async function SettingsPage({
       zohoEmail={zohoEmail}
       zohoParam={zohoParam}
       legacySiteEnabled={legacySiteFlag === "true"}
+      isSuperAdmin
     />
   );
 }

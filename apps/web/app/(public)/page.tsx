@@ -19,7 +19,7 @@ import LegacySitePage from "./_components/legacy/LegacySitePage";
 import { getSetting } from "@/lib/zoho";
 
 export const metadata: Metadata = {
-  title: "CPR Certification Classes — Tampa Bay | SuperHeroCPR",
+  title: "CPR Certification Classes - Tampa Bay | SuperHeroCPR",
   description:
     "American Heart Association CPR certification classes in Tampa Bay. On-location training from a licensed AHA instructor with thousands of real-world patients.",
 };

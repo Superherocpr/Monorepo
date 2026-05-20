@@ -22,7 +22,6 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import {
   Heart,
   Clock,
@@ -75,13 +74,13 @@ const FEATURE_CARDS: FeatureCard[] = [
     icon: Heart,
     title: "The Knowledge You Need To Save A Life",
     body:
-      "Everything you are is stored in your human brain. Two to three minutes without blood oxygen to your brain and that precious brain begins to die. Learning to apply high quality CPR gives you the knowledge you need to save a life — taught by professionals on the front line of today's Fire, EMS, and ER response.",
+      "Everything you are is stored in your human brain. Two to three minutes without blood oxygen to your brain and that precious brain begins to die. Learning to apply high quality CPR gives you the knowledge you need to save a life, taught by professionals on the front line of today's Fire, EMS, and ER response.",
   },
   {
     icon: Clock,
     title: "Flexible Learning Options",
     body:
-      "Learn from the comfort of your home or office. Schedule for the morning, early afternoon, or evening according to your busy work schedule. Weekdays and weekend availability — including most holidays.",
+      "Learn from the comfort of your home or office. Schedule for the morning, early afternoon, or evening according to your busy work schedule. Weekdays and weekend availability, including most holidays.",
   },
   {
     icon: GraduationCap,
@@ -98,7 +97,7 @@ const FEATURE_CARDS: FeatureCard[] = [
     icon: Wrench,
     title: "Modern Learning Tools",
     body:
-      "Modern training tools at your disposal — manikins, AEDs, and the latest practice equipment.",
+      "Modern training tools at your disposal: manikins, AEDs, and the latest practice equipment.",
   },
   {
     icon: Award,
@@ -202,6 +201,9 @@ export default function LegacySitePage() {
 
   return (
     <div className="bg-white dark:bg-gray-950">
+      {/* Hide the shared footer's Quick Links column on the legacy home page only.
+          Scoped via id selector so it has zero effect on any other route. */}
+      <style>{`#footer-quick-links { display: none !important; }`}</style>
       {/* ── 1. Hero ───────────────────────────────────────────────────────── */}
       <section className="relative bg-gradient-to-br from-red-700 via-red-600 to-red-800 text-white overflow-hidden">
         {/* Decorative background image — optional, falls back to gradient if missing */}
@@ -224,12 +226,13 @@ export default function LegacySitePage() {
             On-location classes available.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/book"
+            {/* Anchor links scroll smoothly to the in-page contact form (#contact) rather than navigating away */}
+            <a
+              href="#contact"
               className="inline-flex items-center justify-center bg-white text-red-700 hover:bg-red-50 font-bold px-8 py-4 rounded-lg shadow-lg transition-colors text-lg"
             >
               Book Now
-            </Link>
+            </a>
             <a
               href={`tel:${BUSINESS_PHONE_TEL}`}
               className="inline-flex items-center justify-center gap-2 bg-red-900/40 hover:bg-red-900/60 border border-white/30 text-white font-semibold px-8 py-4 rounded-lg transition-colors text-lg"
@@ -242,14 +245,15 @@ export default function LegacySitePage() {
       </section>
 
       {/* ── 2. Features grid ──────────────────────────────────────────────── */}
-      <section className="py-20 sm:py-24 bg-gray-50 dark:bg-gray-900">
+      {/* id="why-choose-us" — header "Why Choose Us" link scrolls here in legacy mode */}
+      <section id="why-choose-us" className="py-20 sm:py-24 bg-gray-50 dark:bg-gray-900 scroll-mt-20">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
               CPR License And Renewal Classes
             </h2>
             <p className="text-base text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Real-world instruction from someone who's been on the front line —
+              Real-world instruction from someone who's been on the front line,
               so you walk away ready to act when it matters.
             </p>
           </div>
@@ -345,25 +349,27 @@ export default function LegacySitePage() {
             class so you and your loved ones know what to do in a sudden
             cardiac emergency.
           </p>
-          <Link
-            href="/book"
+          {/* Anchor scrolls to the in-page contact form (#contact) below */}
+          <a
+            href="#contact"
             className="inline-flex items-center justify-center bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-4 rounded-lg shadow-lg transition-colors text-lg"
           >
             Schedule a Class
-          </Link>
+          </a>
         </div>
       </section>
 
       {/* ── 5. Contact / Booking form ─────────────────────────────────────── */}
-      <section className="py-20 sm:py-24 bg-white dark:bg-gray-950">
+      {/* id="contact" — Book Now / Schedule a Class hero CTAs scroll here via #contact */}
+      <section id="contact" className="py-20 sm:py-24 bg-white dark:bg-gray-950 scroll-mt-20">
         <div className="max-w-3xl mx-auto px-6">
           <div className="text-center mb-10">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
               Book Your Date Before Classes Fill!
             </h2>
             <p className="text-base text-gray-600 dark:text-gray-300 mb-6">
-              Give us a call, send us an email, or fill out the form below —
-              your CPR certification class is only one click away.
+              Give us a call, send us an email, or fill out the form below.
+              Your CPR certification class is only one click away.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm">
               <a

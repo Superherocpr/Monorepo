@@ -14,13 +14,9 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { getPayPalAccessToken } from "@/lib/paypal";
-import { resolvePaymentRouting } from "@/lib/resolve-payment-routing";
+import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import { Resend } from "resend";
 import { bookingConfirmationEmail } from "@/lib/emails";
-
-const PAYPAL_API_BASE =
-  process.env.PAYPAL_API_BASE ?? "https://api-m.sandbox.paypal.com";
 
 /** Acceptable rounding tolerance when comparing client/server prices. */
 const PRICE_TOLERANCE = 0.01;
@@ -38,7 +34,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 async function refundCapture(captureId: string): Promise<void> {
   const accessToken = await getPayPalAccessToken();
   const res = await fetch(
-    `${PAYPAL_API_BASE}/v2/payments/captures/${captureId}/refund`,
+    `${getPayPalApiBase()}/v2/payments/captures/${captureId}/refund`,
     {
       method: "POST",
       headers: {
@@ -91,11 +87,18 @@ export async function POST(request: Request) {
   // ── Step 1: Server-side price verification (THREAT-013) ──────────────────
   // Never trust the client's amount — fetch the canonical price via the
   // class_types join and reject if it doesn't match.
-  const { data: sessionPriceRow } = await supabase
+  // `.maybeSingle()` (vs `.single()`) so a missing row returns null instead of
+  // throwing — a missing session is a 404, not a 500.
+  const { data: sessionPriceRow, error: sessionFetchError } = await supabase
     .from("class_sessions")
     .select("class_types(price)")
     .eq("id", sessionId)
-    .single();
+    .maybeSingle();
+
+  if (sessionFetchError) {
+    console.error("[bookings/confirm] Session fetch failed:", sessionFetchError);
+    return Response.json({ success: false, error: "Failed to load session" }, { status: 500 });
+  }
 
   if (!sessionPriceRow) {
     return Response.json({ success: false, error: "Session not found" }, { status: 404 });
@@ -215,9 +218,30 @@ export async function POST(request: Request) {
   }
 
   // ── Step 4: Create payment record (with routing audit note) ──────────────
-  const routing = await resolvePaymentRouting(supabase, sessionId);
+  // Derive routing from the capture's payee.merchant_id — the source of truth
+  // for where the funds actually landed. If it matches an instructor's stored
+  // payer_id, attribute the payment to them; otherwise it went to the business.
+  let routingNote = "Routed to SuperHeroCPR business PayPal";
+  let paymentProcessor = "SuperHeroCPR via PayPal";
+  if (payeeMerchantId) {
+    const { data: instructorAcct } = await supabase
+      .from("instructor_payment_accounts")
+      .select("instructor_id, profiles!instructor_payment_accounts_instructor_id_fkey(full_name)")
+      .eq("platform", "paypal")
+      .eq("platform_account_id", payeeMerchantId)
+      .maybeSingle();
+    if (instructorAcct) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const profile = (instructorAcct as any).profiles;
+      const profileRow = Array.isArray(profile) ? profile[0] : profile;
+      const instructorName: string =
+        profileRow?.full_name ?? "instructor";
+      routingNote = `Routed to instructor PayPal — ${instructorName}`;
+      paymentProcessor = `${instructorName} via PayPal`;
+    }
+  }
 
-  await supabase
+  const { error: paymentInsertError } = await supabase
     .from("payments")
     .insert({
       customer_id: customerId,
@@ -226,8 +250,23 @@ export async function POST(request: Request) {
       status: "completed",
       payment_type: "online",
       paypal_transaction_id: paypalTransactionId,
-      routing_note: routing.routingNote,
+      routing_note: routingNote,
     });
+
+  // Insert failure leaves a booking with no payment record — log loudly so
+  // ops can reconcile manually. Do NOT 500 the user: their booking exists and
+  // their card was charged; failing the response would just confuse them.
+  if (paymentInsertError) {
+    console.error(
+      "[bookings/confirm] CRITICAL: payment record insert failed",
+      {
+        bookingId,
+        paypalTransactionId,
+        amount: dbPrice,
+        error: paymentInsertError,
+      }
+    );
+  }
 
   // ── Step 5: Send booking confirmation email (best-effort) ────────────────
   if (
@@ -236,11 +275,6 @@ export async function POST(request: Request) {
     typeof startsAt === "string"
   ) {
     const resend = new Resend(process.env.RESEND_API_KEY);
-
-    // Derive a human-readable "Payment processed by" label from the routing note.
-    const paymentProcessor = routing.instructorPayPalAccountId
-      ? `${routing.routingNote.replace("Routed to instructor PayPal — ", "")} via PayPal`
-      : "SuperHeroCPR via PayPal";
 
     const { subject, html } = bookingConfirmationEmail({
       firstName: typeof customerFirstName === "string" ? customerFirstName : null,

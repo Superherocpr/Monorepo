@@ -1041,7 +1041,7 @@ export default function CustomerDetailClient({
                     <ul className="mt-1 space-y-0.5">
                       {order.order_items.map((item, i) => (
                         <li key={i} className="text-sm text-gray-800">
-                          {item.product_variants.products.name} —{" "}
+                          {item.product_variants.products.name} -{" "}
                           {item.product_variants.size} × {item.quantity}
                         </li>
                       ))}
@@ -1480,7 +1480,7 @@ export default function CustomerDetailClient({
                     value={s.id}
                     disabled={s.spotsRemaining === 0}
                   >
-                    {s.class_types.name} — {fmtDate(s.starts_at)}{" "}
+                    {s.class_types.name} - {fmtDate(s.starts_at)}{" "}
                     {fmtTime(s.starts_at)} · {s.spotsRemaining} spot
                     {s.spotsRemaining !== 1 ? "s" : ""} left
                   </option>
@@ -1574,7 +1574,7 @@ export default function CustomerDetailClient({
                   Expires:{" "}
                   {(() => {
                     const ct = certTypes.find((t) => t.id === issueCertTypeId);
-                    if (!ct) return "—";
+                    if (!ct) return "-";
                     const exp = new Date(issuedAt);
                     exp.setMonth(exp.getMonth() + ct.validity_months);
                     return fmtDate(exp.toISOString());

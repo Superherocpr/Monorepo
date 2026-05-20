@@ -630,7 +630,7 @@ export default function RosterImportClient({
     return (
       <div>
         <p className="mb-1 text-sm text-gray-600">
-          <span className="font-medium">{fileName}</span> —{" "}
+          <span className="font-medium">{fileName}</span> -{" "}
           {rawRows.length - 1} rows detected
         </p>
         <p className="mb-6 text-sm text-gray-500">
@@ -662,7 +662,7 @@ export default function RosterImportClient({
                   }
                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
-                  <option value="">— Not mapped —</option>
+                  <option value="">- Not mapped -</option>
                   {headers.map((h) => (
                     <option key={h} value={h}>
                       {h}
@@ -700,13 +700,13 @@ export default function RosterImportClient({
                       {fields.map((f) => {
                         const h = columnMap[f];
                         const idx = h ? headers.indexOf(h) : -1;
-                        const val = idx !== -1 ? (row[idx] ?? "") : "—";
+                        const val = idx !== -1 ? (row[idx] ?? "") : "-";
                         return (
                           <td
                             key={f}
                             className="px-3 py-2 text-gray-700 max-w-[120px] truncate"
                           >
-                            {val || <span className="text-gray-400">—</span>}
+                            {val || <span className="text-gray-400">-</span>}
                           </td>
                         );
                       })}
@@ -946,7 +946,7 @@ export default function RosterImportClient({
         </a>
         <h1 className="text-2xl font-bold text-gray-900">Import Roster</h1>
         <p className="mt-1 text-sm text-gray-600">
-          {session.class_type_name} —{" "}
+          {session.class_type_name} -{" "}
           {new Date(session.starts_at).toLocaleDateString("en-US", {
             weekday: "long",
             year: "numeric",

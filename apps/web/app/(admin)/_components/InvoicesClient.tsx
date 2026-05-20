@@ -129,7 +129,7 @@ export default function InvoicesClient({
       if (inv.class_sessions) {
         const { id, starts_at, class_types } = inv.class_sessions;
         if (!seen.has(id)) {
-          const label = `${class_types?.name ?? "Unknown"} — ${formatDate(starts_at)}`;
+          const label = `${class_types?.name ?? "Unknown"} - ${formatDate(starts_at)}`;
           seen.set(id, label);
         }
       }
@@ -332,7 +332,7 @@ export default function InvoicesClient({
               const sessionName = inv.class_sessions?.class_types?.name ?? "Unknown class";
               const sessionDate = inv.class_sessions
                 ? formatDate(inv.class_sessions.starts_at)
-                : "—";
+                : "-";
               const instructorName = inv.profiles
                 ? `${inv.profiles.first_name} ${inv.profiles.last_name}`
                 : null;

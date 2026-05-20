@@ -24,6 +24,12 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import { invoiceEmail } from "@/lib/emails";
 import { decryptToken } from "@/lib/crypto";
+import {
+  getPayPalApiBase,
+  getPayPalConnectBase,
+  refreshInstructorPayPalToken,
+} from "@/lib/paypal";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PaymentPlatform } from "@/types/users";
 
 // ---------------------------------------------------------------------------
@@ -58,21 +64,38 @@ interface PlatformCreateParams {
 /**
  * Attempts to create an invoice on PayPal's invoicing API and send it.
  * PayPal and Venmo Business use the same endpoint.
- * Returns null identifiers on any failure — caller always records the DB row.
- * @param accessToken - The instructor's PayPal OAuth access token.
+ *
+ * If the access token is rejected with 401 (typical when the cached token has
+ * exceeded its ~8h lifetime), the supplied `refresh` callback is invoked to
+ * obtain a fresh one and the request is retried once. This keeps invoice
+ * creation working without requiring instructors to re-OAuth every 8 hours.
+ *
+ * @param accessToken - The instructor's PayPal OAuth access token (decrypted).
+ * @param refresh - Optional callback returning a new access token; called on 401.
  * @param params - Invoice details for the payload.
+ * @returns Platform invoice id + hosted payment link, or null fields on failure.
  */
 async function createPayPalInvoice(
   accessToken: string,
+  refresh: (() => Promise<string>) | null,
   params: PlatformCreateParams
 ): Promise<PlatformResult> {
-  try {
-    const createRes = await fetch(
-      "https://api-m.paypal.com/v2/invoicing/invoices",
-      {
+  const apiBase = getPayPalApiBase();
+  const connectBase = getPayPalConnectBase();
+
+  /** Issues the create+send pair against PayPal using the supplied bearer. */
+  const attempt = async (
+    bearer: string
+  ): Promise<
+    | { status: "ok"; result: PlatformResult }
+    | { status: "unauthorized" }
+    | { status: "failed" }
+  > => {
+    try {
+      const createRes = await fetch(`${apiBase}/v2/invoicing/invoices`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${bearer}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -82,11 +105,7 @@ async function createPayPalInvoice(
             note: params.invoiceNumber,
           },
           primary_recipients: [
-            {
-              billing_info: {
-                email_address: params.recipientEmail,
-              },
-            },
+            { billing_info: { email_address: params.recipientEmail } },
           ],
           items: [
             {
@@ -99,35 +118,59 @@ async function createPayPalInvoice(
             },
           ],
         }),
-      }
-    );
+      });
 
-    if (!createRes.ok) return { platformInvoiceId: null, paymentLink: null };
+      if (createRes.status === 401) return { status: "unauthorized" };
+      if (!createRes.ok) return { status: "failed" };
 
-    const createData = (await createRes.json()) as { id?: string };
-    const platformInvoiceId = createData.id ?? null;
-    if (!platformInvoiceId) return { platformInvoiceId: null, paymentLink: null };
+      const createData = (await createRes.json()) as { id?: string };
+      const platformInvoiceId = createData.id ?? null;
+      if (!platformInvoiceId) return { status: "failed" };
 
-    // Send the invoice so the recipient receives the email on PayPal's side
-    const sendRes = await fetch(
-      `https://api-m.paypal.com/v2/invoicing/invoices/${platformInvoiceId}/send`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
+      const sendRes = await fetch(
+        `${apiBase}/v2/invoicing/invoices/${platformInvoiceId}/send`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${bearer}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      if (sendRes.status === 401) return { status: "unauthorized" };
+      if (!sendRes.ok) return { status: "failed" };
+
+      return {
+        status: "ok",
+        result: {
+          platformInvoiceId,
+          // Hosted payment link lives on the consumer host
+          // (paypal.com vs sandbox.paypal.com), derived from PAYPAL_API_BASE.
+          paymentLink: `${connectBase}/invoice/p/#${platformInvoiceId}`,
         },
-        body: JSON.stringify({}),
-      }
-    );
+      };
+    } catch {
+      return { status: "failed" };
+    }
+  };
 
-    if (!sendRes.ok) return { platformInvoiceId: null, paymentLink: null };
+  const first = await attempt(accessToken);
+  if (first.status === "ok") return first.result;
+  if (first.status === "failed" || !refresh) {
+    return { platformInvoiceId: null, paymentLink: null };
+  }
 
-    return {
-      platformInvoiceId,
-      paymentLink: `https://www.paypal.com/invoice/p/#${platformInvoiceId}`,
-    };
-  } catch {
+  // 401 — access token expired. Refresh once and retry.
+  try {
+    const newToken = await refresh();
+    const second = await attempt(newToken);
+    return second.status === "ok"
+      ? second.result
+      : { platformInvoiceId: null, paymentLink: null };
+  } catch (err) {
+    console.error("[invoices/create] PayPal token refresh failed:", err);
     return { platformInvoiceId: null, paymentLink: null };
   }
 }
@@ -339,17 +382,21 @@ async function createSquareInvoice(
  * @param accessToken - The instructor's OAuth access token for that platform.
  * @param platformAccountId - The instructor's account/location ID on the platform.
  * @param params - Invoice details needed by all platforms.
+ * @param refreshPayPalToken - Callback used by the PayPal path to refresh an
+ *                              expired access token on 401. Ignored for other
+ *                              platforms.
  */
 async function createOnPlatform(
   platform: PaymentPlatform,
   accessToken: string | null,
   platformAccountId: string | null,
-  params: PlatformCreateParams
+  params: PlatformCreateParams,
+  refreshPayPalToken: (() => Promise<string>) | null
 ): Promise<PlatformResult> {
   if (!accessToken) return { platformInvoiceId: null, paymentLink: null };
 
   if (platform === "paypal" || platform === "venmo_business") {
-    return createPayPalInvoice(accessToken, params);
+    return createPayPalInvoice(accessToken, refreshPayPalToken, params);
   }
 
   if (platform === "stripe") {
@@ -365,6 +412,70 @@ async function createOnPlatform(
   }
 
   return { platformInvoiceId: null, paymentLink: null };
+}
+
+// ---------------------------------------------------------------------------
+// Invoice number generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Inserts the invoice row, retrying on `invoice_number` UNIQUE-constraint
+ * conflicts. The previous `count(*) + 1` approach was racy — two simultaneous
+ * requests would compute the same next number, and the second INSERT would
+ * fail with code 23505. This loop walks forward until a number is accepted
+ * (bounded by `maxAttempts` to prevent runaway loops in pathological cases).
+ *
+ * @param adminClient - Admin Supabase client (RLS-bypassing).
+ * @param baseRow - The invoice row fields EXCEPT `invoice_number`.
+ * @returns The inserted invoice with `id` + `invoice_number`.
+ * @throws Error if no number can be reserved within `maxAttempts` tries.
+ */
+async function insertInvoiceWithUniqueNumber(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  adminClient: SupabaseClient<any, "public", any>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  baseRow: Record<string, any>
+): Promise<{ id: string; invoice_number: string }> {
+  const maxAttempts = 10;
+
+  // Seed from `count(*) + 1`. `count` is approximate under concurrency —
+  // exactly why the retry loop exists.
+  const { count } = await adminClient
+    .from("invoices")
+    .select("id", { count: "exact", head: true });
+
+  let next = (count ?? 0) + 1;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const candidate = `INV-${String(next).padStart(5, "0")}`;
+    const { data, error } = await adminClient
+      .from("invoices")
+      .insert({ ...baseRow, invoice_number: candidate })
+      .select("id, invoice_number")
+      .single();
+
+    if (!error && data) {
+      return {
+        id: data.id as string,
+        invoice_number: data.invoice_number as string,
+      };
+    }
+
+    // Postgres unique_violation — try the next number.
+    if (error?.code === "23505") {
+      next += 1;
+      continue;
+    }
+
+    // Any other DB error is fatal.
+    throw new Error(
+      `Invoice insert failed: ${error?.message ?? "unknown error"}`
+    );
+  }
+
+  throw new Error(
+    `Failed to reserve a unique invoice number after ${maxAttempts} attempts.`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -517,14 +628,10 @@ export async function POST(request: Request) {
     );
   }
 
-  // Step 2: Generate the next sequential invoice number
-  const { count } = await adminClient
-    .from("invoices")
-    .select("id", { count: "exact", head: true });
-
-  const invoiceNumber = `INV-${String((count ?? 0) + 1).padStart(5, "0")}`;
-
-  // Step 3: Get the instructor's active payment account
+  // Step 2: Get the instructor's active payment account.
+  // We load the row (including the encrypted refresh_token + account id) BEFORE
+  // generating an invoice number, so we can fail fast if the instructor has no
+  // active account — and so the PayPal refresh callback below has what it needs.
   const instructorId =
     profile.role === "instructor" ? profile.id : sessionData.instructor_id;
 
@@ -554,7 +661,7 @@ export async function POST(request: Request) {
 
   const { data: paymentAccount } = await adminClient
     .from("instructor_payment_accounts")
-    .select("platform, access_token, platform_account_id")
+    .select("id, platform, access_token, refresh_token, platform_account_id")
     .eq("instructor_id", instructorId)
     .eq("is_active", true)
     .single();
@@ -583,10 +690,22 @@ export async function POST(request: Request) {
   const locationCity = (location as { city?: string } | null)?.city ?? "";
   const locationState = (location as { state?: string } | null)?.state ?? "";
 
+  // Step 3: Reserve a unique invoice number by attempting INSERT and retrying
+  // on 23505 (see insertInvoiceWithUniqueNumber). We need the number BEFORE
+  // the platform call because it appears in PayPal's invoice note.
+  // The candidate is generated inside the helper; we just need to pre-compute
+  // it for the platform call (it'll match the eventually-accepted number on
+  // the typical first-attempt path; if a conflict shifts it, the platform note
+  // will be one off — acceptable; the DB invoice_number is the source of truth).
+  const { count: invoiceCount } = await adminClient
+    .from("invoices")
+    .select("id", { count: "exact", head: true });
+  const invoiceNumber = `INV-${String((invoiceCount ?? 0) + 1).padStart(5, "0")}`;
+
   // Step 4: Attempt to create the invoice on the payment platform.
-  // Best-effort — a failure here does not block DB record creation.
   // Access token is decrypted in-memory just before the API call and is never
-  // logged or returned to the client.
+  // logged or returned to the client. For PayPal we also pass a refresh
+  // callback that updates the stored access token if it's expired (401).
   let decryptedToken: string | null = null;
   if (paymentAccount.access_token) {
     try {
@@ -596,6 +715,20 @@ export async function POST(request: Request) {
       decryptedToken = null;
     }
   }
+
+  const refreshPayPalToken =
+    (paymentAccount.platform === "paypal" ||
+      paymentAccount.platform === "venmo_business") &&
+    paymentAccount.refresh_token
+      ? async (): Promise<string> => {
+          const { accessToken } = await refreshInstructorPayPalToken(
+            adminClient,
+            paymentAccount.id as string,
+            paymentAccount.refresh_token as string
+          );
+          return accessToken;
+        }
+      : null;
 
   const { platformInvoiceId, paymentLink } = await createOnPlatform(
     paymentAccount.platform as PaymentPlatform,
@@ -608,19 +741,35 @@ export async function POST(request: Request) {
       amountPerStudent: amountPerStudent as number,
       totalAmount: totalAmount as number,
       invoiceNumber,
-    }
+    },
+    refreshPayPalToken
   );
 
-  // Step 5: Insert the invoice record
+  // If the platform call failed, fail the request loudly instead of silently
+  // sending the recipient an email with no payment link. The instructor needs
+  // to know their PayPal/Stripe/Square integration is broken so they can
+  // reconnect — hiding the failure means the customer never pays and the
+  // instructor doesn't notice until reconciliation.
+  if (!platformInvoiceId || !paymentLink) {
+    return Response.json(
+      {
+        success: false,
+        error:
+          "We couldn't create the invoice on your payment platform. Please reconnect your payment account and try again.",
+      },
+      { status: 502 }
+    );
+  }
+
+  // Step 5: Insert the invoice record (retrying on unique-number conflict).
   const companyName =
     invoiceType === "group" && typeof body.companyName === "string"
       ? body.companyName
       : null;
 
-  const { data: invoice, error: insertError } = await adminClient
-    .from("invoices")
-    .insert({
-      invoice_number: invoiceNumber,
+  let invoice: { id: string; invoice_number: string };
+  try {
+    invoice = await insertInvoiceWithUniqueNumber(adminClient, {
       class_session_id: sessionId,
       instructor_id: instructorId,
       invoice_type: invoiceType,
@@ -635,11 +784,9 @@ export async function POST(request: Request) {
       platform_invoice_id: platformInvoiceId,
       notes: notes ?? null,
       status: "sent",
-    })
-    .select("id, invoice_number")
-    .single();
-
-  if (insertError || !invoice) {
+    });
+  } catch (err) {
+    console.error("[invoices/create] Invoice insert failed:", err);
     return Response.json(
       { success: false, error: "Failed to create invoice. Please try again." },
       { status: 500 }
@@ -681,28 +828,38 @@ export async function POST(request: Request) {
       notes: notes as string | null,
       paymentLink,
     });
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
-      to: recipientEmail as string,
-      subject,
-      html,
-      // Attach the roster template CSV for group invoices so the contact
-      // has it ready when they click "Submit Your Roster" in the email.
-      ...(invoiceType === "group" && {
-        attachments: [
-          {
-            filename: "roster-template.csv",
-            content: Buffer.from(
-              [
-                `"First Name","Last Name","Email","Phone","Employer"`,
-                `"Jane","Smith","jane.smith@example.com","555-867-5309","Acme Hospital"`,
-                `"John","Doe","john.doe@example.com","",""`,
-              ].join("\r\n")
-            ),
-          },
-        ],
-      }),
-    });
+    await resend.emails
+      .send({
+        from: process.env.RESEND_FROM_EMAIL!,
+        to: recipientEmail as string,
+        subject,
+        html,
+        // Attach the roster template CSV for group invoices so the contact
+        // has it ready when they click "Submit Your Roster" in the email.
+        ...(invoiceType === "group" && {
+          attachments: [
+            {
+              filename: "roster-template.csv",
+              content: Buffer.from(
+                [
+                  `"First Name","Last Name","Email","Phone","Employer"`,
+                  `"Jane","Smith","jane.smith@example.com","555-867-5309","Acme Hospital"`,
+                  `"John","Doe","john.doe@example.com","",""`,
+                ].join("\r\n")
+              ),
+            },
+          ],
+        }),
+      })
+      .catch((err: unknown) => {
+        // Don't fail the request — the invoice is created on the platform AND
+        // in our DB. The recipient will receive the platform's own invoice
+        // email even if our Resend copy fails.
+        console.error(
+          "[invoices/create] Resend email failed (non-fatal):",
+          err
+        );
+      });
   }
 
   return Response.json({

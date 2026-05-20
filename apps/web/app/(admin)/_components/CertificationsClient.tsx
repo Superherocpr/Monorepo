@@ -1001,7 +1001,7 @@ export default function CertificationsClient({
                         <ExpiryBadge expiresAt={cert.expires_at} />
                       </td>
                       <td className="px-4 py-3 text-gray-600">
-                        {cert.cert_number ?? "—"}
+                        {cert.cert_number ?? "-"}
                       </td>
                       <td className="px-4 py-3">
                         <ReminderBadge sent={cert.reminder_sent} />
@@ -1084,7 +1084,7 @@ export default function CertificationsClient({
                   </div>
                   <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
                     <div>Issued: {fmtDate(cert.issued_at)}</div>
-                    <div>Cert #: {cert.cert_number ?? "—"}</div>
+                    <div>Cert #: {cert.cert_number ?? "-"}</div>
                     <div className="col-span-2">
                       <ReminderBadge sent={cert.reminder_sent} />
                     </div>
@@ -1266,7 +1266,7 @@ export default function CertificationsClient({
               Customer
             </label>
             <p className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-              {editingCert.profiles.first_name} {editingCert.profiles.last_name} — {editingCert.profiles.email}
+              {editingCert.profiles.first_name} {editingCert.profiles.last_name} - {editingCert.profiles.email}
             </p>
           </div>
           <CertForm
