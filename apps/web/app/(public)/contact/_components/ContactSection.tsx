@@ -9,6 +9,12 @@
 
 import { useState } from "react";
 import { Phone, Mail, MapPin } from "lucide-react";
+import TurnstileWidget from "@/components/TurnstileWidget";
+
+// Public Turnstile site key. Safe to expose — pairs with the server-only
+// TURNSTILE_SECRET_KEY checked in /api/contact. When unset the widget renders
+// nothing and the server-side check no-ops, keeping local dev usable.
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 const INQUIRY_TYPES = [
   "General Question",
@@ -43,6 +49,9 @@ export default function ContactSection() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Cloudflare Turnstile token — set when the user passes the checkbox,
+  // cleared when it expires. Required for submission when a site key is set.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   function handleChange(
     e: React.ChangeEvent<
@@ -68,13 +77,21 @@ export default function ContactSection() {
       return;
     }
 
+    // Require a Turnstile token only when a site key is configured. This way
+    // local dev without a key still works; in production the key is set and
+    // the user must complete the captcha.
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      setSubmitError("Please complete the captcha before sending.");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const response = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, captchaToken }),
       });
 
       if (!response.ok) {
@@ -225,6 +242,15 @@ export default function ContactSection() {
                   className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-y min-h-[120px]"
                 />
               </FormField>
+
+              {/* Cloudflare Turnstile checkbox captcha */}
+              {TURNSTILE_SITE_KEY && (
+                <TurnstileWidget
+                  siteKey={TURNSTILE_SITE_KEY}
+                  onVerify={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                />
+              )}
 
               {/* Error message */}
               {submitError && (

@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { contactNotificationEmail, contactAutoReplyEmail } from "@/lib/emails";
 import { createClient } from "@/lib/supabase/server";
+import { verifyTurnstileToken, getClientIp } from "@/lib/turnstile";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -24,10 +25,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, email, phone, inquiryType, message } = body as Record<
+  const { name, email, phone, inquiryType, message, captchaToken } = body as Record<
     string,
     unknown
   >;
+
+  // Verify Cloudflare Turnstile token BEFORE doing any work. The widget on
+  // the contact forms produces this token; without a valid one we treat the
+  // request as bot traffic. When TURNSTILE_SECRET_KEY is unset the helper
+  // no-ops (returns success) so local dev without a key still works.
+  const captcha = await verifyTurnstileToken(
+    typeof captchaToken === "string" ? captchaToken : null,
+    getClientIp(request)
+  );
+  if (!captcha.success) {
+    return NextResponse.json(
+      { success: false, error: captcha.error ?? "Captcha verification failed" },
+      { status: 400 }
+    );
+  }
 
   // Validate required fields
   if (

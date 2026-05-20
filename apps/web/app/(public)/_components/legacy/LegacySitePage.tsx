@@ -22,6 +22,12 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import TurnstileWidget from "@/components/TurnstileWidget";
+
+// Public Turnstile site key for the legacy-page contact form. Pairs with the
+// server-only TURNSTILE_SECRET_KEY verified in /api/contact. When unset, the
+// widget renders nothing and the server check no-ops (local dev convenience).
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 import {
   Heart,
   Clock,
@@ -140,6 +146,9 @@ export default function LegacySitePage() {
     phone: "",
   });
   const [status, setStatus] = useState<SubmitStatus>({ kind: "idle" });
+  // Cloudflare Turnstile token — set when the user passes the checkbox.
+  // Required for submission when NEXT_PUBLIC_TURNSTILE_SITE_KEY is set.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   /**
    * Submits the contact form to POST /api/contact.
@@ -153,6 +162,13 @@ export default function LegacySitePage() {
     // Client-side guard — the API revalidates these
     if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
       setStatus({ kind: "error", message: "Please fill in all fields." });
+      return;
+    }
+
+    // Require Turnstile token only when a site key is configured (so local
+    // dev without a key still works). Server-side verification is the real guard.
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      setStatus({ kind: "error", message: "Please complete the captcha." });
       return;
     }
 
@@ -171,6 +187,7 @@ export default function LegacySitePage() {
           message:
             "Booking inquiry submitted via the legacy home page. " +
             "Please contact this person to schedule a CPR class.",
+          captchaToken,
         }),
       });
 
@@ -453,6 +470,15 @@ export default function LegacySitePage() {
                 placeholder="(555) 555-5555"
               />
             </div>
+
+            {/* Cloudflare Turnstile checkbox captcha */}
+            {TURNSTILE_SITE_KEY && (
+              <TurnstileWidget
+                siteKey={TURNSTILE_SITE_KEY}
+                onVerify={(token) => setCaptchaToken(token)}
+                onExpire={() => setCaptchaToken(null)}
+              />
+            )}
 
             <button
               type="submit"
