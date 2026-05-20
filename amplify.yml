@@ -15,7 +15,7 @@ applications:
             # other code that reads server-only env vars throws at runtime.
             - |
               echo "Writing server-side env vars to .env.production for SSR runtime..."
-              env | grep -E '^(NEXT_PUBLIC_|SUPABASE_SERVICE_ROLE_KEY|PAYPAL_SECRET|PAYPAL_API_BASE|PAYPAL_WEBHOOK_ID|PAYPAL_COMMERCE_|OWNER_EMAIL|FACEBOOK_PAGE_ID|FACEBOOK_PAGE_ACCESS_TOKEN|ENCRYPTION_KEY|ZOHO_CLIENT_ID|ZOHO_CLIENT_SECRET|ZOHO_REDIRECT_URI|RESEND_API_KEY|RESEND_FROM_EMAIL|CRON_SECRET|SQUARE_|STRIPE_|VENMO_|S3_|AWS_S3_)=' >> .env.production
+              env | grep -E '^(NEXT_PUBLIC_|SUPABASE_SERVICE_ROLE_KEY|PAYPAL_|OWNER_EMAIL|FACEBOOK_PAGE_ID|FACEBOOK_PAGE_ACCESS_TOKEN|ENCRYPTION_KEY|ZOHO_CLIENT_ID|ZOHO_CLIENT_SECRET|ZOHO_REDIRECT_URI|RESEND_API_KEY|RESEND_FROM_EMAIL|CRON_SECRET|SQUARE_|STRIPE_|VENMO_|TWILIO_|S3_|AWS_S3_)=' >> .env.production
               echo "Wrote $(wc -l < .env.production) env var lines (values redacted)."
         build:
           commands:
