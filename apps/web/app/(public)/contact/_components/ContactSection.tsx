@@ -131,8 +131,8 @@ export default function ContactSection() {
             label="Service Area"
           >
             <p className="text-gray-700 leading-relaxed">
-              We serve the greater Tampa Bay area including Tampa, St.
-              Petersburg, Clearwater, Brandon, and surrounding communities.
+              We serve Hillsborough, Manatee, and Sarasota Counties on
+              Florida&apos;s Gulf Coast.
             </p>
           </ContactInfoRow>
         </div>

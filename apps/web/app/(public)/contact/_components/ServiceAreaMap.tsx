@@ -1,5 +1,6 @@
 /**
- * ServiceAreaMap — Tampa Bay service area visualization on the /contact page.
+ * ServiceAreaMap — service area visualization on the /contact page.
+ * Covers Hillsborough, Manatee, and Sarasota Counties.
  * Static section, no data fetching.
  * Used by: app/(public)/contact/page.tsx
  */
@@ -10,24 +11,26 @@ export default function ServiceAreaMap() {
     <section className="py-16 px-4 bg-gray-50">
       <div className="max-w-7xl mx-auto">
         <h2 className="text-2xl font-semibold text-gray-900 text-center mb-3">
-          Serving the Tampa Bay Area
+          Serving Hillsborough, Manatee &amp; Sarasota Counties
         </h2>
         <p className="text-center text-gray-600 mb-8 max-w-xl mx-auto">
-          On-location classes available throughout Tampa, St. Petersburg,
-          Clearwater, Brandon, Wesley Chapel, and surrounding areas.
+          On-location classes available throughout Hillsborough, Manatee, and
+          Sarasota Counties on Florida&apos;s Gulf Coast.
         </p>
 
         {/*
-         * TODO: Replace with static map image — see /public/images/tampa-bay-map.png
-         * or use the Google Static Maps API once the API key is available:
-         * https://maps.googleapis.com/maps/api/staticmap?center=Tampa,FL&zoom=10&size=1200x400&scale=2&maptype=roadmap&key=YOUR_API_KEY
+         * Google Maps standard embed — free, no API key required.
+         * Centered on 27.5°N, 82.35°W at zoom 9 to show the full
+         * Hillsborough, Manatee, and Sarasota County footprint.
          */}
-        <div
-          className="w-full h-64 md:h-96 bg-gray-200 rounded-xl flex items-center justify-center text-gray-500 text-sm font-medium"
-          role="img"
-          aria-label="Tampa Bay Area Service Map placeholder"
-        >
-          Tampa Bay Area Service Map
+        <div className="w-full h-64 md:h-96 rounded-xl overflow-hidden">
+          <iframe
+            title="Hillsborough, Manatee, and Sarasota Counties service area map"
+            src="https://maps.google.com/maps?q=27.5,-82.35&z=9&output=embed"
+            className="w-full h-full border-0"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
         </div>
       </div>
     </section>

@@ -13,7 +13,7 @@ import ClassesCtaSection from "./_components/ClassesCtaSection";
 export const metadata: Metadata = {
   title: "CPR Certification Classes",
   description:
-    "American Heart Association CPR certification classes in Tampa Bay. BLS, Heartsaver, CPR+AED, and Pediatric CPR. Flexible scheduling, on-location training.",
+    "American Heart Association CPR certification classes across Hillsborough, Manatee, and Sarasota Counties. BLS, Heartsaver, CPR+AED, and Pediatric CPR. Flexible scheduling, on-location training.",
 };
 
 /** Renders the full /classes page. */

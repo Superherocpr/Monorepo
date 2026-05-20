@@ -16,11 +16,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "SuperHeroCPR | AHA-Certified CPR Training in Tampa, FL",
+    default: "SuperHeroCPR | AHA-Certified CPR Training in the Bay Area, Florida",
     template: "%s | SuperHeroCPR",
   },
   description:
-    "AHA-certified CPR, BLS, and First Aid training in Tampa, Florida. Book a class today.",
+    "AHA-certified CPR, BLS, and First Aid training in the Bay Area, Florida. Book a class today.",
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com"
   ),
