@@ -15,8 +15,9 @@ export default function ClassesCtaSection() {
           Ready to Get Started?
         </h2>
         <p className="text-red-100 text-lg leading-relaxed">
-          Browse available class dates or book your session now. Tampa Bay
-          area. Weekdays, evenings, and weekends available.
+          Browse available class dates or book your session now. Serving
+          Hillsborough, Manatee &amp; Sarasota Counties. Weekdays, evenings,
+          and weekends available.
         </p>
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <Link

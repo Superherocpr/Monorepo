@@ -33,7 +33,7 @@ export function PublicFooter() {
               <span className="text-white">SuperHero</span><span className="text-red-500">CPR</span>
             </p>
             <p className="text-sm leading-relaxed">
-              AHA-certified CPR, BLS, and First Aid training in Tampa, Florida.
+              AHA-certified CPR, BLS, and First Aid training in the Bay Area, Florida.
               On-location classes for individuals, businesses, and healthcare providers.
             </p>
           </div>
@@ -69,7 +69,7 @@ export function PublicFooter() {
           <div>
             <p className="text-white text-sm font-semibold mb-3">Contact</p>
             <ul className="flex flex-col gap-2 text-sm">
-              <li>Tampa Bay Area, Florida</li>
+              <li>Hillsborough, Manatee &amp; Sarasota Counties, FL</li>
               <li>
                 <a
                   href="mailto:contact@superherocpr.com"

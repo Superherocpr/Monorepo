@@ -13,7 +13,7 @@ export const metadata = {
   title: "Account Settings | SuperHeroCPR",
 };
 
-/** Fetches the customer's profile and renders the interactive settings form. */
+/** Fetches the user's profile and renders the interactive settings form. */
 export default async function SettingsPage() {
   const supabase = await createClient();
   const {

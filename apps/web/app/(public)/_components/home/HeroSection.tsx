@@ -121,7 +121,8 @@ export default async function HeroSection() {
         <p className="text-lg md:text-xl text-gray-200 leading-relaxed max-w-2xl">
           Learn from a licensed American Heart Association instructor with
           thousands of real-world CPR patients. Flexible scheduling.
-          On-location classes. Tampa Bay area.
+          On-location classes throughout Hillsborough, Manatee &amp; Sarasota
+          Counties.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">

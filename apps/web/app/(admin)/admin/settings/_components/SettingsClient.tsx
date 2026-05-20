@@ -26,6 +26,29 @@ interface SettingsClientProps {
   legacySiteEnabled: boolean;
   /** Whether the current user is a super_admin — gates the Legacy Site section. */
   isSuperAdmin: boolean;
+  /**
+   * Optional fully-rendered Enrollware Bookmarklet block. When provided, the
+   * settings page exposes an "Enrollware" tab whose content is this node.
+   * Rendered as an opaque slot so this component doesn't need to know about
+   * the bookmarklet's data dependencies (api key state, site URL, etc.).
+   */
+  enrollwareSlot?: React.ReactNode;
+}
+
+/** All tab identifiers for the settings page. Order matches the nav. */
+type SettingsTabId =
+  | "general"
+  | "class-types"
+  | "grades"
+  | "zoho"
+  | "routing"
+  | "social"
+  | "enrollware";
+
+/** Tab nav definition — label + id pairs in display order. */
+interface TabDef {
+  id: SettingsTabId;
+  label: string;
 }
 
 interface Toast {
@@ -70,8 +93,30 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   zohoParam,
   legacySiteEnabled: initialLegacySiteEnabled,
   isSuperAdmin,
+  enrollwareSlot,
 }) => {
   const router = useRouter();
+
+  // ── Tabs ───────────────────────────────────────────────────────────────────
+  // We render every section all the time (just hide inactive ones with CSS) so
+  // that in-progress edits — drafted grades, dirty toggles, etc. — survive a
+  // tab switch.
+  const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
+
+  const tabs: TabDef[] = [
+    { id: "general", label: "General" },
+    { id: "class-types", label: "Class Types" },
+    { id: "grades", label: "Grades" },
+    { id: "zoho", label: "Zoho Mail" },
+    { id: "routing", label: "Payment Routing" },
+    { id: "social", label: "Social Feed" },
+    ...(enrollwareSlot ? [{ id: "enrollware" as const, label: "Enrollware" }] : []),
+  ];
+
+  /** Returns the className applied to a section wrapper based on active tab. */
+  function tabClass(id: SettingsTabId): string {
+    return activeTab === id ? "" : "hidden";
+  }
 
   // ── Dark mode ──────────────────────────────────────────────────────────────
   const [isDark, setIsDark] = useState(false);
@@ -495,8 +540,37 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </p>
       </div>
 
+      {/* Tab navigation — horizontally scrollable on narrow viewports so all
+          tabs stay reachable on mobile without wrapping. */}
+      <div
+        role="tablist"
+        aria-label="Settings sections"
+        className="flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-gray-700 -mt-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {tabs.map((tab) => {
+          const active = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={active}
+              aria-controls={`tab-panel-${tab.id}`}
+              id={`tab-${tab.id}`}
+              onClick={() => setActiveTab(tab.id)}
+              className={`shrink-0 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                active
+                  ? "border-red-600 text-red-600"
+                  : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* ── Section: Legacy Site — super_admin only ──────────────────────── */}
-      {isSuperAdmin && <section aria-labelledby="section-legacy-site">
+      {isSuperAdmin && <section aria-labelledby="section-legacy-site" className={tabClass("general")}>
         <h2
           id="section-legacy-site"
           className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
@@ -535,10 +609,8 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </div>
       </section>}
 
-      <div className="border-t border-gray-200 dark:border-gray-700" />
-
       {/* ── Section 1: Appearance ─────────────────────────────────────────── */}
-      <section aria-labelledby="section-appearance">
+      <section aria-labelledby="section-appearance" className={tabClass("general")}>
         <h2
           id="section-appearance"
           className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
@@ -575,10 +647,8 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </div>
       </section>
 
-      <div className="border-t border-gray-200 dark:border-gray-700" />
-
       {/* ── Section 2: Class Types ─────────────────────────────────────────── */}
-      <section aria-labelledby="section-class-types">
+      <section aria-labelledby="section-class-types" className={tabClass("class-types")}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2
@@ -676,10 +746,8 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </div>
       </section>
 
-      <div className="border-t border-gray-200 dark:border-gray-700" />
-
       {/* ── Section 3: Preset Grades ───────────────────────────────────────── */}
-      <section aria-labelledby="section-grades">
+      <section aria-labelledby="section-grades" className={tabClass("grades")}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2
@@ -900,10 +968,8 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </div>
       </section>
 
-      <div className="border-t border-gray-200 dark:border-gray-700" />
-
       {/* ── Section 4: Zoho Mail ───────────────────────────────────────────── */}
-      <section aria-labelledby="section-zoho">
+      <section aria-labelledby="section-zoho" className={tabClass("zoho")}>
         <div className="mb-4">
           <h2
             id="section-zoho"
@@ -960,10 +1026,8 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </div>
       </section>
 
-      <div className="border-t border-gray-200 dark:border-gray-700" />
-
       {/* ── Section 5: Instructor Payment Routing ──────────────────────────── */}
-      <section aria-labelledby="section-routing">
+      <section aria-labelledby="section-routing" className={tabClass("routing")}>
         <div className="mb-4">
           <h2
             id="section-routing"
@@ -1067,14 +1131,14 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         )}
       </section>
 
-      {/* Instructor payment account note */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300">
+      {/* Instructor payment account note — grouped with Payment Routing tab */}
+      <div className={`bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300 ${tabClass("routing")}`}>
         Instructors manage their payment account connections from their own profile
         settings.
       </div>
 
       {/* ── Section 6: Social Feed ─────────────────────────────────────────── */}
-      <section className="space-y-4">
+      <section className={`space-y-4 ${tabClass("social")}`}>
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Social Feed
@@ -1109,6 +1173,24 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
           environment.
         </p>
       </section>
+
+      {/* ── Section 7: Enrollware Bookmarklet (optional slot) ─────────────── */}
+      {enrollwareSlot && (
+        <section className={tabClass("enrollware")}>
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Enrollware Bookmarklet
+            </h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              A one-click tool that auto-fills new classes on Enrollware from
+              your SuperheroCPR roster. Generate it once, save it to your
+              browser&apos;s bookmarks bar, and click it whenever you&apos;re on
+              an Enrollware class-edit page.
+            </p>
+          </div>
+          {enrollwareSlot}
+        </section>
+      )}
 
       {/* Class type add/edit panel */}
       <ClassTypePanel
