@@ -37,24 +37,20 @@ function sanitiseFilename(filename: string): string {
 }
 
 /**
- * Initialises an S3 client from environment variables.
+ * Initialises an S3 client.
+ * Credentials and region are resolved automatically by the AWS SDK credential
+ * provider chain — uses the Lambda execution role on Amplify, or
+ * AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION from .env.local locally.
  */
 function getS3Client(): S3Client {
-  return new S3Client({
-    region: process.env.AWS_REGION!,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
-  });
+  return new S3Client({});
 }
 
 /**
- * Returns the configured S3 bucket name.
- * Supports AWS_S3_BUCKET_NAME (preferred) and AWS_S3_BUCKET (legacy).
+ * Returns the configured S3 bucket name from S3_BUCKET_NAME.
  */
 function getBucketName(): string | null {
-  return process.env.AWS_S3_BUCKET_NAME ?? process.env.AWS_S3_BUCKET ?? null;
+  return process.env.S3_BUCKET_NAME ?? null;
 }
 
 export async function POST(request: Request) {
@@ -110,7 +106,7 @@ export async function POST(request: Request) {
   // ── Upload to S3 ────────────────────────────────────────────────────────────
   const bucketName = getBucketName();
   if (!bucketName) {
-    console.error("[staff/upload-photo] AWS_S3_BUCKET_NAME env var is not set.");
+    console.error("[staff/upload-photo] S3_BUCKET_NAME env var is not set.");
     return Response.json(
       { success: false, error: "Storage is not configured." },
       { status: 500 }
