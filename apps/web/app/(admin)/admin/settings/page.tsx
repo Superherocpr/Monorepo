@@ -177,35 +177,18 @@ export default async function SettingsPage({
   const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
 
   return (
-    <>
-      <SettingsClient
-        classTypes={(classTypes ?? []) as ClassType[]}
-        presetGrades={(presetGrades ?? []) as PresetGrade[]}
-        instructors={instructors}
-        zohoConnected={Boolean(zohoAccountId && zohoRefreshToken)}
-        zohoEmail={zohoEmail}
-        zohoParam={zohoParam}
-        legacySiteEnabled={legacySiteFlag === "true"}
-        isSuperAdmin
-      />
-
-      {/* Enrollware bookmarklet — super admins also instruct classes */}
-      <div className="max-w-4xl mx-auto px-4 pb-16">
-        <div className="border-t border-gray-200 pt-10 mt-4">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Enrollware Bookmarklet
-            </h2>
-            <p className="mt-1 text-sm text-gray-600">
-              A one-click tool that auto-fills new classes on Enrollware from
-              your SuperheroCPR roster. Generate it once, save it to your
-              browser&apos;s bookmarks bar, and click it whenever you&apos;re on
-              an Enrollware class-edit page.
-            </p>
-          </div>
-          <BookmarkletSetup hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
-        </div>
-      </div>
-    </>
+    <SettingsClient
+      classTypes={(classTypes ?? []) as ClassType[]}
+      presetGrades={(presetGrades ?? []) as PresetGrade[]}
+      instructors={instructors}
+      zohoConnected={Boolean(zohoAccountId && zohoRefreshToken)}
+      zohoEmail={zohoEmail}
+      zohoParam={zohoParam}
+      legacySiteEnabled={legacySiteFlag === "true"}
+      isSuperAdmin
+      enrollwareSlot={
+        <BookmarkletSetup hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
+      }
+    />
   );
 }
