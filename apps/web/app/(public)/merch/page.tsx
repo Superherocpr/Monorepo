@@ -12,7 +12,7 @@ import type { ProductWithVariants } from "@/types/merch";
 export const metadata: Metadata = {
   title: "Merch",
   description:
-    "Official Superhero CPR merchandise. Rep the mission and spread CPR awareness.",
+    "Official SuperHeroCPR merchandise. Rep the mission and spread CPR awareness.",
 };
 
 /** Renders the full /merch page. */

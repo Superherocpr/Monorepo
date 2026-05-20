@@ -49,24 +49,16 @@ const EMPTY_FORM: DetailsForm = {
 /** Renders the customer details form for new customers (Step 2b). */
 export default function BookDetailsPage() {
   const router = useRouter();
-  const [sessionDetails, setSessionDetails] = useState<BookingStore["sessionDetails"]>(null);
-  const [form, setForm] = useState<DetailsForm>(EMPTY_FORM);
+  // Initialize from store on first render; pre-populate form if navigating back from Step 3.
+  const [sessionDetails] = useState<BookingStore["sessionDetails"]>(() => getBookingStore().sessionDetails);
+  const [form, setForm] = useState<DetailsForm>(() => getBookingStore().customerDetails ?? EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof DetailsForm, string>>>({});
   const [loading, setLoading] = useState(false);
 
   // Guard: redirect to /book if no session is selected.
-  // Pre-populate from store if customer is navigating back from Step 3.
   useEffect(() => {
-    const store = getBookingStore();
-    if (!store.sessionId) {
-      router.replace("/book");
-      return;
-    }
-    setSessionDetails(store.sessionDetails);
-    if (store.customerDetails) {
-      setForm(store.customerDetails);
-    }
+    if (!getBookingStore().sessionId) router.replace("/book");
   }, [router]);
 
   /** Updates a single form field. */

@@ -96,7 +96,7 @@ export async function POST(request: Request) {
               value: refundAmount.toFixed(2),
               currency_code: "USD",
             },
-            note_to_payer: "Refund from Superhero CPR",
+            note_to_payer: "Refund from SuperHeroCPR",
           }),
           cache: "no-store",
         }

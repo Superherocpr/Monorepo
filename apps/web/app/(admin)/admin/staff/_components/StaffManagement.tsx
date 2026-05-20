@@ -3,16 +3,18 @@
 /**
  * StaffManagement component
  * Renders the full staff management UI for /admin/staff.
- * Handles client-side filtering, toast notifications, invite panel open/close,
- * and passes action callbacks to StaffList for role changes and deactivation.
+ * Handles client-side filtering (status, role, search), toast notifications,
+ * invite panel open/close, and passes action callbacks to StaffList.
  * Used by: /admin/staff/page.tsx
  */
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Search, X } from "lucide-react";
 import FilterBar from "./FilterBar";
 import StaffList from "./StaffList";
 import InvitePanel from "./InvitePanel";
+import BioEditPanel from "./BioEditPanel";
 import type { UserRole } from "@/types/users";
 
 /** A staff member as returned by the server component's Supabase query. */
@@ -21,15 +23,26 @@ export interface StaffMember {
   first_name: string;
   last_name: string;
   email: string;
+  phone: string | null;
   role: Exclude<UserRole, "customer">;
   deactivated: boolean;
   deactivated_at: string | null;
   created_at: string;
+  /** Public S3 URL of the instructor's headshot. Null if no photo has been uploaded. */
+  bio_photo: string | null;
+  /** Plain-text bio paragraph shown on the /about page. Null if none written. */
+  bio_description: string | null;
+  /** Comma-separated credentials shown as checkmark items on the /about page. Null if none entered. */
+  bio_credentials: string | null;
+  /** Years of experience shown on the lead instructor stat block (e.g. "20"). Null hides the stat. */
+  bio_years_experience: string | null;
+  /** Students trained figure shown on the lead instructor stat block (e.g. "5,000+"). Null hides the stat. */
+  bio_students_trained: string | null;
 }
 
 interface StaffManagementProps {
   staffMembers: StaffMember[];
-  ownerEmail: string;
+  ownerEmails: string[];
   currentUserId: string;
 }
 
@@ -43,18 +56,21 @@ interface Toast {
  * Owns filter state, toast state, and invite panel visibility.
  * Refreshes staff data via router.refresh() after any mutation.
  * @param staffMembers - All staff profiles fetched server-side.
- * @param ownerEmail - Protected owner email — action buttons are hidden for this member.
+ * @param ownerEmails - Protected owner emails — action buttons are hidden for these members.
  * @param currentUserId - The logged-in super admin's user ID (prevents self-demotion).
  */
 const StaffManagement: React.FC<StaffManagementProps> = ({
   staffMembers,
-  ownerEmail,
+  ownerEmails,
   currentUserId,
 }) => {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState("All");
   const [roleFilter, setRoleFilter] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
   const [invitePanelOpen, setInvitePanelOpen] = useState(false);
+  // The staff member whose bio is being edited — null means the panel is closed
+  const [bioPanelMember, setBioPanelMember] = useState<StaffMember | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
 
   /**
@@ -78,7 +94,8 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
     router.refresh();
   }
 
-  // Client-side filter — all staff data is already loaded from the server
+  // Client-side filter — all staff data is already loaded from the server.
+  // Search matches against full name, email, and phone (case-insensitive).
   const filtered = staffMembers.filter((staff) => {
     const statusMatch =
       statusFilter === "All" ||
@@ -90,7 +107,13 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
       (roleFilter === "Manager" && staff.role === "manager") ||
       (roleFilter === "Super Admin" && staff.role === "super_admin") ||
       (roleFilter === "Inspector" && staff.role === "inspector");
-    return statusMatch && roleMatch;
+    const q = searchQuery.trim().toLowerCase();
+    const searchMatch =
+      !q ||
+      `${staff.first_name} ${staff.last_name}`.toLowerCase().includes(q) ||
+      staff.email.toLowerCase().includes(q) ||
+      (staff.phone ?? "").toLowerCase().includes(q);
+    return statusMatch && roleMatch && searchMatch;
   });
 
   return (
@@ -111,6 +134,28 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
         </button>
       </div>
 
+      {/* Search bar — filters by name, email, or phone client-side */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          aria-label="Search staff"
+          placeholder="Search by name, email, or phone..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-9 text-sm text-gray-900 placeholder-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            aria-label="Clear search"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
       {/* Status and role filters */}
       <FilterBar
         status={statusFilter}
@@ -122,7 +167,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
       {/* Staff list — table on desktop, cards on mobile */}
       <StaffList
         staff={filtered}
-        ownerEmail={ownerEmail}
+        ownerEmails={ownerEmails}
         currentUserId={currentUserId}
         onSuccess={(msg) => {
           showToast("success", msg);
@@ -130,6 +175,19 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
         }}
         onError={(msg) => showToast("error", msg)}
         onInvite={() => setInvitePanelOpen(true)}
+        onEditBio={(member) => setBioPanelMember(member)}
+      />
+
+      {/* Bio edit slide-in panel — opens when an instructor's Edit Bio is clicked */}
+      <BioEditPanel
+        member={bioPanelMember}
+        onClose={() => setBioPanelMember(null)}
+        onSuccess={(msg) => {
+          setBioPanelMember(null);
+          showToast("success", msg);
+          refreshList();
+        }}
+        onError={(msg) => showToast("error", msg)}
       />
 
       {/* Invite staff member slide-in panel */}

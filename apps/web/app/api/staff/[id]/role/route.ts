@@ -7,7 +7,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { OWNER_EMAIL } from "@/lib/constants";
+import { OWNER_EMAILS } from "@/lib/constants";
 
 /**
  * Updates the role of a staff member by profile ID.
@@ -73,7 +73,7 @@ export async function PATCH(
   }
 
   // Normalize to lowercase — email addresses are case-insensitive per RFC 5321
-  if (target.email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
+  if (OWNER_EMAILS.includes(target.email.toLowerCase())) {
     return Response.json(
       { success: false, error: "The owner's role cannot be changed." },
       { status: 403 }
@@ -81,12 +81,24 @@ export async function PATCH(
   }
 
   // ── Update role ────────────────────────────────────────────────────────────
-  const { error } = await supabase
-    .from("profiles")
-    .update({ role: newRole, updated_at: new Date().toISOString() })
-    .eq("id", targetId);
+  // Compatibility fallback: some older local schemas may not yet have updated_at.
+  const nowIso = new Date().toISOString();
+  const updateAttempts = [{ role: newRole, updated_at: nowIso }, { role: newRole }];
 
-  if (error) {
+  let updateError: { message?: string } | null = null;
+  for (const payload of updateAttempts) {
+    const { error } = await supabase
+      .from("profiles")
+      .update(payload)
+      .eq("id", targetId);
+    if (!error) {
+      updateError = null;
+      break;
+    }
+    updateError = error;
+  }
+
+  if (updateError) {
     return Response.json(
       { success: false, error: "Failed to update role." },
       { status: 500 }

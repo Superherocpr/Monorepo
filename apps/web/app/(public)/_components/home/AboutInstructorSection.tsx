@@ -25,25 +25,20 @@ export default async function AboutInstructorSection() {
     : "Our Lead Instructor";
 
   return (
-    <section className="py-20 px-4 bg-white">
+    <section className="pt-20 pb-10 px-4 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-stretch justify-center max-w-4xl mx-auto">
 
-          {/* Photo */}
-          <div className="flex justify-center lg:justify-start">
-            {/*
-             * TODO: replace with real instructor photo.
-             * Save to /public/images/lead-instructor.jpg and update src below.
-             */}
-            <div className="relative w-64 h-64 lg:w-80 lg:h-80 rounded-2xl overflow-hidden bg-gray-200">
-              <Image
-                src="/images/lead-instructor.jpg"
-                alt={`${instructorName}, lead CPR instructor`}
-                fill
-                className="object-cover"
-                sizes="(max-width: 1024px) 256px, 320px"
-              />
-            </div>
+          {/* Photo — hidden on mobile when layout stacks to single column */}
+          <div className="hidden lg:flex justify-center lg:justify-end">
+            <Image
+              src="/images/Untitled-2.jpg"
+              alt={`${instructorName}, lead CPR instructor`}
+              width={400}
+              height={500}
+              className="w-auto object-contain"
+              style={{ height: "75%" }}
+            />
           </div>
 
           {/* Text */}
@@ -58,8 +53,8 @@ export default async function AboutInstructorSection() {
               With thousands of documented real-world CPR patients and active
               experience on the front lines of Fire, EMS, and Emergency Room
               response, our lead instructor brings unmatched real-world
-              knowledge to every class. This isn't just certification — it's
-              training that could save someone's life.
+              knowledge to every class. This isn&apos;t just certification — it&apos;s
+              training that could save someone&apos;s life.
             </p>
 
             {/* TODO: add AHA logo asset to /public/images/aha-logo.png */}

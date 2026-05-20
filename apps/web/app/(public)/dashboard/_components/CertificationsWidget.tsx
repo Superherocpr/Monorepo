@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import { AlertTriangle, XCircle } from "lucide-react";
-import { getCertStatus } from "@/lib/cert-utils";
+import { formatCertificationDate, getCertStatus } from "@/lib/cert-utils";
 import type { CertificationWidgetItem } from "@/types/certifications";
 
 interface CertificationsWidgetProps {
@@ -44,11 +44,7 @@ export default function CertificationsWidget({
               </p>
               <p className="text-xs text-gray-500">
                 Issued:{" "}
-                {new Date(cert.issued_at).toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                {formatCertificationDate(cert.issued_at)}
               </p>
               <span
                 className={[

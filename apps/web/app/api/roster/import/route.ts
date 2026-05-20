@@ -23,6 +23,12 @@ interface StudentRow {
   email: string | null;
   phone: string | null;
   employer: string | null;
+  /** Address fields — nullable, added in migration 0009. */
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
 }
 
 /** Expected request body shape. */
@@ -104,6 +110,11 @@ export async function POST(request: Request) {
       email: s.email || null,
       phone: s.phone || null,
       employer: s.employer || null,
+      address_1: s.address1 || null,
+      address_2: s.address2 || null,
+      city: s.city || null,
+      state: s.state || null,
+      zip: s.zip || null,
     }))
   );
 

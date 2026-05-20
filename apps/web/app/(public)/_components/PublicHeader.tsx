@@ -7,9 +7,8 @@
  */
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 /** Primary nav links rendered in both desktop and mobile menus. */
 const NAV_LINKS = [
@@ -21,109 +20,160 @@ const NAV_LINKS = [
   { label: "Contact", href: "/contact" },
 ] as const;
 
+/**
+ * Nav links used when the legacy single-page site is enabled. All three are
+ * in-page anchors on the legacy home; "Welcome" scrolls to the very top via
+ * an onClick handler (see below) because there is no element to anchor to at y=0.
+ */
+const LEGACY_NAV_LINKS = [
+  { label: "Welcome", href: "#legacy-top" },
+  { label: "Why Choose Us", href: "#why-choose-us" },
+  { label: "Book Now", href: "#contact" },
+] as const;
+
 interface PublicHeaderProps {
   /** Whether a Supabase session exists for the current user. Determined server-side in layout.tsx. */
   isAuthenticated: boolean;
+  /** When true, swaps the nav for legacy in-page anchors and hides the Dashboard link. */
+  legacyMode?: boolean;
 }
 
 /**
  * Renders the sticky public site navigation header.
  * Logo left, nav links center, auth actions right. Collapses to hamburger on mobile.
  * @param isAuthenticated - True when user has an active session.
+ * @param legacyMode - True when the legacy single-page site is enabled; swaps nav links
+ *   to in-page anchors and hides the Dashboard / Sign In actions.
  */
-export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
+export function PublicHeader({ isAuthenticated, legacyMode = false }: PublicHeaderProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
 
-  /**
-   * Signs the current user out via Supabase, then refreshes to clear server session state.
-   * Side effect: clears the Supabase auth cookie.
-   */
-  async function handleSignOut() {
-    setSigningOut(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
-  }
+  // Use the legacy in-page anchor set when the legacy site is enabled.
+  const navLinks = legacyMode ? LEGACY_NAV_LINKS : NAV_LINKS;
 
   /** Returns true when the given href is an exact match for the current pathname. */
   function isActive(href: string): boolean {
     return pathname === href;
   }
 
+  /**
+   * Click handler for the legacy "Welcome" link: scrolls smoothly to the top of
+   * the page. Using a handler (rather than an anchor target) avoids needing a
+   * zero-height anchor element above the hero section.
+   */
+  function handleLegacyWelcomeClick(event: React.MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setMobileOpen(false);
+  }
+
   return (
     <header className="bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-800 sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* 3-column grid ensures the nav is always centered relative to the full header width,
-            regardless of the logo and auth section having different widths. */}
-        <div className="grid grid-cols-3 items-center h-16">
+        {/* Relative container so the nav can be absolutely centered on the page.
+            Logo sits left in flow, auth sits right via ml-auto, and the nav is pinned
+            to the exact horizontal center regardless of their differing widths. */}
+        <div className="relative flex items-center h-20">
 
-          {/* Logo — TODO: replace text with actual logo image once brand assets are ready */}
+          {/* Brand name — Comic Book font, matches footer style */}
           <Link
             href="/"
-            className="flex items-center gap-1 font-extrabold text-lg tracking-tight hover:opacity-80 transition-opacity"
+            className="flex items-center"
+            aria-label="SuperHeroCPR home"
           >
-            <span className="text-red-600">Superhero</span>
-            <span className="text-gray-900 dark:text-white">CPR</span>
+            <span
+              className="text-2xl font-bold tracking-tight"
+              style={{ fontFamily: "'Comic Book', sans-serif" }}
+            >
+              <span className="text-gray-900">SuperHero</span><span className="text-red-500">CPR</span>
+            </span>
           </Link>
 
-          {/* Desktop nav links — centered column */}
-          <nav className="hidden md:flex items-center justify-center gap-6" aria-label="Main navigation">
-            {NAV_LINKS.map(({ label, href }) => (
-              <Link
-                key={href}
-                href={href}
-                className={[
-                  "text-sm transition-colors duration-150",
-                  isActive(href)
-                    ? "text-red-600 font-semibold"
-                    : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white",
-                ].join(" ")}
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-
-          {/* Desktop auth actions — right-aligned */}
-          <div className="hidden md:flex items-center justify-end gap-4">
-            {isAuthenticated ? (
-              <>
+          {/* Desktop nav links — absolutely centered so they're always at the true
+              midpoint of the header, independent of logo/auth widths. */}
+          <nav
+            className="hidden md:flex items-center gap-6 absolute left-1/2 -translate-x-1/2"
+            aria-label="Main navigation"
+          >
+            {navLinks.map(({ label, href }) => {
+              // Legacy nav uses in-page anchors — render as plain <a> so the browser
+              // handles hash navigation (and we can intercept Welcome to scroll-to-top).
+              if (legacyMode) {
+                return (
+                  <a
+                    key={href}
+                    href={href}
+                    onClick={href === "#legacy-top" ? handleLegacyWelcomeClick : undefined}
+                    className="text-sm transition-colors duration-150 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                  >
+                    {label}
+                  </a>
+                );
+              }
+              return (
                 <Link
-                  href="/dashboard"
+                  key={href}
+                  href={href}
                   className={[
                     "text-sm transition-colors duration-150",
-                    pathname.startsWith("/dashboard")
+                    isActive(href)
                       ? "text-red-600 font-semibold"
                       : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white",
                   ].join(" ")}
                 >
-                  Dashboard
+                  {label}
                 </Link>
-                <button
-                  onClick={handleSignOut}
-                  disabled={signingOut}
-                  className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors duration-150 disabled:opacity-50"
-                >
-                  {signingOut ? "Signing out…" : "Sign Out"}
-                </button>
-              </>
-            ) : (
-              <Link
-                href="/signin"
-                className="text-sm font-semibold bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-150"
-              >
-                Sign In
-              </Link>
-            )}
-          </div>
+              );
+            })}
+          </nav>
 
-          {/* Mobile hamburger toggle — spans cols 2+3 and right-aligns on mobile */}
+          {/* Desktop auth actions — pushed to the far right.
+              Hidden entirely in legacy mode so the header matches the original
+              WordPress site's simplified menu. */}
+          {!legacyMode && (
+            <div className="hidden md:flex items-center ml-auto gap-4">
+              {isAuthenticated ? (
+                  <Link
+                    href="/dashboard"
+                    className={[
+                      "text-sm transition-colors duration-150",
+                      pathname.startsWith("/dashboard")
+                        ? "text-red-600 font-semibold"
+                        : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white",
+                    ].join(" ")}
+                  >
+                    Dashboard
+                  </Link>
+              ) : (
+                <Link
+                  href="/signin"
+                  className="text-sm font-semibold bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-150"
+                >
+                  Sign In
+                </Link>
+              )}
+            </div>
+          )}
+
+          {/* Legacy-mode right-side slot — shows the paired superhero logo where
+              the Dashboard / Sign In button normally sits. Decorative only. */}
+          {legacyMode && (
+            <div className="hidden md:flex items-center ml-auto">
+              {/* Native <img> (not next/image) so we don't need to declare width/height for
+                  an unknown intrinsic size — height is constrained to fit the 80px header. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/legacy/header-logo.png"
+                alt="SuperHeroCPR characters"
+                className="h-16 w-auto object-contain"
+              />
+            </div>
+          )}
+
+          {/* Mobile hamburger toggle — pushed to the far right */}
           <button
-            className="md:hidden col-span-2 flex justify-end p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+            className="md:hidden ml-auto flex justify-end p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
@@ -142,26 +192,47 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
       {mobileOpen && (
         <div className="md:hidden border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 pb-4">
           <nav className="flex flex-col px-4 pt-3 gap-1" aria-label="Mobile navigation">
-            {NAV_LINKS.map(({ label, href }) => (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setMobileOpen(false)}
-                className={[
-                  "py-2 px-3 rounded-lg text-sm transition-colors duration-150",
-                  isActive(href)
-                    ? "text-red-600 font-semibold bg-red-50 dark:bg-red-950"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800",
-                ].join(" ")}
-              >
-                {label}
-              </Link>
-            ))}
+            {navLinks.map(({ label, href }) => {
+              // Same legacy-vs-normal split as the desktop nav above.
+              if (legacyMode) {
+                return (
+                  <a
+                    key={href}
+                    href={href}
+                    onClick={(e) => {
+                      if (href === "#legacy-top") {
+                        handleLegacyWelcomeClick(e);
+                      } else {
+                        setMobileOpen(false);
+                      }
+                    }}
+                    className="py-2 px-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {label}
+                  </a>
+                );
+              }
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMobileOpen(false)}
+                  className={[
+                    "py-2 px-3 rounded-lg text-sm transition-colors duration-150",
+                    isActive(href)
+                      ? "text-red-600 font-semibold bg-red-50 dark:bg-red-950"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800",
+                  ].join(" ")}
+                >
+                  {label}
+                </Link>
+              );
+            })}
 
-            {/* Mobile auth actions */}
-            <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-1">
-              {isAuthenticated ? (
-                <>
+            {/* Mobile auth actions — hidden in legacy mode to match the simplified menu. */}
+            {!legacyMode && (
+              <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-1">
+                {isAuthenticated ? (
                   <Link
                     href="/dashboard"
                     onClick={() => setMobileOpen(false)}
@@ -169,24 +240,17 @@ export function PublicHeader({ isAuthenticated }: PublicHeaderProps) {
                   >
                     Dashboard
                   </Link>
-                  <button
-                    onClick={handleSignOut}
-                    disabled={signingOut}
-                    className="text-left py-2 px-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                ) : (
+                  <Link
+                    href="/signin"
+                    onClick={() => setMobileOpen(false)}
+                    className="py-2 px-3 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
                   >
-                    {signingOut ? "Signing out…" : "Sign Out"}
-                  </button>
-                </>
-              ) : (
-                <Link
-                  href="/signin"
-                  onClick={() => setMobileOpen(false)}
-                  className="py-2 px-3 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
-                >
-                  Sign In
-                </Link>
-              )}
-            </div>
+                    Sign In
+                  </Link>
+                )}
+              </div>
+            )}
           </nav>
         </div>
       )}

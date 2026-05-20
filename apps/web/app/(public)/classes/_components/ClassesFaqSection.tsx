@@ -44,7 +44,7 @@ const FAQS = [
   {
     question: "Is the certification accepted by hospitals and employers?",
     answer:
-      "Yes. AHA certification from Superhero CPR is recognized by hospitals, clinics, schools, and employers nationwide.",
+      "Yes. AHA certification from SuperHeroCPR is recognized by hospitals, clinics, schools, and employers nationwide.",
   },
   {
     question: "What happens if I need to cancel my booking?",

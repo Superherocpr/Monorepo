@@ -71,17 +71,6 @@ export default async function AdminLayout({
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/*
-       * Dark mode flash prevention: reads localStorage before first paint and
-       * adds the 'dark' class to <html> if the user's preference is dark.
-       * Must be a dangerouslySetInnerHTML script — next/script beforeInteractive
-       * is not supported inside layouts in the App Router.
-       */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.classList.add('dark')}catch(e){}})();`,
-        }}
-      />
       <AdminSidebar role={role} />
       <div className="flex flex-col flex-1 min-w-0">
         <AdminTopBar

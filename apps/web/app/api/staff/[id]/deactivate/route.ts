@@ -8,7 +8,7 @@
  */
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { OWNER_EMAIL } from "@/lib/constants";
+import { OWNER_EMAILS } from "@/lib/constants";
 
 /**
  * Deactivates a staff member by profile ID.
@@ -58,7 +58,7 @@ export async function PATCH(
   }
 
   // Normalize to lowercase — email addresses are case-insensitive per RFC 5321
-  if (target.email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
+  if (OWNER_EMAILS.includes(target.email.toLowerCase())) {
     return Response.json(
       { success: false, error: "The owner cannot be deactivated." },
       { status: 403 }
@@ -66,14 +66,25 @@ export async function PATCH(
   }
 
   // ── Mark profile as deactivated ────────────────────────────────────────────
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .update({
-      deactivated: true,
-      deactivated_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", targetId);
+  // Compatibility fallback: some older local schemas may not yet have updated_at.
+  const nowIso = new Date().toISOString();
+  const updateAttempts = [
+    { deactivated: true, deactivated_at: nowIso, updated_at: nowIso },
+    { deactivated: true, deactivated_at: nowIso },
+  ];
+
+  let profileError: { message?: string } | null = null;
+  for (const payload of updateAttempts) {
+    const { error } = await supabase
+      .from("profiles")
+      .update(payload)
+      .eq("id", targetId);
+    if (!error) {
+      profileError = null;
+      break;
+    }
+    profileError = error;
+  }
 
   if (profileError) {
     return Response.json(
@@ -85,7 +96,7 @@ export async function PATCH(
   // ── Block Supabase auth login ──────────────────────────────────────────────
   // ban_duration: 'none' means an indefinite ban — the user cannot log in
   const adminSupabase = await createAdminClient();
-  await adminSupabase.auth.admin.updateUser(targetId, { ban_duration: "none" });
+  await adminSupabase.auth.admin.updateUserById(targetId, { ban_duration: "none" });
 
   return Response.json({ success: true });
 }

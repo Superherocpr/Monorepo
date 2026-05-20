@@ -44,8 +44,9 @@ const STRENGTH_COLORS = {
 /** Renders the password-creation step for new customers (Step 3). */
 export default function BookCreateAccountPage() {
   const router = useRouter();
-  const [sessionDetails, setSessionDetails] = useState<BookingStore["sessionDetails"]>(null);
-  const [customerDetails, setCustomerDetails] = useState<BookingStore["customerDetails"]>(null);
+  // Initialize from store on first render (avoids set-state-in-effect).
+  const [sessionDetails] = useState<BookingStore["sessionDetails"]>(() => getBookingStore().sessionDetails);
+  const [customerDetails] = useState<BookingStore["customerDetails"]>(() => getBookingStore().customerDetails ?? null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -56,16 +57,8 @@ export default function BookCreateAccountPage() {
   // Guards: redirect if required prior steps are incomplete
   useEffect(() => {
     const store = getBookingStore();
-    if (!store.sessionId) {
-      router.replace("/book");
-      return;
-    }
-    if (!store.customerDetails) {
-      router.replace("/book/details");
-      return;
-    }
-    setSessionDetails(store.sessionDetails);
-    setCustomerDetails(store.customerDetails);
+    if (!store.sessionId) router.replace("/book");
+    else if (!store.customerDetails) router.replace("/book/details");
   }, [router]);
 
   /**

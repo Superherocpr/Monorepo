@@ -9,11 +9,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { getPayPalAccessToken } from "@/lib/paypal";
+import { createHash } from "crypto";
+import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import type { CartItem } from "@/lib/cart-store";
-
-const PAYPAL_API_BASE =
-  process.env.PAYPAL_API_BASE ?? "https://api-m.sandbox.paypal.com";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -81,13 +79,24 @@ export async function POST(request: Request) {
     ],
   };
 
-  const response = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders`, {
+  // Deterministic idempotency key derived from cart contents — same cart +
+  // same totals collapses retries into a single PayPal order. Using Date.now()
+  // here would create a new order per retry, defeating PayPal-Request-Id.
+  const cartFingerprint = items
+    .map((i) => `${i.variantId}:${i.quantity}:${i.price.toFixed(2)}`)
+    .sort()
+    .join("|");
+  const idempotencyKey = createHash("sha256")
+    .update(`${cartFingerprint}|${totalNum.toFixed(2)}`)
+    .digest("hex")
+    .slice(0, 32);
+
+  const response = await fetch(`${getPayPalApiBase()}/v2/checkout/orders`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      // Idempotency key prevents duplicate orders on retry
-      "PayPal-Request-Id": `merch-${Date.now()}`,
+      "PayPal-Request-Id": `merch-${idempotencyKey}`,
     },
     body: JSON.stringify(orderPayload),
   });

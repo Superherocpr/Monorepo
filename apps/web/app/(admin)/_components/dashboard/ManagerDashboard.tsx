@@ -151,7 +151,7 @@ export default function ManagerDashboard({
         {todaySessions.length > 0 && (
           <div className="bg-white border border-gray-200 rounded-lg p-6">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-              Today's Class Sessions
+              Today&apos;s Class Sessions
             </h2>
             <ul className="space-y-3">
               {todaySessions.map((session) => (
@@ -171,7 +171,7 @@ export default function ManagerDashboard({
                         · {formatTimeRange(session.starts_at, session.ends_at)}
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {session.locations?.name ?? "—"}
+                        {session.locations?.name ?? "-"}
                       </p>
                     </div>
                     <span className="text-xs font-semibold shrink-0 ml-3 text-gray-600">
@@ -201,10 +201,10 @@ export default function ManagerDashboard({
                           : "Unknown Customer"}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {booking.class_sessions?.class_types?.name ?? "—"} ·{" "}
+                        {booking.class_sessions?.class_types?.name ?? "-"} ·{" "}
                         {booking.class_sessions
                           ? formatShortDate(booking.class_sessions.starts_at)
-                          : "—"}
+                          : "-"}
                       </p>
                     </div>
                     <span
@@ -240,7 +240,7 @@ export default function ManagerDashboard({
                       {variant.product_name}
                       <span className="text-gray-500 font-normal">
                         {" "}
-                        — {variant.size}
+                        - {variant.size}
                       </span>
                     </p>
                     <p className="text-xs text-gray-400">

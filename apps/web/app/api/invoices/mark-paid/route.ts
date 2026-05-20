@@ -12,6 +12,7 @@
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import { invoicePaidEmail } from "@/lib/emails";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -125,17 +126,28 @@ export async function POST(request: Request) {
 
   if (process.env.RESEND_API_KEY && instructorProfile?.email) {
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
-      from: "Superhero CPR <noreply@superherocpr.com>",
-      to: instructorProfile.email,
-      subject: `Invoice ${invoice.invoice_number} marked as paid`,
-      html: `
-        <p>Hi ${instructorProfile.first_name},</p>
-        <p>Invoice <strong>${invoice.invoice_number}</strong> for ${invoice.recipient_name} has been marked as paid.</p>
-        <p>${invoice.student_count} student spot${(invoice.student_count as number) !== 1 ? "s" : ""} have been reserved for the class.</p>
-        <p>— Superhero CPR</p>
-      `,
+    const { subject, html } = invoicePaidEmail({
+      firstName: instructorProfile.first_name,
+      invoiceNumber: invoice.invoice_number,
+      recipientName: invoice.recipient_name,
+      studentCount: invoice.student_count as number,
     });
+    // Non-fatal: the invoice is already marked paid and the bookings are
+    // created — a failed notification email shouldn't surface as a 5xx to
+    // the caller (Resend outages would otherwise reverse the mark-paid action).
+    await resend.emails
+      .send({
+        from: process.env.RESEND_FROM_EMAIL!,
+        to: instructorProfile.email,
+        subject,
+        html,
+      })
+      .catch((err: unknown) => {
+        console.error(
+          "[invoices/mark-paid] Notification email failed (non-fatal):",
+          err
+        );
+      });
   }
 
   return Response.json({ success: true });

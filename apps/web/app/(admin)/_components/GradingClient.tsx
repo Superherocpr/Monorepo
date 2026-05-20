@@ -188,7 +188,7 @@ export default function GradingClient({ session, students, presetGrades }: Props
           ← Back to session
         </Link>
         <h1 className="text-2xl font-bold text-gray-900">
-          {session.class_types?.name ?? "Class Session"} — Grading
+          {session.class_types?.name ?? "Class Session"} - Grading
         </h1>
         <p className="text-sm text-gray-500">
           {sessionDate}

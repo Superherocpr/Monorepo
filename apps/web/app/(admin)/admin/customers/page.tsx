@@ -7,6 +7,10 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  getCertificationDaysUntilExpiry,
+  isCertificationActive,
+} from "@/lib/cert-utils";
 import CustomersClient, { CustomerWithMeta } from "@/app/(admin)/_components/CustomersClient";
 
 /** Server component — handles auth, access check, and initial data fetch. */
@@ -72,14 +76,11 @@ export default async function CustomersPage() {
           ) >= now
       );
       const activeCerts = customer.certifications.filter(
-        (c: { expires_at: string }) => new Date(c.expires_at) >= now
+        (c: { expires_at: string }) => isCertificationActive(c.expires_at, now)
       );
       const expiringSoon = activeCerts.filter(
         (c: { expires_at: string }) => {
-          const days = Math.ceil(
-            (new Date(c.expires_at).getTime() - now.getTime()) /
-              (1000 * 60 * 60 * 24)
-          );
+          const days = getCertificationDaysUntilExpiry(c.expires_at, now);
           return days <= 90;
         }
       );

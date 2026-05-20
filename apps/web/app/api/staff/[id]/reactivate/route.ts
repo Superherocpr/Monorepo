@@ -41,14 +41,25 @@ export async function PATCH(
   }
 
   // ── Clear deactivated flag ─────────────────────────────────────────────────
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .update({
-      deactivated: false,
-      deactivated_at: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", targetId);
+  // Compatibility fallback: some older local schemas may not yet have updated_at.
+  const nowIso = new Date().toISOString();
+  const updateAttempts = [
+    { deactivated: false, deactivated_at: null, updated_at: nowIso },
+    { deactivated: false, deactivated_at: null },
+  ];
+
+  let profileError: { message?: string } | null = null;
+  for (const payload of updateAttempts) {
+    const { error } = await supabase
+      .from("profiles")
+      .update(payload)
+      .eq("id", targetId);
+    if (!error) {
+      profileError = null;
+      break;
+    }
+    profileError = error;
+  }
 
   if (profileError) {
     return Response.json(
@@ -60,7 +71,7 @@ export async function PATCH(
   // ── Restore Supabase auth login ────────────────────────────────────────────
   // ban_duration: '0' lifts any active ban — the user can log in again
   const adminSupabase = await createAdminClient();
-  await adminSupabase.auth.admin.updateUser(targetId, { ban_duration: "0" });
+  await adminSupabase.auth.admin.updateUserById(targetId, { ban_duration: "0" });
 
   return Response.json({ success: true });
 }

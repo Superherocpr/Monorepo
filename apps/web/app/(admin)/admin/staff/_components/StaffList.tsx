@@ -3,7 +3,8 @@
 /**
  * StaffList component
  * Renders filtered staff as a table on desktop and cards on mobile.
- * Handles inline role-change dropdown and deactivate/reactivate confirmation UI.
+ * Handles inline role-change, deactivate/reactivate, edit-contact (email + phone),
+ * and permanent account deletion confirmation UIs.
  * All mutations call the /api/staff/[id]/* routes and report results via callbacks.
  * Used by: StaffManagement
  */
@@ -15,7 +16,7 @@ import type { UserRole } from "@/types/users";
 
 interface StaffListProps {
   staff: StaffMember[];
-  ownerEmail: string;
+  ownerEmails: string[];
   currentUserId: string;
   /** Called with a success message on any successful mutation — also triggers list refresh. */
   onSuccess: (message: string) => void;
@@ -23,6 +24,8 @@ interface StaffListProps {
   onError: (message: string) => void;
   /** Called when the empty-state invite button is clicked. */
   onInvite: () => void;
+  /** Called when the Edit Bio button is clicked for an instructor. */
+  onEditBio: (member: StaffMember) => void;
 }
 
 /** Display labels for each staff role. */
@@ -63,23 +66,26 @@ function formatDeactivatedDate(dateStr: string): string {
 }
 
 /**
- * Renders the staff list with inline role change and deactivate/reactivate actions.
- * Action buttons are hidden entirely for the owner email and the change-role button
- * is also hidden on the logged-in user's own row (prevents self-demotion).
+ * Renders the staff list with inline role change, deactivate/reactivate,
+ * edit-contact (email + phone), and permanent delete confirmation actions.
+ * Action buttons are hidden entirely for the owner email. The delete action
+ * is also hidden on the logged-in user's own row (prevents self-deletion).
  * @param staff - Filtered staff members to display.
- * @param ownerEmail - Protected owner email — no action buttons shown for this row.
- * @param currentUserId - Logged-in user's ID — change-role hidden on own row.
+ * @param ownerEmails - Protected owner emails — no action buttons shown for these rows.
+ * @param currentUserId - Logged-in user's ID — change-role and delete hidden on own row.
  * @param onSuccess - Callback to show success toast and refresh the list.
  * @param onError - Callback to show an error toast.
  * @param onInvite - Callback to open the invite panel (used in empty state).
+ * @param onEditBio - Callback to open the bio edit panel for an instructor.
  */
 const StaffList: React.FC<StaffListProps> = ({
   staff,
-  ownerEmail,
+  ownerEmails,
   currentUserId,
   onSuccess,
   onError,
   onInvite,
+  onEditBio,
 }) => {
   // Track which row has the change-role dropdown open
   const [changingRoleFor, setChangingRoleFor] = useState<string | null>(null);
@@ -87,6 +93,13 @@ const StaffList: React.FC<StaffListProps> = ({
   const [newRole, setNewRole] = useState<Exclude<UserRole, "customer">>("instructor");
   // Track which row has the deactivate confirmation open
   const [deactivatingFor, setDeactivatingFor] = useState<string | null>(null);
+  // Track which row has the edit-contact form open
+  const [editingContactFor, setEditingContactFor] = useState<string | null>(null);
+  // Draft values pre-filled when the edit-contact form opens
+  const [emailDraft, setEmailDraft] = useState("");
+  const [phoneDraft, setPhoneDraft] = useState("");
+  // Track which row has the delete confirmation open
+  const [deletingFor, setDeletingFor] = useState<string | null>(null);
   // Track which staff ID is waiting on an API response
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
@@ -302,6 +315,225 @@ const StaffList: React.FC<StaffListProps> = ({
     );
   }
 
+  /**
+   * Opens the edit-contact form pre-filled with the member's current values.
+   * Closes any other open inline panels to keep the UI uncluttered.
+   * @param staffId - The target staff member's profile ID.
+   * @param currentEmail - Current email address to pre-fill.
+   * @param currentPhone - Current phone number to pre-fill (may be null).
+   */
+  function openEditContact(
+    staffId: string,
+    currentEmail: string,
+    currentPhone: string | null
+  ) {
+    setEditingContactFor(staffId);
+    setEmailDraft(currentEmail);
+    setPhoneDraft(currentPhone ?? "");
+    setChangingRoleFor(null);
+    setDeactivatingFor(null);
+    setDeletingFor(null);
+  }
+
+  /**
+   * Sends a PATCH request to update email and/or phone for a staff member.
+   * Updates both profiles and auth.users for email changes.
+   * @param staffId - The target staff member's profile ID.
+   * @param fullName - Used in the success message.
+   */
+  async function handleUpdateContact(staffId: string, fullName: string) {
+    setLoadingAction(staffId);
+    try {
+      const res = await fetch(`/api/staff/${staffId}/update`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: emailDraft.trim().toLowerCase(),
+          phone: phoneDraft.trim() || null,
+        }),
+      });
+      const data: { success: boolean; error?: string } = await res.json();
+      if (!res.ok || !data.success) {
+        onError(data.error ?? "Failed to update contact details.");
+      } else {
+        setEditingContactFor(null);
+        onSuccess(`Contact details updated for ${fullName}.`);
+      }
+    } catch {
+      onError("Something went wrong. Please try again.");
+    } finally {
+      setLoadingAction(null);
+    }
+  }
+
+  /**
+   * Sends a DELETE request to permanently remove a staff member's account.
+   * The API route blocks deletion if the member has class sessions on record.
+   * @param staffId - The target staff member's profile ID.
+   * @param fullName - Used in the success message.
+   */
+  async function handleDelete(staffId: string, fullName: string) {
+    setLoadingAction(staffId);
+    try {
+      const res = await fetch(`/api/staff/${staffId}/delete`, {
+        method: "DELETE",
+      });
+      const data: { success: boolean; error?: string } = await res.json();
+      if (!res.ok || !data.success) {
+        onError(data.error ?? "Failed to delete account.");
+      } else {
+        setDeletingFor(null);
+        onSuccess(`${fullName}'s account has been permanently deleted.`);
+      }
+    } catch {
+      onError("Something went wrong. Please try again.");
+    } finally {
+      setLoadingAction(null);
+    }
+  }
+
+  /**
+   * Renders the Edit Bio button for instructors and super admins.
+   * Both roles can appear on the /about page.
+   * @param member - The staff member row.
+   */
+  function renderEditBioButton(member: StaffMember) {
+    if (member.role !== "instructor" && member.role !== "super_admin") return null;
+    return (
+      <button
+        onClick={() => onEditBio(member)}
+        className="text-xs text-blue-600 hover:text-blue-800 underline underline-offset-2 font-medium"
+      >
+        Edit Bio
+      </button>
+    );
+  }
+
+  /**
+   * Renders an inline email + phone edit form for a staff member.
+   * Shows an "Edit Contact" trigger link when closed; expands to input fields on click.
+   * Closing any other open inline panel is handled by openEditContact().
+   * @param member - The staff member row.
+   * @param fullName - Full display name used in success messages.
+   */
+  function renderEditContactUI(member: StaffMember, fullName: string) {
+    const isOpen = editingContactFor === member.id;
+    const isLoading = loadingAction === member.id;
+
+    if (isOpen) {
+      return (
+        <div className="mt-1 p-2 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-0.5">
+              Email
+            </label>
+            <input
+              type="email"
+              value={emailDraft}
+              onChange={(e) => setEmailDraft(e.target.value)}
+              disabled={isLoading}
+              className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-0.5">
+              Phone
+            </label>
+            <input
+              type="tel"
+              value={phoneDraft}
+              onChange={(e) => setPhoneDraft(e.target.value)}
+              placeholder="Optional"
+              disabled={isLoading}
+              className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleUpdateContact(member.id, fullName)}
+              disabled={isLoading || !emailDraft.trim()}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-2.5 py-1 rounded-lg disabled:opacity-50 transition-colors"
+            >
+              {isLoading ? "Saving…" : "Save"}
+            </button>
+            <button
+              onClick={() => setEditingContactFor(null)}
+              disabled={isLoading}
+              className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        onClick={() =>
+          openEditContact(member.id, member.email, member.phone ?? null)
+        }
+        className="text-xs text-gray-600 hover:text-gray-800 underline underline-offset-2 font-medium"
+      >
+        Edit Contact
+      </button>
+    );
+  }
+
+  /**
+   * Renders a delete confirmation UI for a staff member.
+   * Shows a "Delete" trigger link when closed; expands to a destructive confirmation.
+   * The API route will block deletion if the member has class sessions on record.
+   * Not rendered for owner rows or the current user's own row — guarded in the caller.
+   * @param member - The staff member row.
+   * @param fullName - Full display name shown in the confirmation warning.
+   */
+  function renderDeleteUI(member: StaffMember, fullName: string) {
+    const isOpen = deletingFor === member.id;
+    const isLoading = loadingAction === member.id;
+
+    if (isOpen) {
+      return (
+        <div className="mt-1 p-2 bg-red-50 border border-red-200 rounded-lg space-y-1.5">
+          <p className="text-xs text-red-800 font-medium leading-snug">
+            Permanently delete {fullName}? This cannot be undone.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleDelete(member.id, fullName)}
+              disabled={isLoading}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-2.5 py-1 rounded-lg disabled:opacity-50 transition-colors"
+            >
+              {isLoading ? "Deleting…" : "Delete Permanently"}
+            </button>
+            <button
+              onClick={() => setDeletingFor(null)}
+              disabled={isLoading}
+              className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        onClick={() => {
+          setDeletingFor(member.id);
+          setChangingRoleFor(null);
+          setDeactivatingFor(null);
+          setEditingContactFor(null);
+        }}
+        aria-label={`Delete ${fullName}`}
+        className="text-xs text-red-500 hover:text-red-700 underline underline-offset-2 font-medium"
+      >
+        Delete
+      </button>
+    );
+  }
+
   return (
     <>
       {/* ── Desktop table ───────────────────────────────────────────────────── */}
@@ -328,8 +560,7 @@ const StaffList: React.FC<StaffListProps> = ({
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {staff.map((member) => {
-              const isOwner =
-                member.email.toLowerCase() === ownerEmail.toLowerCase();
+              const isOwner = ownerEmails.includes(member.email.toLowerCase());
               const fullName = `${member.first_name} ${member.last_name}`;
               return (
                 <tr key={member.id} className="hover:bg-gray-50 transition-colors">
@@ -368,13 +599,16 @@ const StaffList: React.FC<StaffListProps> = ({
                     )}
                   </td>
                   <td className="px-5 py-4">
-                    {/* All action buttons are hidden for the owner */}
-                    {!isOwner && (
-                      <div className="space-y-2">
-                        {renderChangeRoleUI(member, fullName)}
-                        {renderDeactivateUI(member, fullName)}
-                      </div>
-                    )}
+                    {/* Edit Bio is available to everyone who can appear on /about.
+                        Role and deactivate actions are hidden for the owner.
+                        Delete is also hidden for the current logged-in user. */}
+                    <div className="space-y-2">
+                      {renderEditBioButton(member)}
+                      {!isOwner && renderEditContactUI(member, fullName)}
+                      {!isOwner && renderChangeRoleUI(member, fullName)}
+                      {!isOwner && renderDeactivateUI(member, fullName)}
+                      {!isOwner && member.id !== currentUserId && renderDeleteUI(member, fullName)}
+                    </div>
                   </td>
                 </tr>
               );
@@ -386,8 +620,7 @@ const StaffList: React.FC<StaffListProps> = ({
       {/* ── Mobile cards ────────────────────────────────────────────────────── */}
       <div className="md:hidden space-y-3">
         {staff.map((member) => {
-          const isOwner =
-            member.email.toLowerCase() === ownerEmail.toLowerCase();
+          const isOwner = ownerEmails.includes(member.email.toLowerCase());
           const fullName = `${member.first_name} ${member.last_name}`;
           return (
             <div
@@ -428,13 +661,14 @@ const StaffList: React.FC<StaffListProps> = ({
                 )}
               </div>
 
-              {/* Action buttons — hidden for owner */}
-              {!isOwner && (
-                <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
-                  {renderChangeRoleUI(member, fullName)}
-                  {renderDeactivateUI(member, fullName)}
-                </div>
-              )}
+              {/* Action buttons — Edit Bio available to all; role/deactivate/delete hidden for owner */}
+              <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                {renderEditBioButton(member)}
+                {!isOwner && renderEditContactUI(member, fullName)}
+                {!isOwner && renderChangeRoleUI(member, fullName)}
+                {!isOwner && renderDeactivateUI(member, fullName)}
+                {!isOwner && member.id !== currentUserId && renderDeleteUI(member, fullName)}
+              </div>
             </div>
           );
         })}

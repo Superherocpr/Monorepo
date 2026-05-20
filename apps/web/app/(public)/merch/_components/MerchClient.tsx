@@ -73,15 +73,11 @@ interface MerchClientProps {
  * cart drawer, shipping form, and PayPal checkout.
  */
 export default function MerchClient({ products }: MerchClientProps) {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  // Initialize cart from localStorage using a lazy initializer (avoids set-state-in-effect).
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("cart");
   const [shippingForm, setShippingForm] = useState<ShippingForm>(EMPTY_SHIPPING);
-
-  // Load cart from localStorage on mount
-  useEffect(() => {
-    setCartItems(getCart());
-  }, []);
 
   // Persist cart to localStorage whenever it changes
   useEffect(() => {
@@ -417,8 +413,10 @@ interface ProductCardProps {
 /** Renders a single product card with size/quantity selector and Add to Cart. */
 function ProductCard({ product, onAddToCart }: ProductCardProps) {
   const sortedVariants = sortSizes(product.product_variants);
+  // Default to the first in-stock variant so the card is ready to add to cart
+  // without requiring an explicit size selection on load.
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    null
+    () => sortedVariants.find((v) => v.stock_quantity > 0)?.id ?? null
   );
   const [quantity, setQuantity] = useState(1);
   const [addedFeedback, setAddedFeedback] = useState(false);
@@ -439,13 +437,13 @@ function ProductCard({ product, onAddToCart }: ProductCardProps) {
   return (
     <article className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
       {/* Product image */}
-      <div className="relative aspect-square bg-gray-100">
+      <div className="relative aspect-square bg-white">
         {product.image_url ? (
           <Image
             src={product.image_url}
             alt={product.name}
             fill
-            className="object-cover"
+            className="object-contain p-3"
             sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
         ) : (
@@ -806,10 +804,10 @@ function ErrorState({ onRetry }: ErrorStateProps) {
       <p className="text-gray-700 text-sm leading-relaxed">
         Something went wrong. Please try again or contact us at{" "}
         <a
-          href="mailto:info@superherocpr.com"
+          href="mailto:contact@superherocpr.com"
           className="text-red-600 hover:underline"
         >
-          info@superherocpr.com
+          contact@superherocpr.com
         </a>
       </p>
       <button

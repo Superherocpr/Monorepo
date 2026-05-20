@@ -24,7 +24,7 @@ export default function OrdersList({ orders }: OrdersListProps) {
         />
         <p className="font-semibold text-gray-700 mb-1">No orders yet</p>
         <p className="text-sm text-gray-500 mb-6">
-          Pick up some Superhero CPR gear in our merch store.
+          Pick up some SuperHeroCPR gear in our merch store.
         </p>
         <Link
           href="/merch"

@@ -1,7 +1,7 @@
 /**
- * ActiveCertificationsList — shows all active/expiring-soon certifications as full cards.
- * Left border color reflects cert status: green = valid, amber = expiring soon.
- * Each card includes cert number, issued date, expiry date, status badge, and renewal CTA.
+ * ActiveCertificationsList — shows all active/expiring-soon certifications as AHA eCards.
+ * Each cert renders as an AHACertCard. A renewal CTA appears beneath the card when the
+ * cert is within 90 days of expiry.
  * Renders an empty state with "Book a Class" CTA if the customer has no active certs.
  * Used by: app/(public)/dashboard/certifications/page.tsx
  */
@@ -9,36 +9,19 @@
 import Link from "next/link";
 import { Award, AlertCircle } from "lucide-react";
 import { getCertStatus } from "@/lib/cert-utils";
+import AHACertCard from "./AHACertCard";
 import type { CertificationRecord } from "@/types/certifications";
 
 interface ActiveCertificationsListProps {
   certifications: CertificationRecord[];
+  /** Full name of the student — passed through to AHACertCard for display on the card. */
+  studentName: string;
 }
 
-/** Formats a date string to a short readable label: "April 1, 2024". */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-const statusBadgeClasses = {
-  green: "bg-green-100 text-green-800",
-  amber: "bg-amber-100 text-amber-800",
-  red: "bg-red-100 text-red-700",
-};
-
-const cardBorderClasses = {
-  green: "border-l-4 border-l-green-400",
-  amber: "border-l-4 border-l-amber-400",
-  red: "border-l-4 border-l-red-400",
-};
-
-/** Renders full certification cards for all active certs, or an empty state with CTA. */
+/** Renders AHA eCard-style certification cards for all active certs, or an empty state with CTA. */
 export default function ActiveCertificationsList({
   certifications,
+  studentName,
 }: ActiveCertificationsListProps) {
   if (certifications.length === 0) {
     return (
@@ -74,72 +57,21 @@ export default function ActiveCertificationsList({
         {certifications.map((cert) => {
           const status = getCertStatus(cert.expires_at);
           return (
-            <article
-              key={cert.id}
-              className={`bg-white border border-gray-200 rounded-lg p-5 ${cardBorderClasses[status.color]}`}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-gray-900">
-                      {cert.cert_types.name}
-                    </h3>
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusBadgeClasses[status.color]}`}
-                    >
-                      {status.label}
-                    </span>
-                  </div>
-
-                  <p className="text-sm text-gray-500">
-                    Cert #{cert.cert_number}
-                  </p>
-                </div>
-
-                {status.color !== "green" && (
-                  <div className="flex items-center gap-1 text-amber-600">
-                    <AlertCircle size={14} aria-hidden="true" />
-                    <span className="text-xs font-medium">Renewal needed</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
-                    Issued
-                  </p>
-                  <p className="text-gray-700 mt-0.5">
-                    {formatDate(cert.issued_at)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
-                    Expires
-                  </p>
-                  <p
-                    className={
-                      status.color === "green"
-                        ? "text-gray-700 mt-0.5"
-                        : "text-amber-700 font-semibold mt-0.5"
-                    }
-                  >
-                    {formatDate(cert.expires_at)}
-                  </p>
-                </div>
-              </div>
-
+            <div key={cert.id} className="flex flex-col gap-2">
+              <AHACertCard cert={cert} studentName={studentName} />
+              {/* Renewal CTA shown beneath the card when the cert is within 90 days of expiry */}
               {status.color !== "green" && (
-                <div className="mt-4">
+                <div className="flex justify-end">
                   <Link
                     href="/book"
-                    className="inline-block bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-150"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 hover:text-amber-800 transition-colors duration-150"
                   >
+                    <AlertCircle size={14} aria-hidden="true" />
                     Book Renewal Class
                   </Link>
                 </div>
               )}
-            </article>
+            </div>
           );
         })}
       </div>

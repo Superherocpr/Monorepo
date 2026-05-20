@@ -80,14 +80,22 @@ export async function GET(request: Request) {
     );
   }
 
-  // Search Zoho inbox for messages involving this email address
-  const searchUrl = `https://mail.zoho.com/api/accounts/${accountId}/messages/search?searchKey=${encodeURIComponent(email)}&mailbox=inbox&limit=50`;
+  // Search Zoho for messages either sent by the contact or sent to them.
+  // Zoho expects a GET request with a searchKey expression, not a JSON body.
+  const searchKey = `sender:${email}::or:to:${email}`;
+  const searchUrl = `https://mail.zoho.com/api/accounts/${accountId}/messages/search?${new URLSearchParams({
+    searchKey,
+    start: "1",
+    limit: "50",
+  }).toString()}`;
 
   const zohoRes = await fetch(searchUrl, {
     headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
   });
 
   if (!zohoRes.ok) {
+    const errorBody = await zohoRes.text().catch(() => "(unreadable)");
+    console.error("Zoho thread search failed:", zohoRes.status, errorBody);
     return Response.json(
       { success: false, error: "Failed to fetch thread from Zoho Mail." },
       { status: 502 }

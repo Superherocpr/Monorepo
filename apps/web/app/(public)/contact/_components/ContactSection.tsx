@@ -54,8 +54,21 @@ export default function ContactSection() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSubmitting(true);
     setSubmitError(null);
+
+    // Client-side validation — prevent hitting the API with an empty form
+    if (
+      !form.name.trim() ||
+      !form.email.trim() ||
+      !form.phone.trim() ||
+      !form.inquiryType ||
+      !form.message.trim()
+    ) {
+      setSubmitError("Please fill in all required fields before sending.");
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
       const response = await fetch("/api/contact", {
@@ -71,7 +84,7 @@ export default function ContactSection() {
       setSubmitted(true);
     } catch {
       setSubmitError(
-        "Something went wrong. Please try again or email us directly at info@superherocpr.com"
+        "Something went wrong. Please try again or email us directly at contact@superherocpr.com"
       );
     } finally {
       setSubmitting(false);
@@ -103,10 +116,10 @@ export default function ContactSection() {
             label="Email Us"
           >
             <a
-              href="mailto:info@superherocpr.com"
+              href="mailto:contact@superherocpr.com"
               className="text-gray-700 hover:text-red-600 transition-colors duration-150 font-medium break-all"
             >
-              info@superherocpr.com
+              contact@superherocpr.com
             </a>
             <p className="text-sm text-gray-500 mt-1">
               We typically respond within 1 business day.
@@ -130,7 +143,7 @@ export default function ContactSection() {
             <div className="flex flex-col gap-3 py-8">
               <h2 className="text-xl font-bold text-gray-900">Message sent!</h2>
               <p className="text-gray-600 leading-relaxed">
-                Thanks for reaching out, {firstName}. We'll get back to you at{" "}
+                Thanks for reaching out, {firstName}. We&apos;ll get back to you at{" "}
                 <span className="font-medium">{form.email}</span> within 1
                 business day.
               </p>
@@ -165,13 +178,14 @@ export default function ContactSection() {
                 />
               </FormField>
 
-              {/* Phone (optional) */}
-              <FormField label="Phone" id="contact-phone">
+              {/* Phone */}
+              <FormField label="Phone" id="contact-phone" required>
                 <input
                   id="contact-phone"
                   name="phone"
                   type="tel"
                   autoComplete="tel"
+                  required
                   value={form.phone}
                   onChange={handleChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"

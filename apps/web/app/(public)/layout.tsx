@@ -15,6 +15,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { PublicHeader } from "@/app/(public)/_components/PublicHeader";
 import { PublicFooter } from "@/app/(public)/_components/PublicFooter";
+import { getSetting } from "@/lib/zoho";
 
 /**
  * Renders the shared public site shell: sticky header, page content, footer.
@@ -31,9 +32,14 @@ export default async function PublicLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // When the legacy single-page site is enabled, the header swaps to an in-page
+  // anchor menu (Welcome / Why Choose Us / Book Now) and hides the Dashboard link.
+  const legacyFlag = await getSetting("legacy_site_enabled");
+  const legacyMode = legacyFlag === "true";
+
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-gray-950">
-      <PublicHeader isAuthenticated={!!user} />
+      <PublicHeader isAuthenticated={!!user} legacyMode={legacyMode} />
       <main className="flex-1">{children}</main>
       <PublicFooter />
     </div>

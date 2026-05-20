@@ -10,6 +10,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import { orderShippedEmail, OrderEmailItem } from "@/lib/emails";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -95,48 +96,29 @@ export async function POST(request: Request) {
         product_variants: { size: string; products: { name: string } };
       }>;
 
-      const itemsHtml = items
-        .map((item) => {
-          const pv = item.product_variants;
-          return `<tr>
-            <td style="padding:4px 8px">${pv.products.name}</td>
-            <td style="padding:4px 8px">${pv.size}</td>
-            <td style="padding:4px 8px;text-align:center">${item.quantity}</td>
-            <td style="padding:4px 8px;text-align:right">$${item.price_at_purchase.toFixed(2)}</td>
-          </tr>`;
-        })
-        .join("");
+      const emailItems: OrderEmailItem[] = items.map((item) => ({
+        productName: item.product_variants.products.name,
+        size: item.product_variants.size,
+        quantity: item.quantity,
+        priceAtPurchase: item.price_at_purchase,
+      }));
 
-      const carrierLine =
-        typeof carrier === "string" && carrier.trim()
-          ? `<p><strong>Carrier:</strong> ${carrier.trim()}</p>`
-          : "";
+      const { subject, html } = orderShippedEmail({
+        firstName: customer.first_name,
+        trackingNumber: trackingNumber.trim(),
+        carrier: typeof carrier === "string" && carrier.trim() ? carrier.trim() : null,
+        items: emailItems,
+        totalAmount: order.total_amount as number,
+        shippingName: order.shipping_name,
+        shippingCity: order.shipping_city,
+        shippingState: order.shipping_state,
+      });
 
       await resend.emails.send({
-        from: "Superhero CPR <noreply@superherocpr.com>",
+        from: process.env.RESEND_FROM_EMAIL!,
         to: customer.email,
-        subject: "Your Superhero CPR order has shipped!",
-        html: `
-          <h1>Your order is on the way, ${customer.first_name}!</h1>
-          <p>Your Superhero CPR order has shipped.</p>
-          <p><strong>Tracking number:</strong> ${trackingNumber.trim()}</p>
-          ${carrierLine}
-          <h3>Your order:</h3>
-          <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">
-            <thead>
-              <tr style="background:#f3f4f6">
-                <th style="padding:4px 8px;text-align:left">Product</th>
-                <th style="padding:4px 8px;text-align:left">Size</th>
-                <th style="padding:4px 8px;text-align:center">Qty</th>
-                <th style="padding:4px 8px;text-align:right">Price</th>
-              </tr>
-            </thead>
-            <tbody>${itemsHtml}</tbody>
-          </table>
-          <p style="margin-top:12px"><strong>Order Total: $${(order.total_amount as number).toFixed(2)}</strong></p>
-          <p>Shipping to: ${order.shipping_name}, ${order.shipping_city}, ${order.shipping_state}</p>
-          <p>— The Superhero CPR Team</p>
-        `,
+        subject,
+        html,
       });
     } catch (emailErr) {
       // Non-fatal — order is already marked shipped, just log the failure

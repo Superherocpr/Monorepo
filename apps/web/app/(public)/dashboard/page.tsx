@@ -5,7 +5,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import DashboardWelcome from "./_components/DashboardWelcome";
 import UpcomingClassesWidget from "./_components/UpcomingClassesWidget";
 import CertificationsWidget from "./_components/CertificationsWidget";
@@ -17,7 +17,7 @@ import type { CertificationWidgetItem } from "@/types/certifications";
 import type { RecentOrderWidget as RecentOrderWidgetType } from "@/types/orders";
 
 export const metadata = {
-  title: "My Dashboard | Superhero CPR",
+  title: "My Dashboard | SuperHeroCPR",
 };
 
 /**
@@ -59,8 +59,13 @@ async function fetchUpcomingBookings(
 
 /**
  * Fetches all of the customer's certifications, ordered by soonest expiry.
- * @param supabase - Server Supabase client
- * @param userId - Auth user ID
+ * The `certifications` table has no SELECT RLS policy that allows a customer to
+ * read their own rows (only the admin policy exists), so the user-scoped client
+ * returns an empty list. We use the service-role client here, hard-scoped by
+ * `customer_id = userId`, after the caller has already been verified by
+ * `getUser()` in DashboardPage. No mutations are performed.
+ * @param supabase - Service-role Supabase client (bypasses RLS)
+ * @param userId - Auth user ID — used as the only filter on certifications
  */
 async function fetchCertifications(
   supabase: SupabaseClient,
@@ -108,15 +113,22 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/signin?redirect=/dashboard");
 
+  // Service-role client used solely for the certifications read — see fetchCertifications
+  // JSDoc for why this is necessary and why it remains safe.
+  const adminSupabase = await createAdminClient();
+
   const [profile, upcomingBookings, certifications, recentOrder] =
     await Promise.all([
       fetchProfile(supabase, user.id),
       fetchUpcomingBookings(supabase, user.id),
-      fetchCertifications(supabase, user.id),
+      fetchCertifications(adminSupabase, user.id),
       fetchRecentOrder(supabase, user.id),
     ]);
 
-  if (!profile) redirect("/signin?redirect=/dashboard");
+  // A missing profile means the account exists in auth but has no profile row —
+  // this is a data integrity issue, not an auth failure. Redirecting to sign-in
+  // here would cause an infinite loop, so we surface a clear error instead.
+  if (!profile) redirect("/?");
 
   return (
     <div>

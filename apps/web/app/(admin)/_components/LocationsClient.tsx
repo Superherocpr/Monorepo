@@ -155,7 +155,7 @@ function LocationFormFields({
                 : "border-gray-300 focus:border-red-500"
             }`}
           >
-            <option value="">—</option>
+            <option value="">-</option>
             {US_STATES.map((s) => (
               <option key={s} value={s}>
                 {s}

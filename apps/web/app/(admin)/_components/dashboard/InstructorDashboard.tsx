@@ -110,7 +110,7 @@ export default function InstructorDashboard({
         {todaySessions.length > 0 && (
           <div className="bg-white border border-gray-200 rounded-lg p-6">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-              Today's Class Sessions
+              Today&apos;s Class Sessions
             </h2>
             <ul className="space-y-3">
               {todaySessions.map((session) => (
@@ -194,10 +194,10 @@ export default function InstructorDashboard({
                         {invoice.recipient_name}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {invoice.class_sessions?.class_types?.name ?? "—"} ·{" "}
+                        {invoice.class_sessions?.class_types?.name ?? "-"} ·{" "}
                         {invoice.class_sessions
                           ? formatDate(invoice.class_sessions.starts_at)
-                          : "—"}
+                          : "-"}
                       </p>
                     </div>
                     <div className="text-right shrink-0 ml-3">

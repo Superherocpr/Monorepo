@@ -15,29 +15,18 @@
  */
 
 import { NextResponse } from "next/server";
-import { getPayPalAccessToken } from "@/lib/paypal";
+import { createHash } from "crypto";
+import {
+  getPayPalAccessToken,
+  getPayPalApiBase,
+  buildPayPalAuthAssertion,
+} from "@/lib/paypal";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePaymentRouting } from "@/lib/resolve-payment-routing";
-
-const PAYPAL_API_BASE =
-  process.env.PAYPAL_API_BASE ?? "https://api-m.sandbox.paypal.com";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-/**
- * Base64url-encodes a string (RFC 4648 §5) — the encoding used by PayPal's
- * PayPal-Auth-Assertion JWT-style header.
- * @param input - The raw string to encode.
- */
-function base64url(input: string): string {
-  return Buffer.from(input)
-    .toString("base64")
-    .replace(/=+$/, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
 }
 
 export async function POST(request: Request) {
@@ -73,31 +62,40 @@ export async function POST(request: Request) {
           currency_code: "USD",
           value: amount.toFixed(2),
         },
-        description: `Superhero CPR — ${className}`,
+        description: `SuperHeroCPR — ${className}`,
       },
     ],
   };
 
   // ── Build request headers ──────────────────────────────────────────────
+  // Deterministic idempotency key — same session + amount + routing target
+  // collapses retries into a single PayPal order. Random per-request keys
+  // (e.g. Date.now()) defeat the purpose of PayPal-Request-Id.
+  const idempotencyKey = createHash("sha256")
+    .update(
+      `${sessionId}:${amount.toFixed(2)}:${routing.instructorPayPalAccountId ?? "business"}`
+    )
+    .digest("hex")
+    .slice(0, 32);
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${accessToken}`,
+    "PayPal-Request-Id": `bk-${idempotencyKey}`,
   };
 
   // If routing to instructor, add PayPal-Auth-Assertion to direct payment to
   // their merchant account. The payer_id MUST come from the database (resolved
-  // above) — never from the client. The header is an unsigned JWT (alg: "none")
-  // which PayPal accepts because the request is already authenticated via the
-  // partner's bearer token.
+  // above) — never from the client. Per PayPal spec the JWT payload must
+  // include BOTH `iss` (partner client_id) AND `payer_id` (merchant ID) —
+  // `buildPayPalAuthAssertion` enforces this.
   if (routing.instructorPayPalAccountId) {
-    const assertionHeader = base64url(JSON.stringify({ alg: "none" }));
-    const assertionPayload = base64url(
-      JSON.stringify({ payer_id: routing.instructorPayPalAccountId })
+    headers["PayPal-Auth-Assertion"] = buildPayPalAuthAssertion(
+      routing.instructorPayPalAccountId
     );
-    headers["PayPal-Auth-Assertion"] = `${assertionHeader}.${assertionPayload}.`;
   }
 
-  const response = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders`, {
+  const response = await fetch(`${getPayPalApiBase()}/v2/checkout/orders`, {
     method: "POST",
     headers,
     body: JSON.stringify(orderPayload),

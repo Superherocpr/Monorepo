@@ -1,27 +1,23 @@
 /**
  * ExpiredCertificationsList — collapsible section of expired certifications.
+ * Each cert renders as a grayscale AHACertCard with an "Expired" badge.
  * Collapsed by default. Returns null if no expired certs exist.
  * Used by: app/(public)/dashboard/certifications/page.tsx
  */
 
+import AHACertCard from "./AHACertCard";
 import type { CertificationRecord } from "@/types/certifications";
 
 interface ExpiredCertificationsListProps {
   certifications: CertificationRecord[];
+  /** Full name of the student — passed through to AHACertCard for display on the card. */
+  studentName: string;
 }
 
-/** Formats a date string to a short readable label: "April 1, 2024". */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-/** Renders a collapsible list of expired certifications. Returns null if empty. */
+/** Renders a collapsible list of expired certifications as eCards. Returns null if empty. */
 export default function ExpiredCertificationsList({
   certifications,
+  studentName,
 }: ExpiredCertificationsListProps) {
   if (certifications.length === 0) return null;
 
@@ -45,19 +41,14 @@ export default function ExpiredCertificationsList({
             />
           </svg>
         </summary>
-        <div className="divide-y divide-gray-100 border-t border-gray-100">
+        <div className="flex flex-col gap-4 border-t border-gray-100 p-4">
           {certifications.map((cert) => (
-            <div key={cert.id} className="px-4 py-3 flex flex-col gap-0.5">
-              <p className="font-semibold text-sm text-gray-700">
-                {cert.cert_types.name}
-              </p>
-              <p className="text-xs text-gray-500">
-                Cert #{cert.cert_number}
-              </p>
-              <p className="text-xs text-gray-400">
-                Expired {formatDate(cert.expires_at)}
-              </p>
-            </div>
+            <AHACertCard
+              key={cert.id}
+              cert={cert}
+              studentName={studentName}
+              isExpired
+            />
           ))}
         </div>
       </details>

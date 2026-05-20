@@ -108,7 +108,7 @@ export default async function SessionsPage() {
     const { data: rawInstructors } = await supabase
       .from("profiles")
       .select("id, first_name, last_name")
-      .in("role", ["instructor", "manager", "super_admin"])
+      .neq("role", "customer")
       .eq("deactivated", false)
       .order("first_name");
     instructors = (rawInstructors ?? []) as InstructorOption[];

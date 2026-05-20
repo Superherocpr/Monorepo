@@ -534,7 +534,7 @@ export default function SettingsClient({
                 </p>
                 <p className="text-sm text-gray-500 mt-1 leading-relaxed max-w-prose">
                   Deleting your account will permanently remove your access to
-                  Superhero CPR. Your certification history will be preserved
+                  SuperHeroCPR. Your certification history will be preserved
                   for our records but you will no longer be able to log in.
                 </p>
               </div>

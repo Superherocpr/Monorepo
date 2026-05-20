@@ -796,7 +796,7 @@ export default function MerchAdminClient({
       <SlidePanel
         open={adjustProduct !== null}
         onClose={() => setAdjustProduct(null)}
-        title={`Adjust Stock — ${adjustProduct?.name ?? ""}`}
+        title={`Adjust Stock - ${adjustProduct?.name ?? ""}`}
       >
         {adjustProduct && (
           <div className="space-y-6">
@@ -1021,7 +1021,7 @@ function ProductFormBody({
       {/* Image */}
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
-          Product Image (JPG, PNG, WEBP, HEIC, HEIF — max 5MB)
+          Product Image (JPG, PNG, WEBP, HEIC, HEIF - max 5MB)
         </label>
         {/* Preview existing or newly selected image */}
         {(form.imagePreview ?? form.existingImageUrl) && (

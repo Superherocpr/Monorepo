@@ -8,6 +8,7 @@
  */
 
 import { Resend } from "resend";
+import { welcomeEmail } from "@/lib/emails";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -32,22 +33,14 @@ export async function POST(request: Request) {
     return Response.json({ success: true, skipped: true });
   }
 
-  // Instantiated inside the handler so it never executes at build time
   const resend = new Resend(process.env.RESEND_API_KEY);
+  const { subject, html } = welcomeEmail({ firstName });
 
   await resend.emails.send({
-    from: "Superhero CPR <noreply@superherocpr.com>",
+    from: process.env.RESEND_FROM_EMAIL!,
     to: email,
-    subject: "Welcome to Superhero CPR!",
-    html: `
-      <h1>Welcome, ${firstName}!</h1>
-      <p>Your Superhero CPR account has been created successfully.</p>
-      <p>You can now book classes, view your certifications, and manage your account at
-        <a href="https://superherocpr.com/dashboard">superherocpr.com</a>.
-      </p>
-      <p>See you in class!</p>
-      <p>— The Superhero CPR Team</p>
-    `,
+    subject,
+    html,
   });
 
   return Response.json({ success: true });

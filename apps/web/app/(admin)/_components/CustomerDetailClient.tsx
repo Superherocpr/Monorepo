@@ -9,7 +9,7 @@
  */
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   CheckCircle2,
 } from "lucide-react";
+import { getCertificationDaysUntilExpiry } from "@/lib/cert-utils";
 import type { UserRole } from "@/types/users";
 
 // ── Data types ────────────────────────────────────────────────────────────────
@@ -178,9 +179,7 @@ function fmtTime(iso: string): string {
  * @param expiresAt - ISO date string for the expiry date.
  */
 function daysUntilExpiry(expiresAt: string): number {
-  const now = new Date();
-  const expiry = new Date(expiresAt);
-  return Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  return getCertificationDaysUntilExpiry(expiresAt);
 }
 
 /**
@@ -243,6 +242,112 @@ function paymentTypeClass(type: string): string {
   }
 }
 
+// ── Shared styles ────────────────────────────────────────────────────────────
+
+/** Input style used across all slide panels and inline forms. */
+const inputClass =
+  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500";
+
+/** Label style used across all slide panels and inline forms. */
+const labelClass = "mb-1 block text-sm font-medium text-gray-700";
+
+// ── Shared sub-components ─────────────────────────────────────────────────────
+// Defined at module level (NOT inside CustomerDetailClient) so React never
+// treats them as new component types on re-render, which would unmount the
+// DOM nodes and drop keyboard focus after each keystroke.
+
+interface EditableFieldProps {
+  /** HTML id / field key — used for the label's htmlFor and input id. */
+  field: string;
+  label: string;
+  type?: string;
+  note?: string;
+  value: string;
+  /** Whether the auto-save request for this field is in-flight. */
+  saving: boolean;
+  onChange: (value: string) => void;
+  onBlur: (value: string) => void;
+}
+
+/**
+ * Labeled inline-editable text input for a customer profile field.
+ * Calls onBlur when the input loses focus so the parent can persist the value.
+ */
+function EditableField({
+  field,
+  label,
+  type = "text",
+  note,
+  value,
+  saving,
+  onChange,
+  onBlur,
+}: EditableFieldProps) {
+  return (
+    <div>
+      <label htmlFor={field} className={labelClass}>
+        {label}
+        {saving && (
+          <span className="ml-2 text-xs text-gray-400">Saving…</span>
+        )}
+      </label>
+      <input
+        id={field}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={(e) => onBlur(e.target.value)}
+        className={inputClass}
+      />
+      {note && <p className="mt-1 text-xs text-amber-600">{note}</p>}
+    </div>
+  );
+}
+
+/**
+ * Slide-in panel overlay with a dark backdrop and close button.
+ * Purely presentational — no state from the parent is closed over.
+ */
+function SlidePanel({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-black/40"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-xl"
+      >
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Close panel"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex flex-1 flex-col overflow-y-auto px-6 py-6">
+          {children}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 /** Full customer detail page client component. Manages tabs, mutations, and inline forms. */
@@ -260,7 +365,6 @@ export default function CustomerDetailClient({
     availableSessions,
     certTypes,
     actorRole,
-    actorId,
   } = data;
 
   const router = useRouter();
@@ -336,8 +440,6 @@ export default function CustomerDetailClient({
 
   // ── Archive account (super admin only) ──────────────────────────────────────
 
-  const firstPanelInputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
-
   /**
    * Archives the customer account. Only callable by super admin.
    */
@@ -359,8 +461,9 @@ export default function CustomerDetailClient({
 
   /**
    * Saves the email address explicitly when the user clicks "Update Email".
-   * A separate flow from other fields to prevent accidental Supabase
-   * confirmation emails being triggered by a blur event.
+   * A separate flow from other fields to prevent an accidental blur from
+   * triggering a write. Updates both profiles.email and auth.users.email
+   * immediately — no confirmation email is sent (admin action).
    */
   async function handleSaveEmail() {
     const trimmed = emailDraft.trim();
@@ -373,11 +476,12 @@ export default function CustomerDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ field: "email", value: trimmed }),
       });
+      const json = await res.json();
       if (res.ok) {
-        setEmailMsg(`Confirmation sent to ${trimmed}. The address will update once confirmed.`);
+        setEmailMsg(`Email updated to ${trimmed}.`);
         router.refresh();
       } else {
-        setEmailMsg("Failed to update email. Please try again.");
+        setEmailMsg(json.error ?? "Failed to update email. Please try again.");
       }
     } finally {
       setEmailSaving(false);
@@ -630,100 +734,6 @@ export default function CustomerDetailClient({
 
   // Bookings that have a session (not cancelled) for the log-payment panel dropdown
   const activeBookingsForPayment = bookings.filter((b) => !b.cancelled);
-
-  // ── Helpers ──────────────────────────────────────────────────────────────────
-
-  /** Shared panel field class for consistent styling. */
-  const inputClass =
-    "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500";
-
-  /** Shared label class. */
-  const labelClass = "mb-1 block text-sm font-medium text-gray-700";
-
-  // ── Editable profile field ───────────────────────────────────────────────────
-
-  /**
-   * Renders a labeled inline-editable text input for a profile field.
-   * Saves on blur if the value changed.
-   */
-  function EditableField({
-    field,
-    label,
-    type = "text",
-    note,
-  }: {
-    field: keyof typeof profileValues;
-    label: string;
-    type?: string;
-    note?: string;
-  }) {
-    return (
-      <div>
-        <label htmlFor={field} className={labelClass}>
-          {label}
-          {fieldSaving === field && (
-            <span className="ml-2 text-xs text-gray-400">Saving…</span>
-          )}
-        </label>
-        <input
-          id={field}
-          type={type}
-          value={profileValues[field]}
-          onChange={(e) =>
-            setProfileValues((prev) => ({ ...prev, [field]: e.target.value }))
-          }
-          onBlur={(e) => handleFieldBlur(field, e.target.value)}
-          className={inputClass}
-        />
-        {note && <p className="mt-1 text-xs text-amber-600">{note}</p>}
-      </div>
-    );
-  }
-
-  // ── Slide-in panel wrapper ───────────────────────────────────────────────────
-
-  /**
-   * Wraps content in a slide-in panel overlay with a backdrop and close button.
-   */
-  function SlidePanel({
-    title,
-    onClose,
-    children,
-  }: {
-    title: string;
-    onClose: () => void;
-    children: React.ReactNode;
-  }) {
-    return (
-      <>
-        <div
-          className="fixed inset-0 z-40 bg-black/40"
-          onClick={onClose}
-          aria-hidden="true"
-        />
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={title}
-          className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-xl"
-        >
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-            <button
-              onClick={onClose}
-              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              aria-label="Close panel"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          <div className="flex flex-1 flex-col overflow-y-auto px-6 py-6">
-            {children}
-          </div>
-        </div>
-      </>
-    );
-  }
 
   // ── Tab content renderers ─────────────────────────────────────────────────────
 
@@ -1031,7 +1041,7 @@ export default function CustomerDetailClient({
                     <ul className="mt-1 space-y-0.5">
                       {order.order_items.map((item, i) => (
                         <li key={i} className="text-sm text-gray-800">
-                          {item.product_variants.products.name} —{" "}
+                          {item.product_variants.products.name} -{" "}
                           {item.product_variants.size} × {item.quantity}
                         </li>
                       ))}
@@ -1289,8 +1299,22 @@ export default function CustomerDetailClient({
           Profile
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <EditableField field="first_name" label="First name" />
-          <EditableField field="last_name" label="Last name" />
+          <EditableField
+            field="first_name"
+            label="First name"
+            value={profileValues.first_name}
+            saving={fieldSaving === "first_name"}
+            onChange={(v) => setProfileValues((prev) => ({ ...prev, first_name: v }))}
+            onBlur={(v) => handleFieldBlur("first_name", v)}
+          />
+          <EditableField
+            field="last_name"
+            label="Last name"
+            value={profileValues.last_name}
+            saving={fieldSaving === "last_name"}
+            onChange={(v) => setProfileValues((prev) => ({ ...prev, last_name: v }))}
+            onBlur={(v) => handleFieldBlur("last_name", v)}
+          />
 
           {/* Email — explicit save button to prevent accidental confirmation emails */}
           <div className="sm:col-span-2">
@@ -1326,19 +1350,54 @@ export default function CustomerDetailClient({
                 {emailMsg}
               </p>
             ) : (
-              <p className="mt-1 text-xs text-amber-600">
-                Supabase will send a confirmation to the new address before updating.
+              <p className="mt-1 text-xs text-gray-400">
+                Updates both the login email and profile immediately.
               </p>
             )}
           </div>
 
-          <EditableField field="phone" label="Phone" />
+          <EditableField
+            field="phone"
+            label="Phone"
+            value={profileValues.phone}
+            saving={fieldSaving === "phone"}
+            onChange={(v) => setProfileValues((prev) => ({ ...prev, phone: v }))}
+            onBlur={(v) => handleFieldBlur("phone", v)}
+          />
           <div className="sm:col-span-2">
-            <EditableField field="address" label="Address" />
+            <EditableField
+              field="address"
+              label="Address"
+              value={profileValues.address}
+              saving={fieldSaving === "address"}
+              onChange={(v) => setProfileValues((prev) => ({ ...prev, address: v }))}
+              onBlur={(v) => handleFieldBlur("address", v)}
+            />
           </div>
-          <EditableField field="city" label="City" />
-          <EditableField field="state" label="State" />
-          <EditableField field="zip" label="ZIP" />
+          <EditableField
+            field="city"
+            label="City"
+            value={profileValues.city}
+            saving={fieldSaving === "city"}
+            onChange={(v) => setProfileValues((prev) => ({ ...prev, city: v }))}
+            onBlur={(v) => handleFieldBlur("city", v)}
+          />
+          <EditableField
+            field="state"
+            label="State"
+            value={profileValues.state}
+            saving={fieldSaving === "state"}
+            onChange={(v) => setProfileValues((prev) => ({ ...prev, state: v }))}
+            onBlur={(v) => handleFieldBlur("state", v)}
+          />
+          <EditableField
+            field="zip"
+            label="ZIP"
+            value={profileValues.zip}
+            saving={fieldSaving === "zip"}
+            onChange={(v) => setProfileValues((prev) => ({ ...prev, zip: v }))}
+            onBlur={(v) => handleFieldBlur("zip", v)}
+          />
         </div>
 
         {/* Send password reset */}
@@ -1421,7 +1480,7 @@ export default function CustomerDetailClient({
                     value={s.id}
                     disabled={s.spotsRemaining === 0}
                   >
-                    {s.class_types.name} — {fmtDate(s.starts_at)}{" "}
+                    {s.class_types.name} - {fmtDate(s.starts_at)}{" "}
                     {fmtTime(s.starts_at)} · {s.spotsRemaining} spot
                     {s.spotsRemaining !== 1 ? "s" : ""} left
                   </option>
@@ -1515,7 +1574,7 @@ export default function CustomerDetailClient({
                   Expires:{" "}
                   {(() => {
                     const ct = certTypes.find((t) => t.id === issueCertTypeId);
-                    if (!ct) return "—";
+                    if (!ct) return "-";
                     const exp = new Date(issuedAt);
                     exp.setMonth(exp.getMonth() + ct.validity_months);
                     return fmtDate(exp.toISOString());

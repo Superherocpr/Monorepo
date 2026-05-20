@@ -8,7 +8,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { getSetting } from "@/lib/zoho";
 import SubmissionsClient, {
   type SubmissionWithReplies,
   type ContactFilters,
@@ -58,15 +58,13 @@ export default async function ContactPage({
   }
 
   // ── Zoho connection check ──────────────────────────────────────────────────
-  // Use admin client to bypass any RLS on system_settings
-  const adminSupabase = await createAdminClient();
-  const { data: zohoSetting } = await adminSupabase
-    .from("system_settings")
-    .select("value")
-    .eq("key", "zoho_access_token")
-    .maybeSingle();
+  // A usable connection requires the durable account ID plus a refresh token.
+  const [zohoAccountId, zohoRefreshToken] = await Promise.all([
+    getSetting("zoho_account_id"),
+    getSetting("zoho_refresh_token"),
+  ]);
 
-  const isZohoConnected = !!zohoSetting?.value;
+  const isZohoConnected = Boolean(zohoAccountId && zohoRefreshToken);
 
   // ── Build filtered submissions query ──────────────────────────────────────
   // Order: unreplied first, then newest within each group

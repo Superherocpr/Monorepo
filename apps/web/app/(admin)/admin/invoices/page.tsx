@@ -22,11 +22,13 @@ import InvoicesClient, {
 async function fetchInstructors(
   supabase: Awaited<ReturnType<typeof createClient>>
 ): Promise<InstructorOption[]> {
+  // Any non-customer profile may own invoices — include all active staff roles.
+  // Staff use 'deactivated', not 'archived' (which is for customers only).
   const { data } = await supabase
     .from("profiles")
     .select("id, first_name, last_name")
-    .eq("role", "instructor")
-    .eq("archived", false)
+    .neq("role", "customer")
+    .eq("deactivated", false)
     .order("last_name", { ascending: true });
   return (data ?? []) as InstructorOption[];
 }

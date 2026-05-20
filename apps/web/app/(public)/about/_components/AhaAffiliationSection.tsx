@@ -4,19 +4,24 @@
  * Used by: app/(public)/about/page.tsx
  */
 
+import Image from "next/image";
+
 /** Renders the American Heart Association affiliation section. */
 export default function AhaAffiliationSection() {
   return (
     <section className="py-20 px-4 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
 
-          {/* Logo placeholder */}
-          <div className="flex items-center justify-center lg:justify-start">
-            {/* TODO: add official AHA logo asset to /public/images/aha-logo.png and replace this placeholder */}
-            <div className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 text-sm text-center px-4">
-              American Heart Association Logo
-            </div>
+          {/* AHA Authorized Training Site badge */}
+          <div className="flex items-center justify-center">
+            <Image
+              src="/images/aha-authorized-training-site.png"
+              alt="American Heart Association Authorized Training Site"
+              width={320}
+              height={120}
+              className="object-contain"
+            />
           </div>
 
           {/* Text */}
@@ -25,16 +30,16 @@ export default function AhaAffiliationSection() {
               American Heart Association Certified
             </h2>
             <p className="text-gray-600 leading-relaxed">
-              The American Heart Association is the world's leading nonprofit
+              The American Heart Association is the world&apos;s leading nonprofit
               organization focused on heart disease and stroke. AHA
               certification is the gold standard recognized by employers,
               hospitals, and healthcare organizations nationwide. When you
-              train with Superhero CPR, you receive official AHA
-              certification — the same standard required by healthcare
+              train with SuperHeroCPR, you receive official AHA
+              certification, the same standard required by healthcare
               professionals.
             </p>
             <p className="text-sm text-gray-500">
-              Superhero CPR is an authorized American Heart Association
+              SuperHeroCPR is an authorized American Heart Association
               Training Site.
             </p>
           </div>

@@ -7,6 +7,7 @@
  */
 
 import { Resend } from "resend";
+import { rollcallWelcomeEmail } from "@/lib/emails";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 /**
@@ -107,20 +108,12 @@ export async function POST(request: Request) {
   // ── 4. Send welcome email ────────────────────────────────────────────────
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
+    const { subject, html } = rollcallWelcomeEmail({ firstName });
     await resend.emails.send({
-      from: "Superhero CPR <noreply@superherocpr.com>",
+      from: process.env.RESEND_FROM_EMAIL!,
       to: email.toLowerCase(),
-      subject: "Welcome to Superhero CPR!",
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-          <h1 style="color: #dc2626;">Welcome, ${firstName}!</h1>
-          <p>You've been checked in for today's class. Great to have you!</p>
-          <p>Your Superhero CPR account is now active. You can view your certifications
-          and booking history at
-          <a href="https://superherocpr.com/dashboard">superherocpr.com/dashboard</a>.</p>
-          <p>— The Superhero CPR Team</p>
-        </div>
-      `,
+      subject,
+      html,
     });
   } catch {
     // Welcome email failure is non-fatal — student is still checked in

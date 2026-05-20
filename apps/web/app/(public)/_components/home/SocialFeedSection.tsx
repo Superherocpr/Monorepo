@@ -7,6 +7,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import Image from "next/image";
 import type { SocialFeedPost } from "@/types/social";
 
 /** Renders the "Follow Along" social media photo strip. */
@@ -20,14 +21,14 @@ export default async function SocialFeedSection() {
     .limit(8);
 
   return (
-    <section className="py-20 px-4 bg-gray-50">
+    <section className="pt-10 pb-20 px-4 bg-gray-50">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 mb-2">
             Follow Along
           </h2>
           <p className="text-gray-600 text-sm mb-3">
-            See what's happening at Superhero CPR on Facebook
+            See what&apos;s happening at SuperHeroCPR on Facebook
           </p>
           <a
             href="https://www.facebook.com/1HeroWay"
@@ -56,15 +57,18 @@ export default async function SocialFeedSection() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="relative shrink-0 w-36 h-36 md:w-44 md:h-44 rounded-lg overflow-hidden group"
-                  aria-label={photo.caption ?? "Superhero CPR Facebook post"}
+                  aria-label={photo.caption ?? "SuperHeroCPR Facebook post"}
                 >
-                  {/* Facebook CDN URLs are signed and occasionally fail through the Next image optimizer. */}
-                  <img
+                  {/* Facebook CDN URLs are signed and occasionally fail through the Next
+                      image optimizer — unoptimized bypasses the optimizer while still
+                      satisfying the no-img-element lint rule. */}
+                  <Image
                     src={photo.photo_url}
-                    alt={photo.caption ?? "Superhero CPR class photo"}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                    decoding="async"
+                    alt={photo.caption ?? "SuperHeroCPR class photo"}
+                    unoptimized
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    sizes="(max-width: 768px) 144px, 176px"
                   />
                   {/* Hover overlay */}
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
