@@ -1137,7 +1137,7 @@ export function invoiceEmail({
 
   // Group invoices include a roster submission prompt so the company can
   // pre-register attendees and save time on class day.
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://superherocpr.com";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
   const rosterSection =
     invoiceType === "group"
       ? `<hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />

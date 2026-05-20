@@ -47,7 +47,7 @@ export async function POST(request: Request): Promise<Response> {
   // Supabase's default email so the reset flow still works in development.
   if (!process.env.RESEND_API_KEY) {
     const supabase = await createAdminClient();
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
     await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${siteUrl}/book/reset-password`,
     }).catch(() => {/* non-fatal — always return success */});
@@ -55,7 +55,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const supabase = await createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
 
   // Generate the recovery link via the admin API so we control the redirect
   // destination and can embed it in our own branded email.
