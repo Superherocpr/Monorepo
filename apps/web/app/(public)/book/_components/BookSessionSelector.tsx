@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, X } from "lucide-react";
+import { Calendar, Loader2, MapPin, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { setBookingStore } from "@/lib/booking-store";
 import BookingProgress from "./BookingProgress";
@@ -50,6 +50,59 @@ function formatShortDate(iso: string): string {
   });
 }
 
+/** The radius used for zip code proximity filtering, in miles. */
+const ZIP_RADIUS_MILES = 50;
+
+/**
+ * Computes the great-circle distance between two lat/lng points using the
+ * Haversine formula. Returns the result in miles.
+ * @param lat1 - Latitude of point 1 in decimal degrees
+ * @param lng1 - Longitude of point 1 in decimal degrees
+ * @param lat2 - Latitude of point 2 in decimal degrees
+ * @param lng2 - Longitude of point 2 in decimal degrees
+ */
+function haversineDistanceMiles(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 3958.8; // Earth radius in miles
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+/** Coordinates returned from zip geocoding. */
+interface ZipCoords {
+  lat: number;
+  lng: number;
+}
+
+/**
+ * Looks up the lat/lng for a US zip code via the free zippopotam.us API.
+ * Returns null if the zip is not found or the request fails.
+ * @param zip - 5-digit US zip code
+ */
+async function geocodeZip(zip: string): Promise<ZipCoords | null> {
+  try {
+    const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      places?: Array<{ latitude: string; longitude: string }>;
+    };
+    const place = data.places?.[0];
+    if (!place) return null;
+    return { lat: parseFloat(place.latitude), lng: parseFloat(place.longitude) };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Renders the full Step 1 booking UI: filter bar, session cards, progress bar.
  * Handles pre-selection from URL params, guards full sessions, and routes
@@ -70,12 +123,25 @@ export default function BookSessionSelector({
   const [selecting, setSelecting] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const isFiltered = !!activeClassType || !!dateFrom || !!dateTo;
+  // Zip code proximity filter state
+  const [zipInput, setZipInput] = useState("");
+  const [zipFilter, setZipFilter] = useState(""); // the zip that was actually searched
+  const [zipCoords, setZipCoords] = useState<ZipCoords | null>(null);
+  // Cache of location zip → coords to avoid re-geocoding on every render
+  const [zipCoordsCache, setZipCoordsCache] = useState<Map<string, ZipCoords>>(new Map());
+  const [zipError, setZipError] = useState<string | null>(null);
+  const [zipLoading, setZipLoading] = useState(false);
+
+  const isFiltered = !!activeClassType || !!dateFrom || !!dateTo || !!zipFilter;
 
   function clearFilters() {
     setActiveClassType(null);
     setDateFrom("");
     setDateTo("");
+    setZipInput("");
+    setZipFilter("");
+    setZipCoords(null);
+    setZipError(null);
   }
 
   // Auto-select if ?session= param is present on mount
@@ -87,6 +153,55 @@ export default function BookSessionSelector({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Geocodes the entered zip, pre-geocodes all unique session location zips,
+   * and applies the 50-mile radius filter.
+   */
+  async function handleZipSearch() {
+    const zip = zipInput.trim();
+    if (!zip) return;
+
+    // Basic 5-digit zip validation before hitting the API
+    if (!/^\d{5}$/.test(zip)) {
+      setZipError("Please enter a valid 5-digit zip code.");
+      return;
+    }
+
+    setZipLoading(true);
+    setZipError(null);
+
+    const userCoords = await geocodeZip(zip);
+    if (!userCoords) {
+      setZipLoading(false);
+      setZipError("Zip code not found. Please try another.");
+      return;
+    }
+
+    // Pre-geocode all unique location zips in parallel so the filter runs
+    // synchronously without async lookups on every render.
+    const uniqueLocationZips = [
+      ...new Set(
+        sessions
+          .map((s) => s.locations?.zip)
+          .filter((z): z is string => !!z)
+      ),
+    ];
+
+    const newCache = new Map<string, ZipCoords>(zipCoordsCache);
+    await Promise.all(
+      uniqueLocationZips.map(async (locationZip) => {
+        if (newCache.has(locationZip)) return; // already cached
+        const coords = await geocodeZip(locationZip);
+        if (coords) newCache.set(locationZip, coords);
+      })
+    );
+
+    setZipCoordsCache(newCache);
+    setZipCoords(userCoords);
+    setZipFilter(zip);
+    setZipLoading(false);
+  }
 
   /**
    * Handles a session card "Select" click.
@@ -137,6 +252,21 @@ export default function BookSessionSelector({
     if (activeClassType && toSlug(session.class_types.name) !== activeClassType) return false;
     if (dateFrom && sessionDate < new Date(dateFrom)) return false;
     if (dateTo && sessionDate > new Date(dateTo + "T23:59:59")) return false;
+
+    // Zip proximity filter — only applied after a successful zip lookup
+    if (zipCoords && session.locations?.zip) {
+      const locationCoords = zipCoordsCache.get(session.locations.zip);
+      // Exclude if the location couldn't be geocoded or is beyond the radius
+      if (!locationCoords) return false;
+      const distance = haversineDistanceMiles(
+        zipCoords.lat,
+        zipCoords.lng,
+        locationCoords.lat,
+        locationCoords.lng
+      );
+      if (distance > ZIP_RADIUS_MILES) return false;
+    }
+
     return true;
   });
 
@@ -159,6 +289,72 @@ export default function BookSessionSelector({
             <p className="text-gray-500 mt-1 text-sm">
               Select an upcoming session to reserve your spot.
             </p>
+          </div>
+
+          {/* ── Zip code proximity filter — prominent, top of sidebar ── */}
+          <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <MapPin className="text-red-600 shrink-0" size={18} aria-hidden="true" />
+              <p className="text-sm font-semibold text-red-700">Find Classes Near You</p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                id="book-zip-input"
+                type="text"
+                inputMode="numeric"
+                maxLength={5}
+                value={zipInput}
+                onChange={(e) => {
+                  // Allow only digits
+                  setZipInput(e.target.value.replace(/\D/g, ""));
+                  setZipError(null);
+                }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleZipSearch(); }}
+                placeholder="e.g. 34205"
+                aria-label="Enter your zip code"
+                className="flex-1 min-w-0 border border-red-200 bg-white rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+              <button
+                onClick={handleZipSearch}
+                disabled={zipLoading || zipInput.trim().length !== 5}
+                aria-label="Search classes by zip code"
+                className="shrink-0 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 flex items-center gap-1.5"
+              >
+                {zipLoading ? (
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  "Search"
+                )}
+              </button>
+            </div>
+
+            {/* Error state */}
+            {zipError && (
+              <p role="alert" className="text-xs text-red-600 font-medium">
+                {zipError}
+              </p>
+            )}
+
+            {/* Active filter badge */}
+            {zipFilter && !zipLoading && (
+              <div className="flex items-center justify-between bg-white border border-red-200 rounded-lg px-3 py-2">
+                <span className="text-xs text-gray-700">
+                  Within <span className="font-semibold">{ZIP_RADIUS_MILES} mi</span> of{" "}
+                  <span className="font-semibold">{zipFilter}</span>
+                </span>
+                <button
+                  onClick={() => {
+                    setZipFilter("");
+                    setZipCoords(null);
+                    setZipError(null);
+                  }}
+                  aria-label="Clear zip code filter"
+                  className="text-gray-400 hover:text-red-600 transition-colors duration-150 ml-2"
+                >
+                  <X size={13} aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Class type filter pills */}
