@@ -129,7 +129,7 @@ export async function POST(request: Request) {
   // ── Step 2: Capture the PayPal payment server-side ───────────────────────
   const accessToken = await getPayPalAccessToken();
   const captureResponse = await fetch(
-    `${PAYPAL_API_BASE}/v2/checkout/orders/${paypalOrderId}/capture`,
+    `${getPayPalApiBase()}/v2/checkout/orders/${paypalOrderId}/capture`,
     {
       method: "POST",
       headers: {
@@ -147,12 +147,18 @@ export async function POST(request: Request) {
 
   const captureData = (await captureResponse.json()) as {
     purchase_units?: Array<{
+      payee?: { merchant_id?: string; email_address?: string };
       payments?: { captures?: Array<{ id?: string; amount?: { value: string } }> };
     }>;
   };
 
-  const capture = captureData.purchase_units?.[0]?.payments?.captures?.[0];
+  const purchaseUnit = captureData.purchase_units?.[0];
+  const capture = purchaseUnit?.payments?.captures?.[0];
   const paypalTransactionId = capture?.id ?? null;
+  // PayPal returns the actual destination merchant_id on the capture's payee.
+  // This is the source of truth for routing — used below to attribute the
+  // payment to either an instructor account or the business account.
+  const payeeMerchantId = purchaseUnit?.payee?.merchant_id ?? null;
 
   // Verify PayPal captured the expected amount (defence in depth).
   if (capture?.amount?.value) {
