@@ -8,8 +8,13 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { getPayPalAccessToken } from "@/lib/paypal";
+import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 
+/**
+ * Refunds a paid merch order through PayPal, then cancels it locally and restores stock.
+ * Side effects: PayPal refund, orders update, product_variants stock increment RPC.
+ * @param request - JSON request containing orderId and refundAmount.
+ */
 export async function POST(request: Request) {
   const supabase = await createClient();
 
@@ -80,11 +85,9 @@ export async function POST(request: Request) {
   if (order.paypal_transaction_id) {
     try {
       const token = await getPayPalAccessToken();
-      const paypalBase =
-        process.env.PAYPAL_API_BASE ?? "https://api-m.sandbox.paypal.com";
 
       const paypalRes = await fetch(
-        `${paypalBase}/v2/payments/captures/${order.paypal_transaction_id}/refund`,
+        `${getPayPalApiBase()}/v2/payments/captures/${order.paypal_transaction_id}/refund`,
         {
           method: "POST",
           headers: {

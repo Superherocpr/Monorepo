@@ -1,6 +1,6 @@
 ---
 title: Lead Instructor
-photo: /images/placeholders/instructor.jpg
+photo: /images/Untitled-2.jpg
 credentials:
   - Licensed American Heart Association Instructor
   - Active Fire and EMS Responder
@@ -10,4 +10,4 @@ years_experience: 20
 students_trained: "5,000+"
 ---
 
-Bio coming soon. This content will be replaced with the full instructor biography.
+SuperHeroCPR's lead instructor brings frontline Fire, EMS, and Emergency Room experience into every class. The training is calm, practical, and focused on helping students recognize an emergency, start care quickly, and feel prepared to act when seconds matter.

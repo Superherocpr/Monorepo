@@ -6,7 +6,10 @@
 
 import Image from "next/image";
 
-/** Renders the American Heart Association affiliation section. */
+/**
+ * Renders the American Heart Association affiliation section.
+ * @returns The AHA affiliation section.
+ */
 export default function AhaAffiliationSection() {
   return (
     <section className="py-20 px-4 bg-white">
@@ -15,13 +18,15 @@ export default function AhaAffiliationSection() {
 
           {/* AHA Authorized Training Site badge */}
           <div className="flex items-center justify-center">
-            <Image
-              src="/images/aha-authorized-training-site.png"
-              alt="American Heart Association Authorized Training Site"
-              width={320}
-              height={120}
-              className="object-contain"
-            />
+            <div className="relative h-[82px] w-[320px] max-w-full">
+              <Image
+                src="/images/aha-authorized-training-site.png"
+                alt="American Heart Association Authorized Training Site"
+                fill
+                className="object-contain"
+                sizes="320px"
+              />
+            </div>
           </div>
 
           {/* Text */}

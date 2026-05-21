@@ -52,6 +52,8 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
   const [description, setDescription] = useState("");
   // Credentials textarea value — comma-separated list, initialised from DB
   const [credentials, setCredentials] = useState("");
+  // Public publishing toggle — unpublished bios are stored but hidden from /about
+  const [published, setPublished] = useState(false);
   // Stat fields — only shown/used for the lead instructor, but stored for all staff
   const [yearsExperience, setYearsExperience] = useState("");
   const [studentsTrained, setStudentsTrained] = useState("");
@@ -74,6 +76,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
     if (member) {
       setDescription(member.bio_description ?? "");
       setCredentials(member.bio_credentials ?? "");
+      setPublished(member.bio_published ?? false);
       setYearsExperience(member.bio_years_experience ?? "");
       setStudentsTrained(member.bio_students_trained ?? "");
       setSavedPhotoUrl(member.bio_photo ?? null);
@@ -203,6 +206,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
           bio_photo: finalPhotoUrl,
           bio_description: description.trim() || null,
           bio_credentials: credentials.trim() || null,
+          bio_published: published,
           bio_years_experience: yearsExperience.trim() || null,
           bio_students_trained: studentsTrained.trim() || null,
         }),
@@ -379,6 +383,24 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
               placeholder="e.g. Licensed AHA Instructor, BLS Provider, PALS Certified"
               className={`${inputClass} resize-y`}
             />
+          </div>
+
+          {/* Publishing section */}
+          <div>
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+              <input
+                type="checkbox"
+                checked={published}
+                onChange={(e) => setPublished(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold text-gray-700">Published</span>
+                <span className="text-xs text-gray-500">
+                  Show this bio on the public About page.
+                </span>
+              </span>
+            </label>
           </div>
 
           {/* Stats section — displayed in the lead instructor's stat block on the About page */}

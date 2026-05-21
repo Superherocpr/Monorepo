@@ -13,6 +13,7 @@
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { decryptToken } from "@/lib/crypto";
+import { getPayPalApiBase } from "@/lib/paypal";
 import type { PaymentPlatform } from "@/types/users";
 
 /** Type guard — ensures a value is a non-null object. */
@@ -35,7 +36,7 @@ async function cancelOnPlatform(
   if (platform === "paypal" || platform === "venmo_business") {
     // Venmo Business uses PayPal's invoicing API
     const res = await fetch(
-      `https://api-m.paypal.com/v2/invoicing/invoices/${platformInvoiceId}/cancel`,
+      `${getPayPalApiBase()}/v2/invoicing/invoices/${platformInvoiceId}/cancel`,
       {
         method: "POST",
         headers: {
@@ -83,6 +84,11 @@ async function cancelOnPlatform(
   return false;
 }
 
+/**
+ * Cancels an invoice on its payment platform, then records the cancellation locally.
+ * Side effects: payment-platform invoice cancellation, invoice update, activity log insert.
+ * @param request - JSON request containing invoiceId.
+ */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 

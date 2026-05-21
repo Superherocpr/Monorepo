@@ -270,7 +270,7 @@ export default function LegacySitePage() {
               CPR License And Renewal Classes
             </h2>
             <p className="text-base text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Real-world instruction from someone who's been on the front line,
+              Real-world instruction from someone who&apos;s been on the front line,
               so you walk away ready to act when it matters.
             </p>
           </div>

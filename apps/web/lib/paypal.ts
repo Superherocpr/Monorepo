@@ -12,9 +12,11 @@
  *      `PayPal-Auth-Assertion` header.
  *
  * `PAYPAL_API_BASE` controls the environment (sandbox vs live) for ALL PayPal
- * calls in the codebase. The browser-facing OAuth consent screen URL is derived
- * from the same value via `getPayPalConnectBase()` so sandbox/live can never
- * drift between the API and consent screen.
+ * calls in the codebase. Production deployments must set it explicitly so a
+ * missing env var cannot silently send real customers through sandbox PayPal.
+ * The browser-facing OAuth consent screen URL is derived from the same value via
+ * `getPayPalConnectBase()` so sandbox/live can never drift between the API and
+ * consent screen.
  *
  * Server-side only. Never import this in client components.
  */
@@ -37,10 +39,19 @@ const LIVE_CONNECT = "https://www.paypal.com";
 
 /**
  * Returns the PayPal REST API base URL for the current environment.
- * Defaults to sandbox if `PAYPAL_API_BASE` is unset.
+ * Defaults to sandbox in local development only. Production requires an
+ * explicit PAYPAL_API_BASE so payments cannot accidentally run against sandbox.
+ * @throws Error when PAYPAL_API_BASE is missing in production.
  */
 export function getPayPalApiBase(): string {
-  return process.env.PAYPAL_API_BASE ?? SANDBOX_API;
+  const configuredBase = process.env.PAYPAL_API_BASE;
+  if (configuredBase) return configuredBase;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "PAYPAL_API_BASE must be set in production to either https://api-m.paypal.com or https://api-m.sandbox.paypal.com."
+    );
+  }
+  return SANDBOX_API;
 }
 
 /**

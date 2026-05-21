@@ -129,6 +129,11 @@ async function verifyMagicBytes(file: File): Promise<boolean> {
  * submission in the database, and sends confirmation + manager notification emails.
  * @param request - Multipart form data with file, invoiceId, sessionId, and optional submitter info.
  */
+/**
+ * Accepts a public roster upload for a verified invoice and stores it for admin import.
+ * Side effects: S3 object write, roster_uploads insert, optional Resend emails.
+ * @param request - Multipart form request containing invoice metadata and roster file.
+ */
 export async function POST(request: Request) {
   // ── Parse form data ────────────────────────────────────────────────────────
   let formData: FormData;
@@ -208,12 +213,8 @@ export async function POST(request: Request) {
 
   // ── Upload to S3 ───────────────────────────────────────────────────────────
   const bucket = getBucketName();
-  if (
-    !bucket ||
-    !process.env.AWS_REGION ||
-    !process.env.AWS_ACCESS_KEY_ID ||
-    !process.env.AWS_SECRET_ACCESS_KEY
-  ) {
+  const region = process.env.AWS_REGION;
+  if (!bucket || !region) {
     return Response.json(
       { success: false, error: "File storage is not configured. Please contact support." },
       { status: 500 }
@@ -239,7 +240,7 @@ export async function POST(request: Request) {
       })
     );
 
-    s3Url = `https://${bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    s3Url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
   } catch (err) {
     console.error("[roster-upload/submit] S3 upload failed:", err);
     return Response.json(

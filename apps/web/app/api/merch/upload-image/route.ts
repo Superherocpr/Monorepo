@@ -54,6 +54,11 @@ function getBucketName(): string | null {
   return process.env.S3_BUCKET_NAME ?? null;
 }
 
+/**
+ * Uploads a merch product image to S3 after confirming the caller is a super admin.
+ * Side effects: S3 object write under the merch/ prefix.
+ * @param request - Multipart form request containing the image file.
+ */
 export async function POST(request: Request) {
   // ── Auth guard ──────────────────────────────────────────────────────────────
   const supabase = await createClient();
@@ -107,17 +112,13 @@ export async function POST(request: Request) {
   // ── Upload to S3 ──────────────────────────────────────────────────────────
   try {
     const bucket = getBucketName();
-    if (
-      !bucket ||
-      !process.env.AWS_REGION ||
-      !process.env.AWS_ACCESS_KEY_ID ||
-      !process.env.AWS_SECRET_ACCESS_KEY
-    ) {
+    const region = process.env.AWS_REGION;
+    if (!bucket || !region) {
       return Response.json(
         {
           success: false,
           error:
-            "AWS S3 is not fully configured. Missing bucket, region, or credentials.",
+            "AWS S3 is not fully configured. Missing bucket or region.",
         },
         { status: 500 }
       );
@@ -141,7 +142,7 @@ export async function POST(request: Request) {
       })
     );
 
-    const url = `https://${bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
     return Response.json({ success: true, url });
   } catch (err) {
     console.error("[upload-image] S3 upload failed:", err);

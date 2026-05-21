@@ -34,6 +34,8 @@ export interface Profile {
   bio_description: string | null;
   /** Comma-separated credentials shown as checkmark items on the /about page (e.g. "AHA Instructor, BLS Provider"). Null if none entered. */
   bio_credentials: string | null;
+  /** Whether this staff bio is published to the public /about page. */
+  bio_published: boolean;
   /** Years of experience displayed on the lead instructor stat block (e.g. "20"). Null hides the stat. */
   bio_years_experience: string | null;
   /** Students trained figure displayed on the lead instructor stat block (e.g. "5,000+"). Null hides the stat. */

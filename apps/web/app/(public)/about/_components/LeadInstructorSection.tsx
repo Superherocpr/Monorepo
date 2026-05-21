@@ -10,10 +10,14 @@ import sanitizeHtml from "sanitize-html";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getLeadInstructorBio } from "@/lib/bios";
 
+/** Production fallback headshot used when the lead profile has no uploaded photo. */
+const FALLBACK_INSTRUCTOR_PHOTO = "/images/Untitled-2.jpg";
+
 /**
  * Returns true if a photo source is safe to pass to next/image.
  * Accepts root-relative paths and http/https absolute URLs.
  * @param value - Candidate photo URL from DB or markdown frontmatter.
+ * @returns True when the value can be rendered as an image source.
  */
 function isRenderablePhotoSrc(value: string | null | undefined): value is string {
   if (!value) return false;
@@ -27,7 +31,10 @@ function isRenderablePhotoSrc(value: string | null | undefined): value is string
   }
 }
 
-/** Renders the lead instructor card with photo, credentials, stats, and bio. */
+/**
+ * Renders the lead instructor card with photo, credentials, stats, and bio.
+ * @returns The lead instructor section.
+ */
 export default async function LeadInstructorSection() {
   // Use the admin client so RLS policies do not block reads of public-facing
   // instructor fields (name, photo, bio) for anonymous visitors.
@@ -45,15 +52,33 @@ export default async function LeadInstructorSection() {
 
   const bio = await getLeadInstructorBio();
 
-  // If no lead instructor profile exists in the DB, render a placeholder
+  // If the DB profile is not ready yet, still render a polished production
+  // section so the public page never exposes setup/internal state.
   if (!instructor) {
     return (
       <section className="py-20 px-4 bg-white">
-        <div className="max-w-7xl mx-auto">
-          {/* TODO: add lead instructor profile to the database */}
-          <p className="text-gray-400 text-sm text-center">
-            Instructor profile coming soon.
-          </p>
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div className="relative w-full aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-gray-100">
+            <Image
+              src={FALLBACK_INSTRUCTOR_PHOTO}
+              alt="SuperHeroCPR lead instructor"
+              fill
+              className="object-cover object-top"
+              sizes="(max-width: 768px) 100vw, 384px"
+              priority
+            />
+          </div>
+          <div className="mx-auto max-w-prose">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Real-World Emergency Experience
+            </h2>
+            <p className="text-gray-700 leading-relaxed">
+              SuperHeroCPR classes are taught by AHA-certified instructors with
+              frontline Fire, EMS, and Emergency Room experience. You get calm,
+              practical training from people who understand what it feels like
+              when seconds matter.
+            </p>
+          </div>
         </div>
       </section>
     );
@@ -61,7 +86,9 @@ export default async function LeadInstructorSection() {
 
   const fullName = `${instructor.first_name} ${instructor.last_name}`;
   const photoSrcCandidate = instructor.bio_photo ?? bio?.frontmatter.photo ?? null;
-  const photoSrc = isRenderablePhotoSrc(photoSrcCandidate) ? photoSrcCandidate : null;
+  const photoSrc = isRenderablePhotoSrc(photoSrcCandidate)
+    ? photoSrcCandidate
+    : FALLBACK_INSTRUCTOR_PHOTO;
   // Parse DB credentials first; fall back to markdown frontmatter.
   // Split on comma, trim whitespace, drop empty strings.
   const credentialItems: string[] = instructor.bio_credentials
@@ -79,32 +106,33 @@ export default async function LeadInstructorSection() {
 
           {/* Left column — photo, credentials, stats */}
           <div className="flex flex-col gap-6 items-center">
-            {/* Photo — use DB bio_photo if set, else fall back to markdown frontmatter */}
+            {/* Photo — use DB bio_photo if set, else fall back to markdown/frontmatter asset */}
             <div className="relative w-full aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-gray-100">
-              {photoSrc ? (
-                // TODO: replace placeholder with actual instructor photo
-                <Image
-                  src={photoSrc}
-                  alt={fullName}
-                  fill
-                  className="object-cover object-top"
-                  sizes="(max-width: 768px) 100vw, 384px"
-                  unoptimized
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
-                  Photo coming soon
-                </div>
-              )}
+              <Image
+                src={photoSrc}
+                alt={fullName}
+                fill
+                className="object-cover object-top"
+                sizes="(max-width: 768px) 100vw, 384px"
+                priority
+                unoptimized
+              />
             </div>
 
             {/* Name */}
             <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-900">{fullName}</h2>
-              {/* TODO: add AHA logo asset to /public/images/aha-logo.png */}
-              <p className="text-sm text-red-600 font-semibold mt-1">
-                AHA Certified Instructor
-              </p>
+              <div className="mt-3 flex justify-center">
+                <div className="relative h-[58px] w-[224px]">
+                  <Image
+                    src="/images/aha-authorized-training-site.png"
+                    alt="American Heart Association Authorized Training Site"
+                    fill
+                    className="object-contain"
+                    sizes="224px"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Credentials — DB credentials take priority over markdown frontmatter */}
