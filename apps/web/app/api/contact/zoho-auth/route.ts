@@ -55,6 +55,11 @@ export async function GET(_request: Request) {
     scope: "ZohoMail.messages.CREATE,ZohoMail.messages.READ,ZohoMail.accounts.READ",
     redirect_uri: redirectUri,
     access_type: "offline", // offline = include refresh_token in response
+    // prompt=consent forces Zoho to re-issue a refresh_token on every authorization.
+    // Without this, Zoho only returns a refresh_token on the very first approval —
+    // subsequent connects return only an access_token, which expires after 1 hour
+    // and leaves the integration permanently broken.
+    prompt: "consent",
   });
 
   redirect(`https://accounts.zoho.com/oauth/v2/auth?${params.toString()}`);
