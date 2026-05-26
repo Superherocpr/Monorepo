@@ -2,22 +2,23 @@
  * Admin Contact Submissions page — `/admin/contact`
  * Access: manager and super_admin only.
  * Loads all contact form submissions from the database (with optional filters),
- * checks whether Zoho Mail is connected, then hands off to SubmissionsClient
+ * checks whether Zoho Mail is connected, then hands off to ContactSubmissionsClient
  * for accordion expansion, thread loading, and reply sending.
  */
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSetting } from "@/lib/zoho";
-import SubmissionsClient, {
+import ContactSubmissionsClient, {
   type SubmissionWithReplies,
   type ContactFilters,
-} from "@/app/(admin)/_components/SubmissionsClient";
+} from "@/app/(admin)/_components/ContactSubmissionsClient";
 
 /** Valid inquiry_type values accepted as filter inputs. */
 const VALID_TYPES = new Set([
   "General Question",
   "Group Booking",
+  "Booking Inquiry",
   "Corporate Training",
   "Certification Renewal",
   "Other",
@@ -121,7 +122,7 @@ export default async function ContactPage({
         )}
       </div>
 
-      <SubmissionsClient
+      <ContactSubmissionsClient
         initialSubmissions={(submissions ?? []) as unknown as SubmissionWithReplies[]}
         filters={activeFilters}
         isZohoConnected={isZohoConnected}

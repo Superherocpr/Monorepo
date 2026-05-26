@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SubmissionsClient — client component for the admin contact submissions page.
+ * ContactSubmissionsClient — client component for the admin contact submissions page.
  * Renders the filter bar, the grouped submission list (unanswered / replied),
  * per-submission expand/collapse accordion, Zoho email thread display, and
  * the reply form. Used by: app/(admin)/admin/contact/page.tsx
@@ -67,6 +67,7 @@ const INQUIRY_TYPES = [
   "Group Booking",
   "Corporate Training",
   "Certification Renewal",
+  "Booking Inquiry",
   "Other",
 ];
 
@@ -125,7 +126,7 @@ function typeBadgeClass(type: string): string {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 /** Client component for the contact submissions page. */
-export default function SubmissionsClient({
+export default function ContactSubmissionsClient({
   initialSubmissions,
   filters,
   isZohoConnected,
