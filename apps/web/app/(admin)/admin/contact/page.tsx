@@ -9,20 +9,17 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSetting } from "@/lib/zoho";
+import { CONTACT_INQUIRY_TYPES } from "@/lib/contact-constants";
 import ContactSubmissionsClient, {
   type SubmissionWithReplies,
   type ContactFilters,
 } from "@/app/(admin)/_components/ContactSubmissionsClient";
 
-/** Valid inquiry_type values accepted as filter inputs. */
-const VALID_TYPES = new Set([
-  "General Question",
-  "Group Booking",
-  "Booking Inquiry",
-  "Corporate Training",
-  "Certification Renewal",
-  "Other",
-]);
+/** Valid inquiry_type values — built from the single source of truth in lib/contact-constants. */
+const VALID_TYPES = new Set<string>(CONTACT_INQUIRY_TYPES);
+
+/** Only accept YYYY-MM-DD date strings to prevent injection via date filter params. */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Server component — handles auth, Zoho connection check, and filtered data fetch. */
 export default async function ContactPage({
@@ -87,8 +84,7 @@ export default async function ContactPage({
   }
   if (params.replied === "true") query = query.eq("replied", true);
   if (params.replied === "false") query = query.eq("replied", false);
-  // Date range — only accept YYYY-MM-DD format to prevent injection
-  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  // Date range — DATE_RE defined at module scope
   if (params.from && DATE_RE.test(params.from)) {
     query = query.gte("created_at", params.from);
   }
@@ -126,7 +122,6 @@ export default async function ContactPage({
         initialSubmissions={(submissions ?? []) as unknown as SubmissionWithReplies[]}
         filters={activeFilters}
         isZohoConnected={isZohoConnected}
-        userRole={profile.role}
       />
     </main>
   );
