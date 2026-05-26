@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SubmissionsClient — client component for the admin contact submissions page.
+ * ContactSubmissionsClient — client component for the admin contact submissions page.
  * Renders the filter bar, the grouped submission list (unanswered / replied),
  * per-submission expand/collapse accordion, Zoho email thread display, and
  * the reply form. Used by: app/(admin)/admin/contact/page.tsx
@@ -11,6 +11,7 @@ import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Mail, RefreshCw, Search, Send, X } from "lucide-react";
+import { CONTACT_INQUIRY_TYPES } from "@/lib/contact-constants";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -58,18 +59,7 @@ interface SubmissionsClientProps {
   initialSubmissions: SubmissionWithReplies[];
   filters: ContactFilters;
   isZohoConnected: boolean;
-  userRole: string;
 }
-
-// ── Inquiry type options (must match contact_submissions.inquiry_type values) ──
-const INQUIRY_TYPES = [
-  "General Question",
-  "Group Booking",
-  "Corporate Training",
-  "Certification Renewal",
-  "Booking Inquiry",
-  "Other",
-];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -110,12 +100,14 @@ function fullDate(iso: string): string {
  */
 function typeBadgeClass(type: string): string {
   switch (type) {
-    case "Group Booking":
+    case "Group Booking (5+ people)":
       return "bg-blue-100 text-blue-700";
-    case "Corporate Training":
+    case "Corporate / Workplace Training":
       return "bg-purple-100 text-purple-700";
     case "Certification Renewal":
       return "bg-green-100 text-green-700";
+    case "Booking Inquiry":
+      return "bg-orange-100 text-orange-700";
     case "General Question":
       return "bg-gray-100 text-gray-600";
     default:
@@ -466,7 +458,7 @@ export default function ContactSubmissionsClient({
             className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
           >
             <option value="">All</option>
-            {INQUIRY_TYPES.map((t) => (
+            {CONTACT_INQUIRY_TYPES.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
