@@ -1,5 +1,5 @@
 /**
- * POST /admin (GET)
+ * GET /admin
  * Route: /admin
  * Auth: Staff only — layout.tsx enforces this.
  * Role-aware dashboard page. Fetches data in parallel via Promise.all based on
@@ -10,6 +10,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import InstructorDashboard from "../_components/dashboard/InstructorDashboard";
+import type {
+  TodaySession,
+  PendingGradeSession,
+  PendingInvoice,
+} from "../_components/dashboard/InstructorDashboard";
 import ManagerDashboard from "../_components/dashboard/ManagerDashboard";
 import SuperAdminDashboard from "../_components/dashboard/SuperAdminDashboard";
 import type { ActivityItem } from "../_components/dashboard/SuperAdminDashboard";
@@ -58,7 +63,7 @@ export default async function AdminDashboardPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("first_name, role")
+    .select("first_name, role, daily_access_code")
     .eq("id", user.id)
     .single();
 
@@ -74,7 +79,6 @@ export default async function AdminDashboardPage() {
       { data: rawTodaySessions },
       { data: completedSessionsWithRoster },
       { data: pendingInvoices },
-      { data: instructorProfile },
     ] = await Promise.all([
       supabase
         .from("class_sessions")
@@ -104,13 +108,6 @@ export default async function AdminDashboardPage() {
         .eq("instructor_id", user.id)
         .eq("status", "sent")
         .order("created_at", { ascending: false }),
-
-      // Fetch daily_access_code separately in case it doesn't exist in older DB versions
-      supabase
-        .from("profiles")
-        .select("daily_access_code")
-        .eq("id", user.id)
-        .single(),
     ]);
 
     // Filter completed sessions down to those with at least one ungraded roster record
@@ -133,17 +130,13 @@ export default async function AdminDashboardPage() {
       <InstructorDashboard
         firstName={profile.first_name}
         todaySessions={
-          (rawTodaySessions ?? []) as unknown as Parameters<
-            typeof InstructorDashboard
-          >[0]["todaySessions"]
+          (rawTodaySessions ?? []) as unknown as TodaySession[]
         }
         pendingGrades={pendingGrades}
         pendingInvoices={
-          (pendingInvoices ?? []) as unknown as Parameters<
-            typeof InstructorDashboard
-          >[0]["pendingInvoices"]
+          (pendingInvoices ?? []) as unknown as PendingInvoice[]
         }
-        dailyAccessCode={instructorProfile?.daily_access_code ?? null}
+        dailyAccessCode={profile.daily_access_code ?? null}
       />
     );
   }
@@ -151,6 +144,101 @@ export default async function AdminDashboardPage() {
   // ── Manager + Super Admin shared data ──────────────────────────────────────
   if (role === "manager" || role === "super_admin") {
     const today = getTodayUTCRange();
+    // Month range needed by the super_admin extra queries — must be computed here
+    // so it is available when superAdminExtraPromise is created below.
+    const month = getThisMonthUTCRange();
+
+    // Fire the super_admin-only queries immediately so they run in parallel with
+    // the shared batch below, cutting the super_admin page load from 2 serial
+    // round-trips to 1. null for managers — they return before it is awaited.
+    // IMPORTANT: any new role added to this block MUST return before the
+    // `await superAdminExtraPromise!` line below, or that assertion will throw.
+    const superAdminExtraPromise =
+      role === "super_admin"
+        ? Promise.all([
+            supabase
+              .from("profiles")
+              .select("id", { count: "exact", head: true })
+              .eq("role", "customer")
+              .eq("archived", false),
+
+            supabase
+              .from("class_sessions")
+              .select("id", { count: "exact", head: true })
+              .eq("approval_status", "approved")
+              .gte("starts_at", month.start)
+              .lte("starts_at", month.end),
+
+            // Online booking payments this month
+            supabase
+              .from("payments")
+              .select("amount")
+              .eq("payment_type", "online")
+              .eq("status", "completed")
+              .gte("created_at", month.start)
+              .lte("created_at", month.end),
+
+            // Paid invoices this month — invoice revenue is tracked separately from online
+            supabase
+              .from("invoices")
+              .select("total_amount")
+              .eq("status", "paid")
+              .gte("paid_at", month.start)
+              .lte("paid_at", month.end),
+
+            // Activity feed: recent bookings
+            supabase
+              .from("bookings")
+              .select(
+                "id, created_at, profiles!bookings_customer_id_fkey ( first_name, last_name ), class_sessions ( class_types ( name ) )"
+              )
+              .order("created_at", { ascending: false })
+              .limit(5),
+
+            // Activity feed: recent payments
+            supabase
+              .from("payments")
+              .select(
+                "id, created_at, amount, profiles!payments_customer_id_fkey ( first_name, last_name )"
+              )
+              .order("created_at", { ascending: false })
+              .limit(5),
+
+            // Activity feed: recent invoices
+            supabase
+              .from("invoices")
+              .select("id, created_at, recipient_name, total_amount")
+              .order("created_at", { ascending: false })
+              .limit(5),
+
+            // Activity feed: new customers
+            supabase
+              .from("profiles")
+              .select("id, created_at, first_name, last_name")
+              .eq("role", "customer")
+              .order("created_at", { ascending: false })
+              .limit(5),
+
+            // Pending grades: all completed sessions system-wide with at least one ungraded
+            // roster student — super_admins oversee all instructors
+            supabase
+              .from("class_sessions")
+              .select(
+                "id, starts_at, class_types ( name ), roster_records ( id, grade )"
+              )
+              .eq("status", "completed"),
+
+            // Pending invoices: all sent-but-unpaid invoices system-wide —
+            // super_admins oversee all instructors
+            supabase
+              .from("invoices")
+              .select(
+                "id, recipient_name, total_amount, created_at, class_sessions ( starts_at, class_types ( name ) )"
+              )
+              .eq("status", "sent")
+              .order("created_at", { ascending: false }),
+          ])
+        : null;
 
     const [
       { count: pendingApprovalsCount },
@@ -158,8 +246,6 @@ export default async function AdminDashboardPage() {
       { data: rawRecentBookings },
       { count: unansweredContactCount },
       { data: rawLowStockVariants },
-      // super_admins are also instructors — fetch their daily code
-      { data: selfProfile },
     ] = await Promise.all([
       supabase
         .from("class_sessions")
@@ -203,9 +289,6 @@ export default async function AdminDashboardPage() {
         .from("product_variants")
         .select("id, size, stock_quantity, products ( id, name, low_stock_threshold )")
         .order("stock_quantity"),
-
-      // Daily access code — only relevant for super_admin (instructors fetch this above)
-      supabase.from("profiles").select("daily_access_code").eq("id", user.id).single(),
     ]);
 
     // Derive enrolledCount from non-cancelled bookings per session
@@ -245,31 +328,24 @@ export default async function AdminDashboardPage() {
       } | null,
     }));
 
-    // Filter low stock variants to those actually at or below threshold
-    const lowStockVariants: LowStockVariant[] = (rawLowStockVariants ?? [])
-      .filter((v) => {
-        const product = v.products as unknown as {
-          id: string;
-          name: string;
-          low_stock_threshold: number;
-        } | null;
-        return product && v.stock_quantity <= product.low_stock_threshold;
-      })
-      .map((v) => {
-        const product = v.products as unknown as {
-          id: string;
-          name: string;
-          low_stock_threshold: number;
-        };
-        return {
-          id: v.id,
-          size: v.size,
-          stock_quantity: v.stock_quantity,
-          product_id: product.id,
-          product_name: product.name,
-          low_stock_threshold: product.low_stock_threshold,
-        };
-      });
+    // Filter low stock variants to those actually at or below threshold.
+    // flatMap lets us cast v.products once per item instead of separately in filter+map.
+    const lowStockVariants: LowStockVariant[] = (rawLowStockVariants ?? []).flatMap((v) => {
+      const product = v.products as unknown as {
+        id: string;
+        name: string;
+        low_stock_threshold: number;
+      } | null;
+      if (!product || v.stock_quantity > product.low_stock_threshold) return [];
+      return [{
+        id: v.id,
+        size: v.size,
+        stock_quantity: v.stock_quantity,
+        product_id: product.id,
+        product_name: product.name,
+        low_stock_threshold: product.low_stock_threshold,
+      }];
+    });
 
     const managerProps = {
       firstName: profile.first_name,
@@ -285,8 +361,8 @@ export default async function AdminDashboardPage() {
     }
 
     // ── Super Admin extra data ──────────────────────────────────────────────
-    const month = getThisMonthUTCRange();
-
+    // superAdminExtraPromise was fired before the shared batch above.
+    // It is guaranteed non-null here — manager returned early above.
     const [
       { count: totalCustomers },
       { count: classesThisMonth },
@@ -296,70 +372,9 @@ export default async function AdminDashboardPage() {
       { data: recentPaymentsActivity },
       { data: recentInvoicesActivity },
       { data: recentCustomersActivity },
-    ] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("id", { count: "exact", head: true })
-        .eq("role", "customer")
-        .eq("archived", false),
-
-      supabase
-        .from("class_sessions")
-        .select("id", { count: "exact", head: true })
-        .eq("approval_status", "approved")
-        .gte("starts_at", month.start)
-        .lte("starts_at", month.end),
-
-      // Online booking payments this month
-      supabase
-        .from("payments")
-        .select("amount")
-        .eq("payment_type", "online")
-        .eq("status", "completed")
-        .gte("created_at", month.start)
-        .lte("created_at", month.end),
-
-      // Paid invoices this month — invoice revenue is tracked separately from online
-      supabase
-        .from("invoices")
-        .select("total_amount")
-        .eq("status", "paid")
-        .gte("paid_at", month.start)
-        .lte("paid_at", month.end),
-
-      // Activity feed: recent bookings
-      supabase
-        .from("bookings")
-        .select(
-          "id, created_at, profiles!bookings_customer_id_fkey ( first_name, last_name ), class_sessions ( class_types ( name ) )"
-        )
-        .order("created_at", { ascending: false })
-        .limit(5),
-
-      // Activity feed: recent payments
-      supabase
-        .from("payments")
-        .select(
-          "id, created_at, amount, profiles!payments_customer_id_fkey ( first_name, last_name )"
-        )
-        .order("created_at", { ascending: false })
-        .limit(5),
-
-      // Activity feed: recent invoices
-      supabase
-        .from("invoices")
-        .select("id, created_at, recipient_name, total_amount")
-        .order("created_at", { ascending: false })
-        .limit(5),
-
-      // Activity feed: new customers
-      supabase
-        .from("profiles")
-        .select("id, created_at, first_name, last_name")
-        .eq("role", "customer")
-        .order("created_at", { ascending: false })
-        .limit(5),
-    ]);
+      { data: completedSessionsForSuperAdmin },
+      { data: rawPendingInvoicesForSuperAdmin },
+    ] = await superAdminExtraPromise!;
 
     const onlineRevenueThisMonth = (onlinePayments ?? []).reduce(
       (sum, p) => sum + Number(p.amount),
@@ -369,6 +384,23 @@ export default async function AdminDashboardPage() {
       (sum, inv) => sum + Number(inv.total_amount),
       0
     );
+
+    // Filter completed sessions to those with at least one ungraded roster student,
+    // across all instructors — super_admins have full visibility
+    const superAdminPendingGrades = (completedSessionsForSuperAdmin ?? [])
+      .filter((session) =>
+        (
+          session.roster_records as Array<{ id: string; grade: number | null }>
+        ).some((r) => r.grade === null)
+      )
+      .map((session) => ({
+        id: session.id,
+        starts_at: session.starts_at,
+        class_types: session.class_types as unknown as { name: string } | null,
+        ungradedCount: (
+          session.roster_records as Array<{ id: string; grade: number | null }>
+        ).filter((r) => r.grade === null).length,
+      }));
 
     // Build and sort a unified activity feed from the four recent-activity queries
     const activityItems: ActivityItem[] = [
@@ -432,7 +464,11 @@ export default async function AdminDashboardPage() {
           invoiceRevenueThisMonth,
         }}
         recentActivity={activityItems}
-        dailyAccessCode={selfProfile?.daily_access_code ?? null}
+        dailyAccessCode={profile.daily_access_code ?? null}
+        pendingGrades={superAdminPendingGrades}
+        pendingInvoices={
+          (rawPendingInvoicesForSuperAdmin ?? []) as unknown as PendingInvoice[]
+        }
       />
     );
   }
