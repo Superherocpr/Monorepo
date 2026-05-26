@@ -11,19 +11,12 @@ import { useState } from "react";
 import { Phone, Mail, MapPin } from "lucide-react";
 import CaptchaCheckbox from "@/components/CaptchaCheckbox";
 import TurnstileWidget from "@/components/TurnstileWidget";
+import { CONTACT_INQUIRY_TYPES } from "@/lib/contact-constants";
 
 // When this key is present the real Cloudflare Turnstile widget is shown and
 // the token is verified server-side. When unset, the self-contained checkbox
 // is shown instead — no external account needed.
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-
-const INQUIRY_TYPES = [
-  "General Question",
-  "Group Booking (5+ people)",
-  "Corporate / Workplace Training",
-  "Certification Renewal",
-  "Other",
-] as const;
 
 interface FormData {
   name: string;
@@ -226,7 +219,7 @@ export default function ContactSection() {
                   <option value="" disabled>
                     Select…
                   </option>
-                  {INQUIRY_TYPES.map((type) => (
+                  {CONTACT_INQUIRY_TYPES.map((type) => (
                     <option key={type} value={type}>
                       {type}
                     </option>

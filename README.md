@@ -1,6 +1,6 @@
 # Superhero CPR
 
-Full-stack platform for [superherocpr.com](https://superherocpr.com) — a Tampa-based AHA-certified CPR training business. Replaces the current WordPress site with a custom booking, certification, invoicing, and staff management system.
+Full-stack platform for [superherocpr.com](https://superherocpr.com). An AHA-certified CPR training business. Replaces the current site with a custom booking, certification, invoicing, and staff management system.
 
 ---
 
