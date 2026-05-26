@@ -3,8 +3,8 @@
 /**
  * /setup-password — Staff account password setup page.
  * Reached via the invite email link sent to new staff members by an admin.
- * Reads the Supabase recovery token from the URL hash, establishes a live session,
- * then lets the user choose a permanent password for their account.
+ * Reads the Supabase recovery token_hash from the URL query string, exchanges it
+ * for a live session via verifyOtp, then lets the user choose a permanent password.
  * After setting the password, redirects to /admin/profile/payment.
  * Used by: staff invite flow (POST /api/staff/invite).
  */
@@ -29,34 +29,25 @@ export default function SetupPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  // On mount: extract tokens from the URL hash and exchange them for a session.
-  // Supabase appends #access_token=...&refresh_token=...&type=recovery after
-  // verifying the invite link. This must be done client-side since the hash is
-  // never sent to the server.
+  // On mount: extract token_hash from the URL query string and exchange it for
+  // a live session via verifyOtp. The invite route builds the link as
+  // /setup-password?token_hash=...&type=recovery so it arrives here directly
+  // without routing through Supabase's redirect mechanism.
   useEffect(() => {
     async function exchangeToken() {
-      const hash = window.location.hash.slice(1); // strip leading #
+      const params = new URLSearchParams(window.location.search);
+      const tokenHash = params.get("token_hash");
 
-      if (!hash) {
-        setLinkError("This link is invalid or has already been used.");
-        setStatus("error");
-        return;
-      }
-
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get("access_token");
-      const refreshToken = params.get("refresh_token");
-
-      if (!accessToken || !refreshToken) {
+      if (!tokenHash) {
         setLinkError("This link is invalid or has already been used.");
         setStatus("error");
         return;
       }
 
       const supabase = createClient();
-      const { error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: "recovery",
       });
 
       if (error) {
@@ -67,7 +58,7 @@ export default function SetupPasswordPage() {
         return;
       }
 
-      // Remove tokens from the address bar so they aren't visible or bookmarked.
+      // Remove the token from the address bar so it isn't visible or bookmarked.
       window.history.replaceState(null, "", window.location.pathname);
       setStatus("ready");
     }
