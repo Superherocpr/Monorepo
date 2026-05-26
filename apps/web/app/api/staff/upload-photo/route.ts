@@ -53,6 +53,11 @@ function getBucketName(): string | null {
   return process.env.S3_BUCKET_NAME ?? null;
 }
 
+/**
+ * Uploads a staff headshot to S3 after confirming the caller is a super admin.
+ * Side effects: S3 object write under the staff-photos/ prefix.
+ * @param request - Multipart form request containing the image file.
+ */
 export async function POST(request: Request) {
   // ── Auth guard ──────────────────────────────────────────────────────────────
   const supabase = await createClient();
@@ -105,8 +110,9 @@ export async function POST(request: Request) {
 
   // ── Upload to S3 ────────────────────────────────────────────────────────────
   const bucketName = getBucketName();
-  if (!bucketName) {
-    console.error("[staff/upload-photo] S3_BUCKET_NAME env var is not set.");
+  const region = process.env.AWS_REGION;
+  if (!bucketName || !region) {
+    console.error("[staff/upload-photo] S3 bucket or region is not configured.");
     return Response.json(
       { success: false, error: "Storage is not configured." },
       { status: 500 }
@@ -136,7 +142,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const region = process.env.AWS_REGION!;
   const url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 
   return Response.json({ success: true, url });

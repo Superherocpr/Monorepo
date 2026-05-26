@@ -8,7 +8,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 
-/** Renders the "Meet Your Instructor" two-column section. */
+/**
+ * Renders the "Meet Your Instructor" two-column section.
+ * @returns The home page instructor spotlight section.
+ */
 export default async function AboutInstructorSection() {
   const supabase = await createClient();
 
@@ -37,7 +40,7 @@ export default async function AboutInstructorSection() {
               width={400}
               height={500}
               className="w-auto object-contain"
-              style={{ height: "75%" }}
+              style={{ height: "75%", width: "auto" }}
             />
           </div>
 
@@ -57,10 +60,15 @@ export default async function AboutInstructorSection() {
               training that could save someone&apos;s life.
             </p>
 
-            {/* TODO: add AHA logo asset to /public/images/aha-logo.png */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-xs text-gray-400 text-center leading-tight">
-                AHA
+              <div className="relative h-[33px] w-32 shrink-0">
+                <Image
+                  src="/images/aha-authorized-training-site.png"
+                  alt="American Heart Association Authorized Training Site"
+                  fill
+                  className="object-contain"
+                  sizes="128px"
+                />
               </div>
               <span className="text-sm text-gray-500">
                 Licensed American Heart Association Instructor

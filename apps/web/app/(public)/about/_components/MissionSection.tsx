@@ -10,21 +10,18 @@ const VALUES = [
   {
     icon: Heart,
     title: "Passion for Life",
-    // TODO: replace placeholder copy with final mission text
     description:
       "Every class we teach is driven by a genuine belief that CPR knowledge saves lives. We have seen it firsthand.",
   },
   {
     icon: Award,
     title: "Gold Standard Training",
-    // TODO: replace placeholder copy with final mission text
     description:
-      "We teach exclusively to the standards of the most trusted name in emergency cardiovascular care; the American Heart Association",
+      "We teach to the standards of the most trusted name in emergency cardiovascular care: the American Heart Association.",
   },
   {
     icon: Home,
     title: "We Come to You",
-    // TODO: replace placeholder copy with final mission text
     description:
       "No commute, no unfamiliar classroom. We bring the training to your home, your office, or your facility.",
   },

@@ -6,25 +6,27 @@
 
 import Image from "next/image";
 
-/** Renders the "Our Story" hero section header for the about page. */
+/**
+ * Renders the "Our Story" hero section header for the about page.
+ * @returns The about page hero section.
+ */
 export default function AboutHeroSection() {
   return (
     <section
       className="relative text-center px-4 py-20 overflow-hidden"
       style={{ backgroundColor: "#1a5c2e" }}
     >
-      {/* TODO: replace placeholder with final about page character image */}
       <div
-        className="absolute bottom-0 right-0 pointer-events-none select-none"
+        className="absolute bottom-0 right-0 h-[700px] w-[323px] pointer-events-none select-none"
         style={{ transform: "translateY(50%)" }}
         aria-hidden="true"
       >
         <Image
           src="/images/MainFemaleHero1_white.svg"
           alt=""
-          width={467}
-          height={700}
-          className="h-[700px] w-auto object-contain"
+          fill
+          className="object-contain"
+          priority
           style={{ transform: "scaleX(-1)" }}
         />
       </div>

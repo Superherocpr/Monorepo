@@ -9,6 +9,13 @@
 
 import { useState } from "react";
 import { Phone, Mail, MapPin } from "lucide-react";
+import CaptchaCheckbox from "@/components/CaptchaCheckbox";
+import TurnstileWidget from "@/components/TurnstileWidget";
+
+// When this key is present the real Cloudflare Turnstile widget is shown and
+// the token is verified server-side. When unset, the self-contained checkbox
+// is shown instead — no external account needed.
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 const INQUIRY_TYPES = [
   "General Question",
@@ -43,6 +50,11 @@ export default function ContactSection() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Captcha state — one of these is used depending on which widget is active:
+  //   TURNSTILE_SITE_KEY present → captchaToken holds the verified Cloudflare token.
+  //   No key                     → captchaChecked is a simple boolean.
+  const [captchaChecked, setCaptchaChecked] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   function handleChange(
     e: React.ChangeEvent<
@@ -68,13 +80,22 @@ export default function ContactSection() {
       return;
     }
 
+    // Require the captcha to be completed before submitting.
+    // Turnstile (when keys are set) provides a cryptographic token;
+    // the simple checkbox is a UX-level deterrent when no key is configured.
+    if (TURNSTILE_SITE_KEY ? !captchaToken : !captchaChecked) {
+      setSubmitError("Please check the \"I'm not a robot\" box before sending.");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const response = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        // Send the real Turnstile token when available; server verifies it.
+        body: JSON.stringify({ ...form, captchaToken: captchaToken ?? "human-checked" }),
       });
 
       if (!response.ok) {
@@ -225,6 +246,20 @@ export default function ContactSection() {
                   className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-y min-h-[120px]"
                 />
               </FormField>
+
+              {/* Captcha — Turnstile when keys are set, simple checkbox otherwise */}
+              {TURNSTILE_SITE_KEY ? (
+                <TurnstileWidget
+                  siteKey={TURNSTILE_SITE_KEY}
+                  onVerify={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                />
+              ) : (
+                <CaptchaCheckbox
+                  checked={captchaChecked}
+                  onChange={setCaptchaChecked}
+                />
+              )}
 
               {/* Error message */}
               {submitError && (

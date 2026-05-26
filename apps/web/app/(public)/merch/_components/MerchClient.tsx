@@ -19,7 +19,7 @@ import type { OnApproveDataOneTimePayments } from "@paypal/react-paypal-js/sdk-v
 import { getCart, setCart, clearCart, type CartItem } from "@/lib/cart-store";
 import type { ProductWithVariants, ProductVariant } from "@/types/merch";
 
-// TODO: set NEXT_PUBLIC_SHIPPING_RATE in environment variables
+// Shipping is configured in Building/env.example.md and re-checked server-side.
 const SHIPPING_RATE = parseFloat(process.env.NEXT_PUBLIC_SHIPPING_RATE ?? "0");
 
 // Logical size sort order — unknown sizes fall back to alphabetical

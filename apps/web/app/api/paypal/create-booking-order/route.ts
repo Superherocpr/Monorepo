@@ -3,10 +3,11 @@
  * Called by: book/payment page (PayPalOneTimePaymentButton createOrder callback)
  * Auth: None required — creates a pending PayPal order that the buyer approves
  *
- * Accepts session ID, price, and class name. Resolves payment routing server-side
- * (instructor PayPal vs. business PayPal) and creates a PayPal order in CAPTURE
- * intent. When routing to an instructor, includes the PayPal-Auth-Assertion header
- * to direct funds to their merchant account. Returns { orderId } to the client.
+ * Accepts a session ID, re-fetches the class price/name from the database,
+ * resolves payment routing server-side (instructor PayPal vs. business PayPal),
+ * and creates a PayPal order in CAPTURE intent. When routing to an instructor,
+ * includes the PayPal-Auth-Assertion header to direct funds to their merchant
+ * account. Returns { orderId } to the client.
  *
  * Actual capture and booking creation happen in /api/bookings/confirm after approval.
  *
@@ -29,6 +30,11 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+/**
+ * Creates a PayPal order for a selected booking session using DB-owned price and routing.
+ * Side effects: PayPal order creation only; no payment is captured here.
+ * @param request - JSON request containing sessionId.
+ */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 
@@ -36,19 +42,50 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { amount, className, sessionId } = body;
+  const { sessionId } = body;
 
-  if (
-    typeof amount !== "number" ||
-    amount <= 0 ||
-    typeof className !== "string" ||
-    typeof sessionId !== "string"
-  ) {
+  if (typeof sessionId !== "string") {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // ── Resolve routing — never trust client input for merchant ID ─────────
   const supabase = await createAdminClient();
+
+  // ── Resolve authoritative session details — never trust client price/copy ──
+  const { data: sessionRow, error: sessionError } = await supabase
+    .from("class_sessions")
+    .select("class_types(name, price)")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (sessionError) {
+    console.error("[create-booking-order] Session lookup failed:", sessionError);
+    return NextResponse.json({ error: "Failed to load session" }, { status: 500 });
+  }
+
+  if (!sessionRow) {
+    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  }
+
+  const classTypeJoin = (
+    sessionRow as {
+      class_types:
+        | { name: string | null; price: number | string | null }
+        | Array<{ name: string | null; price: number | string | null }>
+        | null;
+    }
+  ).class_types;
+  const classType = Array.isArray(classTypeJoin) ? classTypeJoin[0] : classTypeJoin;
+  const amount =
+    typeof classType?.price === "number"
+      ? classType.price
+      : parseFloat(String(classType?.price ?? ""));
+  const className = classType?.name?.trim() || "CPR Class";
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return NextResponse.json({ error: "Session pricing unavailable" }, { status: 500 });
+  }
+
+  // ── Resolve routing — never trust client input for merchant ID ─────────
   const routing = await resolvePaymentRouting(supabase, sessionId);
 
   // ── Get business PayPal access token (always — required to create the order) ──

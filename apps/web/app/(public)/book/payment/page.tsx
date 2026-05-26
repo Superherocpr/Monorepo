@@ -52,11 +52,9 @@ export default function BookPaymentPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        // sessionId is required server-side to resolve payment routing —
-        // the merchant ID is never trusted from the client
+        // sessionId is enough: price, class name, and payment routing are all
+        // re-fetched server-side so stale client state cannot create a bad order.
         sessionId: store.sessionId,
-        amount: store.sessionDetails.price,
-        className: store.sessionDetails.className,
       }),
     });
 
@@ -71,6 +69,7 @@ export default function BookPaymentPage() {
    */
   async function handlePayPalApprove({ orderId }: OnApproveDataOneTimePayments) {
     setPaymentError(null);
+    setIsFullError(false);
     if (!store) return;
 
     const response = await fetch("/api/bookings/confirm", {
@@ -93,17 +92,38 @@ export default function BookPaymentPage() {
       }),
     });
 
-    const result = await response.json().catch(() => ({ success: false }));
+    const result = (await response.json().catch(() => ({ success: false }))) as {
+      success?: boolean;
+      error?: string;
+    };
 
     if (result.success) {
       router.push("/book/confirmation");
       return;
     }
 
-    // Class filled up during checkout — payment was captured but spot is gone
-    // TODO: implement PayPal refund flow for this case
-    if (response.status === 409) {
+    const serverError = typeof result.error === "string" ? result.error : "";
+
+    // Class filled up during checkout. The server refunds any captured payment
+    // before returning this error, so the page should guide the customer back to
+    // session selection instead of asking them to contact support first.
+    if (response.status === 409 && serverError.toLowerCase().includes("class filled")) {
       setIsFullError(true);
+      return;
+    }
+
+    if (/refunded|reversed/i.test(serverError)) {
+      const cleanError = serverError.replace(/\s*Payment refunded\.?$/i, "").trim();
+      setPaymentError(
+        `${cleanError || "We couldn't finish your booking."} ` +
+        "Any payment captured for this attempt has been refunded automatically. " +
+        "Please select another session or contact us at (813) 966-3969 if you need help."
+      );
+      return;
+    }
+
+    if (serverError) {
+      setPaymentError(`${serverError} Please refresh and try again.`);
       return;
     }
 
@@ -140,7 +160,8 @@ export default function BookPaymentPage() {
                   <p className="font-semibold mb-1">This class just filled up.</p>
                   <p>
                     We&apos;re sorry — this class filled up while you were checking out.
-                    Your payment has <strong>not</strong> been charged. Please select another session.
+                    Any payment captured for this attempt has been refunded automatically.
+                    Please select another session.
                   </p>
                   <button
                     onClick={() => router.push("/book")}

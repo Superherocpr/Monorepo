@@ -22,6 +22,10 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import CaptchaCheckbox from "@/components/CaptchaCheckbox";
+import TurnstileWidget from "@/components/TurnstileWidget";
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 import {
   Heart,
   Clock,
@@ -140,6 +144,9 @@ export default function LegacySitePage() {
     phone: "",
   });
   const [status, setStatus] = useState<SubmitStatus>({ kind: "idle" });
+  // Captcha state — Turnstile token when keys are set, simple boolean otherwise.
+  const [captchaChecked, setCaptchaChecked] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   /**
    * Submits the contact form to POST /api/contact.
@@ -156,6 +163,12 @@ export default function LegacySitePage() {
       return;
     }
 
+    // Require the captcha to be completed before submitting.
+    if (TURNSTILE_SITE_KEY ? !captchaToken : !captchaChecked) {
+      setStatus({ kind: "error", message: "Please check the \"I'm not a robot\" box." });
+      return;
+    }
+
     setStatus({ kind: "submitting" });
 
     try {
@@ -166,11 +179,11 @@ export default function LegacySitePage() {
           name: form.name.trim(),
           email: form.email.trim(),
           phone: form.phone.trim(),
-          // Fixed values so the existing /api/contact handler accepts the submission
           inquiryType: "Booking Inquiry",
           message:
             "Booking inquiry submitted via the legacy home page. " +
             "Please contact this person to schedule a CPR class.",
+          captchaToken: captchaToken ?? "human-checked",
         }),
       });
 
@@ -253,7 +266,7 @@ export default function LegacySitePage() {
               CPR License And Renewal Classes
             </h2>
             <p className="text-base text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Real-world instruction from someone who's been on the front line,
+              Real-world instruction from someone who&apos;s been on the front line,
               so you walk away ready to act when it matters.
             </p>
           </div>
@@ -453,6 +466,20 @@ export default function LegacySitePage() {
                 placeholder="(555) 555-5555"
               />
             </div>
+
+            {/* Captcha — Turnstile when keys are set, simple checkbox otherwise */}
+            {TURNSTILE_SITE_KEY ? (
+              <TurnstileWidget
+                siteKey={TURNSTILE_SITE_KEY}
+                onVerify={(token) => setCaptchaToken(token)}
+                onExpire={() => setCaptchaToken(null)}
+              />
+            ) : (
+              <CaptchaCheckbox
+                checked={captchaChecked}
+                onChange={setCaptchaChecked}
+              />
+            )}
 
             <button
               type="submit"

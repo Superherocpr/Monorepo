@@ -19,11 +19,8 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
-import { getPayPalAccessToken } from "@/lib/paypal";
+import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import type { CartItem } from "@/lib/cart-store";
-
-const PAYPAL_API_BASE =
-  process.env.PAYPAL_API_BASE ?? "https://api-m.sandbox.paypal.com";
 
 /** Flat shipping rate — mirrors NEXT_PUBLIC_SHIPPING_RATE used client-side. */
 const SHIPPING_RATE = parseFloat(process.env.NEXT_PUBLIC_SHIPPING_RATE ?? "0");
@@ -64,7 +61,7 @@ interface ShippingInfo {
 async function refundCapture(captureId: string): Promise<void> {
   const accessToken = await getPayPalAccessToken();
   const res = await fetch(
-    `${PAYPAL_API_BASE}/v2/payments/captures/${captureId}/refund`,
+    `${getPayPalApiBase()}/v2/payments/captures/${captureId}/refund`,
     {
       method: "POST",
       headers: {
@@ -80,6 +77,11 @@ async function refundCapture(captureId: string): Promise<void> {
   }
 }
 
+/**
+ * Confirms a merch PayPal order, reserves stock, stores the order, and sends emails.
+ * Side effects: PayPal capture/refund, stock RPCs, orders/order_items inserts, Resend emails.
+ * @param request - JSON request containing PayPal order id, cart items, totals, and shipping info.
+ */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 
@@ -215,7 +217,7 @@ export async function POST(request: Request) {
   try {
     const accessToken = await getPayPalAccessToken();
     const captureResponse = await fetch(
-      `${PAYPAL_API_BASE}/v2/checkout/orders/${paypalOrderId}/capture`,
+        `${getPayPalApiBase()}/v2/checkout/orders/${paypalOrderId}/capture`,
       {
         method: "POST",
         headers: {
