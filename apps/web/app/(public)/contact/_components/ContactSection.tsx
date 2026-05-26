@@ -9,11 +9,12 @@
 
 import { useState } from "react";
 import { Phone, Mail, MapPin } from "lucide-react";
+import CaptchaCheckbox from "@/components/CaptchaCheckbox";
 import TurnstileWidget from "@/components/TurnstileWidget";
 
-// Public Turnstile site key. Safe to expose — pairs with the server-only
-// TURNSTILE_SECRET_KEY checked in /api/contact. When unset the widget renders
-// nothing and the server-side check no-ops, keeping local dev usable.
+// When this key is present the real Cloudflare Turnstile widget is shown and
+// the token is verified server-side. When unset, the self-contained checkbox
+// is shown instead — no external account needed.
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 const INQUIRY_TYPES = [
@@ -49,8 +50,10 @@ export default function ContactSection() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  // Cloudflare Turnstile token — set when the user passes the checkbox,
-  // cleared when it expires. Required for submission when a site key is set.
+  // Captcha state — one of these is used depending on which widget is active:
+  //   TURNSTILE_SITE_KEY present → captchaToken holds the verified Cloudflare token.
+  //   No key                     → captchaChecked is a simple boolean.
+  const [captchaChecked, setCaptchaChecked] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   function handleChange(
@@ -77,11 +80,11 @@ export default function ContactSection() {
       return;
     }
 
-    // Require a Turnstile token only when a site key is configured. This way
-    // local dev without a key still works; in production the key is set and
-    // the user must complete the captcha.
-    if (TURNSTILE_SITE_KEY && !captchaToken) {
-      setSubmitError("Please complete the captcha before sending.");
+    // Require the captcha to be completed before submitting.
+    // Turnstile (when keys are set) provides a cryptographic token;
+    // the simple checkbox is a UX-level deterrent when no key is configured.
+    if (TURNSTILE_SITE_KEY ? !captchaToken : !captchaChecked) {
+      setSubmitError("Please check the \"I'm not a robot\" box before sending.");
       return;
     }
 
@@ -91,7 +94,8 @@ export default function ContactSection() {
       const response = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, captchaToken }),
+        // Send the real Turnstile token when available; server verifies it.
+        body: JSON.stringify({ ...form, captchaToken: captchaToken ?? "human-checked" }),
       });
 
       if (!response.ok) {
@@ -243,12 +247,17 @@ export default function ContactSection() {
                 />
               </FormField>
 
-              {/* Cloudflare Turnstile checkbox captcha */}
-              {TURNSTILE_SITE_KEY && (
+              {/* Captcha — Turnstile when keys are set, simple checkbox otherwise */}
+              {TURNSTILE_SITE_KEY ? (
                 <TurnstileWidget
                   siteKey={TURNSTILE_SITE_KEY}
                   onVerify={(token) => setCaptchaToken(token)}
                   onExpire={() => setCaptchaToken(null)}
+                />
+              ) : (
+                <CaptchaCheckbox
+                  checked={captchaChecked}
+                  onChange={setCaptchaChecked}
                 />
               )}
 

@@ -22,11 +22,9 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import CaptchaCheckbox from "@/components/CaptchaCheckbox";
 import TurnstileWidget from "@/components/TurnstileWidget";
 
-// Public Turnstile site key for the legacy-page contact form. Pairs with the
-// server-only TURNSTILE_SECRET_KEY verified in /api/contact. When unset, the
-// widget renders nothing and the server check no-ops (local dev convenience).
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 import {
   Heart,
@@ -146,8 +144,8 @@ export default function LegacySitePage() {
     phone: "",
   });
   const [status, setStatus] = useState<SubmitStatus>({ kind: "idle" });
-  // Cloudflare Turnstile token — set when the user passes the checkbox.
-  // Required for submission when NEXT_PUBLIC_TURNSTILE_SITE_KEY is set.
+  // Captcha state — Turnstile token when keys are set, simple boolean otherwise.
+  const [captchaChecked, setCaptchaChecked] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   /**
@@ -165,10 +163,9 @@ export default function LegacySitePage() {
       return;
     }
 
-    // Require Turnstile token only when a site key is configured (so local
-    // dev without a key still works). Server-side verification is the real guard.
-    if (TURNSTILE_SITE_KEY && !captchaToken) {
-      setStatus({ kind: "error", message: "Please complete the captcha." });
+    // Require the captcha to be completed before submitting.
+    if (TURNSTILE_SITE_KEY ? !captchaToken : !captchaChecked) {
+      setStatus({ kind: "error", message: "Please check the \"I'm not a robot\" box." });
       return;
     }
 
@@ -182,12 +179,11 @@ export default function LegacySitePage() {
           name: form.name.trim(),
           email: form.email.trim(),
           phone: form.phone.trim(),
-          // Fixed values so the existing /api/contact handler accepts the submission
           inquiryType: "Booking Inquiry",
           message:
             "Booking inquiry submitted via the legacy home page. " +
             "Please contact this person to schedule a CPR class.",
-          captchaToken,
+          captchaToken: captchaToken ?? "human-checked",
         }),
       });
 
@@ -471,12 +467,17 @@ export default function LegacySitePage() {
               />
             </div>
 
-            {/* Cloudflare Turnstile checkbox captcha */}
-            {TURNSTILE_SITE_KEY && (
+            {/* Captcha — Turnstile when keys are set, simple checkbox otherwise */}
+            {TURNSTILE_SITE_KEY ? (
               <TurnstileWidget
                 siteKey={TURNSTILE_SITE_KEY}
                 onVerify={(token) => setCaptchaToken(token)}
                 onExpire={() => setCaptchaToken(null)}
+              />
+            ) : (
+              <CaptchaCheckbox
+                checked={captchaChecked}
+                onChange={setCaptchaChecked}
               />
             )}
 
