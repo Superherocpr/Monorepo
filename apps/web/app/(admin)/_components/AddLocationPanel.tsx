@@ -10,8 +10,8 @@
  * Shows a brief success message then calls onClose automatically.
  */
 
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { X, Search, Loader2 } from "lucide-react";
 import LocationFormFields, {
   blankLocationForm,
   validateLocationForm,
@@ -31,6 +31,12 @@ export interface NewLocationResult {
   notes: string | null;
   is_home_base: boolean;
   created_at: string;
+}
+
+/** A single address suggestion returned by the autocomplete proxy. */
+interface PlaceSuggestion {
+  place_id: string;
+  description: string;
 }
 
 interface AddLocationPanelProps {
@@ -58,6 +64,108 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // ── Address search state ──────────────────────────────────────────────────────
+  /** What the user has typed into the address search box. */
+  const [searchQuery, setSearchQuery] = useState("");
+  /** Autocomplete suggestions from the server proxy. */
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  /** True while the autocomplete or details fetch is in flight. */
+  const [searchLoading, setSearchLoading] = useState(false);
+  /** Non-null when the autocomplete call returns a non-fatal error. */
+  const [searchError, setSearchError] = useState<string | null>(null);
+  /** Controls suggestion dropdown visibility. */
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  /** Ref for the search container — used to close suggestions on outside click. */
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  // Close the suggestions dropdown when the user clicks outside the search box.
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Debounce autocomplete calls while the user types (300ms delay).
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+      setSearchError(null);
+      try {
+        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        const json = (await res.json()) as {
+          success: boolean;
+          suggestions?: PlaceSuggestion[];
+          error?: string;
+        };
+        if (json.success && json.suggestions) {
+          setSuggestions(json.suggestions);
+          setShowSuggestions(json.suggestions.length > 0);
+        } else {
+          // Show the error subtly — user can still fill the form manually.
+          setSearchError(json.error ?? null);
+          setSuggestions([]);
+        }
+      } catch {
+        // Silent fail — user can fill the address form below manually.
+        setSuggestions([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  /**
+   * Called when a suggestion is selected from the dropdown.
+   * Fetches full address details from the server and populates the form fields.
+   * @param suggestion - The selected autocomplete suggestion.
+   */
+  const handleSelectSuggestion = useCallback(async (suggestion: PlaceSuggestion) => {
+    setSearchQuery(suggestion.description);
+    setShowSuggestions(false);
+    setSearchLoading(true);
+
+    try {
+      const res = await fetch(
+        `/api/places/details?place_id=${encodeURIComponent(suggestion.place_id)}`
+      );
+      const json = (await res.json()) as {
+        success: boolean;
+        parsed?: { address: string; city: string; state: string; zip: string };
+        error?: string;
+      };
+
+      if (json.success && json.parsed) {
+        const { address, city, state, zip } = json.parsed;
+        setForm((prev) => ({ ...prev, address, city, state, zip }));
+        // Clear errors on the fields we just auto-populated.
+        setErrors((prev) => ({
+          ...prev,
+          address: undefined,
+          city: undefined,
+          state: undefined,
+          zip: undefined,
+        }));
+      }
+    } catch {
+      // Silent fail — form fields remain editable so the user can correct manually.
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
 
   /**
    * Updates a single form field and clears its validation error.
@@ -155,12 +263,63 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
           onSubmit={handleSubmit}
           className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
         >
-          <LocationFormFields
-            form={form}
-            errors={errors}
-            onChange={handleChange}
-            idPrefix="add-loc-panel"
-          />
+          {/* Address search — type to find a real address and auto-fill the fields below */}
+          <div ref={searchRef} className="relative">
+            <label
+              htmlFor="add-loc-search"
+              className="mb-1 block text-xs font-medium text-gray-700"
+            >
+              Search for an address
+            </label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                id="add-loc-search"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                placeholder="Start typing an address…"
+                autoComplete="off"
+                className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-9 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+              {searchLoading && (
+                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+              )}
+            </div>
+            {searchError && (
+              <p className="mt-0.5 text-xs text-amber-600">{searchError}</p>
+            )}
+            {showSuggestions && suggestions.length > 0 && (
+              <ul
+                role="listbox"
+                className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg"
+              >
+                {suggestions.map((s) => (
+                  <li key={s.place_id} role="option" aria-selected={false}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectSuggestion(s)}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 focus:bg-red-50 focus:outline-none"
+                    >
+                      {s.description}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Manual entry fields — auto-populated by the search above, editable */}
+          <div className="border-t border-gray-100 pt-1">
+            <p className="mb-3 text-xs text-gray-400">Or fill in the fields below manually:</p>
+            <LocationFormFields
+              form={form}
+              errors={errors}
+              onChange={handleChange}
+              idPrefix="add-loc-panel"
+            />
+          </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
           {success && (
