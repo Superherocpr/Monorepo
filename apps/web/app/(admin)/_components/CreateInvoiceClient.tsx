@@ -15,7 +15,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Check } from "lucide-react";
-import type { UserRole } from "@/types/users";
+import { formatCurrency } from "@/lib/invoice-utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,7 +55,6 @@ type InvoiceType = "individual" | "group";
 interface CreateInvoiceClientProps {
   sessions: SessionOption[];
   preSelectedSessionId: string | null;
-  userRole: UserRole;
   /** The instructor whose sessions are shown. Null when super admin has not yet chosen an instructor. */
   instructorId: string | null;
   /** Instructor list for the super admin instructor selection step. Null for instructor-role users. */
@@ -88,17 +87,6 @@ function formatTime(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
-}
-
-/**
- * Formats a dollar amount to a USD currency string.
- * e.g. "$75.00"
- */
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
 }
 
 /**
@@ -910,6 +898,12 @@ export default function CreateInvoiceClient({
             className="rounded-md border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
           >
             Send another invoice
+          </Link>
+          <Link
+            href="/admin/invoices"
+            className="rounded-md border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Back to invoices
           </Link>
         </div>
       </div>

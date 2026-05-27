@@ -10,8 +10,13 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import type { InvoiceStatus, InvoiceType } from "@/types/invoices";
-import type { PaymentPlatform } from "@/types/users";
-import type { UserRole } from "@/types/users";
+import type { PaymentPlatform, UserRole } from "@/types/users";
+import {
+  formatCurrency,
+  formatDate,
+  STATUS_BADGES,
+  PLATFORM_LABELS,
+} from "@/lib/invoice-utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,7 +42,7 @@ export interface InvoiceRow {
     class_types: { name: string } | null;
   } | null;
   /** Instructor profile — populated for all invoices; shown only for manager/super admin views. */
-  profiles: { first_name: string; last_name: string } | null;
+  profiles: { id: string; first_name: string; last_name: string } | null;
 }
 
 /** An instructor entry for the filter dropdown (manager/super admin only). */
@@ -51,48 +56,7 @@ interface InvoicesClientProps {
   invoices: InvoiceRow[];
   instructors: InstructorOption[];
   userRole: UserRole;
-  userId: string;
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Formats a number as USD currency, e.g. 1500 → "$1,500.00".
- * @param amount - Numeric amount in dollars
- */
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
-}
-
-/**
- * Formats an ISO date string as "Mon DD, YYYY".
- * @param iso - ISO 8601 date string
- */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-/** Maps InvoiceStatus to display label and Tailwind badge classes. */
-const STATUS_BADGES: Record<InvoiceStatus, { label: string; classes: string }> = {
-  sent: { label: "Sent", classes: "bg-blue-100 text-blue-700" },
-  paid: { label: "Paid", classes: "bg-green-100 text-green-700" },
-  cancelled: { label: "Cancelled", classes: "bg-gray-100 text-gray-500" },
-};
-
-/** Maps PaymentPlatform to a display label. */
-const PLATFORM_LABELS: Record<PaymentPlatform, string> = {
-  paypal: "PayPal",
-  square: "Square",
-  stripe: "Stripe",
-  venmo_business: "Venmo Business",
-};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -103,7 +67,6 @@ const PLATFORM_LABELS: Record<PaymentPlatform, string> = {
  * @param invoices - All invoice rows fetched server-side
  * @param instructors - Instructor options for filter dropdown (empty for instructor role)
  * @param userRole - The current user's role, used to control UI visibility
- * @param userId - The current user's profile ID
  */
 export default function InvoicesClient({
   invoices,
@@ -143,18 +106,9 @@ export default function InvoicesClient({
       if (filterStatus !== "all" && inv.status !== filterStatus) return false;
       if (filterType !== "all" && inv.invoice_type !== filterType) return false;
       if (filterInstructor !== "all") {
-        // Derive instructor ID from profiles — we don't store it in InvoiceRow,
-        // so we match by checking the invoice's instructor against the dropdown value
-        // via the instructors list (matched by name is fragile; use stored id if available).
-        // The page passes invoices that already scoped to the user for instructors,
-        // so this filter only runs for manager/super_admin views.
-        const instr = instructors.find(
-          (i) => `${i.first_name} ${i.last_name}` === filterInstructor
-        );
-        if (instr) {
-          const fullName = `${inv.profiles?.first_name ?? ""} ${inv.profiles?.last_name ?? ""}`.trim();
-          if (fullName !== filterInstructor) return false;
-        }
+        // Filter by instructor profile ID. The option value is the instructor's
+        // UUID, and profiles now includes id — this is exact and collision-proof.
+        if (inv.profiles?.id !== filterInstructor) return false;
       }
       if (filterClass !== "all" && inv.class_sessions?.id !== filterClass) return false;
       if (filterFrom) {
@@ -181,7 +135,9 @@ export default function InvoicesClient({
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Invoices</h1>
             <p className="mt-1 text-sm text-gray-500">
-              {filtered.length} invoice{filtered.length !== 1 ? "s" : ""}
+              {filtered.length !== invoices.length
+                ? `${filtered.length} of ${invoices.length} invoice${invoices.length !== 1 ? "s" : ""}`
+                : `${invoices.length} invoice${invoices.length !== 1 ? "s" : ""}`}
             </p>
           </div>
           {canCreate && (
@@ -261,7 +217,7 @@ export default function InvoicesClient({
                 >
                   <option value="all">All instructors</option>
                   {instructors.map((i) => (
-                    <option key={i.id} value={`${i.first_name} ${i.last_name}`}>
+                    <option key={i.id} value={i.id}>
                       {i.first_name} {i.last_name}
                     </option>
                   ))}

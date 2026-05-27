@@ -61,6 +61,9 @@ interface PlatformCreateParams {
 // Platform invoice creation
 // ---------------------------------------------------------------------------
 
+/** Square API version header — bump when migrating to a newer Square API. */
+const SQUARE_API_VERSION = "2024-01-18";
+
 /**
  * Attempts to create an invoice on PayPal's invoicing API and send it.
  * PayPal and Venmo Business use the same endpoint.
@@ -296,7 +299,7 @@ async function createSquareInvoice(
     const squareHeaders = {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      "Square-Version": "2024-01-18",
+      "Square-Version": SQUARE_API_VERSION,
     };
 
     // Create a quick-pay invoice (no order required for simple one-off charges)
@@ -574,7 +577,7 @@ export async function POST(request: Request) {
     .from("class_sessions")
     .select(`
       id, max_capacity, instructor_id, starts_at,
-      class_types ( name ),
+      class_types ( name, price ),
       locations ( name, city, state ),
       bookings ( id, cancelled ),
       invoices ( id, student_count, status )
@@ -690,6 +693,18 @@ export async function POST(request: Request) {
   const locationCity = (location as { city?: string } | null)?.city ?? "";
   const locationState = (location as { state?: string } | null)?.state ?? "";
 
+  // When the instructor chose a standard-priced class (customPrice = false),
+  // ignore the client-supplied amounts and recompute from the DB class price.
+  // This prevents a bad actor from submitting an arbitrarily low (or zero)
+  // amount by manipulating the request body.
+  const classPrice = (classType as { name?: string; price?: number } | null)?.price ?? 0;
+  const serverTotalAmount = customPrice
+    ? (totalAmount as number)
+    : classPrice * (studentCount as number);
+  const serverAmountPerStudent = customPrice
+    ? (amountPerStudent as number)
+    : classPrice;
+
   // Step 3: Reserve a unique invoice number by attempting INSERT and retrying
   // on 23505 (see insertInvoiceWithUniqueNumber). We need the number BEFORE
   // the platform call because it appears in PayPal's invoice note.
@@ -738,8 +753,8 @@ export async function POST(request: Request) {
       recipientEmail: recipientEmail as string,
       className,
       studentCount: studentCount as number,
-      amountPerStudent: amountPerStudent as number,
-      totalAmount: totalAmount as number,
+      amountPerStudent: serverAmountPerStudent,
+      totalAmount: serverTotalAmount,
       invoiceNumber,
     },
     refreshPayPalToken
@@ -777,9 +792,9 @@ export async function POST(request: Request) {
       recipient_email: recipientEmail,
       company_name: companyName,
       student_count: studentCount,
-      amount_per_student: amountPerStudent,
+      amount_per_student: serverAmountPerStudent,
       custom_price: customPrice,
-      total_amount: totalAmount,
+      total_amount: serverTotalAmount,
       payment_platform: paymentAccount.platform,
       platform_invoice_id: platformInvoiceId,
       notes: notes ?? null,
@@ -818,7 +833,7 @@ export async function POST(request: Request) {
       invoiceType: invoiceType as "individual" | "group",
       companyName: companyName as string | null,
       studentCount: studentCount as number,
-      totalAmount: totalAmount as number,
+      totalAmount: serverTotalAmount,
       className,
       classDate: sessionData.starts_at as string,
       locationName,
