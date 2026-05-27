@@ -8,8 +8,8 @@ import Link from "next/link";
 import RollcallCodeWidget from "./RollcallCodeWidget";
 import PendingGradesWidget from "./PendingGradesWidget";
 import PendingInvoicesWidget from "./PendingInvoicesWidget";
-export type { PendingGradeSession } from "./PendingGradesWidget";
-export type { PendingInvoice } from "./PendingInvoicesWidget";
+import type { PendingGradeSession } from "./PendingGradesWidget";
+import type { PendingInvoice } from "./PendingInvoicesWidget";
 
 /** A single class session happening today for this instructor. */
 export interface TodaySession {
