@@ -187,7 +187,9 @@ export default async function SettingsPage({
       legacySiteEnabled={legacySiteFlag === "true"}
       isSuperAdmin
       enrollwareSlot={
-        <BookmarkletSetup hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
+        // key required: React 19 owner-based key tracking flags elements that are
+        // created in one component (here) and rendered inside another (SettingsClient).
+        <BookmarkletSetup key="enrollware-slot" hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
       }
     />
   );
