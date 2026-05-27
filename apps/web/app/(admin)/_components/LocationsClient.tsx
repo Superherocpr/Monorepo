@@ -7,7 +7,13 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
-import { MapPin, Plus, Search, X } from "lucide-react";
+import { MapPin, Plus, Search } from "lucide-react";
+import LocationFormFields, {
+  blankLocationForm,
+  validateLocationForm,
+  type LocationFormState,
+} from "./LocationFormFields";
+import AddLocationPanel, { type NewLocationResult } from "./AddLocationPanel";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -25,45 +31,8 @@ export interface LocationWithCount {
   sessionCount: number;
 }
 
-/** Fields used for both add and edit forms. */
-interface LocationFormState {
-  name: string;
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
-  notes: string;
-}
-
 interface LocationsClientProps {
   initialLocations: LocationWithCount[];
-}
-
-// ── US state options ───────────────────────────────────────────────────────────
-const US_STATES = [
-  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
-  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
-  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
-  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
-  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
-];
-
-/** Returns a blank form state. */
-function blankForm(): LocationFormState {
-  return { name: "", address: "", city: "", state: "", zip: "", notes: "" };
-}
-
-/** Validates a location form. Returns a map of field → error message. */
-function validateForm(
-  f: LocationFormState
-): Partial<Record<keyof LocationFormState, string>> {
-  const errors: Partial<Record<keyof LocationFormState, string>> = {};
-  if (!f.name.trim()) errors.name = "Name is required.";
-  if (!f.address.trim()) errors.address = "Address is required.";
-  if (!f.city.trim()) errors.city = "City is required.";
-  if (!f.state) errors.state = "State is required.";
-  if (!f.zip.trim()) errors.zip = "Zip code is required.";
-  return errors;
 }
 
 /**
@@ -80,111 +49,6 @@ function sortAndCapTopLocations(
         a.name.localeCompare(b.name)
     )
     .slice(0, 10);
-}
-
-// ── Sub-component: location form fields ────────────────────────────────────────
-
-/**
- * Reusable set of form fields used in both the add panel and inline edit mode.
- * @param form - Current form values.
- * @param errors - Validation error messages keyed by field name.
- * @param onChange - Called when any field changes; receives field name and new value.
- * @param idPrefix - Prefix for label htmlFor / input id to avoid ID collisions.
- */
-function LocationFormFields({
-  form,
-  errors,
-  onChange,
-  idPrefix,
-}: {
-  form: LocationFormState;
-  errors: Partial<Record<keyof LocationFormState, string>>;
-  onChange: (field: keyof LocationFormState, value: string) => void;
-  idPrefix: string;
-}) {
-  const field = (
-    name: keyof LocationFormState,
-    label: string,
-    required = true
-  ) => (
-    <div>
-      <label
-        htmlFor={`${idPrefix}-${name}`}
-        className="mb-1 block text-xs font-medium text-gray-700"
-      >
-        {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
-      </label>
-      <input
-        id={`${idPrefix}-${name}`}
-        type="text"
-        value={form[name]}
-        onChange={(e) => onChange(name, e.target.value)}
-        className={`w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-red-500 ${
-          errors[name]
-            ? "border-red-400 focus:border-red-400"
-            : "border-gray-300 focus:border-red-500"
-        }`}
-      />
-      {errors[name] && (
-        <p className="mt-0.5 text-xs text-red-600">{errors[name]}</p>
-      )}
-    </div>
-  );
-
-  return (
-    <div className="space-y-3">
-      {field("name", "Location Name")}
-      {field("address", "Street Address")}
-      <div className="grid grid-cols-3 gap-3">
-        {field("city", "City")}
-        <div>
-          <label
-            htmlFor={`${idPrefix}-state`}
-            className="mb-1 block text-xs font-medium text-gray-700"
-          >
-            State<span className="ml-0.5 text-red-500">*</span>
-          </label>
-          <select
-            id={`${idPrefix}-state`}
-            value={form.state}
-            onChange={(e) => onChange("state", e.target.value)}
-            className={`w-full rounded-md border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-red-500 ${
-              errors.state
-                ? "border-red-400 focus:border-red-400"
-                : "border-gray-300 focus:border-red-500"
-            }`}
-          >
-            <option value="">-</option>
-            {US_STATES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          {errors.state && (
-            <p className="mt-0.5 text-xs text-red-600">{errors.state}</p>
-          )}
-        </div>
-        {field("zip", "Zip")}
-      </div>
-      <div>
-        <label
-          htmlFor={`${idPrefix}-notes`}
-          className="mb-1 block text-xs font-medium text-gray-700"
-        >
-          Notes
-        </label>
-        <textarea
-          id={`${idPrefix}-notes`}
-          rows={2}
-          value={form.notes}
-          onChange={(e) => onChange("notes", e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-        />
-      </div>
-    </div>
-  );
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -230,16 +94,9 @@ export default function LocationsClient({
   }, [searchQuery]);
 
   const [showAddPanel, setShowAddPanel] = useState(false);
-  const [addForm, setAddForm] = useState<LocationFormState>(blankForm());
-  const [addErrors, setAddErrors] = useState<
-    Partial<Record<keyof LocationFormState, string>>
-  >({});
-  const [addSaving, setAddSaving] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
-  const [addSuccess, setAddSuccess] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<LocationFormState>(blankForm());
+  const [editForm, setEditForm] = useState<LocationFormState>(blankLocationForm());
   const [editErrors, setEditErrors] = useState<
     Partial<Record<keyof LocationFormState, string>>
   >({});
@@ -254,69 +111,14 @@ export default function LocationsClient({
   const [homeBaseError, setHomeBaseError] = useState<string | null>(null);
 
   /**
-   * Updates a single field in the add form.
-   * @param field - The field name to update.
-   * @param value - The new value.
+   * Adds a newly created location to the top list.
+   * Called by AddLocationPanel after a successful save.
+   * @param location - The new location returned by POST /api/locations.
    */
-  function handleAddChange(field: keyof LocationFormState, value: string) {
-    setAddForm((prev) => ({ ...prev, [field]: value }));
-    setAddErrors((prev) => ({ ...prev, [field]: undefined }));
-  }
-
-  /**
-   * Submits the add form. Creates a new location via POST /api/locations.
-   * @param e - Form submit event.
-   */
-  async function handleAddSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const errs = validateForm(addForm);
-    if (Object.keys(errs).length > 0) {
-      setAddErrors(errs);
-      return;
-    }
-
-    setAddSaving(true);
-    setAddError(null);
-
-    try {
-      const res = await fetch("/api/locations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: addForm.name.trim(),
-          address: addForm.address.trim(),
-          city: addForm.city.trim(),
-          state: addForm.state,
-          zip: addForm.zip.trim(),
-          notes: addForm.notes.trim() || null,
-        }),
-      });
-
-      const json = (await res.json()) as {
-        success: boolean;
-        location?: LocationWithCount;
-        error?: string;
-      };
-
-      if (!json.success || !json.location) {
-        setAddError(json.error ?? "Failed to add location.");
-        return;
-      }
-
-      setTopLocations((prev) =>
-        sortAndCapTopLocations([...prev, { ...json.location!, sessionCount: 0 }])
-      );
-      setAddSuccess(true);
-      setAddForm(blankForm());
-      setTimeout(() => {
-        setShowAddPanel(false);
-        setAddSuccess(false);
-      }, 1200);
-    } catch {
-      setAddError("Network error. Please try again.");
-    } finally {
-      setAddSaving(false);
-    }
+  function handleLocationAdded(location: NewLocationResult) {
+    setTopLocations((prev) =>
+      sortAndCapTopLocations([...prev, { ...location, sessionCount: 0 }])
+    );
   }
 
   /**
@@ -360,7 +162,7 @@ export default function LocationsClient({
    * @param id - The location ID being edited.
    */
   async function handleEditSave(id: string) {
-    const errs = validateForm(editForm);
+    const errs = validateLocationForm(editForm);
     if (Object.keys(errs).length > 0) {
       setEditErrors(errs);
       return;
@@ -493,13 +295,7 @@ export default function LocationsClient({
         <h1 className="text-2xl font-bold text-gray-900">Locations</h1>
         <button
           type="button"
-          onClick={() => {
-            setAddForm(blankForm());
-            setAddErrors({});
-            setAddError(null);
-            setAddSuccess(false);
-            setShowAddPanel(true);
-          }}
+          onClick={() => setShowAddPanel(true)}
           className="flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
         >
           <Plus className="h-4 w-4" />
@@ -699,67 +495,10 @@ export default function LocationsClient({
       )}
 
       {showAddPanel && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/30"
-            onClick={() => setShowAddPanel(false)}
-            aria-hidden="true"
-          />
-          <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-              <h2 className="text-base font-semibold text-gray-900">
-                Add Location
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowAddPanel(false)}
-                aria-label="Close panel"
-                className="rounded-md p-1 text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={handleAddSubmit}
-              className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
-            >
-              <LocationFormFields
-                form={addForm}
-                errors={addErrors}
-                onChange={handleAddChange}
-                idPrefix="add"
-              />
-
-              {addError && (
-                <p className="text-sm text-red-600">{addError}</p>
-              )}
-              {addSuccess && (
-                <p className="text-sm font-medium text-green-600">
-                  Location added.
-                </p>
-              )}
-
-              <div className="mt-auto flex gap-2 border-t border-gray-200 pt-4">
-                <button
-                  type="submit"
-                  disabled={addSaving}
-                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  {addSaving ? "Adding…" : "Add Location"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAddPanel(false)}
-                  disabled={addSaving}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </aside>
-        </>
+        <AddLocationPanel
+          onClose={() => setShowAddPanel(false)}
+          onAdded={handleLocationAdded}
+        />
       )}
     </div>
   );
