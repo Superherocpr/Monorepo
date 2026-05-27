@@ -1,8 +1,9 @@
 /**
  * GET  /api/locations?q=   — search locations by name, address, city, state, zip, or notes
  * POST /api/locations       — create a new location
- * Called by: LocationsClient.tsx
- * Auth: manager and super_admin only
+ * Called by: LocationsClient.tsx, AddLocationPanel.tsx
+ * Auth: GET — manager and super_admin only
+ *       POST — instructor, manager, and super_admin (instructors can create locations for their sessions)
  */
 
 import { NextResponse } from "next/server";
@@ -18,7 +19,8 @@ const VALID_STATES = new Set([
 ]);
 
 /**
- * Shared auth check. Returns { supabase } on success or a NextResponse error.
+ * Shared auth check for manager/super_admin-only operations (e.g. search all locations).
+ * Returns { supabase } on success or a NextResponse error.
  */
 async function requireManagerAuth() {
   const supabase = await createClient();
@@ -39,6 +41,39 @@ async function requireManagerAuth() {
     .single();
 
   if (!profile || (profile.role !== "manager" && profile.role !== "super_admin")) {
+    return {
+      error: NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 }),
+    };
+  }
+
+  return { supabase };
+}
+
+/**
+ * Auth check for staff operations available to all admin roles.
+ * Allows instructor, manager, and super_admin.
+ * Returns { supabase } on success or a NextResponse error.
+ */
+async function requireStaffAuth() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      error: NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const allowed = ["instructor", "manager", "super_admin"];
+  if (!profile || !allowed.includes(profile.role as string)) {
     return {
       error: NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 }),
     };
@@ -107,7 +142,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const result = await requireManagerAuth();
+  // Instructors can create new locations (e.g. from the session creation form).
+  const result = await requireStaffAuth();
   if ("error" in result) return result.error;
   const { supabase } = result;
 

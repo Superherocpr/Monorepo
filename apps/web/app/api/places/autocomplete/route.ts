@@ -1,7 +1,7 @@
 /**
  * GET /api/places/autocomplete?q=
  * Called by: AddLocationPanel (address search-as-you-type)
- * Auth: manager and super_admin only
+ * Auth: instructor, manager, and super_admin
  * Proxies the Google Places Autocomplete API server-side so the API key is
  * never exposed to the browser. Restricts results to US street addresses only.
  */
@@ -20,8 +20,9 @@ export interface PlaceSuggestion {
 
 /**
  * Shared auth guard. Returns void on success, or a NextResponse 401/403 on failure.
+ * Allows instructor, manager, and super_admin.
  */
-async function requireManagerAuth(): Promise<NextResponse | null> {
+async function requireStaffAuth(): Promise<NextResponse | null> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -37,7 +38,8 @@ async function requireManagerAuth(): Promise<NextResponse | null> {
     .eq("id", user.id)
     .single();
 
-  if (!profile || (profile.role !== "manager" && profile.role !== "super_admin")) {
+  const allowed = ["instructor", "manager", "super_admin"];
+  if (!profile || !allowed.includes(profile.role as string)) {
     return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -50,7 +52,7 @@ async function requireManagerAuth(): Promise<NextResponse | null> {
  * @param request - Expects ?q= search query.
  */
 export async function GET(request: Request) {
-  const authError = await requireManagerAuth();
+  const authError = await requireStaffAuth();
   if (authError) return authError;
 
   const { searchParams } = new URL(request.url);
@@ -94,6 +96,8 @@ export async function GET(request: Request) {
     };
 
     if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+      // Log the actual status so we can diagnose API key / quota issues without exposing it to the client.
+      console.error("[places/autocomplete] Google API status:", data.status);
       return NextResponse.json(
         { success: false, error: "Address lookup unavailable. Please enter the address manually." },
         { status: 502 }

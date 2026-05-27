@@ -1,7 +1,7 @@
 /**
  * GET /api/places/details?place_id=
  * Called by: AddLocationPanel (after a suggestion is selected)
- * Auth: manager and super_admin only
+ * Auth: instructor, manager, and super_admin
  * Proxies the Google Places Details API server-side so the API key is never
  * exposed to the browser. Returns only the parsed address fields needed to
  * populate the location form (address, city, state, zip).
@@ -24,8 +24,9 @@ export interface ParsedAddress {
 
 /**
  * Shared auth guard. Returns a NextResponse error or null on success.
+ * Allows instructor, manager, and super_admin.
  */
-async function requireManagerAuth(): Promise<NextResponse | null> {
+async function requireStaffAuth(): Promise<NextResponse | null> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -41,7 +42,8 @@ async function requireManagerAuth(): Promise<NextResponse | null> {
     .eq("id", user.id)
     .single();
 
-  if (!profile || (profile.role !== "manager" && profile.role !== "super_admin")) {
+  const allowed = ["instructor", "manager", "super_admin"];
+  if (!profile || !allowed.includes(profile.role as string)) {
     return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -77,7 +79,7 @@ function getComponent(
  * @param request - Expects ?place_id= query parameter.
  */
 export async function GET(request: Request) {
-  const authError = await requireManagerAuth();
+  const authError = await requireStaffAuth();
   if (authError) return authError;
 
   const { searchParams } = new URL(request.url);
