@@ -120,21 +120,26 @@ export async function POST(request: Request) {
   }
 
   // ── Generate password setup link ───────────────────────────────────────────
-  // redirect_to points at /setup-password so the invite link lands on our
-  // dedicated password-setup page rather than the homepage.
+  // We generate a recovery link and extract its hashed_token to build a direct
+  // link to /setup-password. Sending action_link (the default Supabase URL)
+  // would route through Supabase's redirect, which requires the redirect URL
+  // to be in the Supabase Auth allowlist — a common misconfiguration point.
+  // Using the hashed_token instead lets the email link go straight to our app.
   const { data: linkData, error: linkError } = await adminSupabase.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL}/setup-password`,
-    },
   });
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (linkError || !linkData?.properties?.hashed_token) {
     // Account was created but link generation failed — return partial success
     console.error("[staff/invite] generateLink failed:", linkError);
     return Response.json({ success: true, emailSent: false });
   }
+
+  // Build the link so it points directly at our /setup-password page.
+  // The page exchanges the token via verifyOtp — no Supabase redirect needed.
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
+  const setupLink = `${baseUrl}/setup-password?token_hash=${linkData.properties.hashed_token}&type=recovery`;
 
   // ── Send invitation email ──────────────────────────────────────────────────
   const resend = new Resend(process.env.RESEND_API_KEY);
@@ -145,7 +150,7 @@ export async function POST(request: Request) {
     firstName: firstName.trim(),
     personalMessage: personalMessage ?? null,
     roleLabel,
-    actionLink: linkData.properties.action_link,
+    actionLink: setupLink,
     isInstructor: role === "instructor",
   });
 

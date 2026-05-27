@@ -8,6 +8,10 @@ import ManagerDashboard, {
   type ManagerDashboardProps,
 } from "./ManagerDashboard";
 import RollcallCodeWidget from "./RollcallCodeWidget";
+import PendingGradesWidget from "./PendingGradesWidget";
+import PendingInvoicesWidget from "./PendingInvoicesWidget";
+import type { PendingGradeSession } from "./PendingGradesWidget";
+import type { PendingInvoice } from "./PendingInvoicesWidget";
 
 /** The four top-level stats shown in the quick stats strip. */
 export interface QuickStats {
@@ -30,6 +34,10 @@ export interface SuperAdminDashboardProps extends ManagerDashboardProps {
   recentActivity: ActivityItem[];
   /** Daily rollcall code — super_admins are also instructors. */
   dailyAccessCode: string | null;
+  /** Completed sessions with ungraded students for this super_admin as instructor. */
+  pendingGrades: PendingGradeSession[];
+  /** Sent-but-unpaid invoices for this super_admin as instructor. */
+  pendingInvoices: PendingInvoice[];
 }
 
 /** Icon labels per activity type — text-based since we're keeping deps minimal. */
@@ -79,6 +87,8 @@ export default function SuperAdminDashboard({
   quickStats,
   recentActivity,
   dailyAccessCode,
+  pendingGrades,
+  pendingInvoices,
   ...managerProps
 }: SuperAdminDashboardProps) {
   return (
@@ -126,9 +136,11 @@ export default function SuperAdminDashboard({
         </div>
       </div>
 
-      {/* ── Rollcall Code (super_admin is also an instructor) ── */}
-      <div className="lg:w-1/2">
+      {/* ── Instructor widgets: rollcall code, pending grades, pending invoices ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RollcallCodeWidget initialCode={dailyAccessCode} />
+        <PendingGradesWidget sessions={pendingGrades} />
+        <PendingInvoicesWidget invoices={pendingInvoices} />
       </div>
 
       {/* ── Recent Activity Feed ── */}
