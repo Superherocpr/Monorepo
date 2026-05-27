@@ -10,9 +10,12 @@
  */
 
 // supabase (admin) handles all DB reads/writes — bypasses RLS since no user
-// session exists at this point. authClient (anon key) is used only for
-// signInWithPassword on the edit-with-password path.
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+// session exists at this point.
+import { createAdminClient } from "@/lib/supabase/server";
+// Plain (non-SSR) anon client used only for signInWithPassword. The SSR cookie
+// client is unreliable for credential-only checks inside Route Handlers because
+// its session-management machinery can swallow auth errors.
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 /** Fields the student may update during check-in. */
 interface ProfileUpdates {
@@ -25,15 +28,31 @@ interface ProfileUpdates {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
+ * Extracts the JWT role claim from a Supabase API key when it is in JWT format.
+ * Returns null for non-JWT keys (for example, newer publishable key formats).
+ * @param key - Supabase API key string
+ */
+function getJwtRoleClaim(key: string): string | null {
+  const parts = key.split(".");
+  if (parts.length !== 3) return null;
+
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
+      role?: string;
+    };
+    return payload.role ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Checks in a student by profileId. Optionally updates their profile when
  * password + updates are provided.
  * @param request - POST body: { profileId, sessionId, password?, updates? }
  */
 export async function POST(request: Request) {
   const supabase = await createAdminClient();
-  // User-facing auth client needed only for signInWithPassword — password
-  // verification must go through the anon key, not the service role.
-  const authClient = await createClient();
 
   const body = await request.json();
   const { profileId, sessionId, password, updates } = body as {
@@ -89,16 +108,9 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Profile not found." }, { status: 500 });
   }
 
-  // Already on the roster — return success without inserting a duplicate
-  if (existingRecord) {
-    return Response.json({
-      success: true,
-      alreadyCheckedIn: true,
-      firstName: profile.first_name,
-    });
-  }
-
   // ── 4. If updates requested, verify password before applying them ─────────
+  // NOTE: this block runs even when the student is already on the roster —
+  // password verification must not be bypassed by the idempotency check.
   if (updates) {
     if (!password) {
       return Response.json(
@@ -122,13 +134,50 @@ export async function POST(request: Request) {
       );
     }
 
-    // Authenticate using the profile's stored email — this is the identity gate
-    const { error: signInError } = await authClient.auth.signInWithPassword({
+    if (!profile.email) {
+      return Response.json(
+        {
+          success: false,
+          error: "Your account is missing an email address. Please see your instructor.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    if (!anonKey || !supabaseUrl) {
+      console.error("[checkin-by-profile] Missing Supabase env vars for password verification.");
+      return Response.json(
+        { success: false, error: "Server configuration error. Please contact support." },
+        { status: 500 }
+      );
+    }
+
+    const keyRole = getJwtRoleClaim(anonKey);
+    if (keyRole && keyRole !== "anon") {
+      console.error(
+        `[checkin-by-profile] Refusing password verification because NEXT_PUBLIC_SUPABASE_ANON_KEY role is '${keyRole}', expected 'anon'.`
+      );
+      return Response.json(
+        { success: false, error: "Server configuration error. Please contact support." },
+        { status: 500 }
+      );
+    }
+
+    // Authenticate using the profile's stored email — this is the identity gate.
+    // A fresh plain Supabase client (not the SSR cookie client) is used here so
+    // that signInWithPassword returns a clean error on bad credentials.
+    const anonClient = createSupabaseClient(supabaseUrl, anonKey);
+    const { data: authData, error: signInError } = await anonClient.auth.signInWithPassword({
       email: profile.email,
       password,
     });
 
-    if (signInError) {
+    // Require both: no auth error and an authenticated user whose ID exactly
+    // matches the profile being edited.
+    if (signInError || !authData.user || authData.user.id !== profileId) {
       return Response.json({ success: false, error: "Incorrect password." }, { status: 401 });
     }
 
@@ -150,6 +199,17 @@ export async function POST(request: Request) {
         { success: false, error: "Failed to update your information." },
         { status: 500 }
       );
+    }
+
+    // If the student is already on the roster, skip the insert — the profile
+    // update above is the meaningful change. Return alreadyCheckedIn so the
+    // page advances to the confirmation screen correctly.
+    if (existingRecord) {
+      return Response.json({
+        success: true,
+        alreadyCheckedIn: true,
+        firstName: updates.firstName.trim(),
+      });
     }
 
     // Create the roster record using the updated values, marking as corrected
@@ -180,7 +240,17 @@ export async function POST(request: Request) {
     });
   }
 
-  // ── 5. No updates — create the roster record from the current profile ─────
+  // ── 5. No updates path ─────────────────────────────────────────────────────
+  // Already on the roster with no changes requested — return immediately.
+  if (existingRecord) {
+    return Response.json({
+      success: true,
+      alreadyCheckedIn: true,
+      firstName: profile.first_name,
+    });
+  }
+
+  // ── 6. No updates, not yet checked in — create the roster record ──────────
   const { error: rosterError } = await supabase.from("roster_records").insert({
     session_id: sessionId,
     booking_id: booking.id,
