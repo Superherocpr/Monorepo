@@ -217,7 +217,7 @@ const StaffList: React.FC<StaffListProps> = ({
     if (isSelf) return null;
 
     return isChangingRole ? (
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="w-full flex items-center gap-2 flex-wrap">
         <select
           value={newRole}
           onChange={(e) =>
@@ -254,7 +254,7 @@ const StaffList: React.FC<StaffListProps> = ({
           setChangingRoleFor(member.id);
           setDeactivatingFor(null);
         }}
-        className="text-xs text-gray-600 hover:text-gray-900 underline underline-offset-2 font-medium"
+        className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors"
       >
         Change Role
       </button>
@@ -272,7 +272,7 @@ const StaffList: React.FC<StaffListProps> = ({
           onClick={() => handleReactivate(member.id, fullName)}
           disabled={isLoading}
           aria-label={`Reactivate ${fullName}`}
-          className="text-xs text-green-700 hover:text-green-900 underline underline-offset-2 font-medium disabled:opacity-50"
+          className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border bg-green-50 text-green-700 border-green-200 hover:bg-green-100 disabled:opacity-50 transition-colors"
         >
           {isLoading ? "Reactivating…" : "Reactivate"}
         </button>
@@ -280,7 +280,7 @@ const StaffList: React.FC<StaffListProps> = ({
     }
 
     return isDeactivating ? (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs space-y-2">
+      <div className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs space-y-2">
         <p className="text-gray-700">
           Deactivate {member.first_name}? They will no longer be able to log in.
         </p>
@@ -308,7 +308,7 @@ const StaffList: React.FC<StaffListProps> = ({
           setChangingRoleFor(null);
         }}
         aria-label={`Deactivate ${fullName}`}
-        className="text-xs text-red-600 hover:text-red-800 underline underline-offset-2 font-medium"
+        className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border bg-red-50 text-red-700 border-red-200 hover:bg-red-100 transition-colors"
       >
         Deactivate
       </button>
@@ -367,6 +367,32 @@ const StaffList: React.FC<StaffListProps> = ({
   }
 
   /**
+   * Sends a POST request to regenerate a password setup link and re-send
+   * the invitation email to an existing active staff member.
+   * Useful when the original invite email was lost or the link expired.
+   * @param staffId - The target staff member's profile ID.
+   * @param fullName - Used in the success message.
+   */
+  async function handleResendInvite(staffId: string, fullName: string) {
+    setLoadingAction(staffId);
+    try {
+      const res = await fetch(`/api/staff/${staffId}/resend-invite`, {
+        method: "POST",
+      });
+      const data: { success: boolean; error?: string } = await res.json();
+      if (!res.ok || !data.success) {
+        onError(data.error ?? "Failed to resend invite.");
+      } else {
+        onSuccess(`Invite resent to ${fullName}.`);
+      }
+    } catch {
+      onError("Something went wrong. Please try again.");
+    } finally {
+      setLoadingAction(null);
+    }
+  }
+
+  /**
    * Sends a DELETE request to permanently remove a staff member's account.
    * The API route blocks deletion if the member has class sessions on record.
    * @param staffId - The target staff member's profile ID.
@@ -393,6 +419,28 @@ const StaffList: React.FC<StaffListProps> = ({
   }
 
   /**
+   * Renders a "Resend Invite" button for active (non-deactivated) staff members.
+   * Regenerates the password setup link and re-sends the invitation email.
+   * Hidden for deactivated accounts — they cannot log in regardless.
+   * @param member - The staff member row.
+   * @param fullName - Full display name used in the success message.
+   */
+  function renderResendInviteButton(member: StaffMember, fullName: string) {
+    if (member.deactivated) return null;
+    const isLoading = loadingAction === member.id;
+    return (
+      <button
+        onClick={() => handleResendInvite(member.id, fullName)}
+        disabled={isLoading}
+        aria-label={`Resend invite to ${fullName}`}
+        className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+      >
+        {isLoading ? "Sending…" : "Resend Invite"}
+      </button>
+    );
+  }
+
+  /**
    * Renders the Edit Bio button for instructors and super admins.
    * Both roles can appear on the /about page.
    * @param member - The staff member row.
@@ -402,7 +450,7 @@ const StaffList: React.FC<StaffListProps> = ({
     return (
       <button
         onClick={() => onEditBio(member)}
-        className="text-xs text-blue-600 hover:text-blue-800 underline underline-offset-2 font-medium"
+        className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 transition-colors"
       >
         Edit Bio
       </button>
@@ -422,7 +470,7 @@ const StaffList: React.FC<StaffListProps> = ({
 
     if (isOpen) {
       return (
-        <div className="mt-1 p-2 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+        <div className="w-full p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-0.5">
               Email
@@ -473,7 +521,7 @@ const StaffList: React.FC<StaffListProps> = ({
         onClick={() =>
           openEditContact(member.id, member.email, member.phone ?? null)
         }
-        className="text-xs text-gray-600 hover:text-gray-800 underline underline-offset-2 font-medium"
+        className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors"
       >
         Edit Contact
       </button>
@@ -494,7 +542,7 @@ const StaffList: React.FC<StaffListProps> = ({
 
     if (isOpen) {
       return (
-        <div className="mt-1 p-2 bg-red-50 border border-red-200 rounded-lg space-y-1.5">
+        <div className="w-full p-3 bg-red-50 border border-red-200 rounded-lg space-y-1.5">
           <p className="text-xs text-red-800 font-medium leading-snug">
             Permanently delete {fullName}? This cannot be undone.
           </p>
@@ -527,7 +575,7 @@ const StaffList: React.FC<StaffListProps> = ({
           setEditingContactFor(null);
         }}
         aria-label={`Delete ${fullName}`}
-        className="text-xs text-red-500 hover:text-red-700 underline underline-offset-2 font-medium"
+        className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border bg-white text-red-500 border-red-200 hover:bg-red-50 transition-colors"
       >
         Delete
       </button>
@@ -602,9 +650,10 @@ const StaffList: React.FC<StaffListProps> = ({
                     {/* Edit Bio is available to everyone who can appear on /about.
                         Role and deactivate actions are hidden for the owner.
                         Delete is also hidden for the current logged-in user. */}
-                    <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1.5 items-center">
                       {renderEditBioButton(member)}
                       {!isOwner && renderEditContactUI(member, fullName)}
+                      {!isOwner && renderResendInviteButton(member, fullName)}
                       {!isOwner && renderChangeRoleUI(member, fullName)}
                       {!isOwner && renderDeactivateUI(member, fullName)}
                       {!isOwner && member.id !== currentUserId && renderDeleteUI(member, fullName)}
@@ -662,9 +711,10 @@ const StaffList: React.FC<StaffListProps> = ({
               </div>
 
               {/* Action buttons — Edit Bio available to all; role/deactivate/delete hidden for owner */}
-              <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-1.5 items-center">
                 {renderEditBioButton(member)}
                 {!isOwner && renderEditContactUI(member, fullName)}
+                {!isOwner && renderResendInviteButton(member, fullName)}
                 {!isOwner && renderChangeRoleUI(member, fullName)}
                 {!isOwner && renderDeactivateUI(member, fullName)}
                 {!isOwner && member.id !== currentUserId && renderDeleteUI(member, fullName)}
