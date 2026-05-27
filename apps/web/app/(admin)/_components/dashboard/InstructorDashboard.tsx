@@ -11,6 +11,8 @@ import PendingInvoicesWidget from "./PendingInvoicesWidget";
 import type { PendingGradeSession } from "./PendingGradesWidget";
 import type { PendingInvoice } from "./PendingInvoicesWidget";
 
+export type { PendingGradeSession, PendingInvoice };
+
 /** A single class session happening today for this instructor. */
 export interface TodaySession {
   id: string;
