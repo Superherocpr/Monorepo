@@ -247,20 +247,27 @@ export function getBookmarkletSource(apiBase: string): string {
   /**
    * Builds a CSV string from the student roster in the format expected by the
    * Enrollware student import (matching the column order on the import spec).
+   * Column order matches the Enrollware sample: Last Name first, Phone (not Primary Phone),
+   * with the required Score/Status/License/Price/Codes trailing columns left blank.
    */
   function buildStudentCSV(students) {
-    var header = 'First Name,Last Name,Email Address,Primary Phone,Address 1,Address 2,City,State,Zip';
+    var header = 'Last Name,First Name,Email Address,Phone,Address 1,Address 2,City,State,Zip,Score,Status,License,Price,Codes';
     var rows = students.map(function(s) {
       return [
-        s.first_name  || '',
         s.last_name   || '',
+        s.first_name  || '',
         s.email       || '',
         s.phone       || '',
         s.address_1   || '',
         s.address_2   || '',
         s.city        || '',
         s.state       || '',
-        s.zip         || ''
+        s.zip         || '',
+        '',  // Score — filled by Enrollware after grading
+        '',  // Status — filled by Enrollware
+        '',  // License — filled by Enrollware
+        '',  // Price — filled by Enrollware
+        ''   // Codes — filled by Enrollware
       ].map(function(v) {
         // Wrap every field in quotes and escape any internal quotes
         return '"' + String(v).replace(/"/g, '""') + '"';
