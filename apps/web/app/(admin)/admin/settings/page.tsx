@@ -126,8 +126,7 @@ export default async function SettingsPage({
          class_sessions ( starts_at )`
       )
       .order("is_home_base", { ascending: false })
-      .order("name", { ascending: true })
-      .limit(10);
+      .order("name", { ascending: true });
 
     const locations: LocationWithCount[] = (raw ?? []).map((loc) => {
       const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
@@ -184,8 +183,7 @@ export default async function SettingsPage({
          class_sessions ( starts_at )`
       )
       .order("is_home_base", { ascending: false })
-      .order("name", { ascending: true })
-      .limit(10),
+      .order("name", { ascending: true }),
   ]);
 
   // Reduce the joined accounts to a single boolean per instructor for the UI

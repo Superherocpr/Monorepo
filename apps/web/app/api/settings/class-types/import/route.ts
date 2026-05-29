@@ -78,6 +78,12 @@ export async function POST(request: Request) {
     );
   }
 
+  // ── Load existing names to detect duplicates before inserting ───────────────
+  const { data: existingRaw } = await supabase
+    .from("class_types")
+    .select("name");
+  const existingNames = new Set((existingRaw ?? []).map((r) => r.name as string));
+
   // ── Process rows ───────────────────────────────────────────────────────────
   let created = 0;
   let skipped = 0;
@@ -90,6 +96,12 @@ export async function POST(request: Request) {
     // Skip rows with no name
     if (!name) {
       skipped++;
+      continue;
+    }
+
+    // Skip rows whose name already exists in the database
+    if (existingNames.has(name)) {
+      duplicates++;
       continue;
     }
 
@@ -116,12 +128,14 @@ export async function POST(request: Request) {
 
     if (error) {
       if (error.code === "23505") {
-        // Unique constraint violation — name already exists, not a hard error
+        // Unique constraint violation — race condition safety net
         duplicates++;
       } else {
         errors.push(`"${name}": ${error.message}`);
       }
     } else {
+      // Track so subsequent rows in this batch don't duplicate each other
+      existingNames.add(name);
       created++;
     }
   }

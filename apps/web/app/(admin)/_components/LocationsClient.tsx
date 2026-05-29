@@ -44,19 +44,17 @@ interface LocationsClientProps {
 const TWO_YEARS_MS = 2 * 365.25 * 24 * 60 * 60 * 1000;
 
 /**
- * Sorts locations for the top list and enforces a hard cap of 10 rows.
- * @param locations - Candidate list to sort and trim.
+ * Sorts locations: home base first, then alphabetically by name.
+ * @param locations - Candidate list to sort.
  */
 function sortAndCapTopLocations(
   locations: LocationWithCount[]
 ): LocationWithCount[] {
-  return [...locations]
-    .sort(
-      (a, b) =>
-        Number(b.is_home_base) - Number(a.is_home_base) ||
-        a.name.localeCompare(b.name)
-    )
-    .slice(0, 10);
+  return [...locations].sort(
+    (a, b) =>
+      Number(b.is_home_base) - Number(a.is_home_base) ||
+      a.name.localeCompare(b.name)
+  );
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────

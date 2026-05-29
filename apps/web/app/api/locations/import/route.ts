@@ -136,8 +136,42 @@ export async function POST(request: Request) {
       success: true,
       created: 0,
       skipped,
+      duplicates: 0,
       errors: [],
       message: "No importable rows found — every row was missing a name.",
+    });
+  }
+
+  // ── Filter out names that already exist in the database ───────────────────
+  const { data: existingRaw } = await supabase
+    .from("locations")
+    .select("name");
+  const existingNames = new Set((existingRaw ?? []).map((r) => r.name as string));
+
+  const newRows: typeof rows = [];
+  let duplicates = 0;
+
+  for (const row of rows) {
+    if (existingNames.has(row.name)) {
+      duplicates++;
+    } else {
+      // Track within this batch so two rows with the same name don't both insert
+      existingNames.add(row.name);
+      newRows.push(row);
+    }
+  }
+
+  if (newRows.length === 0) {
+    const parts: string[] = [];
+    if (duplicates > 0) parts.push(`${duplicates} skipped (duplicate name)`);
+    if (skipped > 0) parts.push(`${skipped} skipped (no name)`);
+    return NextResponse.json({
+      success: true,
+      created: 0,
+      skipped,
+      duplicates,
+      errors: [],
+      message: "Nothing was imported — " + parts.join(", ") + ".",
     });
   }
 
@@ -146,7 +180,7 @@ export async function POST(request: Request) {
   // empty string satisfies them for text columns.
   const { data: inserted, error } = await supabase
     .from("locations")
-    .insert(rows)
+    .insert(newRows)
     .select("id");
 
   if (error) {
@@ -157,13 +191,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const created = inserted?.length ?? rows.length;
+  const created = inserted?.length ?? newRows.length;
+
+  const parts: string[] = [`${created} imported`];
+  if (duplicates > 0) parts.push(`${duplicates} skipped (duplicate name)`);
+  if (skipped > 0) parts.push(`${skipped} skipped (no name)`);
 
   return NextResponse.json({
     success: true,
     created,
     skipped,
+    duplicates,
     errors: [],
-    message: `Imported ${created} location${created !== 1 ? "s" : ""}${skipped > 0 ? `, skipped ${skipped} (no name)` : ""}.`,
+    message: parts.join(", ") + ".",
   });
 }
