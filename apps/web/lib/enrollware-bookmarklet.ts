@@ -31,10 +31,17 @@ export function getBookmarkletSource(apiBase: string): string {
   // The apiBase is embedded directly in the script at serve time —
   // only __k (the API key) is injected at runtime by the bookmark wrapper.
   // This avoids exposing the API key in server logs via query parameters.
+  //
+  // The returned text is a complete self-contained IIFE. The bookmark wrapper
+  // must set window.__SCPR_KEY before injecting so the IIFE can read the key.
   return `
-(function(__k) {
+(function() {
   'use strict';
 
+  // Read the API key from the global set by the bookmark wrapper before
+  // this script was injected. Falls back to empty string (auth will fail
+  // with a clear error message from the API).
+  var __k = window.__SCPR_KEY || '';
   var API_BASE = ${JSON.stringify(apiBase)};
 
   // --- Guard: prevent double-running if bookmarklet is tapped twice ---
@@ -323,7 +330,7 @@ export function getBookmarkletSource(apiBase: string): string {
   function panelHeader() {
     return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
            '<b style="color:#c8102e;font-size:14px">&#x1F9B8; SuperheroCPR</b>' +
-           '<button onclick="(function(){var p=document.getElementById(\'scpr-enrw-panel\');if(p)p.remove();window.__SCPR_LOADED=false;})()" ' +
+           '<button onclick="(function(){var p=document.getElementById(\\'scpr-enrw-panel\\');if(p)p.remove();window.__SCPR_LOADED=false;})()" ' +
            'style="border:none;background:none;cursor:pointer;font-size:18px;line-height:1;color:#666">&times;</button>' +
            '</div>';
   }
@@ -350,9 +357,9 @@ export function getBookmarkletSource(apiBase: string): string {
         : '';
       return '<div style="border:1px solid #ddd;border-radius:4px;padding:8px;' +
              'margin-bottom:8px;cursor:pointer;transition:background 0.1s" ' +
-             'onmouseover="this.style.background=\'#f9f9f9\'" ' +
-             'onmouseout="this.style.background=\'#fff\'" ' +
-             'onclick="window.__SCPR_PICK(' + idx + ')">' +
+             'onmouseover="this.style.background=\\'#f9f9f9\\'" ' +
+             'onmouseout="this.style.background=\\'#fff\\'" ' +
+             'onclick="window.__SCPR_PICK(' + idx + ')">'  +
              '<b style="font-size:13px">' + (c.class_type ? c.class_type.name : 'Unknown Course') + '</b>' + submitted + '<br>' +
              '<span style="color:#555;font-size:12px">' + timeStr + ' &middot; ' + (c.location ? c.location.name : 'No location') + '</span><br>' +
              '<span style="color:#888;font-size:11px">' + count + ' student' + (count !== 1 ? 's' : '') + ' in database</span>' +
@@ -473,7 +480,7 @@ export function getBookmarkletSource(apiBase: string): string {
       'border-radius:4px;cursor:pointer;font-size:12px;margin-bottom:6px">' +
       '&#x2193; Download student CSV' +
       '</button>' +
-      '<button onclick="window.__SCPR_MARK_DONE(\'' + session.id + '\')" ' +
+      '<button onclick="window.__SCPR_MARK_DONE(\\\'' + session.id + '\\\')" ' +
       'style="width:100%;padding:6px;background:#c8102e;color:#fff;border:none;' +
       'border-radius:4px;cursor:pointer;font-size:12px">' +
       '&#x2713; Mark class as submitted' +
@@ -556,9 +563,9 @@ export function getBookmarkletSource(apiBase: string): string {
       var count = c.students ? c.students.length : 0;
       return '<div style="border:1px solid #ddd;border-radius:4px;padding:8px;' +
              'margin-bottom:8px;cursor:pointer" ' +
-             'onmouseover="this.style.background=\'#f9f9f9\'" ' +
-             'onmouseout="this.style.background=\'#fff\'" ' +
-             'onclick="window.__SCPR_PICK_STUDENTS(' + idx + ')">' +
+             'onmouseover="this.style.background=\\'#f9f9f9\\'" ' +
+             'onmouseout="this.style.background=\\'#fff\\'" ' +
+             'onclick="window.__SCPR_PICK_STUDENTS(' + idx + ')">'  +
              '<b>' + (c.class_type ? c.class_type.name : 'Unknown') + '</b><br>' +
              '<span style="color:#555;font-size:12px">' + timeStr + ' &middot; ' + (c.location ? c.location.name : '') + '</span><br>' +
              '<span style="color:#888;font-size:11px">' + count + ' student' + (count !== 1 ? 's' : '') + '</span>' +
@@ -583,6 +590,6 @@ export function getBookmarkletSource(apiBase: string): string {
 
   run();
 
-})(__k);
+})();
 `.trim();
 }

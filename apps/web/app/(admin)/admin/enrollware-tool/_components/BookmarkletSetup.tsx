@@ -25,14 +25,29 @@ interface BookmarkletSetupProps {
  */
 function buildBookmarkletCode(apiKey: string, siteUrl: string): string {
   const fetchUrl = `${siteUrl}/api/enrollware/bookmarklet`;
-  // Uses new Function('__k', code)(__k) instead of eval() — avoids strict mode issues
+  // Preferred approach: inject the script tag so the returned script runs
+  // natively (avoids eval/Function failures on pages with strict CSP).
+  // window.__SCPR_KEY is set before the script tag is appended so the IIFE
+  // can read the API key without it ever appearing in a network request.
+  // The onerror fallback evaluates the script text directly via Function
+  // for environments that block external script-tag src injection.
+  const src = JSON.stringify(fetchUrl);
   return (
     `javascript:(function(){` +
-    `var __k=${JSON.stringify(apiKey)};` +
-    `fetch(${JSON.stringify(fetchUrl)})` +
-    `.then(function(r){return r.text()})` +
-    `.then(function(c){(new Function('__k',c))(__k)})` +
-    `.catch(function(){alert('Could not load SuperheroCPR Enrollware tool. Check your connection.')})` +
+    `window.__SCPR_KEY=${JSON.stringify(apiKey)};` +
+    `try{` +
+      `var s=document.createElement('script');` +
+      `s.src=${src};` +
+      `s.onerror=function(){` +
+        // onerror fallback: fetch the script text, then use indirect eval
+        // (via Function constructor) which keeps the fallback working even if
+        // the script-tag src is blocked by CSP
+        `fetch(${src}).then(function(r){return r.text()}).then(function(c){(0,eval)(c)}).catch(function(){alert('Could not load SuperheroCPR Enrollware tool. Check your connection.')});` +
+      `};` +
+      `document.documentElement.appendChild(s);` +
+    `}catch(e){` +
+      `fetch(${src}).then(function(r){return r.text()}).then(function(c){(0,eval)(c)}).catch(function(){alert('Could not load SuperheroCPR Enrollware tool. Check your connection.')});` +
+    `}` +
     `})()`
   );
 }
