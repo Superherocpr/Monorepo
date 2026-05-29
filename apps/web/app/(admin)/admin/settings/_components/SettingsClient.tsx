@@ -33,6 +33,13 @@ interface SettingsClientProps {
    * the bookmarklet's data dependencies (api key state, site URL, etc.).
    */
   enrollwareSlot?: React.ReactNode;
+  /**
+   * Optional fully-rendered Locations management block. When provided, the
+   * settings page exposes a "Locations" tab whose content is this node.
+   * Rendered as an opaque slot so this component doesn't need to know about
+   * the locations data dependencies.
+   */
+  locationsSlot?: React.ReactNode;
 }
 
 /** All tab identifiers for the settings page. Order matches the nav. */
@@ -43,6 +50,7 @@ type SettingsTabId =
   | "zoho"
   | "routing"
   | "social"
+  | "locations"
   | "enrollware";
 
 /** Tab nav definition — label + id pairs in display order. */
@@ -94,6 +102,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   legacySiteEnabled: initialLegacySiteEnabled,
   isSuperAdmin,
   enrollwareSlot,
+  locationsSlot,
 }) => {
   const router = useRouter();
 
@@ -110,6 +119,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
     { id: "zoho", label: "Zoho Mail" },
     { id: "routing", label: "Payment Routing" },
     { id: "social", label: "Social Feed" },
+    ...(locationsSlot ? [{ id: "locations" as const, label: "Locations" }] : []),
     ...(enrollwareSlot ? [{ id: "enrollware" as const, label: "Enrollware" }] : []),
   ];
 
@@ -1174,7 +1184,14 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </p>
       </section>
 
-      {/* ── Section 7: Enrollware Bookmarklet (optional slot) ─────────────── */}
+      {/* ── Section 7: Locations (optional slot) ──────────────────────────── */}
+      {locationsSlot && (
+        <section className={tabClass("locations")}>
+          {locationsSlot}
+        </section>
+      )}
+
+      {/* ── Section 8: Enrollware Bookmarklet (optional slot) ─────────────── */}
       {enrollwareSlot && (
         <section className={tabClass("enrollware")}>
           <div className="mb-4">
