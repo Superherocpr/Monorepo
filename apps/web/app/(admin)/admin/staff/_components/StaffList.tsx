@@ -96,6 +96,8 @@ const StaffList: React.FC<StaffListProps> = ({
   // Track which row has the edit-contact form open
   const [editingContactFor, setEditingContactFor] = useState<string | null>(null);
   // Draft values pre-filled when the edit-contact form opens
+  const [firstNameDraft, setFirstNameDraft] = useState("");
+  const [lastNameDraft, setLastNameDraft] = useState("");
   const [emailDraft, setEmailDraft] = useState("");
   const [phoneDraft, setPhoneDraft] = useState("");
   // Track which row has the delete confirmation open
@@ -319,15 +321,21 @@ const StaffList: React.FC<StaffListProps> = ({
    * Opens the edit-contact form pre-filled with the member's current values.
    * Closes any other open inline panels to keep the UI uncluttered.
    * @param staffId - The target staff member's profile ID.
+   * @param currentFirstName - Current first name to pre-fill.
+   * @param currentLastName - Current last name to pre-fill.
    * @param currentEmail - Current email address to pre-fill.
    * @param currentPhone - Current phone number to pre-fill (may be null).
    */
   function openEditContact(
     staffId: string,
+    currentFirstName: string,
+    currentLastName: string,
     currentEmail: string,
     currentPhone: string | null
   ) {
     setEditingContactFor(staffId);
+    setFirstNameDraft(currentFirstName);
+    setLastNameDraft(currentLastName);
     setEmailDraft(currentEmail);
     setPhoneDraft(currentPhone ?? "");
     setChangingRoleFor(null);
@@ -336,7 +344,7 @@ const StaffList: React.FC<StaffListProps> = ({
   }
 
   /**
-   * Sends a PATCH request to update email and/or phone for a staff member.
+   * Sends a PATCH request to update name, email, and/or phone for a staff member.
    * Updates both profiles and auth.users for email changes.
    * @param staffId - The target staff member's profile ID.
    * @param fullName - Used in the success message.
@@ -348,6 +356,8 @@ const StaffList: React.FC<StaffListProps> = ({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          first_name: firstNameDraft.trim(),
+          last_name: lastNameDraft.trim(),
           email: emailDraft.trim().toLowerCase(),
           phone: phoneDraft.trim() || null,
         }),
@@ -471,6 +481,32 @@ const StaffList: React.FC<StaffListProps> = ({
     if (isOpen) {
       return (
         <div className="w-full p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                First Name
+              </label>
+              <input
+                type="text"
+                value={firstNameDraft}
+                onChange={(e) => setFirstNameDraft(e.target.value)}
+                disabled={isLoading}
+                className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                Last Name
+              </label>
+              <input
+                type="text"
+                value={lastNameDraft}
+                onChange={(e) => setLastNameDraft(e.target.value)}
+                disabled={isLoading}
+                className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              />
+            </div>
+          </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-0.5">
               Email
@@ -499,7 +535,7 @@ const StaffList: React.FC<StaffListProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleUpdateContact(member.id, fullName)}
-              disabled={isLoading || !emailDraft.trim()}
+              disabled={isLoading || !firstNameDraft.trim() || !lastNameDraft.trim() || !emailDraft.trim()}
               className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-2.5 py-1 rounded-lg disabled:opacity-50 transition-colors"
             >
               {isLoading ? "Saving…" : "Save"}
@@ -519,7 +555,7 @@ const StaffList: React.FC<StaffListProps> = ({
     return (
       <button
         onClick={() =>
-          openEditContact(member.id, member.email, member.phone ?? null)
+          openEditContact(member.id, member.first_name, member.last_name, member.email, member.phone ?? null)
         }
         className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors"
       >

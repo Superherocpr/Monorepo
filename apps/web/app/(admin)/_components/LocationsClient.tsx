@@ -6,8 +6,8 @@
  * inline delete confirmation. Used by: app/(admin)/admin/locations/page.tsx
  */
 
-import { useState, useCallback, useEffect } from "react";
-import { MapPin, Plus, Search, Upload } from "lucide-react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { Loader2, MapPin, Plus, Search, Upload } from "lucide-react";
 import LocationFormFields, {
   blankLocationForm,
   validateLocationForm,
@@ -42,6 +42,12 @@ interface LocationsClientProps {
 
 /** Two years in milliseconds — threshold for flagging a location as unused. */
 const TWO_YEARS_MS = 2 * 365.25 * 24 * 60 * 60 * 1000;
+
+/** A single address suggestion returned by the autocomplete proxy. */
+interface PlaceSuggestion {
+  place_id: string;
+  description: string;
+}
 
 /**
  * Sorts locations: home base first, then alphabetically by name.
@@ -119,6 +125,96 @@ export default function LocationsClient({
   const [homeBaseLoading, setHomeBaseLoading] = useState<string | null>(null);
   const [homeBaseError, setHomeBaseError] = useState<string | null>(null);
 
+  // ── Edit address autocomplete state ────────────────────────────────────────
+  const [editSearchQuery, setEditSearchQuery] = useState("");
+  const [editSuggestions, setEditSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [editSearchLoading, setEditSearchLoading] = useState(false);
+  const [editSearchError, setEditSearchError] = useState<string | null>(null);
+  const [editShowSuggestions, setEditShowSuggestions] = useState(false);
+  /** Ref for the search container — used to close dropdown on outside click. */
+  const editSearchRef = useRef<HTMLDivElement>(null);
+
+  // Close the suggestions dropdown when the user clicks outside the search box.
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (editSearchRef.current && !editSearchRef.current.contains(e.target as Node)) {
+        setEditShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Debounce autocomplete calls while the user types in the edit search box.
+  useEffect(() => {
+    const q = editSearchQuery.trim();
+    if (q.length < 3) {
+      setEditSuggestions([]);
+      setEditShowSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setEditSearchLoading(true);
+      setEditSearchError(null);
+      try {
+        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        const json = (await res.json()) as {
+          success: boolean;
+          suggestions?: PlaceSuggestion[];
+          error?: string;
+        };
+        if (json.success && json.suggestions) {
+          setEditSuggestions(json.suggestions);
+          setEditShowSuggestions(json.suggestions.length > 0);
+        } else {
+          setEditSearchError(json.error ?? null);
+          setEditSuggestions([]);
+        }
+      } catch {
+        setEditSuggestions([]);
+      } finally {
+        setEditSearchLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [editSearchQuery]);
+
+  /**
+   * Called when a suggestion is selected from the edit-mode dropdown.
+   * Fetches full address details and populates the edit form fields.
+   * @param suggestion - The selected autocomplete suggestion.
+   */
+  const handleEditSelectSuggestion = useCallback(async (suggestion: PlaceSuggestion) => {
+    setEditSearchQuery(suggestion.description);
+    setEditShowSuggestions(false);
+    setEditSearchLoading(true);
+    try {
+      const res = await fetch(
+        `/api/places/details?place_id=${encodeURIComponent(suggestion.place_id)}`
+      );
+      const json = (await res.json()) as {
+        success: boolean;
+        parsed?: { address: string; city: string; state: string; zip: string };
+        error?: string;
+      };
+      if (json.success && json.parsed) {
+        const { address, city, state, zip } = json.parsed;
+        setEditForm((prev) => ({ ...prev, address, city, state, zip }));
+        setEditErrors((prev) => ({
+          ...prev,
+          address: undefined,
+          city: undefined,
+          state: undefined,
+          zip: undefined,
+        }));
+      }
+    } catch {
+      // Silent fail — form fields remain editable so the user can correct manually.
+    } finally {
+      setEditSearchLoading(false);
+    }
+  }, []);
+
   /**
    * Adds a newly created location to the top list.
    * Called by AddLocationPanel after a successful save.
@@ -158,6 +254,11 @@ export default function LocationsClient({
     });
     setEditErrors({});
     setEditError(null);
+    // Reset autocomplete search for this new edit session
+    setEditSearchQuery("");
+    setEditSuggestions([]);
+    setEditShowSuggestions(false);
+    setEditSearchError(null);
     if (deletingId === loc.id) setDeletingId(null);
   }
 
@@ -166,6 +267,10 @@ export default function LocationsClient({
     setEditingId(null);
     setEditErrors({});
     setEditError(null);
+    setEditSearchQuery("");
+    setEditSuggestions([]);
+    setEditShowSuggestions(false);
+    setEditSearchError(null);
   }
 
   /**
@@ -421,12 +526,63 @@ export default function LocationsClient({
                     <p className="mb-3 text-sm font-semibold text-gray-700">
                       Edit Location
                     </p>
-                    <LocationFormFields
-                      form={editForm}
-                      errors={editErrors}
-                      onChange={handleEditChange}
-                      idPrefix={`edit-${loc.id}`}
-                    />
+
+                    {/* Address autocomplete search — same behaviour as Add Location panel */}
+                    <div ref={editSearchRef} className="relative mb-3">
+                      <label
+                        htmlFor={`edit-search-${loc.id}`}
+                        className="mb-1 block text-xs font-medium text-gray-700"
+                      >
+                        Search for an address
+                      </label>
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <input
+                          id={`edit-search-${loc.id}`}
+                          type="text"
+                          value={editSearchQuery}
+                          onChange={(e) => setEditSearchQuery(e.target.value)}
+                          onFocus={() => editSuggestions.length > 0 && setEditShowSuggestions(true)}
+                          placeholder="Start typing an address…"
+                          autoComplete="off"
+                          className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-9 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                        />
+                        {editSearchLoading && (
+                          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+                        )}
+                      </div>
+                      {editSearchError && (
+                        <p className="mt-0.5 text-xs text-amber-600">{editSearchError}</p>
+                      )}
+                      {editShowSuggestions && editSuggestions.length > 0 && (
+                        <ul
+                          role="listbox"
+                          className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg"
+                        >
+                          {editSuggestions.map((s) => (
+                            <li key={s.place_id} role="option" aria-selected={false}>
+                              <button
+                                type="button"
+                                onClick={() => handleEditSelectSuggestion(s)}
+                                className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 focus:bg-red-50 focus:outline-none"
+                              >
+                                {s.description}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    <div className="mb-3 border-t border-gray-100 pt-3">
+                      <p className="mb-2 text-xs text-gray-400">Or fill in the fields below manually:</p>
+                      <LocationFormFields
+                        form={editForm}
+                        errors={editErrors}
+                        onChange={handleEditChange}
+                        idPrefix={`edit-${loc.id}`}
+                      />
+                    </div>
                     {editError && (
                       <p className="mt-2 text-xs text-red-600">{editError}</p>
                     )}
