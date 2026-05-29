@@ -18,7 +18,7 @@ import LocationImportPanel from "./LocationImportPanel";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-/** A locations row with a computed session count. */
+/** A locations row with a computed session count and last-used date. */
 export interface LocationWithCount {
   id: string;
   name: string;
@@ -30,11 +30,18 @@ export interface LocationWithCount {
   is_home_base: boolean;
   created_at: string;
   sessionCount: number;
+  /** ISO timestamp of the most recent class session at this location, or null if never used. */
+  last_used_at: string | null;
 }
 
 interface LocationsClientProps {
   initialLocations: LocationWithCount[];
+  /** The viewing user's role — controls delete button visibility. */
+  userRole?: string;
 }
+
+/** Two years in milliseconds — threshold for flagging a location as unused. */
+const TWO_YEARS_MS = 2 * 365.25 * 24 * 60 * 60 * 1000;
 
 /**
  * Sorts locations for the top list and enforces a hard cap of 10 rows.
@@ -57,6 +64,7 @@ function sortAndCapTopLocations(
 /** Client component for managing locations. */
 export default function LocationsClient({
   initialLocations,
+  userRole,
 }: LocationsClientProps) {
   const [topLocations, setTopLocations] = useState<LocationWithCount[]>(
     sortAndCapTopLocations(initialLocations)
@@ -64,6 +72,7 @@ export default function LocationsClient({
   const [searchResults, setSearchResults] = useState<LocationWithCount[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showUnused, setShowUnused] = useState(false);
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -119,7 +128,7 @@ export default function LocationsClient({
    */
   function handleLocationAdded(location: NewLocationResult) {
     setTopLocations((prev) =>
-      sortAndCapTopLocations([...prev, { ...location, sessionCount: 0 }])
+      sortAndCapTopLocations([...prev, { ...location, sessionCount: 0, last_used_at: null }])
     );
   }
 
@@ -301,7 +310,17 @@ export default function LocationsClient({
   }
 
   const isSearchMode = searchQuery.trim().length > 0;
-  const displayedLocations = isSearchMode ? searchResults : topLocations;
+  const isSuperAdmin = userRole === "super_admin";
+
+  // Apply unused filter on top of search/top-10 results
+  const rawDisplayed = isSearchMode ? searchResults : topLocations;
+  const displayedLocations = showUnused
+    ? rawDisplayed.filter(
+        (loc) =>
+          !loc.last_used_at ||
+          Date.now() - new Date(loc.last_used_at).getTime() > TWO_YEARS_MS
+      )
+    : rawDisplayed;
 
   return (
     <div>
@@ -328,15 +347,30 @@ export default function LocationsClient({
       </div>
 
       {topLocations.length > 0 && (
-        <div className="relative mb-6 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            type="search"
-            placeholder="Search locations…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-          />
+        <div className="relative mb-6 flex items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              placeholder="Search locations…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+          </div>
+          {/* Toggle button: show only locations unused for 2+ years */}
+          <button
+            type="button"
+            onClick={() => setShowUnused((v) => !v)}
+            className={`shrink-0 rounded-md border px-3 py-2 text-sm font-semibold transition-colors ${
+              showUnused
+                ? "border-amber-500 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+            aria-pressed={showUnused}
+          >
+            {showUnused ? "Showing unused only" : "Show unused"}
+          </button>
         </div>
       )}
 
@@ -362,7 +396,11 @@ export default function LocationsClient({
         <p className="text-sm text-gray-500">Searching…</p>
       ) : isSearchMode && displayedLocations.length === 0 ? (
         <p className="text-sm text-gray-500">
-          No locations match &ldquo;{searchQuery}&rdquo;.
+          No locations match &ldquo;{searchQuery}&rdquo;{showUnused ? " (unused filter active)" : ""}.
+        </p>
+      ) : showUnused && displayedLocations.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No unused locations found — all locations have been used within the last 2 years.
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -373,7 +411,12 @@ export default function LocationsClient({
             return (
               <div
                 key={loc.id}
-                className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
+                className={`rounded-lg border bg-white p-5 shadow-sm ${
+                  loc.last_used_at === null ||
+                  Date.now() - new Date(loc.last_used_at).getTime() > TWO_YEARS_MS
+                    ? "border-amber-300"
+                    : "border-gray-200"
+                }`}
               >
                 {isEditing ? (
                   <div>
@@ -412,11 +455,19 @@ export default function LocationsClient({
                   <div>
                     <div className="mb-1 flex items-start justify-between gap-2">
                       <h2 className="font-semibold text-gray-900">{loc.name}</h2>
-                      {loc.is_home_base && (
-                        <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                          Home Base
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                        {loc.is_home_base && (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                            Home Base
+                          </span>
+                        )}
+                        {(loc.last_used_at === null ||
+                          Date.now() - new Date(loc.last_used_at).getTime() > TWO_YEARS_MS) && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                            Unused 2y+
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <address className="not-italic text-sm text-gray-600">
@@ -432,13 +483,28 @@ export default function LocationsClient({
                     <p className="mt-2 text-xs text-gray-400">
                       Used in {loc.sessionCount}{" "}
                       {loc.sessionCount !== 1 ? "sessions" : "session"}
+                      {loc.last_used_at
+                        ? ` · Last used ${
+                            new Date(loc.last_used_at).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "short",
+                            })
+                          }`
+                        : " · Never used"}
                     </p>
 
                     {isConfirmingDelete && (
                       <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                        <p className="mb-2 text-sm font-medium text-red-700">
+                        <p className="mb-1 text-sm font-medium text-red-700">
                           Delete &ldquo;{loc.name}&rdquo;?
                         </p>
+                        {loc.sessionCount > 0 && (
+                          <p className="mb-2 text-xs text-red-600">
+                            This location is linked to {loc.sessionCount}{" "}
+                            {loc.sessionCount !== 1 ? "sessions" : "session"}.
+                            It cannot be deleted while sessions reference it.
+                          </p>
+                        )}
                         {deleteError && (
                           <p className="mb-1 text-xs text-red-600">
                             {deleteError}
@@ -496,7 +562,7 @@ export default function LocationsClient({
                           </button>
                         )}
 
-                        {loc.sessionCount === 0 && (
+                        {loc.sessionCount === 0 ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -507,7 +573,18 @@ export default function LocationsClient({
                           >
                             Delete
                           </button>
-                        )}
+                        ) : isSuperAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeletingId(loc.id);
+                              setDeleteError(null);
+                            }}
+                            className="rounded-md border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        ) : null}
                       </div>
                     )}
                   </div>

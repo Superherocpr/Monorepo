@@ -123,30 +123,34 @@ export default async function SettingsPage({
       .from("locations")
       .select(
         `id, name, address, city, state, zip, notes, is_home_base, created_at,
-         class_sessions ( id )`
+         class_sessions ( starts_at )`
       )
       .order("is_home_base", { ascending: false })
       .order("name", { ascending: true })
       .limit(10);
 
-    const locations: LocationWithCount[] = (raw ?? []).map((loc) => ({
-      id: loc.id,
-      name: loc.name,
-      address: loc.address,
-      city: loc.city,
-      state: loc.state,
-      zip: loc.zip,
-      notes: loc.notes ?? null,
-      is_home_base: loc.is_home_base,
-      created_at: loc.created_at,
-      sessionCount: Array.isArray(loc.class_sessions)
-        ? loc.class_sessions.length
-        : 0,
-    }));
+    const locations: LocationWithCount[] = (raw ?? []).map((loc) => {
+      const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
+      const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
+      const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
+      return {
+        id: loc.id,
+        name: loc.name,
+        address: loc.address,
+        city: loc.city,
+        state: loc.state,
+        zip: loc.zip,
+        notes: loc.notes ?? null,
+        is_home_base: loc.is_home_base,
+        created_at: loc.created_at,
+        sessionCount: sessions.length,
+        last_used_at: lastUsedAt,
+      };
+    });
 
     return (
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        <LocationsClient initialLocations={locations} />
+        <LocationsClient initialLocations={locations} userRole="manager" />
       </div>
     );
   }
@@ -177,7 +181,7 @@ export default async function SettingsPage({
       .from("locations")
       .select(
         `id, name, address, city, state, zip, notes, is_home_base, created_at,
-         class_sessions ( id )`
+         class_sessions ( starts_at )`
       )
       .order("is_home_base", { ascending: false })
       .order("name", { ascending: true })
@@ -200,18 +204,24 @@ export default async function SettingsPage({
   });
 
   // Map raw locations rows into the shape LocationsClient expects
-  const locations: LocationWithCount[] = (locationRaw ?? []).map((loc) => ({
-    id: loc.id,
-    name: loc.name,
-    address: loc.address,
-    city: loc.city,
-    state: loc.state,
-    zip: loc.zip,
-    notes: loc.notes ?? null,
-    is_home_base: loc.is_home_base,
-    created_at: loc.created_at,
-    sessionCount: Array.isArray(loc.class_sessions) ? loc.class_sessions.length : 0,
-  }));
+  const locations: LocationWithCount[] = (locationRaw ?? []).map((loc) => {
+    const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
+    const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
+    const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
+    return {
+      id: loc.id,
+      name: loc.name,
+      address: loc.address,
+      city: loc.city,
+      state: loc.state,
+      zip: loc.zip,
+      notes: loc.notes ?? null,
+      is_home_base: loc.is_home_base,
+      created_at: loc.created_at,
+      sessionCount: sessions.length,
+      last_used_at: lastUsedAt,
+    };
+  });
 
   // Check Zoho connection status using the durable credentials needed to refresh.
   // Also read the legacy_site_enabled flag — controls which version of / renders.
@@ -253,7 +263,7 @@ export default async function SettingsPage({
         <BookmarkletSetup key="enrollware-slot" hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
       }
       locationsSlot={
-        <LocationsClient key="locations-slot" initialLocations={locations} />
+        <LocationsClient key="locations-slot" initialLocations={locations} userRole="super_admin" />
       }
     />
   );

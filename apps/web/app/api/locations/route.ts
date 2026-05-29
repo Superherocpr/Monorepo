@@ -107,7 +107,7 @@ export async function GET(request: Request) {
     .select(
       `id, name, address, city, state, zip,
        notes, is_home_base, created_at,
-       class_sessions ( id )`
+       class_sessions ( starts_at )`
     )
     .or(
       `name.ilike.${pattern},address.ilike.${pattern},city.ilike.${pattern},state.ilike.${pattern},zip.ilike.${pattern},notes.ilike.${pattern}`
@@ -122,20 +122,24 @@ export async function GET(request: Request) {
   }
 
   const locations = (raw ?? [])
-    .map((loc) => ({
-      id: loc.id,
-      name: loc.name,
-      address: loc.address,
-      city: loc.city,
-      state: loc.state,
-      zip: loc.zip,
-      notes: loc.notes ?? null,
-      is_home_base: loc.is_home_base,
-      created_at: loc.created_at,
-      sessionCount: Array.isArray(loc.class_sessions)
-        ? loc.class_sessions.length
-        : 0,
-    }))
+    .map((loc) => {
+      const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
+      const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
+      const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
+      return {
+        id: loc.id,
+        name: loc.name,
+        address: loc.address,
+        city: loc.city,
+        state: loc.state,
+        zip: loc.zip,
+        notes: loc.notes ?? null,
+        is_home_base: loc.is_home_base,
+        created_at: loc.created_at,
+        sessionCount: sessions.length,
+        last_used_at: lastUsedAt,
+      };
+    })
     .sort((a, b) => b.sessionCount - a.sessionCount || a.name.localeCompare(b.name));
 
   return NextResponse.json({ success: true, locations });

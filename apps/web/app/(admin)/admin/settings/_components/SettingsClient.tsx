@@ -116,11 +116,11 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   const tabs: TabDef[] = [
     { id: "general", label: "General" },
     { id: "class-types", label: "Class Types" },
+    ...(locationsSlot ? [{ id: "locations" as const, label: "Locations" }] : []),
     { id: "grades", label: "Grades" },
-    { id: "zoho", label: "Zoho Mail" },
     { id: "routing", label: "Payment Routing" },
     { id: "social", label: "Social Feed" },
-    ...(locationsSlot ? [{ id: "locations" as const, label: "Locations" }] : []),
+    { id: "zoho", label: "Zoho Mail" },
     ...(enrollwareSlot ? [{ id: "enrollware" as const, label: "Enrollware" }] : []),
   ];
 
@@ -378,6 +378,38 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
     setEditingClassType(null);
     showToast("success", message);
     router.refresh();
+  }
+
+  // ── Class type delete ──────────────────────────────────────────────────────
+  const [deletingClassTypeId, setDeletingClassTypeId] = useState<string | null>(null);
+  const [deleteClassTypeLoading, setDeleteClassTypeLoading] = useState(false);
+  const [deleteClassTypeError, setDeleteClassTypeError] = useState<string | null>(null);
+
+  /**
+   * Deletes a class type via DELETE /api/settings/class-types/[id].
+   * Refused by the server if any sessions reference the class type.
+   * @param id - UUID of the class type to delete.
+   */
+  async function handleDeleteClassType(id: string) {
+    setDeleteClassTypeLoading(true);
+    setDeleteClassTypeError(null);
+    try {
+      const res = await fetch(`/api/settings/class-types/${id}`, { method: "DELETE" });
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (!json.success) {
+        setDeleteClassTypeError(json.error ?? "Failed to delete class type.");
+        return;
+      }
+      // Remove the deleted item from local state immediately so the UI updates
+      // without waiting for a server round-trip.
+      setClassTypes((prev) => prev.filter((ct) => ct.id !== id));
+      setDeletingClassTypeId(null);
+      showToast("success", "Class type deleted.");
+    } catch {
+      setDeleteClassTypeError("Network error. Please try again.");
+    } finally {
+      setDeleteClassTypeLoading(false);
+    }
   }
 
   // ── Preset grade actions ───────────────────────────────────────────────────
@@ -692,78 +724,123 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-700">
-          {classTypes.length === 0 ? (
-            <div className="text-center py-10 text-sm text-gray-500">
-              No class types yet. Add your first one.
-            </div>
-          ) : (
-            classTypes.map((ct) => (
-              <div key={ct.id} className="flex items-start justify-between gap-4 p-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm text-gray-900 dark:text-white">
-                      {ct.name}
-                    </span>
-                    {ct.active ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                        Inactive
-                      </span>
-                    )}
-                  </div>
-                  {ct.description && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                      {ct.description}
+        {classTypes.length === 0 ? (
+          <div className="text-center py-10 text-sm text-gray-500">
+            No class types yet. Add your first one.
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {classTypes.map((ct) => (
+              <div
+                key={ct.id}
+                className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+              >
+                {deletingClassTypeId === ct.id ? (
+                  // ── Inline delete confirmation ─────────────────────────
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3">
+                    <p className="mb-1 text-sm font-medium text-red-700">
+                      Delete &ldquo;{ct.name}&rdquo;?
                     </p>
-                  )}
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    <span>{ct.duration_minutes} minutes</span>
-                    <span>·</span>
-                    <span>Capacity: {ct.max_capacity}</span>
-                    <span>·</span>
-                    <span>
-                      $
-                      {ct.price.toLocaleString("en-US", {
+                    {deleteClassTypeError && (
+                      <p className="mb-2 text-xs text-red-600">{deleteClassTypeError}</p>
+                    )}
+                    <p className="mb-3 text-xs text-red-600">
+                      This cannot be undone. Class types linked to existing sessions cannot be deleted.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteClassType(ct.id)}
+                        disabled={deleteClassTypeLoading}
+                        className="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {deleteClassTypeLoading ? "Deleting…" : "Delete"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeletingClassTypeId(null);
+                          setDeleteClassTypeError(null);
+                        }}
+                        disabled={deleteClassTypeLoading}
+                        className="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-1 flex items-start justify-between gap-2">
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {ct.name}
+                      </span>
+                      {ct.active ? (
+                        <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                    {ct.description && (
+                      <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
+                        {ct.description}
+                      </p>
+                    )}
+                    <p className="mt-2 text-xs text-gray-400">
+                      {ct.duration_minutes} min · Capacity {ct.max_capacity} ·{" "}
+                      ${ct.price.toLocaleString("en-US", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
-                    </span>
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingClassType(ct);
+                          setClassTypePanelOpen(true);
+                        }}
+                        className="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleClassType(ct)}
+                        disabled={togglingClassTypeId === ct.id}
+                        className={`rounded-md border px-3 py-1 text-xs font-semibold disabled:opacity-50 ${
+                          ct.active
+                            ? "border-orange-300 text-orange-600 hover:bg-orange-50"
+                            : "border-green-300 text-green-700 hover:bg-green-50"
+                        }`}
+                      >
+                        {togglingClassTypeId === ct.id
+                          ? "Saving…"
+                          : ct.active
+                          ? "Deactivate"
+                          : "Activate"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeletingClassTypeId(ct.id);
+                          setDeleteClassTypeError(null);
+                        }}
+                        className="rounded-md border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <button
-                    onClick={() => {
-                      setEditingClassType(ct);
-                      setClassTypePanelOpen(true);
-                    }}
-                    className="text-xs text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white underline underline-offset-2 font-medium"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleToggleClassType(ct)}
-                    disabled={togglingClassTypeId === ct.id}
-                    className={`text-xs underline underline-offset-2 font-medium disabled:opacity-50 ${
-                      ct.active
-                        ? "text-red-600 hover:text-red-800"
-                        : "text-green-700 hover:text-green-900"
-                    }`}
-                  >
-                    {togglingClassTypeId === ct.id
-                      ? "Saving…"
-                      : ct.active
-                      ? "Deactivate"
-                      : "Activate"}
-                  </button>
-                </div>
+                )}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── Section 3: Preset Grades ───────────────────────────────────────── */}

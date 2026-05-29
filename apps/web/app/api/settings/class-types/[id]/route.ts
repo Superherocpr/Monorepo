@@ -88,3 +88,72 @@ export async function PATCH(
 
   return Response.json({ success: true });
 }
+
+/**
+ * DELETE /api/settings/class-types/[id]
+ * Called by: Admin Settings — Class Types section delete button
+ * Auth: super_admin only
+ * Deletes a class type only if no class sessions reference it.
+ * @param _request - Unused.
+ * @param params - Route params containing the class type UUID.
+ */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  // ── Auth & role check ──────────────────────────────────────────────────────
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
+
+  const { data: actor } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!actor || (actor.role as UserRole) !== "super_admin") {
+    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
+  }
+
+  // ── Verify no linked sessions ──────────────────────────────────────────────
+  const { count, error: countError } = await supabase
+    .from("class_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("class_type_id", id);
+
+  if (countError) {
+    console.error("[DELETE /api/settings/class-types/[id]] count check", countError);
+    return Response.json(
+      { success: false, error: "Failed to verify class type usage." },
+      { status: 500 }
+    );
+  }
+
+  if ((count ?? 0) > 0) {
+    return Response.json(
+      {
+        success: false,
+        error: `This class type is used in ${count} session${count !== 1 ? "s" : ""} and cannot be deleted.`,
+      },
+      { status: 409 }
+    );
+  }
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+  const { error } = await supabase.from("class_types").delete().eq("id", id);
+
+  if (error) {
+    console.error("[DELETE /api/settings/class-types/[id]]", error);
+    return Response.json(
+      { success: false, error: "Failed to delete class type." },
+      { status: 500 }
+    );
+  }
+
+  return Response.json({ success: true });
+}
