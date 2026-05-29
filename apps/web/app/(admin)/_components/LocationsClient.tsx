@@ -7,13 +7,14 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
-import { MapPin, Plus, Search } from "lucide-react";
+import { MapPin, Plus, Search, Upload } from "lucide-react";
 import LocationFormFields, {
   blankLocationForm,
   validateLocationForm,
   type LocationFormState,
 } from "./LocationFormFields";
 import AddLocationPanel, { type NewLocationResult } from "./AddLocationPanel";
+import LocationImportPanel from "./LocationImportPanel";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -94,6 +95,7 @@ export default function LocationsClient({
   }, [searchQuery]);
 
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<LocationFormState>(blankLocationForm());
@@ -119,6 +121,18 @@ export default function LocationsClient({
     setTopLocations((prev) =>
       sortAndCapTopLocations([...prev, { ...location, sessionCount: 0 }])
     );
+  }
+
+  /**
+   * Called by LocationImportPanel after a successful CSV import.
+   * Reloads the top-10 list from the server so newly imported locations appear.
+   * @param _count - Number of locations created (unused here — we just refetch).
+   */
+  async function handleImported(_count: number) {
+    setShowImportPanel(false);
+    // Trigger a full page reload so the server re-fetches the updated list.
+    // This matches how ClassTypePanel works after a save (router.refresh).
+    window.location.reload();
   }
 
   /**
@@ -293,14 +307,24 @@ export default function LocationsClient({
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Locations</h1>
-        <button
-          type="button"
-          onClick={() => setShowAddPanel(true)}
-          className="flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
-        >
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowImportPanel(true)}
+            className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+          >
+            <Upload className="h-4 w-4" />
+            Import CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAddPanel(true)}
+            className="flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
+          >
           <Plus className="h-4 w-4" />
           Add Location
-        </button>
+          </button>
+        </div>
       </div>
 
       {topLocations.length > 0 && (
@@ -498,6 +522,13 @@ export default function LocationsClient({
         <AddLocationPanel
           onClose={() => setShowAddPanel(false)}
           onAdded={handleLocationAdded}
+        />
+      )}
+
+      {showImportPanel && (
+        <LocationImportPanel
+          onClose={() => setShowImportPanel(false)}
+          onImported={handleImported}
         />
       )}
     </div>

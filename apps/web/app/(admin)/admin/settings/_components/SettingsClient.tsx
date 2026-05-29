@@ -12,6 +12,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import ClassTypePanel from "./ClassTypePanel";
+import ClassTypeImportPanel from "./ClassTypeImportPanel";
 import type { ClassType, PresetGrade, InstructorRoutingRow } from "../page";
 
 interface SettingsClientProps {
@@ -200,6 +201,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   // ── Class types ────────────────────────────────────────────────────────────
   const [classTypes, setClassTypes] = useState<ClassType[]>(initialClassTypes);
   const [classTypePanelOpen, setClassTypePanelOpen] = useState(false);
+  const [classTypeImportPanelOpen, setClassTypeImportPanelOpen] = useState(false);
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null);
   const [togglingClassTypeId, setTogglingClassTypeId] = useState<string | null>(null);
 
@@ -671,15 +673,23 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
               Manage the CPR course offerings available for booking and invoicing.
             </p>
           </div>
-          <button
-            onClick={() => {
-              setEditingClassType(null);
-              setClassTypePanelOpen(true);
-            }}
-            className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-          >
-            + Add Class Type
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setClassTypeImportPanelOpen(true)}
+              className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Import CSV / XLSX
+            </button>
+            <button
+              onClick={() => {
+                setEditingClassType(null);
+                setClassTypePanelOpen(true);
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              + Add Class Type
+            </button>
+          </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-700">
@@ -1220,6 +1230,17 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         onSaved={handleClassTypeSaved}
         onError={(msg) => showToast("error", msg)}
       />
+
+      {/* Class type bulk import panel */}
+      {classTypeImportPanelOpen && (
+        <ClassTypeImportPanel
+          onClose={() => setClassTypeImportPanelOpen(false)}
+          onImported={(_count) => {
+            setClassTypeImportPanelOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
 
       {/* Toast */}
       {toast && (
