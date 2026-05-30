@@ -466,7 +466,7 @@ export default function BookSessionSelector({
           {filteredSessions.length === 0 ? (
             <BookingEmptyState isFiltered={isFiltered} onClearFilters={clearFilters} />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {filteredSessions.map((session) => (
                 <BookingSessionCard
                   key={session.id}
