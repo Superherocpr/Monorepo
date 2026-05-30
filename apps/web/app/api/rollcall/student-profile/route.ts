@@ -5,8 +5,8 @@
  *       The profileId was obtained from /api/rollcall/session-students, which
  *       is only accessible after providing a valid 6-digit instructor access
  *       code. An active booking is verified before any data is returned.
- * Returns first name, last name, email, and phone so the student can confirm
- * or update their contact information before checking in.
+ * Returns first name, last name, email, phone, and address so the student can
+ * confirm or update their contact information before checking in.
  */
 
 // Admin client bypasses RLS — read-only, scoped to sessionId + profileId from a
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   // Fetch the profile details
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("first_name, last_name, email, phone")
+    .select("first_name, last_name, email, phone, address, city, state, zip")
     .eq("id", profileId)
     .single();
 
@@ -60,5 +60,9 @@ export async function POST(request: Request) {
     lastName: profile.last_name,
     email: profile.email,
     phone: profile.phone ?? null,
+    address: profile.address ?? null,
+    city: profile.city ?? null,
+    state: profile.state ?? null,
+    zip: profile.zip ?? null,
   });
 }

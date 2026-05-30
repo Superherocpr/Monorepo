@@ -247,8 +247,9 @@ export function getBookmarkletSource(apiBase: string): string {
   /**
    * Builds a CSV string from the student roster in the format expected by the
    * Enrollware student import (matching the column order on the import spec).
-   * Column order matches the Enrollware sample: Last Name first, Phone (not Primary Phone),
-   * with the required Score/Status/License/Price/Codes trailing columns left blank.
+   * Column order matches the Enrollware sample: Last Name first, Phone (not Primary Phone).
+   * Score is populated from the student's grade. Status is always "Complete".
+   * License, Price, and Codes are left blank — managed by Enrollware.
    */
   function buildStudentCSV(students) {
     var header = 'Last Name,First Name,Email Address,Phone,Address 1,Address 2,City,State,Zip,Score,Status,License,Price,Codes';
@@ -263,17 +264,19 @@ export function getBookmarkletSource(apiBase: string): string {
         s.city        || '',
         s.state       || '',
         s.zip         || '',
-        '',  // Score — filled by Enrollware after grading
-        '',  // Status — filled by Enrollware
-        '',  // License — filled by Enrollware
-        '',  // Price — filled by Enrollware
-        ''   // Codes — filled by Enrollware
+        s.grade != null ? String(s.grade) : '',  // numeric score (e.g. 100)
+        s.grade != null ? 'Complete' : '',        // status only set when graded
+        '',  // License — managed by Enrollware
+        '',  // Price — managed by Enrollware
+        ''   // Codes — managed by Enrollware
       ].map(function(v) {
         // Wrap every field in quotes and escape any internal quotes
         return '"' + String(v).replace(/"/g, '""') + '"';
       }).join(',');
     });
-    return header + '\\n' + rows.join('\\n');
+    // Use CRLF line endings — Enrollware runs on .NET/Windows and its CSV
+    // parser expects Windows-style line endings.
+    return header + '\\r\\n' + rows.join('\\r\\n');
   }
 
   /**
@@ -537,15 +540,26 @@ export function getBookmarkletSource(apiBase: string): string {
         // Check if the student panel is already visible (page loaded with a class ID)
         var studentPanel = document.getElementById('mainContent_studentPanel');
         var storedId = sessionStorage.getItem('scpr_session_id');
-        var storedData = sessionStorage.getItem('scpr_session_data');
 
-        if (studentPanel && storedData) {
-          // Came from a new-class fill — auto-populate students from stored session data
-          try {
-            var session = JSON.parse(storedData);
-            showStudentFill(session);
+        if (studentPanel && storedId) {
+          // Always prefer fresh data from the API — the cached version was fetched
+          // before grading, so grades would be null if we used it. Look up the
+          // stored session ID in the freshly-fetched classes list.
+          var freshSession = null;
+          for (var i = 0; i < classes.length; i++) {
+            if (classes[i].id === storedId) {
+              freshSession = classes[i];
+              break;
+            }
+          }
+          if (freshSession) {
+            // Refresh the cache so downstream code also has current grades
+            sessionStorage.setItem('scpr_session_data', JSON.stringify(freshSession));
+            showStudentFill(freshSession);
             return;
-          } catch (e) { /* fall through to picker */ }
+          }
+          // Stored session not found in today's classes (e.g. different day) —
+          // fall through to the manual picker so the instructor can choose
         }
 
         // Student panel visible but no stored selection — let instructor pick

@@ -93,7 +93,7 @@ export async function POST(request: Request) {
   // ── 4. Fetch profile details for roster record ───────────────────────────
   const { data: profile } = await supabase
     .from("profiles")
-    .select("first_name, last_name, phone")
+    .select("first_name, last_name, phone, address, city, state, zip")
     .eq("id", userId)
     .single();
 
@@ -111,8 +111,10 @@ export async function POST(request: Request) {
     first_name: profile.first_name,
     last_name: profile.last_name,
     email: email.toLowerCase(),
-    phone: profile.phone ?? null,
-  });
+    phone: profile.phone ?? null,    address_1: profile.address ?? null,
+    city: profile.city ?? null,
+    state: profile.state ?? null,
+    zip: profile.zip ?? null,  });
 
   if (insertError) {
     return Response.json(

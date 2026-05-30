@@ -49,6 +49,10 @@ interface StudentProfile {
   lastName: string;
   email: string;
   phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
 }
 
 type Step = 1 | 2 | 3 | 4 | "4-edit" | 5;
@@ -197,6 +201,10 @@ export default function RollcallPage() {
   const [editLastName, setEditLastName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editCity, setEditCity] = useState("");
+  const [editState, setEditState] = useState("");
+  const [editZip, setEditZip] = useState("");
   const [editPassword, setEditPassword] = useState("");
 
   // ── Step 5 state ─────────────────────────────────────────────────────────
@@ -382,6 +390,10 @@ export default function RollcallPage() {
     setEditLastName(studentProfile.lastName);
     setEditEmail(studentProfile.email);
     setEditPhone(studentProfile.phone ?? "");
+    setEditAddress(studentProfile.address ?? "");
+    setEditCity(studentProfile.city ?? "");
+    setEditState(studentProfile.state ?? "");
+    setEditZip(studentProfile.zip ?? "");
     setEditPassword("");
     setError(null);
     setStep("4-edit");
@@ -427,6 +439,10 @@ export default function RollcallPage() {
             lastName: editLastName.trim(),
             email: editEmail.trim().toLowerCase(),
             phone: editPhone.trim() || null,
+            address: editAddress.trim() || null,
+            city: editCity.trim() || null,
+            state: editState.trim() || null,
+            zip: editZip.trim() || null,
           },
         }),
       });
@@ -584,6 +600,21 @@ export default function RollcallPage() {
           <InfoRow label="Last Name" value={studentProfile.lastName} />
           <InfoRow label="Email" value={studentProfile.email} />
           <InfoRow label="Phone" value={studentProfile.phone ?? "—"} />
+          <InfoRow
+            label="Address"
+            value={
+              studentProfile.address
+                ? [
+                    studentProfile.address,
+                    studentProfile.city,
+                    studentProfile.state,
+                    studentProfile.zip,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")
+                : "—"
+            }
+          />
         </div>
 
         {error && <ErrorMsg message={error} />}
@@ -676,6 +707,63 @@ export default function RollcallPage() {
               className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-red-500 text-gray-900 bg-white"
               autoComplete="tel"
             />
+          </div>
+
+          <div>
+            <label htmlFor="edit-address" className="sr-only">
+              Street address (optional)
+            </label>
+            <input
+              id="edit-address"
+              type="text"
+              value={editAddress}
+              onChange={(e) => setEditAddress(e.target.value)}
+              placeholder="Street address (optional)"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-red-500 text-gray-900 bg-white"
+              autoComplete="street-address"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-1">
+              <label htmlFor="edit-city" className="sr-only">City</label>
+              <input
+                id="edit-city"
+                type="text"
+                value={editCity}
+                onChange={(e) => setEditCity(e.target.value)}
+                placeholder="City"
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-red-500 text-gray-900 bg-white"
+                autoComplete="address-level2"
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-state" className="sr-only">State</label>
+              <input
+                id="edit-state"
+                type="text"
+                value={editState}
+                onChange={(e) => setEditState(e.target.value)}
+                placeholder="State"
+                maxLength={2}
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-red-500 text-gray-900 bg-white uppercase"
+                autoComplete="address-level1"
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-zip" className="sr-only">ZIP code</label>
+              <input
+                id="edit-zip"
+                type="text"
+                value={editZip}
+                onChange={(e) => setEditZip(e.target.value)}
+                placeholder="ZIP"
+                maxLength={10}
+                inputMode="numeric"
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-red-500 text-gray-900 bg-white"
+                autoComplete="postal-code"
+              />
+            </div>
           </div>
 
           <div>

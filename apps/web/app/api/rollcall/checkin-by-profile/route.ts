@@ -23,6 +23,10 @@ interface ProfileUpdates {
   lastName: string;
   email: string;
   phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -100,7 +104,7 @@ export async function POST(request: Request) {
   // ── 3. Fetch the current profile ─────────────────────────────────────────
   const { data: profile } = await supabase
     .from("profiles")
-    .select("first_name, last_name, email, phone")
+    .select("first_name, last_name, email, phone, address, city, state, zip")
     .eq("id", profileId)
     .single();
 
@@ -189,6 +193,10 @@ export async function POST(request: Request) {
         last_name: updates.lastName.trim(),
         email: updates.email.trim().toLowerCase(),
         phone: updates.phone?.trim() || null,
+        address: updates.address?.trim() || null,
+        city: updates.city?.trim() || null,
+        state: updates.state?.trim() || null,
+        zip: updates.zip?.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", profileId);
@@ -220,6 +228,10 @@ export async function POST(request: Request) {
       last_name: updates.lastName.trim(),
       email: updates.email.trim().toLowerCase(),
       phone: updates.phone?.trim() || null,
+      address_1: updates.address?.trim() || null,
+      city: updates.city?.trim() || null,
+      state: updates.state?.trim() || null,
+      zip: updates.zip?.trim() || null,
       confirmed: true,
       // corrected=true records that the student made at least one change
       corrected: true,
@@ -258,6 +270,10 @@ export async function POST(request: Request) {
     last_name: profile.last_name,
     email: profile.email,
     phone: profile.phone ?? null,
+    address_1: profile.address ?? null,
+    city: profile.city ?? null,
+    state: profile.state ?? null,
+    zip: profile.zip ?? null,
     confirmed: true,
     corrected: false,
   });
