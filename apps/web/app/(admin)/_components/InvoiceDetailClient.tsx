@@ -206,7 +206,7 @@ export default function InvoiceDetailClient({
 
   /**
    * Cancels the invoice.
-   * Side effects: voids the invoice on the payment platform (PayPal/Square/Stripe),
+  * Side effects: voids the invoice on PayPal,
    * sets invoice status to 'cancelled' in DB, and logs to invoice_activity_log.
    * This action cannot be undone.
    */

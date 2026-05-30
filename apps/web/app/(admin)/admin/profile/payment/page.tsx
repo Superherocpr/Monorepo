@@ -1,42 +1,28 @@
 /**
- * /admin/profile/payment — Instructor Payment Account page.
- * Server component: fetches the logged-in instructor's connected payment accounts.
+ * /admin/profile/payment — Instructor payout settings page.
+ * Server component: fetches the logged-in instructor's PayPal payout email.
  * Access: instructor and super_admin only.
- * Used by: AdminSidebar "Payment Account" link.
+ * Used by: AdminSidebar "Payout Settings" link.
  */
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
-import type { UserRole, PaymentPlatform } from "@/types/users";
-import PaymentAccountClient from "./_components/PaymentAccountClient";
+import type { UserRole } from "@/types/users";
+import PayoutSettingsClient from "./_components/PayoutSettingsClient";
 
 export const metadata: Metadata = {
-  title: "Payment Account | SuperHeroCPR Admin",
+  title: "Payout Settings | SuperHeroCPR Admin",
 };
-
-/** Shape of a connected payment account returned to the client — no tokens. */
-export interface ConnectedAccount {
-  id: string;
-  platform: PaymentPlatform;
-  platform_account_id: string | null;
-  is_active: boolean;
-  connected_at: string;
-}
 
 /** Roles that may access this page. */
 const ALLOWED_ROLES: UserRole[] = ["instructor", "super_admin"];
 
 /**
- * Fetches and renders the payment account management page.
+ * Fetches and renders the payout settings page.
  * Redirects to /admin if the user's role is not instructor or super_admin.
  */
-export default async function PaymentAccountPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | undefined>>;
-}) {
-  const { connected } = await searchParams;
+export default async function PaymentAccountPage() {
   const supabase = await createClient();
 
   const {
@@ -46,7 +32,7 @@ export default async function PaymentAccountPage({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, role, paypal_payout_email")
     .eq("id", user.id)
     .single();
 
@@ -54,18 +40,9 @@ export default async function PaymentAccountPage({
     redirect("/admin");
   }
 
-  // Fetch connected accounts — no tokens, just the public fields
-  const { data: accounts } = await supabase
-    .from("instructor_payment_accounts")
-    .select("id, platform, platform_account_id, is_active, connected_at")
-    .eq("instructor_id", profile.id)
-    .order("connected_at", { ascending: false });
-
   return (
-    <PaymentAccountClient
-      instructorId={profile.id}
-      initialAccounts={(accounts ?? []) as ConnectedAccount[]}
-      connectedParam={connected ?? null}
+    <PayoutSettingsClient
+      initialPaypalPayoutEmail={profile.paypal_payout_email ?? null}
     />
   );
 }

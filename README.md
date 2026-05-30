@@ -12,7 +12,7 @@ Full-stack platform for [superherocpr.com](https://superherocpr.com). An AHA-cer
 | Database + Auth | Supabase (Postgres) |
 | Hosting | AWS Amplify |
 | Payments (public) | PayPal |
-| Payments (invoices) | PayPal / Square / Stripe / Venmo Business |
+| Payments (public, invoices, payouts) | PayPal Checkout, PayPal Invoicing, PayPal Payouts |
 | Email (transactional) | Resend |
 | Email (contact replies) | Zoho Mail |
 | File Storage | AWS S3 |
@@ -99,7 +99,7 @@ All planning documentation is in the monorepo root. Read these before touching t
 
 **All sessions require approval.** Class sessions created by any role — instructor, manager, or super admin — go through an approval workflow before appearing publicly.
 
-**Instructor payments are personal.** Instructors connect their own PayPal, Square, Stripe, or Venmo Business account. Invoice payments go directly to the instructor, not the business.
+**Payments are collected centrally.** Customers pay the SuperHeroCPR business PayPal account for bookings, merch, and invoices. Instructor compensation is recorded as earnings and paid later through PayPal Payouts after a super admin reviews the payout dashboard.
 
 **Three public tools run unauthenticated.** `/rollcall` (student check-in), `/roster/[session_token]` (roster correction), and `/submit-roster` (company roster upload) are intentionally public — they run on student phones in a classroom setting.
 

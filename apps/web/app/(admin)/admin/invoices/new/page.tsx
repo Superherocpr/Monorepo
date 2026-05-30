@@ -2,11 +2,10 @@
  * GET /admin/invoices/new
  * Access: Instructor and Super Admin only.
  *
- * Fetches the authenticated instructor's active payment account and their
+ * Fetches the authenticated instructor's payout setup and their
  * upcoming approved class sessions with spot availability computed.
- * If no payment account exists (instructors only), renders a gate prompt
- * directing them to connect one first.
- * Super admins bypass the payment account gate.
+ * If no payout email exists (instructors only), renders a gate prompt
+ * directing them to save one first. Super admins bypass the payout gate.
  * Accepts a `?session=[id]` query param to pre-select a session.
  */
 
@@ -46,7 +45,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, role, paypal_payout_email")
     .eq("id", user.id)
     .single();
 
@@ -90,32 +89,25 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
   let instructorId: string;
 
   if (role === "instructor") {
-    // Instructors need an active connected payment account before they can invoice.
-    const { data: paymentAccount } = await supabase
-      .from("instructor_payment_accounts")
-      .select("id")
-      .eq("instructor_id", profile.id)
-      .eq("is_active", true)
-      .single();
-
-    if (!paymentAccount) {
+    // Instructors need a payout email before they can create invoices.
+    if (!profile.paypal_payout_email) {
       return (
         <main className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-8 text-center">
           <CreditCard className="h-12 w-12 text-gray-400" />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              Connect a Payment Account First
+              Add a Payout Email First
             </h1>
             <p className="mt-2 max-w-md text-gray-500">
-              You need to connect a payment account before you can send invoices.
-              This is how your clients will pay you.
+              Save the PayPal email where SuperHeroCPR should send your instructor
+              payouts before creating invoices.
             </p>
           </div>
           <Link
             href="/admin/profile/payment"
             className="rounded-md bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
           >
-            Connect Payment Account
+            Set Up Payouts
           </Link>
         </main>
       );

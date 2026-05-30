@@ -57,16 +57,20 @@ export default async function AdminLayout({
 
   const role = profile.role as UserRole;
 
-  // Check if instructor has a connected payment account.
-  // Runs for instructors AND super_admins, who are also instructors.
-  // TODO: replace with full onboarding flow when ready
+  // Check if instructor has a payout email. Fetched separately so a DB error
+  // (e.g. column not yet added via migration 0020) cannot break the auth guard above.
   let showPaymentBanner = false;
   if (role === "instructor" || role === "super_admin") {
-    const { count } = await supabase
-      .from("instructor_payment_accounts")
-      .select("id", { count: "exact", head: true })
-      .eq("instructor_id", user.id);
-    showPaymentBanner = !count || count === 0;
+    const { data: payoutRow, error: payoutError } = await supabase
+      .from("profiles")
+      .select("paypal_payout_email")
+      .eq("id", user.id)
+      .single();
+    // Only show banner if the query succeeded and email is absent.
+    // If the column doesn't exist yet, payoutError will be set and we suppress the banner.
+    if (!payoutError) {
+      showPaymentBanner = !payoutRow?.paypal_payout_email;
+    }
   }
 
   return (
@@ -78,17 +82,17 @@ export default async function AdminLayout({
           lastName={profile.last_name}
           role={role}
         />
-        {/* Instructor onboarding banner — shown until a payment account is connected */}
+        {/* Instructor onboarding banner — shown until a payout email is saved */}
         {showPaymentBanner && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center justify-between gap-4">
             <p className="text-sm text-amber-800 font-medium">
-              Connect a payment account to start sending invoices.
+              Add your PayPal payout email so SuperHeroCPR can pay your instructor share.
             </p>
             <a
               href="/admin/profile/payment"
               className="shrink-0 text-sm font-semibold text-amber-900 hover:text-amber-700 underline underline-offset-2 transition-colors"
             >
-              Set Up Payment Account →
+              Set Up Payouts →
             </a>
           </div>
         )}
