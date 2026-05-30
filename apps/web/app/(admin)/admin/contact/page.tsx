@@ -7,7 +7,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getSetting } from "@/lib/zoho";
 import { CONTACT_INQUIRY_TYPES } from "@/lib/contact-constants";
 import ContactSubmissionsClient, {
@@ -34,6 +34,7 @@ export default async function ContactPage({
 }) {
   const params = await searchParams;
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   // ── Auth & access check ────────────────────────────────────────────────────
   const {
@@ -42,7 +43,7 @@ export default async function ContactPage({
 
   if (!user) redirect("/signin");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -67,7 +68,7 @@ export default async function ContactPage({
   // ── Build filtered submissions query ──────────────────────────────────────
   // Order: unreplied first, then newest within each group
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query: any = supabase
+  let query: any = admin
     .from("contact_submissions")
     .select(
       `

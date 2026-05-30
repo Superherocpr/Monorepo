@@ -22,6 +22,7 @@ export const metadata = { title: "Staff Management" };
  */
 export default async function StaffPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -29,7 +30,7 @@ export default async function StaffPage() {
   if (!user) redirect("/signin?redirect=/admin/staff");
 
   // Role check — super admin only
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -78,47 +79,10 @@ export default async function StaffPage() {
         bio_students_trained: null,
       })) as StaffMember[];
     } else {
-      // Final fallback: use the request-bound client in case service-role config
-      // is unavailable in the current environment.
-      const { data: anonFull, error: anonFullError } = await supabase
-        .from("profiles")
-        .select(fullSelect)
-        .neq("role", "customer")
-        .order("role")
-        .order("last_name");
-
-      if (!anonFullError) {
-        staffMembers = (anonFull ?? []) as StaffMember[];
-      } else {
-        const { data: anonLegacy, error: anonLegacyError } = await supabase
-          .from("profiles")
-          .select(legacySelect)
-          .neq("role", "customer")
-          .order("role")
-          .order("last_name");
-
-        if (!anonLegacyError) {
-          staffMembers = (anonLegacy ?? []).map((row) => ({
-            ...row,
-            phone: null,
-            deactivated: false,
-            deactivated_at: null,
-            bio_photo: null,
-            bio_description: null,
-            bio_credentials: null,
-            bio_published: false,
-            bio_years_experience: null,
-            bio_students_trained: null,
-          })) as StaffMember[];
-        } else {
-          console.error("[admin/staff] Failed to fetch staff after all fallbacks.", {
-            adminFullError,
-            adminLegacyError,
-            anonFullError,
-            anonLegacyError,
-          });
-        }
-      }
+      console.error("[admin/staff] Failed to fetch staff members.", {
+        adminFullError,
+        adminLegacyError,
+      });
     }
   }
 

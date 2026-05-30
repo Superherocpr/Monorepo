@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import SessionDetailClient, {
   type SessionDetailData,
   type ClassTypeOption,
@@ -25,6 +25,7 @@ interface PageProps {
 export default async function SessionDetailPage({ params }: PageProps) {
   const { id } = await params;
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
@@ -32,7 +33,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
 
   if (!user) redirect(`/signin?redirect=/admin/sessions/${id}`);
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("id, role")
     .eq("id", user.id)
@@ -43,7 +44,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
   const role = profile.role as UserRole;
 
   // Fetch the full session with all related data needed to render the detail page
-  const { data: raw } = await supabase
+  const { data: raw } = await admin
     .from("class_sessions")
     .select(
       `
@@ -113,7 +114,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
   };
 
   // Fetch class types for the edit form dropdown (active types only)
-  const { data: rawClassTypes } = await supabase
+  const { data: rawClassTypes } = await admin
     .from("class_types")
     .select("id, name, price, duration_minutes")
     .eq("active", true)
@@ -122,7 +123,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
   const classTypes: ClassTypeOption[] = (rawClassTypes ?? []) as ClassTypeOption[];
 
   // Fetch all locations for the edit form dropdown
-  const { data: rawLocations } = await supabase
+  const { data: rawLocations } = await admin
     .from("locations")
     .select("id, name, address, city, state, zip")
     .order("name");
@@ -133,7 +134,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
   // Any non-customer profile may be assigned as the session instructor.
   let instructors: InstructorOption[] = [];
   if (role === "manager" || role === "super_admin") {
-    const { data: rawInstructors } = await supabase
+    const { data: rawInstructors } = await admin
       .from("profiles")
       .select("id, first_name, last_name")
       .neq("role", "customer")

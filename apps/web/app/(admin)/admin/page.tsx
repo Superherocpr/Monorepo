@@ -8,7 +8,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import InstructorDashboard from "../_components/dashboard/InstructorDashboard";
 import type {
   TodaySession,
@@ -61,7 +61,12 @@ export default async function AdminDashboardPage() {
   // since this page fetches data — a missing user would cause runtime errors.
   if (!user) redirect("/signin?redirect=/admin");
 
-  const { data: profile } = await supabase
+  // Use the service-role admin client for all data queries. RLS policies grant
+  // only per-user row access to authenticated sessions; admin dashboard needs
+  // full table visibility across all customers, sessions, and transactions.
+  const admin = await createAdminClient();
+
+  const { data: profile } = await admin
     .from("profiles")
     .select("first_name, role, daily_access_code")
     .eq("id", user.id)
@@ -80,7 +85,7 @@ export default async function AdminDashboardPage() {
       { data: completedSessionsWithRoster },
       { data: pendingInvoices },
     ] = await Promise.all([
-      supabase
+      admin
         .from("class_sessions")
         .select(
           "id, starts_at, ends_at, status, class_types ( name ), locations ( name )"
@@ -92,7 +97,7 @@ export default async function AdminDashboardPage() {
         .order("starts_at"),
 
       // Fetch completed sessions with their roster grades to compute ungraded counts
-      supabase
+      admin
         .from("class_sessions")
         .select(
           "id, starts_at, class_types ( name ), roster_records ( id, grade )"
@@ -100,7 +105,7 @@ export default async function AdminDashboardPage() {
         .eq("instructor_id", user.id)
         .eq("status", "completed"),
 
-      supabase
+      admin
         .from("invoices")
         .select(
           "id, recipient_name, total_amount, created_at, class_sessions ( starts_at, class_types ( name ) )"
@@ -156,13 +161,13 @@ export default async function AdminDashboardPage() {
     const superAdminExtraPromise =
       role === "super_admin"
         ? Promise.all([
-            supabase
+            admin
               .from("profiles")
               .select("id", { count: "exact", head: true })
               .eq("role", "customer")
               .eq("archived", false),
 
-            supabase
+            admin
               .from("class_sessions")
               .select("id", { count: "exact", head: true })
               .eq("approval_status", "approved")
@@ -170,7 +175,7 @@ export default async function AdminDashboardPage() {
               .lte("starts_at", month.end),
 
             // Online booking payments this month
-            supabase
+            admin
               .from("payments")
               .select("amount")
               .eq("payment_type", "online")
@@ -179,7 +184,7 @@ export default async function AdminDashboardPage() {
               .lte("created_at", month.end),
 
             // Paid invoices this month — invoice revenue is tracked separately from online
-            supabase
+            admin
               .from("invoices")
               .select("total_amount")
               .eq("status", "paid")
@@ -187,7 +192,7 @@ export default async function AdminDashboardPage() {
               .lte("paid_at", month.end),
 
             // Activity feed: recent bookings
-            supabase
+            admin
               .from("bookings")
               .select(
                 "id, created_at, profiles!bookings_customer_id_fkey ( first_name, last_name ), class_sessions ( class_types ( name ) )"
@@ -196,7 +201,7 @@ export default async function AdminDashboardPage() {
               .limit(5),
 
             // Activity feed: recent payments
-            supabase
+            admin
               .from("payments")
               .select(
                 "id, created_at, amount, profiles!payments_customer_id_fkey ( first_name, last_name )"
@@ -205,14 +210,14 @@ export default async function AdminDashboardPage() {
               .limit(5),
 
             // Activity feed: recent invoices
-            supabase
+            admin
               .from("invoices")
               .select("id, created_at, recipient_name, total_amount")
               .order("created_at", { ascending: false })
               .limit(5),
 
             // Activity feed: new customers
-            supabase
+            admin
               .from("profiles")
               .select("id, created_at, first_name, last_name")
               .eq("role", "customer")
@@ -221,7 +226,7 @@ export default async function AdminDashboardPage() {
 
             // Pending grades: all completed sessions system-wide with at least one ungraded
             // roster student — super_admins oversee all instructors
-            supabase
+            admin
               .from("class_sessions")
               .select(
                 "id, starts_at, class_types ( name ), roster_records ( id, grade )"
@@ -230,7 +235,7 @@ export default async function AdminDashboardPage() {
 
             // Pending invoices: all sent-but-unpaid invoices system-wide —
             // super_admins oversee all instructors
-            supabase
+            admin
               .from("invoices")
               .select(
                 "id, recipient_name, total_amount, created_at, class_sessions ( starts_at, class_types ( name ) )"
@@ -247,13 +252,13 @@ export default async function AdminDashboardPage() {
       { count: unansweredContactCount },
       { data: rawLowStockVariants },
     ] = await Promise.all([
-      supabase
+      admin
         .from("class_sessions")
         .select("id", { count: "exact", head: true })
         .eq("approval_status", "pending_approval"),
 
       // All approved sessions today across all instructors
-      supabase
+      admin
         .from("class_sessions")
         .select(
           `id, starts_at, ends_at, max_capacity,
@@ -268,7 +273,7 @@ export default async function AdminDashboardPage() {
         .order("starts_at"),
 
       // Last 5 non-cancelled bookings with customer and session info
-      supabase
+      admin
         .from("bookings")
         .select(
           `id, created_at, booking_source,
@@ -279,13 +284,13 @@ export default async function AdminDashboardPage() {
         .order("created_at", { ascending: false })
         .limit(5),
 
-      supabase
+      admin
         .from("contact_submissions")
         .select("id", { count: "exact", head: true })
         .eq("replied", false),
 
       // Product variants at or below their product's low_stock_threshold
-      supabase
+      admin
         .from("product_variants")
         .select("id, size, stock_quantity, products ( id, name, low_stock_threshold )")
         .order("stock_quantity"),

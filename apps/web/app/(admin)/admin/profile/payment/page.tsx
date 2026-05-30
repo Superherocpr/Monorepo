@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 import type { UserRole } from "@/types/users";
 import PayoutSettingsClient from "./_components/PayoutSettingsClient";
@@ -24,13 +24,14 @@ const ALLOWED_ROLES: UserRole[] = ["instructor", "super_admin"];
  */
 export default async function PaymentAccountPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin?redirect=/admin/profile/payment");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("id, role, paypal_payout_email")
     .eq("id", user.id)

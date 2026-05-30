@@ -88,13 +88,14 @@ function formatTime(iso: string): string {
 
 export default async function EnrollwareToolPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/signin?redirect=/admin/enrollware-tool");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("id, first_name, role")
     .eq("id", user.id)

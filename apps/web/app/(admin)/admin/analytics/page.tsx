@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 import { AnalyticsClient } from "./_components/AnalyticsClient";
 import { fetchAnalyticsData } from "./_components/analyticsData";
@@ -17,13 +17,14 @@ import { fetchAnalyticsData } from "./_components/analyticsData";
  */
 export default async function AdminAnalyticsPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -38,7 +39,7 @@ export default async function AdminAnalyticsPage() {
   const defaultEnd = now.toISOString();
   const defaultStart = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-  const initialData = await fetchAnalyticsData(supabase, defaultStart, defaultEnd);
+  const initialData = await fetchAnalyticsData(admin, defaultStart, defaultEnd);
 
   return (
     <AnalyticsClient

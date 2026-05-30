@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 import ArchivedClient from "./_components/ArchivedClient";
 
@@ -34,6 +34,7 @@ export interface ArchivedCustomer {
  */
 export default async function ArchivedPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   // ── Auth & access check ────────────────────────────────────────────────────
   const {
@@ -41,7 +42,7 @@ export default async function ArchivedPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin?redirect=/admin/archived");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -54,7 +55,7 @@ export default async function ArchivedPage() {
   // ── Fetch archived customers with related counts ───────────────────────────
   // bookings uses the customer_id FK hint to avoid PostgREST ambiguity
   // (bookings.customer_id, bookings.created_by, bookings.cancelled_by all point to profiles)
-  const { data: rows } = await supabase
+  const { data: rows } = await admin
     .from("profiles")
     .select(
       `

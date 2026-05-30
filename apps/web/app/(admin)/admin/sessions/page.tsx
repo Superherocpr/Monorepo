@@ -7,7 +7,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import SessionsClient from "../../_components/SessionsClient";
 import type { SessionApprovalStatus, SessionStatus } from "@/types/schedule";
 import type { UserRole } from "@/types/users";
@@ -39,6 +39,7 @@ export interface InstructorOption {
 /** Fetches data and renders the sessions list via SessionsClient. */
 export default async function SessionsPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
@@ -46,7 +47,7 @@ export default async function SessionsPage() {
 
   if (!user) redirect("/signin?redirect=/admin/sessions");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("id, role")
     .eq("id", user.id)
@@ -58,7 +59,7 @@ export default async function SessionsPage() {
   const isInstructor = role === "instructor";
 
   // Build the sessions query — instructors only see their own sessions
-  let query = supabase
+  let query = admin
     .from("class_sessions")
     .select(
       `id, starts_at, ends_at, status, approval_status,
@@ -105,7 +106,7 @@ export default async function SessionsPage() {
   // Fetch instructor list for filter dropdown — manager/super admin only
   let instructors: InstructorOption[] = [];
   if (!isInstructor) {
-    const { data: rawInstructors } = await supabase
+    const { data: rawInstructors } = await admin
       .from("profiles")
       .select("id, first_name, last_name")
       .neq("role", "customer")

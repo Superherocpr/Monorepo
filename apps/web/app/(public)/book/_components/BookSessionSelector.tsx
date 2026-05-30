@@ -501,7 +501,7 @@ interface BookingSessionCardProps {
 function BookingSessionCard({ session, isSelecting, onSelect }: BookingSessionCardProps) {
   const timeRange = formatTimeRange(session.starts_at, session.ends_at);
   const formattedDate = formatShortDate(session.starts_at);
-  const price = session.class_types.price.toLocaleString("en-US", {
+  const price = (session.class_types?.price ?? 0).toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 0,

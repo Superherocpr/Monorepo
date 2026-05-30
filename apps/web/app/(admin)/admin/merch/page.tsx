@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import MerchAdminClient from "../../_components/MerchAdminClient";
 import type { ProductWithVariants } from "@/types/merch";
 
@@ -17,6 +17,7 @@ import type { ProductWithVariants } from "@/types/merch";
  */
 export default async function AdminMerchPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   // ── Auth guard ─────────────────────────────────────────────────────────────
   const {
@@ -27,7 +28,7 @@ export default async function AdminMerchPage() {
     redirect("/signin");
   }
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -38,7 +39,7 @@ export default async function AdminMerchPage() {
   }
 
   // ── Fetch all products with variants ──────────────────────────────────────
-  const { data: rawProducts, error } = await supabase
+  const { data: rawProducts, error } = await admin
     .from("products")
     .select(
       `

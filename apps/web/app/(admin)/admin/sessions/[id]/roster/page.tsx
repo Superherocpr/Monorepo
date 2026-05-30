@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import RosterImportClient, {
   type RosterSessionInfo,
   type PendingUpload,
@@ -22,6 +22,7 @@ interface PageProps {
 export default async function RosterImportPage({ params }: PageProps) {
   const { id } = await params;
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
@@ -29,7 +30,7 @@ export default async function RosterImportPage({ params }: PageProps) {
 
   if (!user) redirect(`/signin?redirect=/admin/sessions/${id}/roster`);
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("id, role")
     .eq("id", user.id)
@@ -45,7 +46,7 @@ export default async function RosterImportPage({ params }: PageProps) {
   }
 
   // Fetch session info needed to display the page header
-  const { data: session } = await supabase
+  const { data: session } = await admin
     .from("class_sessions")
     .select(
       "id, starts_at, max_capacity, class_types ( name ), locations ( name )"
@@ -57,7 +58,7 @@ export default async function RosterImportPage({ params }: PageProps) {
 
   // Fetch existing roster emails — used client-side for duplicate detection.
   // We pass the Set as an array since props must be serialisable.
-  const { data: existing } = await supabase
+  const { data: existing } = await admin
     .from("roster_records")
     .select("email")
     .eq("session_id", id);
@@ -67,7 +68,7 @@ export default async function RosterImportPage({ params }: PageProps) {
     .filter(Boolean);
 
   // Check for an unimported customer roster upload for this session
-  const { data: pendingUpload } = await supabase
+  const { data: pendingUpload } = await admin
     .from("roster_uploads")
     .select(
       "id, file_url, original_filename, submitted_by_name, created_at"

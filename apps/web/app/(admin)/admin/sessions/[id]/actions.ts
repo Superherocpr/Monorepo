@@ -7,7 +7,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Approves a class session by setting approval_status to 'approved'.
@@ -17,7 +17,8 @@ import { createClient } from "@/lib/supabase/server";
  */
 export async function approveSession(sessionId: string): Promise<string | null> {
   const supabase = await createClient();
-  const { error } = await supabase
+  const admin = await createAdminClient();
+  const { error } = await admin
     .from("class_sessions")
     .update({ approval_status: "approved" })
     .eq("id", sessionId);
@@ -42,7 +43,8 @@ export async function rejectSession(
     return "Rejection reason must be at least 10 characters.";
   }
   const supabase = await createClient();
-  const { error } = await supabase
+  const admin = await createAdminClient();
+  const { error } = await admin
     .from("class_sessions")
     .update({
       approval_status: "rejected",
@@ -70,7 +72,8 @@ export async function cancelSession(
     return "Cancellation reason must be at least 10 characters.";
   }
   const supabase = await createClient();
-  const { error } = await supabase
+  const admin = await createAdminClient();
+  const { error } = await admin
     .from("class_sessions")
     .update({
       status: "cancelled",
@@ -111,6 +114,7 @@ export async function updateSession(
   wasApproved: boolean
 ): Promise<string | null> {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const update: Record<string, unknown> = {
     class_type_id: fields.class_type_id,
@@ -127,7 +131,7 @@ export async function updateSession(
     update.approval_status = "pending_approval";
   }
 
-  const { error } = await supabase
+  const { error } = await admin
     .from("class_sessions")
     .update(update)
     .eq("id", sessionId);
