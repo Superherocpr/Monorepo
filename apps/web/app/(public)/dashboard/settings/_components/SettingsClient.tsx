@@ -8,10 +8,16 @@
  * Used by: app/(public)/dashboard/settings/page.tsx
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle, XCircle, Search, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+
+/** A single address suggestion returned by the autocomplete proxy. */
+interface PlaceSuggestion {
+  place_id: string;
+  description: string;
+}
 
 /** Profile shape passed from the server-side page.tsx. */
 interface SettingsProfile {
@@ -96,6 +102,14 @@ export default function SettingsClient({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // ── Address autocomplete state ───────────────────────────────────────────
+  const [addrQuery, setAddrQuery] = useState("");
+  const [addrSuggestions, setAddrSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [addrLoading, setAddrLoading] = useState(false);
+  const [addrShowSuggestions, setAddrShowSuggestions] = useState(false);
+  /** Ref for the address search container — used to close dropdown on outside click. */
+  const addrSearchRef = useRef<HTMLDivElement>(null);
+
   // Inline delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -135,6 +149,78 @@ export default function SettingsClient({
     },
     []
   );
+
+  // Close the address suggestions dropdown when the user clicks outside the search box.
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (addrSearchRef.current && !addrSearchRef.current.contains(e.target as Node)) {
+        setAddrShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Debounce autocomplete calls while the user types in the address search box.
+  useEffect(() => {
+    const q = addrQuery.trim();
+    if (q.length < 3) {
+      setAddrSuggestions([]);
+      setAddrShowSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setAddrLoading(true);
+      try {
+        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        const json = (await res.json()) as {
+          success: boolean;
+          suggestions?: PlaceSuggestion[];
+        };
+        if (json.success && json.suggestions) {
+          setAddrSuggestions(json.suggestions);
+          setAddrShowSuggestions(json.suggestions.length > 0);
+        } else {
+          setAddrSuggestions([]);
+        }
+      } catch {
+        setAddrSuggestions([]);
+      } finally {
+        setAddrLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [addrQuery]);
+
+  /**
+   * Called when a suggestion is selected from the address autocomplete dropdown.
+   * Fetches full place details and populates address, city, state, and zip.
+   * @param suggestion - The selected autocomplete suggestion.
+   */
+  const handleSelectAddressSuggestion = useCallback(async (suggestion: PlaceSuggestion) => {
+    setAddrQuery(suggestion.description);
+    setAddrShowSuggestions(false);
+    setAddrLoading(true);
+    try {
+      const res = await fetch(
+        `/api/places/details?place_id=${encodeURIComponent(suggestion.place_id)}`
+      );
+      const json = (await res.json()) as {
+        success: boolean;
+        parsed?: { address: string; city: string; state: string; zip: string };
+      };
+      if (json.success && json.parsed) {
+        const { address, city, state, zip } = json.parsed;
+        setForm((prev) => ({ ...prev, address, city, state, zip }));
+        // Clear the search box after populating the form fields
+        setAddrQuery("");
+      }
+    } catch {
+      // Silent fail — form fields remain editable so the user can correct manually.
+    } finally {
+      setAddrLoading(false);
+    }
+  }, []);
 
   /**
    * Saves all changed fields in a single operation.
@@ -331,6 +417,44 @@ export default function SettingsClient({
             <p className="text-xs text-gray-400 -mt-0.5">
               Used for your certification records
             </p>
+            {/* Address autocomplete search — typing 3+ characters shows address suggestions */}
+            <div ref={addrSearchRef} className="relative">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                {addrLoading && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 animate-spin" />
+                )}
+                <input
+                  type="text"
+                  placeholder="Search for your address…"
+                  value={addrQuery}
+                  onChange={(e) => setAddrQuery(e.target.value)}
+                  onFocus={() => addrSuggestions.length > 0 && setAddrShowSuggestions(true)}
+                  className={`${inputClass} pl-8`}
+                  autoComplete="off"
+                />
+              </div>
+              {addrShowSuggestions && addrSuggestions.length > 0 && (
+                <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg max-h-52 overflow-y-auto">
+                  {addrSuggestions.map((s) => (
+                    <li key={s.place_id}>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          // onMouseDown fires before the input's onBlur so the click registers
+                          e.preventDefault();
+                          handleSelectAddressSuggestion(s);
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700"
+                      >
+                        {s.description}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {/* Manual address input — pre-filled by autocomplete but still editable */}
             <input
               id="address"
               name="address"

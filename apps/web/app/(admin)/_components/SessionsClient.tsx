@@ -7,6 +7,7 @@
  */
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { SessionWithMeta, InstructorOption } from "../admin/sessions/page";
 import type { SessionApprovalStatus, SessionStatus } from "@/types/schedule";
@@ -95,6 +96,41 @@ export default function SessionsClient({
 }: SessionsClientProps) {
   const today = new Date().toISOString().slice(0, 10);
   const isManager = userRole === "manager" || userRole === "super_admin";
+  const router = useRouter();
+
+  // Tracks in-flight or locally overridden statuses so the UI reflects the
+  // change immediately without a full page reload.
+  const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
+  const [startingSessionId, setStartingSessionId] = useState<string | null>(null);
+
+  /**
+   * Transitions a session to "in_progress" via the status API.
+   * Optimistically updates local state then refreshes server data.
+   * @param sessionId - The UUID of the session to start
+   */
+  async function handleStartClass(sessionId: string) {
+    setStartingSessionId(sessionId);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "in_progress" }),
+      });
+      if (res.ok) {
+        // Optimistic update — badge changes immediately
+        setSessionStatuses((prev) => ({ ...prev, [sessionId]: "in_progress" }));
+        // Refresh server-side props so the card reflects the new state fully
+        router.refresh();
+      } else {
+        const { error } = await res.json() as { error?: string };
+        alert(error ?? "Failed to start class. Please try again.");
+      }
+    } catch {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setStartingSessionId(null);
+    }
+  }
 
   // ── Filter state ──────────────────────────────────────────────────────────
   const [showPastSessions, setShowPastSessions] = useState(false);
@@ -300,14 +336,22 @@ export default function SessionsClient({
 
               <div className="space-y-3">
                 {monthSessions.map((session) => {
+                  // Use locally overridden status if present (post-start optimistic update)
+                  const effectiveStatus: SessionStatus = sessionStatuses[session.id] ?? session.status;
                   const approvalBadge =
                     APPROVAL_BADGES[session.approval_status];
-                  const statusBadge = STATUS_BADGES[session.status];
+                  const statusBadge = STATUS_BADGES[effectiveStatus];
                   const isRejected = session.approval_status === "rejected";
                   const isOwnSession = session.instructor?.id === userId;
                   const canGrade =
                     userRole === "super_admin" ||
                     (userRole === "instructor" && isOwnSession);
+                  // Show "Start Class" when the session is approved + still scheduled
+                  // and the logged-in user owns it or is a manager/super admin.
+                  const canStart =
+                    session.approval_status === "approved" &&
+                    effectiveStatus === "scheduled" &&
+                    (isManager || isOwnSession);
 
                   return (
                     <div
@@ -362,7 +406,7 @@ export default function SessionsClient({
                             </span>
                           </div>
 
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2 items-center">
                             <Link
                               href={`/admin/sessions/${session.id}`}
                               className="text-sm font-medium text-red-600 hover:underline"
@@ -370,7 +414,7 @@ export default function SessionsClient({
                               View
                             </Link>
                             {canGrade &&
-                              session.status === "completed" && (
+                              (effectiveStatus === "completed" || effectiveStatus === "in_progress") && (
                                 <Link
                                   href={`/admin/sessions/${session.id}/grades`}
                                   className="text-sm font-medium text-gray-600 hover:underline"
@@ -378,6 +422,18 @@ export default function SessionsClient({
                                   Grade
                                 </Link>
                               )}
+                            {canStart && (
+                              <button
+                                type="button"
+                                disabled={startingSessionId === session.id}
+                                onClick={() => handleStartClass(session.id)}
+                                className="text-sm font-semibold px-3 py-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-md transition-colors"
+                              >
+                                {startingSessionId === session.id
+                                  ? "Starting…"
+                                  : "Start Class"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

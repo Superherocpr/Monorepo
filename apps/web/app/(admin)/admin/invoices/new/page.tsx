@@ -76,7 +76,6 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
         <CreateInvoiceClient
           sessions={[]}
           preSelectedSessionId={null}
-          userRole={role}
           instructorId={null}
           instructors={(allInstructors ?? []) as InstructorOption[]}
         />
@@ -137,7 +136,17 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
     instructorId = targetSession.instructor_id as string;
   } else {
     // Super admin arrived via ?instructor=[id] from the instructor selection step.
-    instructorId = preSelectedInstructorId!;
+    // Validate the id against active instructors to prevent a confused wizard state.
+    const { data: instructorCheck } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", preSelectedInstructorId)
+      .eq("role", "instructor")
+      .eq("deactivated", false)
+      .single();
+
+    if (!instructorCheck) redirect("/admin/invoices/new");
+    instructorId = instructorCheck.id as string;
   }
 
   // Fetch all approved sessions for this instructor (past and future).

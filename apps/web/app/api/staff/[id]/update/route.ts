@@ -2,7 +2,7 @@
  * PATCH /api/staff/[id]/update
  * Called by: Admin Staff Management — Edit Contact inline form
  * Auth: super_admin only
- * Updates email and/or phone on a staff member's profile.
+ * Updates first name, last name, email, and/or phone on a staff member's profile.
  * Email is written to BOTH profiles.email AND auth.users.email so the login
  * address stays in sync. email_confirm: true applies the change immediately
  * without sending a confirmation email — appropriate for admin-initiated corrections.
@@ -13,8 +13,8 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { OWNER_EMAILS } from "@/lib/constants";
 
 /**
- * Updates a staff member's email and/or phone.
- * @param request - PATCH body: { email?: string; phone?: string | null }
+ * Updates a staff member's first name, last name, email, and/or phone.
+ * @param request - PATCH body: { first_name?: string; last_name?: string; email?: string; phone?: string | null }
  * @param params - Route params containing the target staff member's profile ID.
  */
 export async function PATCH(
@@ -74,7 +74,7 @@ export async function PATCH(
   }
 
   // ── Parse body ─────────────────────────────────────────────────────────────
-  let body: { email?: unknown; phone?: unknown };
+  let body: { first_name?: unknown; last_name?: unknown; email?: unknown; phone?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -83,6 +83,16 @@ export async function PATCH(
       { status: 400 }
     );
   }
+
+  const firstNameValue =
+    typeof body.first_name === "string" && body.first_name.trim().length > 0
+      ? body.first_name.trim()
+      : null;
+
+  const lastNameValue =
+    typeof body.last_name === "string" && body.last_name.trim().length > 0
+      ? body.last_name.trim()
+      : null;
 
   const emailValue =
     typeof body.email === "string" && body.email.trim().length > 0
@@ -96,16 +106,28 @@ export async function PATCH(
       : null;
 
   // At least one field must be present in the request
-  if (body.email === undefined && body.phone === undefined) {
+  if (
+    body.first_name === undefined &&
+    body.last_name === undefined &&
+    body.email === undefined &&
+    body.phone === undefined
+  ) {
     return Response.json(
       { success: false, error: "No fields to update." },
       { status: 400 }
     );
   }
 
-  if (body.email !== undefined && !emailValue) {
+  if (body.first_name !== undefined && !firstNameValue) {
     return Response.json(
-      { success: false, error: "Email cannot be empty." },
+      { success: false, error: "First name cannot be empty." },
+      { status: 400 }
+    );
+  }
+
+  if (body.last_name !== undefined && !lastNameValue) {
+    return Response.json(
+      { success: false, error: "Last name cannot be empty." },
       { status: 400 }
     );
   }
@@ -114,6 +136,8 @@ export async function PATCH(
   const profileUpdate: Record<string, string | null> = {
     updated_at: new Date().toISOString(),
   };
+  if (body.first_name !== undefined) profileUpdate.first_name = firstNameValue;
+  if (body.last_name !== undefined) profileUpdate.last_name = lastNameValue;
   if (body.email !== undefined) profileUpdate.email = emailValue;
   if (body.phone !== undefined) profileUpdate.phone = phoneValue;
 

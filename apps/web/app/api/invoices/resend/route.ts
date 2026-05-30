@@ -106,7 +106,10 @@ export async function POST(request: Request) {
       .eq("id", invoiceId);
   }
 
-  // Send invoice email via Resend
+  // Send invoice email via Resend. This is best-effort — if delivery fails,
+  // we still log the resend action so there is a record of the attempt.
+  // The instructor can retry if the email doesn't arrive.
+  let emailSendError: Error | null = null;
   if (process.env.RESEND_API_KEY) {
     const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -130,18 +133,28 @@ export async function POST(request: Request) {
       paymentPlatform: invoice.payment_platform ?? null,
     });
 
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
-      to: newEmail,
-      subject,
-      html,
-    });
+    emailSendError = await resend.emails
+      .send({
+        from: process.env.RESEND_FROM_EMAIL!,
+        to: newEmail,
+        subject,
+        html,
+      })
+      .then(() => null)
+      .catch((err: unknown) => {
+        console.error("[invoices/resend] Email send failed (non-fatal):", err);
+        return err instanceof Error ? err : new Error(String(err));
+      });
   }
 
-  // Log the action
-  const logNote = emailChanged
+  // Log the action regardless of whether the email send succeeded.
+  // If delivery failed, note it so admins can identify the issue.
+  const baseLogNote = emailChanged
     ? `Resent to ${newEmail} (corrected from ${originalEmail})`
     : `Resent to ${newEmail}`;
+  const logNote = emailSendError
+    ? `${baseLogNote} (email delivery failed: ${emailSendError.message})`
+    : baseLogNote;
 
   await adminClient.from("invoice_activity_log").insert({
     invoice_id: invoiceId,

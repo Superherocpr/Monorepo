@@ -31,10 +31,17 @@ export function getBookmarkletSource(apiBase: string): string {
   // The apiBase is embedded directly in the script at serve time —
   // only __k (the API key) is injected at runtime by the bookmark wrapper.
   // This avoids exposing the API key in server logs via query parameters.
+  //
+  // The returned text is a complete self-contained IIFE. The bookmark wrapper
+  // must set window.__SCPR_KEY before injecting so the IIFE can read the key.
   return `
-(function(__k) {
+(function() {
   'use strict';
 
+  // Read the API key from the global set by the bookmark wrapper before
+  // this script was injected. Falls back to empty string (auth will fail
+  // with a clear error message from the API).
+  var __k = window.__SCPR_KEY || '';
   var API_BASE = ${JSON.stringify(apiBase)};
 
   // --- Guard: prevent double-running if bookmarklet is tapped twice ---
@@ -240,26 +247,36 @@ export function getBookmarkletSource(apiBase: string): string {
   /**
    * Builds a CSV string from the student roster in the format expected by the
    * Enrollware student import (matching the column order on the import spec).
+   * Column order matches the Enrollware sample: Last Name first, Phone (not Primary Phone).
+   * Score is populated from the student's grade. Status is always "Complete".
+   * License, Price, and Codes are left blank — managed by Enrollware.
    */
   function buildStudentCSV(students) {
-    var header = 'First Name,Last Name,Email Address,Primary Phone,Address 1,Address 2,City,State,Zip';
+    var header = 'Last Name,First Name,Email Address,Phone,Address 1,Address 2,City,State,Zip,Score,Status,License,Price,Codes';
     var rows = students.map(function(s) {
       return [
-        s.first_name  || '',
         s.last_name   || '',
+        s.first_name  || '',
         s.email       || '',
         s.phone       || '',
         s.address_1   || '',
         s.address_2   || '',
         s.city        || '',
         s.state       || '',
-        s.zip         || ''
+        s.zip         || '',
+        s.grade != null ? String(s.grade) : '',  // numeric score (e.g. 100)
+        s.grade != null ? 'Complete' : '',        // status only set when graded
+        '',  // License — managed by Enrollware
+        '',  // Price — managed by Enrollware
+        ''   // Codes — managed by Enrollware
       ].map(function(v) {
         // Wrap every field in quotes and escape any internal quotes
         return '"' + String(v).replace(/"/g, '""') + '"';
       }).join(',');
     });
-    return header + '\\n' + rows.join('\\n');
+    // Use CRLF line endings — Enrollware runs on .NET/Windows and its CSV
+    // parser expects Windows-style line endings.
+    return header + '\\r\\n' + rows.join('\\r\\n');
   }
 
   /**
@@ -323,7 +340,7 @@ export function getBookmarkletSource(apiBase: string): string {
   function panelHeader() {
     return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
            '<b style="color:#c8102e;font-size:14px">&#x1F9B8; SuperheroCPR</b>' +
-           '<button onclick="(function(){var p=document.getElementById(\'scpr-enrw-panel\');if(p)p.remove();window.__SCPR_LOADED=false;})()" ' +
+           '<button onclick="(function(){var p=document.getElementById(\\'scpr-enrw-panel\\');if(p)p.remove();window.__SCPR_LOADED=false;})()" ' +
            'style="border:none;background:none;cursor:pointer;font-size:18px;line-height:1;color:#666">&times;</button>' +
            '</div>';
   }
@@ -350,9 +367,9 @@ export function getBookmarkletSource(apiBase: string): string {
         : '';
       return '<div style="border:1px solid #ddd;border-radius:4px;padding:8px;' +
              'margin-bottom:8px;cursor:pointer;transition:background 0.1s" ' +
-             'onmouseover="this.style.background=\'#f9f9f9\'" ' +
-             'onmouseout="this.style.background=\'#fff\'" ' +
-             'onclick="window.__SCPR_PICK(' + idx + ')">' +
+             'onmouseover="this.style.background=\\'#f9f9f9\\'" ' +
+             'onmouseout="this.style.background=\\'#fff\\'" ' +
+             'onclick="window.__SCPR_PICK(' + idx + ')">'  +
              '<b style="font-size:13px">' + (c.class_type ? c.class_type.name : 'Unknown Course') + '</b>' + submitted + '<br>' +
              '<span style="color:#555;font-size:12px">' + timeStr + ' &middot; ' + (c.location ? c.location.name : 'No location') + '</span><br>' +
              '<span style="color:#888;font-size:11px">' + count + ' student' + (count !== 1 ? 's' : '') + ' in database</span>' +
@@ -473,7 +490,7 @@ export function getBookmarkletSource(apiBase: string): string {
       'border-radius:4px;cursor:pointer;font-size:12px;margin-bottom:6px">' +
       '&#x2193; Download student CSV' +
       '</button>' +
-      '<button onclick="window.__SCPR_MARK_DONE(\'' + session.id + '\')" ' +
+      '<button onclick="window.__SCPR_MARK_DONE(\\\'' + session.id + '\\\')" ' +
       'style="width:100%;padding:6px;background:#c8102e;color:#fff;border:none;' +
       'border-radius:4px;cursor:pointer;font-size:12px">' +
       '&#x2713; Mark class as submitted' +
@@ -523,15 +540,26 @@ export function getBookmarkletSource(apiBase: string): string {
         // Check if the student panel is already visible (page loaded with a class ID)
         var studentPanel = document.getElementById('mainContent_studentPanel');
         var storedId = sessionStorage.getItem('scpr_session_id');
-        var storedData = sessionStorage.getItem('scpr_session_data');
 
-        if (studentPanel && storedData) {
-          // Came from a new-class fill — auto-populate students from stored session data
-          try {
-            var session = JSON.parse(storedData);
-            showStudentFill(session);
+        if (studentPanel && storedId) {
+          // Always prefer fresh data from the API — the cached version was fetched
+          // before grading, so grades would be null if we used it. Look up the
+          // stored session ID in the freshly-fetched classes list.
+          var freshSession = null;
+          for (var i = 0; i < classes.length; i++) {
+            if (classes[i].id === storedId) {
+              freshSession = classes[i];
+              break;
+            }
+          }
+          if (freshSession) {
+            // Refresh the cache so downstream code also has current grades
+            sessionStorage.setItem('scpr_session_data', JSON.stringify(freshSession));
+            showStudentFill(freshSession);
             return;
-          } catch (e) { /* fall through to picker */ }
+          }
+          // Stored session not found in today's classes (e.g. different day) —
+          // fall through to the manual picker so the instructor can choose
         }
 
         // Student panel visible but no stored selection — let instructor pick
@@ -556,9 +584,9 @@ export function getBookmarkletSource(apiBase: string): string {
       var count = c.students ? c.students.length : 0;
       return '<div style="border:1px solid #ddd;border-radius:4px;padding:8px;' +
              'margin-bottom:8px;cursor:pointer" ' +
-             'onmouseover="this.style.background=\'#f9f9f9\'" ' +
-             'onmouseout="this.style.background=\'#fff\'" ' +
-             'onclick="window.__SCPR_PICK_STUDENTS(' + idx + ')">' +
+             'onmouseover="this.style.background=\\'#f9f9f9\\'" ' +
+             'onmouseout="this.style.background=\\'#fff\\'" ' +
+             'onclick="window.__SCPR_PICK_STUDENTS(' + idx + ')">'  +
              '<b>' + (c.class_type ? c.class_type.name : 'Unknown') + '</b><br>' +
              '<span style="color:#555;font-size:12px">' + timeStr + ' &middot; ' + (c.location ? c.location.name : '') + '</span><br>' +
              '<span style="color:#888;font-size:11px">' + count + ' student' + (count !== 1 ? 's' : '') + '</span>' +
@@ -583,6 +611,6 @@ export function getBookmarkletSource(apiBase: string): string {
 
   run();
 
-})(__k);
+})();
 `.trim();
 }

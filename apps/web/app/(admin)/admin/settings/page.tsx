@@ -16,6 +16,9 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getSetting } from "@/lib/zoho";
 import SettingsClient from "./_components/SettingsClient";
 import BookmarkletSetup from "@/app/(admin)/admin/enrollware-tool/_components/BookmarkletSetup";
+import LocationsClient, {
+  type LocationWithCount,
+} from "@/app/(admin)/_components/LocationsClient";
 import type { UserRole } from "@/types/users";
 
 export const metadata = { title: "Settings" };
@@ -74,7 +77,7 @@ export default async function SettingsPage({
 
   const role = profile?.role as UserRole | undefined;
 
-  if (!role || !["instructor", "super_admin"].includes(role)) {
+  if (!role || !["instructor", "manager", "super_admin"].includes(role)) {
     redirect("/admin");
   }
 
@@ -114,10 +117,48 @@ export default async function SettingsPage({
     );
   }
 
+  // ── Manager view: locations panel only ───────────────────────────────────
+  if (role === "manager") {
+    const { data: raw } = await supabase
+      .from("locations")
+      .select(
+        `id, name, address, city, state, zip, notes, is_home_base, created_at,
+         class_sessions ( starts_at )`
+      )
+      .order("is_home_base", { ascending: false })
+      .order("name", { ascending: true });
+
+    const locations: LocationWithCount[] = (raw ?? []).map((loc) => {
+      const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
+      const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
+      const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
+      return {
+        id: loc.id,
+        name: loc.name,
+        address: loc.address,
+        city: loc.city,
+        state: loc.state,
+        zip: loc.zip,
+        notes: loc.notes ?? null,
+        is_home_base: loc.is_home_base,
+        created_at: loc.created_at,
+        sessionCount: sessions.length,
+        last_used_at: lastUsedAt,
+      };
+    });
+
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <LocationsClient initialLocations={locations} userRole="manager" />
+      </div>
+    );
+  }
+
   // ── Super admin view: full settings panel ────────────────────────────────
 
-  // Fetch class types, preset grades, instructor routing, and bookmarklet status in parallel
-  const [{ data: classTypes }, { data: presetGrades }, { data: instructorRows }] = await Promise.all([
+  // Fetch class types, preset grades, instructor routing, bookmarklet status,
+  // and locations in parallel
+  const [{ data: classTypes }, { data: presetGrades }, { data: instructorRows }, { data: locationRaw }] = await Promise.all([
     supabase
       .from("class_types")
       .select("id, name, description, duration_minutes, max_capacity, price, active")
@@ -135,6 +176,14 @@ export default async function SettingsPage({
       .in("role", ["instructor", "super_admin"])
       .eq("deactivated", false)
       .order("last_name"),
+    supabase
+      .from("locations")
+      .select(
+        `id, name, address, city, state, zip, notes, is_home_base, created_at,
+         class_sessions ( starts_at )`
+      )
+      .order("is_home_base", { ascending: false })
+      .order("name", { ascending: true }),
   ]);
 
   // Reduce the joined accounts to a single boolean per instructor for the UI
@@ -149,6 +198,26 @@ export default async function SettingsPage({
       email: row.email,
       payment_routing: (row.payment_routing as "instructor" | "business") ?? "instructor",
       has_active_paypal: hasPayPal,
+    };
+  });
+
+  // Map raw locations rows into the shape LocationsClient expects
+  const locations: LocationWithCount[] = (locationRaw ?? []).map((loc) => {
+    const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
+    const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
+    const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
+    return {
+      id: loc.id,
+      name: loc.name,
+      address: loc.address,
+      city: loc.city,
+      state: loc.state,
+      zip: loc.zip,
+      notes: loc.notes ?? null,
+      is_home_base: loc.is_home_base,
+      created_at: loc.created_at,
+      sessionCount: sessions.length,
+      last_used_at: lastUsedAt,
     };
   });
 
@@ -187,7 +256,12 @@ export default async function SettingsPage({
       legacySiteEnabled={legacySiteFlag === "true"}
       isSuperAdmin
       enrollwareSlot={
-        <BookmarkletSetup hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
+        // key required: React 19 owner-based key tracking flags elements that are
+        // created in one component (here) and rendered inside another (SettingsClient).
+        <BookmarkletSetup key="enrollware-slot" hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
+      }
+      locationsSlot={
+        <LocationsClient key="locations-slot" initialLocations={locations} userRole="super_admin" />
       }
     />
   );

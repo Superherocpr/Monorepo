@@ -36,7 +36,7 @@ export default async function NewSessionPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, role, first_name, last_name")
     .eq("id", user.id)
     .single();
 
@@ -45,6 +45,12 @@ export default async function NewSessionPage() {
   }
 
   const isInstructor = profile.role === "instructor";
+
+  // The instructor's own full name — passed to the form so it can display a
+  // read-only "Instructor" row in place of the selector when isInstructor is true.
+  const instructorName = isInstructor
+    ? `${profile.first_name as string} ${profile.last_name as string}`.trim()
+    : undefined;
 
   // ── Fetch active class types ───────────────────────────────────────────────
   const { data: rawClassTypes } = await supabase
@@ -97,6 +103,7 @@ export default async function NewSessionPage() {
       locations={locations}
       instructors={instructors}
       isInstructor={isInstructor}
+      instructorName={instructorName}
     />
   );
 }
