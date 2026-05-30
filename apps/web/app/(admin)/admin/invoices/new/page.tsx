@@ -217,7 +217,6 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
       <CreateInvoiceClient
         sessions={sessions}
         preSelectedSessionId={preSelectedSessionId}
-        userRole={role}
         instructorId={instructorId}
         instructors={null}
       />
