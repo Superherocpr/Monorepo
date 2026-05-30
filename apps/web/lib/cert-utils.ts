@@ -183,6 +183,8 @@ export const CERT_CONFIGS: Record<
   "PEARS® Instructor eCard":                       { category: "PEARS",      color: "#007A87", nameLine1: "PEARS®",       nameLine2: "Instructor" },
   "ACLS EP eCard":                                 { category: "ACLS EP",    color: "#D12F36", nameLine1: "ACLS EP",      nameLine2: "" },
   "ACLS EP Instructor eCard":                      { category: "ACLS EP",    color: "#D12F36", nameLine1: "ACLS EP",      nameLine2: "Instructor" },
+  // SuperHeroCPR-branded cert — issued directly by SuperHeroCPR, not an AHA eCard
+  "SuperHeroCPR Certificate":                      { category: "SUPERHEROCPR", color: "#dc2626", nameLine1: "SuperHero",  nameLine2: "CPR" },
 };
 
 export function getCertConfig(name: string): {
