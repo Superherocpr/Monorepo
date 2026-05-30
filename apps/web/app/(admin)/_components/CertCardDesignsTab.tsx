@@ -30,6 +30,7 @@ function mockAHACert(certTypeName: string): CertificationRecord {
       name: certTypeName,
       issuing_body: "American Heart Association",
       validity_months: 24,
+      card_design: "aha",
     },
     class_sessions: null,
   };
@@ -50,6 +51,7 @@ function mockSHCPRCert(className: string): CertificationRecord {
       name: `${className} Certificate`,
       issuing_body: "SuperHero CPR",
       validity_months: 24,
+      card_design: "superherocpr",
     },
     class_sessions: {
       starts_at: "2025-01-15T14:00:00.000Z",
