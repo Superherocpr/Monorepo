@@ -131,13 +131,16 @@ export async function GET(request: NextRequest) {
           zip: string | null;
           grade: number | null;
           bookings: {
-            profiles: { address: string | null; city: string | null; state: string | null; zip: string | null } | null;
-          } | null;
+            profiles: { address: string | null; city: string | null; state: string | null; zip: string | null }[] | null;
+          }[] | null;
         }) => {
           // Prefer the roster_record's own address (set at check-in); fall back
           // to the profile's saved address for students who checked in before
           // address capture was added to the rollcall flow.
-          const profileAddr = r.bookings?.profiles ?? null;
+          // Supabase returns nested relations as arrays — unwrap one level each.
+          const booking = Array.isArray(r.bookings) ? r.bookings[0] : (r.bookings ?? null);
+          const rawProfiles = booking?.profiles;
+          const profileAddr = Array.isArray(rawProfiles) ? (rawProfiles[0] ?? null) : (rawProfiles ?? null);
           return {
             first_name: r.first_name,
             last_name: r.last_name,
