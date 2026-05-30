@@ -64,8 +64,8 @@ function formatDate(iso: string): string {
   });
 }
 
-/** All four supported platforms in display order. */
-const ALL_PLATFORMS: PaymentPlatform[] = ["paypal", "square", "stripe", "venmo_business"];
+/** Platforms available for new connections — PayPal only for now. */
+const ALL_PLATFORMS: PaymentPlatform[] = ["paypal"];
 
 /**
  * Root client component for the instructor payment account page.

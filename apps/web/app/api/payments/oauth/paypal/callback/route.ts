@@ -109,8 +109,12 @@ export async function GET(request: Request) {
   //   - `emails`:   array of {value, primary} (NOT a valid auth-assertion identity)
   // We MUST store the payer_id because PayPal-Auth-Assertion's `payer_id`
   // claim only accepts a merchant ID; emails are rejected with PAYER_ID_NOT_FOUND.
+  // Current PayPal Identity v1 endpoint — replaces the deprecated
+  // /v1/oauth2/token/userinfo?schema=paypalv1.1 path.
+  // With the paypalattributes scope, this returns user_id as a URN
+  // of the form ".../identity/user/<payer_id>" which we extract below.
   const userInfoRes = await fetch(
-    `${apiBase}/v1/oauth2/token/userinfo?schema=paypalv1.1`,
+    `${apiBase}/v1/identity/openidconnect/userinfo?schema=openid`,
     {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
       cache: "no-store",

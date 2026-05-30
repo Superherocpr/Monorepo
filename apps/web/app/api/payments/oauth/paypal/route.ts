@@ -61,7 +61,10 @@ export async function GET() {
   url.searchParams.set("client_id", clientId);
   url.searchParams.set(
     "scope",
-    "openid profile email https://uri.paypal.com/services/invoicing"
+    // paypalattributes is required by PayPal to return the merchant payer_id
+    // from the userinfo endpoint. invoicing grants the access token permission
+    // to create/send invoices on the instructor's behalf.
+    "openid profile email https://uri.paypal.com/services/paypalattributes https://uri.paypal.com/services/invoicing"
   );
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("state", state);
