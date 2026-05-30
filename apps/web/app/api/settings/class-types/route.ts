@@ -10,7 +10,7 @@ import type { UserRole } from "@/types/users";
 
 /**
  * Creates a new class type record.
- * @param request - POST body: { name, description?, duration_minutes, max_capacity, price, active }
+ * @param request - POST body: { name, description?, duration_minutes, max_capacity, price, active, cert_type_id? }
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
   // ── Parse and validate body ────────────────────────────────────────────────
   const body = await request.json();
-  const { name, description, duration_minutes, max_capacity, price, active } =
+  const { name, description, duration_minutes, max_capacity, price, active, cert_type_id } =
     body as {
       name: string;
       description: string | null;
@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       max_capacity: number;
       price: number;
       active: boolean;
+      cert_type_id?: string | null;
     };
 
   if (
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
     max_capacity,
     price,
     active: active !== false,
+    cert_type_id: cert_type_id || null,
   });
 
   if (error) {

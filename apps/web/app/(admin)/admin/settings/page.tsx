@@ -32,6 +32,14 @@ export interface ClassType {
   max_capacity: number;
   price: number;
   active: boolean;
+  /** FK to cert_types.id — nullable for non-certifying sessions. */
+  cert_type_id: string | null;
+}
+
+/** A minimal cert type row used to populate the cert type dropdown in class type editing. */
+export interface CertTypeOption {
+  id: string;
+  name: string;
 }
 
 /** A preset grade row from the preset_grades table. */
@@ -158,10 +166,17 @@ export default async function SettingsPage({
 
   // Fetch class types, preset grades, instructor routing, bookmarklet status,
   // and locations in parallel
-  const [{ data: classTypes }, { data: presetGrades }, { data: instructorRows }, { data: locationRaw }] = await Promise.all([
+  const [{ data: classTypes }, { data: certTypeRows }, { data: presetGrades }, { data: instructorRows }, { data: locationRaw }] = await Promise.all([
     supabase
       .from("class_types")
-      .select("id, name, description, duration_minutes, max_capacity, price, active")
+      .select("id, name, description, duration_minutes, max_capacity, price, active, cert_type_id")
+      .order("name"),
+    // Cert types used to populate the linked cert dropdown in the class type add/edit panel.
+    // Fetched separately from the certifications page so settings page is self-contained.
+    supabase
+      .from("cert_types")
+      .select("id, name")
+      .eq("active", true)
       .order("name"),
     supabase
       .from("preset_grades")
@@ -248,6 +263,7 @@ export default async function SettingsPage({
   return (
     <SettingsClient
       classTypes={(classTypes ?? []) as ClassType[]}
+      certTypeOptions={(certTypeRows ?? []) as CertTypeOption[]}
       presetGrades={(presetGrades ?? []) as PresetGrade[]}
       instructors={instructors}
       zohoConnected={Boolean(zohoAccountId && zohoRefreshToken)}

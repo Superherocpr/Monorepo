@@ -179,6 +179,10 @@ const CERT_CONFIGS: Record<
   "PALS Provider eCard":                          { category: "PALS",       color: "#5F249F", nameLine1: "PALS",          nameLine2: "Provider" },
   "PALS Instructor eCard":                        { category: "PALS",       color: "#5F249F", nameLine1: "PALS",          nameLine2: "Instructor" },
   "Heartsaver® for K-12 Schools eCard":           { category: "HEARTSAVER", color: "#00953B", nameLine1: "Heartsaver®",  nameLine2: "for K-12 Schools" },
+  "PEARS® Provider eCard":                         { category: "PEARS",      color: "#007A87", nameLine1: "PEARS®",       nameLine2: "Provider" },
+  "PEARS® Instructor eCard":                       { category: "PEARS",      color: "#007A87", nameLine1: "PEARS®",       nameLine2: "Instructor" },
+  "ACLS EP eCard":                                 { category: "ACLS EP",    color: "#D12F36", nameLine1: "ACLS EP",      nameLine2: "" },
+  "ACLS EP Instructor eCard":                      { category: "ACLS EP",    color: "#D12F36", nameLine1: "ACLS EP",      nameLine2: "Instructor" },
 };
 
 export function getCertConfig(name: string): {

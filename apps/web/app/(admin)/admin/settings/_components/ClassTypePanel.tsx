@@ -10,12 +10,14 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import type { ClassType } from "../page";
+import type { ClassType, CertTypeOption } from "../page";
 
 interface ClassTypePanelProps {
   open: boolean;
   /** Null when creating a new class type; populated when editing an existing one. */
   classType: ClassType | null;
+  /** All active cert types — used to populate the linked cert type dropdown. */
+  certTypeOptions: CertTypeOption[];
   onClose: () => void;
   /** Called with a success message after a successful save. */
   onSaved: (message: string) => void;
@@ -33,6 +35,7 @@ const inputClass =
  * Traps focus while open and closes on Escape.
  * @param open - Whether the panel is visible.
  * @param classType - The class type to edit, or null for a new one.
+ * @param certTypeOptions - Active cert types for the linked cert dropdown.
  * @param onClose - Called to dismiss the panel.
  * @param onSaved - Called with a success message after a successful save.
  * @param onError - Called with an error message on failure.
@@ -40,6 +43,7 @@ const inputClass =
 const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
   open,
   classType,
+  certTypeOptions,
   onClose,
   onSaved,
   onError,
@@ -52,6 +56,8 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
   const [maxCapacity, setMaxCapacity] = useState("");
   const [price, setPrice] = useState("");
   const [active, setActive] = useState(true);
+  // UUID of the linked cert type, or empty string for none
+  const [certTypeId, setCertTypeId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const firstInputRef = useRef<HTMLInputElement>(null);
@@ -67,6 +73,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
         setMaxCapacity(String(classType.max_capacity));
         setPrice(String(classType.price));
         setActive(classType.active);
+        setCertTypeId(classType.cert_type_id ?? "");
       } else {
         setName("");
         setDescription("");
@@ -74,6 +81,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
         setMaxCapacity("");
         setPrice("");
         setActive(true);
+        setCertTypeId("");
       }
       setTimeout(() => firstInputRef.current?.focus(), 50);
     }
@@ -148,6 +156,8 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
       max_capacity: parsedCapacity,
       price: parsedPrice,
       active,
+      // Send null when no cert type selected so the DB column is explicitly cleared
+      cert_type_id: certTypeId || null,
     };
 
     setSubmitting(true);
@@ -338,6 +348,35 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
                 />
               </button>
             </div>
+
+            {/* Linked cert type */}
+            {certTypeOptions.length > 0 && (
+              <div>
+                <label
+                  htmlFor="ct-cert-type"
+                  className="block text-sm font-semibold text-gray-700 mb-1"
+                >
+                  Linked Cert Type{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <select
+                  id="ct-cert-type"
+                  value={certTypeId}
+                  onChange={(e) => setCertTypeId(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">None — no cert issued for this class</option>
+                  {certTypeOptions.map((ct) => (
+                    <option key={ct.id} value={ct.id}>
+                      {ct.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-400">
+                  The AHA eCard that students earn when they complete this class.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Footer */}

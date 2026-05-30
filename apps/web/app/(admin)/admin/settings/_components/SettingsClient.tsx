@@ -13,10 +13,12 @@ import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import ClassTypePanel from "./ClassTypePanel";
 import ClassTypeImportPanel from "./ClassTypeImportPanel";
-import type { ClassType, PresetGrade, InstructorRoutingRow } from "../page";
+import type { ClassType, CertTypeOption, PresetGrade, InstructorRoutingRow } from "../page";
 
 interface SettingsClientProps {
   classTypes: ClassType[];
+  /** All active cert types — used to populate the linked cert dropdown in ClassTypePanel. */
+  certTypeOptions: CertTypeOption[];
   presetGrades: PresetGrade[];
   instructors: InstructorRoutingRow[];
   zohoConnected: boolean;
@@ -95,6 +97,7 @@ interface EditingGrade {
  */
 const SettingsClient: React.FC<SettingsClientProps> = ({
   classTypes: initialClassTypes,
+  certTypeOptions,
   presetGrades: initialPresetGrades,
   instructors: initialInstructors,
   zohoConnected: initialZohoConnected,
@@ -797,6 +800,13 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                         maximumFractionDigits: 2,
                       })}
                     </p>
+                    {/* Show the linked cert type name if one is set */}
+                    {ct.cert_type_id && (
+                      <p className="mt-1 text-xs text-gray-400">
+                        Cert:{" "}
+                        {certTypeOptions.find((c) => c.id === ct.cert_type_id)?.name ?? "Unknown"}
+                      </p>
+                    )}
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                       <button
                         type="button"
@@ -1300,6 +1310,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       <ClassTypePanel
         open={classTypePanelOpen}
         classType={editingClassType}
+        certTypeOptions={certTypeOptions}
         onClose={() => {
           setClassTypePanelOpen(false);
           setEditingClassType(null);

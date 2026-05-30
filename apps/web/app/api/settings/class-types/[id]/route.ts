@@ -10,7 +10,7 @@ import type { UserRole } from "@/types/users";
 
 /**
  * Updates a class type by ID. All editable fields may be provided.
- * @param request - PATCH body: { name, description?, duration_minutes, max_capacity, price, active }
+ * @param request - PATCH body: { name, description?, duration_minutes, max_capacity, price, active, cert_type_id? }
  * @param params - Route params containing the class type UUID.
  */
 export async function PATCH(
@@ -38,7 +38,7 @@ export async function PATCH(
 
   // ── Parse and validate body ────────────────────────────────────────────────
   const body = await request.json();
-  const { name, description, duration_minutes, max_capacity, price, active } =
+  const { name, description, duration_minutes, max_capacity, price, active, cert_type_id } =
     body as {
       name: string;
       description: string | null;
@@ -46,6 +46,7 @@ export async function PATCH(
       max_capacity: number;
       price: number;
       active: boolean;
+      cert_type_id?: string | null;
     };
 
   if (
@@ -73,6 +74,7 @@ export async function PATCH(
       max_capacity,
       price,
       active,
+      cert_type_id: cert_type_id || null,
     })
     .eq("id", id);
 
