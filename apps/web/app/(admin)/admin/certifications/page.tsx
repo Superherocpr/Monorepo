@@ -54,7 +54,7 @@ export default async function CertificationsPage() {
 
     supabase
       .from("cert_types")
-      .select("id, name, description, validity_months, issuing_body, active")
+      .select("id, name, description, validity_months, issuing_body, card_design, active")
       .order("name"),
 
     adminSupabase
@@ -89,6 +89,7 @@ export default async function CertificationsPage() {
     description: ct.description,
     validity_months: ct.validity_months,
     issuing_body: ct.issuing_body,
+    card_design: ct.card_design ?? "aha",
     active: ct.active,
     certCount: countByTypeId[ct.id] ?? 0,
   }));
