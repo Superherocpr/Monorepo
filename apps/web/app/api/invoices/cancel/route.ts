@@ -4,7 +4,7 @@
  * Auth: Instructor (own invoice only) or super admin
  *
  * Cancels an invoice by:
- * 1. Calling the instructor's payment platform API to void the invoice there
+ * 1. Calling the business PayPal API to void the invoice there
  * 2. Only if that succeeds: updating our DB (status = cancelled, cancelled_at = now())
  * 3. Logging the cancellation action in invoice_activity_log
  *
@@ -12,9 +12,7 @@
  */
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { decryptToken } from "@/lib/crypto";
-import { getPayPalApiBase } from "@/lib/paypal";
-import type { PaymentPlatform } from "@/types/users";
+import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -22,66 +20,34 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Calls the appropriate payment platform API to void/cancel the given invoice.
+ * Calls the business PayPal API to void/cancel the given invoice.
  * Returns true if the platform accepted the cancellation.
- * @param platform - The payment platform
- * @param platformInvoiceId - The invoice ID on the payment platform
- * @param accessToken - The instructor's OAuth access token for that platform
+ * @param platformInvoiceId - The invoice ID on PayPal.
  */
-async function cancelOnPlatform(
-  platform: PaymentPlatform,
-  platformInvoiceId: string,
-  accessToken: string
-): Promise<boolean> {
-  if (platform === "paypal" || platform === "venmo_business") {
-    // Venmo Business uses PayPal's invoicing API
-    const res = await fetch(
-      `${getPayPalApiBase()}/v2/invoicing/invoices/${platformInvoiceId}/cancel`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          subject: "Invoice cancelled",
-          note: "Cancelled via SuperHeroCPR",
-        }),
-      }
-    );
-    return res.ok;
+async function cancelPayPalInvoice(platformInvoiceId: string): Promise<boolean> {
+  const accessToken = await getPayPalAccessToken();
+  const res = await fetch(
+    `${getPayPalApiBase()}/v2/invoicing/invoices/${platformInvoiceId}/cancel`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        subject: "Invoice cancelled",
+        note: "Cancelled via SuperHeroCPR",
+      }),
+      cache: "no-store",
+    }
+  );
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    console.error("[invoices/cancel] PayPal cancel failed:", errorText);
   }
 
-  if (platform === "square") {
-    const res = await fetch(
-      `https://connect.squareup.com/v2/invoices/${platformInvoiceId}/cancel`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          "Square-Version": "2024-01-18",
-        },
-        body: JSON.stringify({ version: 1 }),
-      }
-    );
-    return res.ok;
-  }
-
-  if (platform === "stripe") {
-    const res = await fetch(
-      `https://api.stripe.com/v1/invoices/${platformInvoiceId}/void`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
-    return res.ok;
-  }
-
-  return false;
+  return res.ok;
 }
 
 /**
@@ -152,54 +118,14 @@ export async function POST(request: Request) {
     );
   }
 
-  // Fetch the instructor's active payment account for this platform
-  const { data: paymentAccount } = await adminClient
-    .from("instructor_payment_accounts")
-    .select("access_token")
-    .eq("instructor_id", invoice.instructor_id)
-    .eq("platform", invoice.payment_platform)
-    .eq("is_active", true)
-    .single();
-
-  if (!paymentAccount?.access_token) {
-    return Response.json(
-      {
-        success: false,
-        error:
-          "No active payment account found for this platform. Cannot cancel.",
-      },
-      { status: 400 }
-    );
-  }
-
-  // Decrypt the access token in-memory immediately before the API call.
-  // Never log the decrypted value.
-  let decryptedToken: string;
-  try {
-    decryptedToken = decryptToken(paymentAccount.access_token);
-  } catch (err) {
-    console.error("[invoices/cancel] Failed to decrypt access token:", err);
-    return Response.json(
-      {
-        success: false,
-        error: "Could not access payment platform credentials. Please reconnect your account.",
-      },
-      { status: 500 }
-    );
-  }
-
   // Call the platform API first — only update our DB if it succeeds
-  const platformSuccess = await cancelOnPlatform(
-    invoice.payment_platform as PaymentPlatform,
-    invoice.platform_invoice_id,
-    decryptedToken
-  );
+  const platformSuccess = await cancelPayPalInvoice(invoice.platform_invoice_id);
 
   if (!platformSuccess) {
     return Response.json(
       {
         success: false,
-        error: `Failed to cancel invoice on ${invoice.payment_platform}. Please try again or contact support.`,
+          error: "Failed to cancel invoice in PayPal. Please try again or contact support.",
       },
       { status: 500 }
     );

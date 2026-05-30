@@ -4,15 +4,13 @@
  * Auth: None required — creates a pending PayPal order that the buyer approves
  *
  * Accepts a session ID, re-fetches the class price/name from the database,
- * resolves payment routing server-side (instructor PayPal vs. business PayPal),
- * and creates a PayPal order in CAPTURE intent. When routing to an instructor,
- * includes the PayPal-Auth-Assertion header to direct funds to their merchant
- * account. Returns { orderId } to the client.
+ * and creates a PayPal order in CAPTURE intent against the SuperHeroCPR
+ * business PayPal account. Returns { orderId } to the client.
  *
  * Actual capture and booking creation happen in /api/bookings/confirm after approval.
  *
- * Security: instructorPayPalAccountId is ALWAYS resolved server-side from the
- * sessionId — the client cannot supply or override the merchant ID.
+ * Security: price is ALWAYS resolved server-side from the sessionId — the client
+ * cannot supply or override the amount charged.
  */
 
 import { NextResponse } from "next/server";
@@ -20,10 +18,8 @@ import { createHash } from "crypto";
 import {
   getPayPalAccessToken,
   getPayPalApiBase,
-  buildPayPalAuthAssertion,
 } from "@/lib/paypal";
 import { createAdminClient } from "@/lib/supabase/server";
-import { resolvePaymentRouting } from "@/lib/resolve-payment-routing";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -31,7 +27,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Creates a PayPal order for a selected booking session using DB-owned price and routing.
+ * Creates a PayPal order for a selected booking session using DB-owned price.
  * Side effects: PayPal order creation only; no payment is captured here.
  * @param request - JSON request containing sessionId.
  */
@@ -85,9 +81,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Session pricing unavailable" }, { status: 500 });
   }
 
-  // ── Resolve routing — never trust client input for merchant ID ─────────
-  const routing = await resolvePaymentRouting(supabase, sessionId);
-
   // ── Get business PayPal access token (always — required to create the order) ──
   const accessToken = await getPayPalAccessToken();
 
@@ -105,13 +98,11 @@ export async function POST(request: Request) {
   };
 
   // ── Build request headers ──────────────────────────────────────────────
-  // Deterministic idempotency key — same session + amount + routing target
+  // Deterministic idempotency key — same session + amount
   // collapses retries into a single PayPal order. Random per-request keys
   // (e.g. Date.now()) defeat the purpose of PayPal-Request-Id.
   const idempotencyKey = createHash("sha256")
-    .update(
-      `${sessionId}:${amount.toFixed(2)}:${routing.instructorPayPalAccountId ?? "business"}`
-    )
+    .update(`${sessionId}:${amount.toFixed(2)}:business`)
     .digest("hex")
     .slice(0, 32);
 
@@ -120,17 +111,6 @@ export async function POST(request: Request) {
     Authorization: `Bearer ${accessToken}`,
     "PayPal-Request-Id": `bk-${idempotencyKey}`,
   };
-
-  // If routing to instructor, add PayPal-Auth-Assertion to direct payment to
-  // their merchant account. The payer_id MUST come from the database (resolved
-  // above) — never from the client. Per PayPal spec the JWT payload must
-  // include BOTH `iss` (partner client_id) AND `payer_id` (merchant ID) —
-  // `buildPayPalAuthAssertion` enforces this.
-  if (routing.instructorPayPalAccountId) {
-    headers["PayPal-Auth-Assertion"] = buildPayPalAuthAssertion(
-      routing.instructorPayPalAccountId
-    );
-  }
 
   const response = await fetch(`${getPayPalApiBase()}/v2/checkout/orders`, {
     method: "POST",

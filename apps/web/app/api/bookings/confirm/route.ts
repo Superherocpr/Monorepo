@@ -9,7 +9,7 @@
  * 3. Captures the PayPal payment server-side.
  * 4. Atomically reserves a spot via book_spot RPC (THREAT-006). If the class
  *    filled up during checkout, the PayPal capture is refunded automatically.
- * 5. Creates the payment record (with routing audit note).
+ * 5. Creates the payment record and instructor earning record.
  * 6. Sends booking confirmation email via Resend (best-effort).
  */
 
@@ -17,6 +17,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import { Resend } from "resend";
 import { bookingConfirmationEmail } from "@/lib/emails";
+import { recordBookingEarning } from "@/lib/instructor-earnings";
+import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
 
 /** Acceptable rounding tolerance when comparing client/server prices. */
 const PRICE_TOLERANCE = 0.01;
@@ -91,7 +93,7 @@ export async function POST(request: Request) {
   // throwing — a missing session is a 404, not a 500.
   const { data: sessionPriceRow, error: sessionFetchError } = await supabase
     .from("class_sessions")
-    .select("class_types(price)")
+    .select("instructor_id, class_types(price)")
     .eq("id", sessionId)
     .maybeSingle();
 
@@ -105,8 +107,12 @@ export async function POST(request: Request) {
   }
 
   const classTypeJoin = (
-    sessionPriceRow as { class_types: { price: number | string } | { price: number | string }[] | null }
+    sessionPriceRow as {
+      instructor_id: string;
+      class_types: { price: number | string } | { price: number | string }[] | null;
+    }
   ).class_types;
+  const instructorId = (sessionPriceRow as { instructor_id: string }).instructor_id;
   const classType = Array.isArray(classTypeJoin) ? classTypeJoin[0] : classTypeJoin;
   const dbPrice =
     classType?.price == null
@@ -147,7 +153,6 @@ export async function POST(request: Request) {
 
   const captureData = (await captureResponse.json()) as {
     purchase_units?: Array<{
-      payee?: { merchant_id?: string; email_address?: string };
       payments?: { captures?: Array<{ id?: string; amount?: { value: string } }> };
     }>;
   };
@@ -155,10 +160,6 @@ export async function POST(request: Request) {
   const purchaseUnit = captureData.purchase_units?.[0];
   const capture = purchaseUnit?.payments?.captures?.[0];
   const paypalTransactionId = capture?.id ?? null;
-  // PayPal returns the actual destination merchant_id on the capture's payee.
-  // This is the source of truth for routing — used below to attribute the
-  // payment to either an instructor account or the business account.
-  const payeeMerchantId = purchaseUnit?.payee?.merchant_id ?? null;
 
   // Verify PayPal captured the expected amount (defence in depth).
   if (capture?.amount?.value) {
@@ -223,31 +224,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── Step 4: Create payment record (with routing audit note) ──────────────
-  // Derive routing from the capture's payee.merchant_id — the source of truth
-  // for where the funds actually landed. If it matches an instructor's stored
-  // payer_id, attribute the payment to them; otherwise it went to the business.
-  let routingNote = "Routed to SuperHeroCPR business PayPal";
-  let paymentProcessor = "SuperHeroCPR via PayPal";
-  if (payeeMerchantId) {
-    const { data: instructorAcct } = await supabase
-      .from("instructor_payment_accounts")
-      .select("instructor_id, profiles!instructor_payment_accounts_instructor_id_fkey(full_name)")
-      .eq("platform", "paypal")
-      .eq("platform_account_id", payeeMerchantId)
-      .maybeSingle();
-    if (instructorAcct) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const profile = (instructorAcct as any).profiles;
-      const profileRow = Array.isArray(profile) ? profile[0] : profile;
-      const instructorName: string =
-        profileRow?.full_name ?? "instructor";
-      routingNote = `Routed to instructor PayPal — ${instructorName}`;
-      paymentProcessor = `${instructorName} via PayPal`;
-    }
-  }
+  // ── Step 4: Create payment + instructor earning records ─────────────────
+  // All online booking funds now land in the SuperHeroCPR business PayPal
+  // account. The instructor receives their share through the payout system.
+  const routingNote = "Collected by SuperHeroCPR business PayPal — instructor payout pending";
+  const paymentProcessor = "SuperHeroCPR via PayPal";
 
-  const { error: paymentInsertError } = await supabase
+  const { data: paymentRow, error: paymentInsertError } = await supabase
     .from("payments")
     .insert({
       customer_id: customerId,
@@ -257,7 +240,9 @@ export async function POST(request: Request) {
       payment_type: "online",
       paypal_transaction_id: paypalTransactionId,
       routing_note: routingNote,
-    });
+    })
+    .select("id")
+    .single();
 
   // Insert failure leaves a booking with no payment record — log loudly so
   // ops can reconcile manually. Do NOT 500 the user: their booking exists and
@@ -273,6 +258,25 @@ export async function POST(request: Request) {
       }
     );
   }
+
+  await recordBookingEarning(supabase, {
+    instructorId,
+    bookingId: bookingId as string,
+    paymentId: (paymentRow as { id?: string } | null)?.id ?? null,
+    grossAmount: dbPrice,
+    note: routingNote,
+  }).catch((err: unknown) => {
+    console.error("[bookings/confirm] CRITICAL: instructor earning insert failed", {
+      bookingId,
+      paypalTransactionId,
+      amount: dbPrice,
+      error: err,
+    });
+  });
+
+  // Fire a payout immediately if the system is configured for immediate trigger mode.
+  // Non-blocking: the customer response is not delayed by the payout call.
+  await maybeTriggerImmediatePayout(supabase);
 
   // ── Step 5: Send booking confirmation email (best-effort) ────────────────
   if (
