@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * Creates a new certification type.
- * Body: { name, description?, validityMonths, issuingBody?, active }
+ * Body: { name, description?, validityMonths, issuingBody?, cardDesign?, active }
  * @param request - Incoming POST request with JSON body
  */
 export async function POST(request: Request) {
@@ -40,6 +40,7 @@ export async function POST(request: Request) {
     description?: string | null;
     validityMonths?: number;
     issuingBody?: string | null;
+    cardDesign?: string;
     active?: boolean;
   };
 
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { name, description, validityMonths, issuingBody, active } = body;
+  const { name, description, validityMonths, issuingBody, cardDesign, active } = body;
 
   if (!name || typeof name !== "string" || !name.trim()) {
     return Response.json({ error: "name is required." }, { status: 400 });
@@ -69,9 +70,11 @@ export async function POST(request: Request) {
       description: description ?? null,
       validity_months: validityMonths,
       issuing_body: issuingBody ?? null,
+      // Only accept known design values; fall back to 'aha' if an unexpected value arrives
+      card_design: cardDesign === "superherocpr" ? "superherocpr" : "aha",
       active: active ?? true,
     })
-    .select("id, name, description, validity_months, issuing_body, active")
+    .select("id, name, description, validity_months, issuing_body, card_design, active")
     .single();
 
   if (error || !certType) {

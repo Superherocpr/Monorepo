@@ -1,8 +1,9 @@
 /**
  * GET  /api/locations?q=   — search locations by name, address, city, state, zip, or notes
  * POST /api/locations       — create a new location
- * Called by: LocationsClient.tsx
- * Auth: manager and super_admin only
+ * Called by: LocationsClient.tsx, AddLocationPanel.tsx
+ * Auth: GET — manager and super_admin only
+ *       POST — instructor, manager, and super_admin (instructors can create locations for their sessions)
  */
 
 import { NextResponse } from "next/server";
@@ -18,7 +19,8 @@ const VALID_STATES = new Set([
 ]);
 
 /**
- * Shared auth check. Returns { supabase } on success or a NextResponse error.
+ * Shared auth check for manager/super_admin-only operations (e.g. search all locations).
+ * Returns { supabase } on success or a NextResponse error.
  */
 async function requireManagerAuth() {
   const supabase = await createClient();
@@ -39,6 +41,39 @@ async function requireManagerAuth() {
     .single();
 
   if (!profile || (profile.role !== "manager" && profile.role !== "super_admin")) {
+    return {
+      error: NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 }),
+    };
+  }
+
+  return { supabase };
+}
+
+/**
+ * Auth check for staff operations available to all admin roles.
+ * Allows instructor, manager, and super_admin.
+ * Returns { supabase } on success or a NextResponse error.
+ */
+async function requireStaffAuth() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      error: NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const allowed = ["instructor", "manager", "super_admin"];
+  if (!profile || !allowed.includes(profile.role as string)) {
     return {
       error: NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 }),
     };
@@ -72,7 +107,7 @@ export async function GET(request: Request) {
     .select(
       `id, name, address, city, state, zip,
        notes, is_home_base, created_at,
-       class_sessions ( id )`
+       class_sessions ( starts_at )`
     )
     .or(
       `name.ilike.${pattern},address.ilike.${pattern},city.ilike.${pattern},state.ilike.${pattern},zip.ilike.${pattern},notes.ilike.${pattern}`
@@ -87,27 +122,32 @@ export async function GET(request: Request) {
   }
 
   const locations = (raw ?? [])
-    .map((loc) => ({
-      id: loc.id,
-      name: loc.name,
-      address: loc.address,
-      city: loc.city,
-      state: loc.state,
-      zip: loc.zip,
-      notes: loc.notes ?? null,
-      is_home_base: loc.is_home_base,
-      created_at: loc.created_at,
-      sessionCount: Array.isArray(loc.class_sessions)
-        ? loc.class_sessions.length
-        : 0,
-    }))
+    .map((loc) => {
+      const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
+      const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
+      const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
+      return {
+        id: loc.id,
+        name: loc.name,
+        address: loc.address,
+        city: loc.city,
+        state: loc.state,
+        zip: loc.zip,
+        notes: loc.notes ?? null,
+        is_home_base: loc.is_home_base,
+        created_at: loc.created_at,
+        sessionCount: sessions.length,
+        last_used_at: lastUsedAt,
+      };
+    })
     .sort((a, b) => b.sessionCount - a.sessionCount || a.name.localeCompare(b.name));
 
   return NextResponse.json({ success: true, locations });
 }
 
 export async function POST(request: Request) {
-  const result = await requireManagerAuth();
+  // Instructors can create new locations (e.g. from the session creation form).
+  const result = await requireStaffAuth();
   if ("error" in result) return result.error;
   const { supabase } = result;
 

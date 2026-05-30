@@ -66,6 +66,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
       )
     `)
     .eq("id", id)
+    .order("created_at", { foreignTable: "invoice_activity_log", ascending: true })
     .single();
 
   if (!invoice) redirect("/admin/invoices");

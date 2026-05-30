@@ -3,7 +3,7 @@
  * Route: /admin/settings
  * Called by: Admin sidebar nav
  * Auth:
- *   - super_admin — full settings panel (class types, grades, Zoho, instructor routing, etc.)
+ *   - super_admin — full settings panel (class types, grades, Zoho, locations, etc.)
  *   - instructor  — Enrollware bookmarklet section only
  * All other roles are redirected to /admin.
  * Fetches class types and preset grades server-side, then passes them to
@@ -15,8 +15,13 @@ import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getSetting } from "@/lib/zoho";
 import SettingsClient from "./_components/SettingsClient";
+import PayoutSettingsPanel from "./_components/PayoutSettingsPanel";
 import BookmarkletSetup from "@/app/(admin)/admin/enrollware-tool/_components/BookmarkletSetup";
+import LocationsClient, {
+  type LocationWithCount,
+} from "@/app/(admin)/_components/LocationsClient";
 import type { UserRole } from "@/types/users";
+import type { PayoutTrigger, PayoutSchedule } from "@/app/api/settings/payouts/route";
 
 export const metadata = { title: "Settings" };
 
@@ -29,6 +34,14 @@ export interface ClassType {
   max_capacity: number;
   price: number;
   active: boolean;
+  /** FK to cert_types.id — nullable for non-certifying sessions. */
+  cert_type_id: string | null;
+}
+
+/** A minimal cert type row used to populate the cert type dropdown in class type editing. */
+export interface CertTypeOption {
+  id: string;
+  name: string;
 }
 
 /** A preset grade row from the preset_grades table. */
@@ -36,17 +49,6 @@ export interface PresetGrade {
   id: string;
   value: number;
   label: string;
-}
-
-/** An instructor row used by the Instructor Payment Routing section. */
-export interface InstructorRoutingRow {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  payment_routing: "instructor" | "business";
-  /** True if the instructor has at least one active PayPal account connected. */
-  has_active_paypal: boolean;
 }
 
 /**
@@ -74,7 +76,7 @@ export default async function SettingsPage({
 
   const role = profile?.role as UserRole | undefined;
 
-  if (!role || !["instructor", "super_admin"].includes(role)) {
+  if (!role || !["instructor", "manager", "super_admin"].includes(role)) {
     redirect("/admin");
   }
 
@@ -114,41 +116,90 @@ export default async function SettingsPage({
     );
   }
 
+  // ── Manager view: locations panel only ───────────────────────────────────
+  if (role === "manager") {
+    const { data: raw } = await supabase
+      .from("locations")
+      .select(
+        `id, name, address, city, state, zip, notes, is_home_base, created_at,
+         class_sessions ( starts_at )`
+      )
+      .order("is_home_base", { ascending: false })
+      .order("name", { ascending: true });
+
+    const locations: LocationWithCount[] = (raw ?? []).map((loc) => {
+      const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
+      const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
+      const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
+      return {
+        id: loc.id,
+        name: loc.name,
+        address: loc.address,
+        city: loc.city,
+        state: loc.state,
+        zip: loc.zip,
+        notes: loc.notes ?? null,
+        is_home_base: loc.is_home_base,
+        created_at: loc.created_at,
+        sessionCount: sessions.length,
+        last_used_at: lastUsedAt,
+      };
+    });
+
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <LocationsClient initialLocations={locations} userRole="manager" />
+      </div>
+    );
+  }
+
   // ── Super admin view: full settings panel ────────────────────────────────
 
-  // Fetch class types, preset grades, instructor routing, and bookmarklet status in parallel
-  const [{ data: classTypes }, { data: presetGrades }, { data: instructorRows }] = await Promise.all([
+  // Fetch class types, preset grades, bookmarklet status,
+  // and locations in parallel
+  const [{ data: classTypes }, { data: certTypeRows }, { data: presetGrades }, { data: locationRaw }] = await Promise.all([
     supabase
       .from("class_types")
-      .select("id, name, description, duration_minutes, max_capacity, price, active")
+      .select("id, name, description, duration_minutes, max_capacity, price, active, cert_type_id")
+      .order("name"),
+    // Cert types used to populate the linked cert dropdown in the class type add/edit panel.
+    // Fetched separately from the certifications page so settings page is self-contained.
+    supabase
+      .from("cert_types")
+      .select("id, name")
+      .eq("active", true)
       .order("name"),
     supabase
       .from("preset_grades")
       .select("id, value, label")
       .order("value"),
-    // super_admin profiles also instruct — include them so their routing can be set
     supabase
-      .from("profiles")
+      .from("locations")
       .select(
-        "id, first_name, last_name, email, payment_routing, role, instructor_payment_accounts ( platform, is_active )"
+        `id, name, address, city, state, zip, notes, is_home_base, created_at,
+         class_sessions ( starts_at )`
       )
-      .in("role", ["instructor", "super_admin"])
-      .eq("deactivated", false)
-      .order("last_name"),
+      .order("is_home_base", { ascending: false })
+      .order("name", { ascending: true }),
   ]);
 
-  // Reduce the joined accounts to a single boolean per instructor for the UI
-  const instructors: InstructorRoutingRow[] = (instructorRows ?? []).map((row) => {
-    const accounts =
-      (row.instructor_payment_accounts as { platform: string; is_active: boolean }[] | null) ?? [];
-    const hasPayPal = accounts.some((a) => a.platform === "paypal" && a.is_active);
+  // Map raw locations rows into the shape LocationsClient expects
+  const locations: LocationWithCount[] = (locationRaw ?? []).map((loc) => {
+    const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
+    const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
+    const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
     return {
-      id: row.id,
-      first_name: row.first_name,
-      last_name: row.last_name,
-      email: row.email,
-      payment_routing: (row.payment_routing as "instructor" | "business") ?? "instructor",
-      has_active_paypal: hasPayPal,
+      id: loc.id,
+      name: loc.name,
+      address: loc.address,
+      city: loc.city,
+      state: loc.state,
+      zip: loc.zip,
+      notes: loc.notes ?? null,
+      is_home_base: loc.is_home_base,
+      created_at: loc.created_at,
+      sessionCount: sessions.length,
+      last_used_at: lastUsedAt,
     };
   });
 
@@ -160,6 +211,34 @@ export default async function SettingsPage({
     getSetting("zoho_connected_email"),
     getSetting("legacy_site_enabled"),
   ]);
+
+  // Fetch payout settings (platform_fee_percent, payout_trigger, payout_schedule).
+  // Defensive: if migration 0021 hasn't been applied yet, fall back to safe defaults
+  // so the settings page still renders without erroring.
+  let payoutFeePercent = 20;
+  let payoutTrigger: PayoutTrigger = "manual";
+  let payoutSchedule: PayoutSchedule = "daily";
+  try {
+    const { data: payoutRows } = await supabase
+      .from("system_settings")
+      .select("key, value")
+      .in("key", ["platform_fee_percent", "payout_trigger", "payout_schedule"]);
+    const pm = new Map<string, string>(
+      ((payoutRows ?? []) as { key: string; value: string }[]).map((r) => [r.key, r.value])
+    );
+    const rawFee = Number(pm.get("platform_fee_percent") ?? "20");
+    payoutFeePercent = Number.isFinite(rawFee) ? Math.min(100, Math.max(0, rawFee)) : 20;
+    const rawTrigger = pm.get("payout_trigger") ?? "manual";
+    payoutTrigger = (["immediate", "scheduled", "manual"] as string[]).includes(rawTrigger)
+      ? (rawTrigger as PayoutTrigger)
+      : "manual";
+    const rawSchedule = pm.get("payout_schedule") ?? "daily";
+    payoutSchedule = (["daily", "weekly", "monthly"] as string[]).includes(rawSchedule)
+      ? (rawSchedule as PayoutSchedule)
+      : "daily";
+  } catch {
+    // Suppress — defaults above are safe
+  }
 
   const params = await searchParams;
   const zohoParam = params.zoho ?? null;
@@ -179,15 +258,28 @@ export default async function SettingsPage({
   return (
     <SettingsClient
       classTypes={(classTypes ?? []) as ClassType[]}
+      certTypeOptions={(certTypeRows ?? []) as CertTypeOption[]}
       presetGrades={(presetGrades ?? []) as PresetGrade[]}
-      instructors={instructors}
       zohoConnected={Boolean(zohoAccountId && zohoRefreshToken)}
       zohoEmail={zohoEmail}
       zohoParam={zohoParam}
       legacySiteEnabled={legacySiteFlag === "true"}
       isSuperAdmin
+      payoutsSlot={
+        <PayoutSettingsPanel
+          key="payouts-slot"
+          initialFeePercent={payoutFeePercent}
+          initialTrigger={payoutTrigger}
+          initialSchedule={payoutSchedule}
+        />
+      }
       enrollwareSlot={
-        <BookmarkletSetup hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
+        // key required: React 19 owner-based key tracking flags elements that are
+        // created in one component (here) and rendered inside another (SettingsClient).
+        <BookmarkletSetup key="enrollware-slot" hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
+      }
+      locationsSlot={
+        <LocationsClient key="locations-slot" initialLocations={locations} userRole="super_admin" />
       }
     />
   );

@@ -168,26 +168,24 @@ Clicking an invoice shows its full detail: recipient info, amounts, session deta
 
 ---
 
-## 6. Connecting Your Payment Account (`/admin/profile/payment`)
+## 6. Payout Settings (`/admin/profile/payment`)
 
-To send invoices, you must connect a payment account. This is how students pay you directly — payments go to your PayPal account, not to the company (unless your payment routing is set to "business" by a super admin).
+To create invoices and receive instructor payouts, you must save the PayPal email address where SuperHeroCPR should send your payout. Students pay SuperHeroCPR first; your instructor earnings are recorded automatically when bookings or invoices are paid.
 
-### Connecting PayPal
+### Saving Your PayPal Payout Email
 
 1. Go to `/admin/profile/payment`
-2. Click **"Connect new account"**
-3. You'll be redirected to PayPal's authorization page
-4. Log in to your PayPal account and approve the connection
-5. You'll be returned to the site with PayPal now listed as a connected account
+2. Enter the email address tied to the PayPal account where you want payouts sent
+3. Click **Save payout email**
+4. Confirm the page shows that you are ready for payouts
 
-Once connected, the account appears in your list with the connected date and a status flag. Only one account can be active at a time.
+You are responsible for keeping this email accurate. If it is missing or incorrect, payouts may be delayed or rejected by PayPal.
 
-### Managing Connected Accounts
+### How Payments Reach You
 
-- Use the toggle to **activate or deactivate** an account
-- To disconnect an account, use the remove option next to it
+SuperHeroCPR keeps the configured platform fee and pays the remaining instructor amount through PayPal Payouts. Super admins review pending earnings and send payout batches from the admin payout dashboard.
 
-> If you don't have an active connected account, you cannot create new invoices. Contact a super admin if you're having trouble.
+> If you don't have a payout email saved, you cannot create new invoices. Contact a super admin if you're having trouble.
 
 ---
 

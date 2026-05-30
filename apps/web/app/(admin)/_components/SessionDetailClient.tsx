@@ -336,19 +336,73 @@ export default function SessionDetailClient({
     [session.bookings]
   );
 
-  /** Total students (active bookings + roster records) */
-  const totalStudents = activeBookings + session.roster_records.length;
+  /**
+   * Set of lowercase emails already represented by active bookings.
+   * Used to deduplicate roster_records so the same person never appears twice.
+   */
+  const bookingEmailSet = useMemo(() => {
+    const set = new Set<string>();
+    session.bookings
+      .filter((b) => !b.cancelled)
+      .forEach((b) => {
+        if (b.profiles?.email) set.add(b.profiles.email.toLowerCase());
+      });
+    return set;
+  }, [session.bookings]);
+
+  /**
+   * Roster records that don’t already appear in active bookings.
+   * A student who checked in via rollcall will have both a booking row AND a
+   * roster_record row. We hide the roster_record duplicate to avoid showing
+   * the same person twice in the student table.
+   */
+  const uniqueRosterRecords = useMemo(() => {
+    const seenEmails = new Set<string>(bookingEmailSet);
+    return session.roster_records.filter((r) => {
+      // Roster records with no email are always shown (can’t match)
+      if (!r.email) return true;
+      const key = r.email.toLowerCase();
+      // Skip if already visible via a booking row, or duplicated within roster
+      if (seenEmails.has(key)) return false;
+      seenEmails.add(key);
+      return true;
+    });
+  }, [session.roster_records, bookingEmailSet]);
+
+  /** Total students (active bookings + deduplicated roster records) */
+  const totalStudents = activeBookings + uniqueRosterRecords.length;
+
+  /**
+   * Grade lookup by lowercase email from ALL roster_records (including those
+   * hidden by the dedup filter). The grading tool writes to roster_records,
+   * not to bookings, so booking-sourced students need this map to show their
+   * grade correctly.
+   */
+  const rosterGradeByEmail = useMemo(() => {
+    const map = new Map<string, number | null>();
+    for (const r of session.roster_records) {
+      if (r.email && r.grade !== null) {
+        map.set(r.email.toLowerCase(), r.grade);
+      }
+    }
+    return map;
+  }, [session.roster_records]);
 
   /** Students who have been graded */
   const gradedCount = useMemo(() => {
-    const fromBookings = session.bookings.filter(
-      (b) => !b.cancelled && b.grade !== null
-    ).length;
-    const fromRoster = session.roster_records.filter(
+    // For booking rows, prefer the grade from the matching roster_record (set
+    // by the grading tool) then fall back to bookings.grade.
+    const fromBookings = session.bookings.filter((b) => {
+      if (b.cancelled) return false;
+      const email = b.profiles?.email?.toLowerCase();
+      const rosterGrade = email ? rosterGradeByEmail.get(email) : undefined;
+      return (rosterGrade ?? b.grade) !== null;
+    }).length;
+    const fromRoster = uniqueRosterRecords.filter(
       (r) => r.grade !== null
     ).length;
     return fromBookings + fromRoster;
-  }, [session.bookings, session.roster_records]);
+  }, [session.bookings, uniqueRosterRecords, rosterGradeByEmail]);
 
   /** Roster upload waiting to be imported, if any */
   const pendingRosterUpload = useMemo(
@@ -1008,12 +1062,18 @@ export default function SessionDetailClient({
                             {b.payments[0]?.status ?? "-"}
                           </td>
                           <td className="px-4 py-2.5 text-gray-600">
-                            {b.grade ?? "-"}
+                            {/* Prefer grade from the roster_record (where the
+                                grading tool saves it) over bookings.grade */}
+                            {(rosterGradeByEmail.get(
+                              b.profiles?.email?.toLowerCase() ?? ""
+                            ) ??
+                              b.grade) ??
+                              "-"}
                           </td>
                         </tr>
                       ))}
-                    {/* Rows from roster records */}
-                    {session.roster_records.map((r) => (
+                    {/* Rows from roster records — deduplicated against booking emails */}
+                    {uniqueRosterRecords.map((r) => (
                       <tr key={`roster-${r.id}`} className="hover:bg-gray-50">
                         <td className="px-6 py-2.5 font-medium text-gray-800">
                           {r.first_name} {r.last_name}
@@ -1057,7 +1117,7 @@ export default function SessionDetailClient({
                     {gradedCount} / {totalStudents} graded
                   </span>
                 </div>
-                {session.status === "completed" ? (
+                {session.status === "completed" || session.status === "in_progress" ? (
                   <Link
                     href={`/admin/sessions/${session.id}/grades`}
                     className="block text-center px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 transition-colors"

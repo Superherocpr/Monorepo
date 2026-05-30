@@ -1,6 +1,6 @@
 /**
  * TypeScript interfaces for user-related database tables.
- * Covers: profiles, instructor_payment_accounts, api_keys, system_settings.
+ * Covers: profiles, payment platform labels, api_keys, system_settings.
  * Source of truth: schema.md — do not modify column names without verifying there first.
  */
 
@@ -47,27 +47,14 @@ export interface Profile {
   deactivated: boolean;
   deactivated_at: string | null;
   customer_notes: string | null;
+  /** PayPal email address where instructor payouts are sent. Null until configured. */
+  paypal_payout_email: string | null;
   created_at: string;
   updated_at: string;
 }
 
-/** Payment platform options for instructor_payment_accounts.platform enum. */
+/** Payment platform values stored on invoices.payment_platform. */
 export type PaymentPlatform = "paypal" | "square" | "stripe" | "venmo_business";
-
-/**
- * An OAuth-connected payment account for an instructor.
- * Only one record per instructor may have is_active = true at a time.
- */
-export interface InstructorPaymentAccount {
-  id: string;
-  instructor_id: string;
-  platform: PaymentPlatform;
-  access_token: string | null;
-  refresh_token: string | null;
-  platform_account_id: string | null;
-  is_active: boolean;
-  connected_at: string;
-}
 
 /**
  * An API key record. Reserved for future external integrations.

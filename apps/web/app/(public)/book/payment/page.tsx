@@ -30,6 +30,9 @@ export default function BookPaymentPage() {
   });
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isFullError, setIsFullError] = useState(false);
+  // Dev bypass state — only used in development builds.
+  const [devBypassing, setDevBypassing] = useState(false);
+  const [devError, setDevError] = useState<string | null>(null);
 
   // Guards: redirect if required prior steps are incomplete
   useEffect(() => {
@@ -39,6 +42,47 @@ export default function BookPaymentPage() {
       else router.replace("/book/details");
     }
   }, [store, router]);
+
+  /**
+   * DEV ONLY — books the selected session without any payment.
+   * Calls /api/dev/book-free which is a hard 404 outside development.
+   * Used to run through the full booking → rollcall → grading → Enrollware flow
+   * without needing a real PayPal transaction.
+   */
+  async function handleDevBypass() {
+    if (!store) return;
+    setDevError(null);
+    setDevBypassing(true);
+    try {
+      const response = await fetch("/api/dev/book-free", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: store.sessionId,
+          customerId: store.customerId,
+          customerEmail: store.customerDetails?.email,
+          customerFirstName: store.customerDetails?.firstName,
+          className: store.sessionDetails?.className,
+          startsAt: store.sessionDetails?.startsAt,
+          locationName: store.sessionDetails?.locationName,
+          locationAddress: store.sessionDetails?.locationAddress,
+          locationCity: store.sessionDetails?.locationCity,
+          locationState: store.sessionDetails?.locationState,
+          locationZip: store.sessionDetails?.locationZip,
+        }),
+      });
+      const result = await response.json().catch(() => ({ success: false }));
+      if (result.success) {
+        router.push("/book/confirmation");
+      } else {
+        setDevError(result.error ?? "Dev bypass failed.");
+      }
+    } catch {
+      setDevError("Network error — dev bypass failed.");
+    } finally {
+      setDevBypassing(false);
+    }
+  }
 
   /**
    * Called by PayPalOneTimePaymentButton createOrder callback.
@@ -205,6 +249,30 @@ export default function BookPaymentPage() {
               {/* Loading state while store hydrates */}
               {!store && (
                 <div className="h-14 w-full max-w-sm bg-gray-100 animate-pulse rounded-lg" />
+              )}
+
+              {/* ── DEV ONLY: skip payment button ────────────────────────── */}
+              {/* process.env.NODE_ENV is replaced at build time — this entire
+                  block is dead code in production builds and will be tree-shaken. */}
+              {process.env.NODE_ENV === "development" && !isFullError && store?.sessionDetails && (
+                <div className="mt-6 max-w-sm border border-dashed border-yellow-400 rounded-lg p-4 bg-yellow-50">
+                  <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">
+                    Dev only — skip payment
+                  </p>
+                  <p className="text-xs text-yellow-600 mb-3">
+                    Books the spot with $0 recorded as cash. Use this to test the full rollcall → grading → Enrollware flow without a real PayPal transaction.
+                  </p>
+                  {devError && (
+                    <p className="text-xs text-red-600 mb-2">{devError}</p>
+                  )}
+                  <button
+                    onClick={handleDevBypass}
+                    disabled={devBypassing}
+                    className="w-full py-2 px-4 bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50 text-yellow-900 font-semibold rounded-lg text-sm transition-colors"
+                  >
+                    {devBypassing ? "Booking…" : "Book without paying (dev)"}
+                  </button>
+                </div>
               )}
             </div>
 

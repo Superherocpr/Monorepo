@@ -96,6 +96,40 @@ export interface LowStockInfo {
   count: number;
 }
 
+/** Per-instructor earnings summary for the analytics range. */
+export interface InstructorPayoutStat {
+  name: string;
+  grossAmount: number;
+  platformFee: number;
+  instructorAmount: number;
+}
+
+/** A time-series data point showing platform fee vs instructor payout amounts. */
+export interface PayoutFlowPoint {
+  period: string;
+  /** Dollar amount retained by SuperHeroCPR as the platform fee. */
+  platformFee: number;
+  /** Dollar amount owed or paid to instructors. */
+  instructorAmount: number;
+}
+
+/** High-level counts for payout batch outcomes in the range. */
+export interface PayoutBatchStats {
+  totalBatches: number;
+  succeededBatches: number;
+  failedBatches: number;
+}
+
+/** Overview totals and status breakdown for the payouts section. */
+export interface PayoutStats {
+  totalGross: number;
+  totalPlatformFees: number;
+  totalInstructorPaid: number;
+  /** Sum of instructor_amount on rows still in 'pending' status. */
+  totalPending: number;
+  pendingCount: number;
+}
+
 /** The full aggregated analytics dataset passed to the client. */
 export interface AnalyticsData {
   // Overview
@@ -123,6 +157,11 @@ export interface AnalyticsData {
   merchRevenueOverTime: MerchRevenuePoint[];
   merchProducts: MerchProductStat[];
   lowStock: LowStockInfo;
+  // Payouts
+  payoutStats: PayoutStats;
+  payoutsOverTime: PayoutFlowPoint[];
+  earningsByInstructor: InstructorPayoutStat[];
+  payoutBatchStats: PayoutBatchStats;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -194,6 +233,8 @@ export async function fetchAnalyticsData(
     { data: orderItems },
     { data: lowStockVariants },
     { data: profiles },
+    { data: earnings },
+    { data: payoutBatches },
   ] = await Promise.all([
     // Current period payments
     supabase
@@ -273,6 +314,20 @@ export async function fetchAnalyticsData(
       .from("profiles")
       .select("id, first_name, last_name, role")
       .in("role", ["instructor", "manager", "super_admin"]),
+
+    // Instructor earnings created in range — feeds the Payouts analytics section
+    supabase
+      .from("instructor_earnings")
+      .select("instructor_id, gross_amount, platform_fee_amount, instructor_amount, status, created_at")
+      .gte("created_at", rangeStart)
+      .lte("created_at", rangeEnd),
+
+    // Payout batches created in range — for batch success/failure rate
+    supabase
+      .from("instructor_payout_batches")
+      .select("id, status, total_amount, item_count, created_at")
+      .gte("created_at", rangeStart)
+      .lte("created_at", rangeEnd),
   ]);
 
   const safePayments = payments ?? [];
@@ -284,6 +339,8 @@ export async function fetchAnalyticsData(
   const safeCertifications = certifications ?? [];
   const safeOrderItems = orderItems ?? [];
   const safeLowStockVariants = lowStockVariants ?? [];
+  const safeEarnings = earnings ?? [];
+  const safePayoutBatches = payoutBatches ?? [];
 
   // ── Helper: profile name lookup ──────────────────────────────────────────
   const profileMap = new Map<string, string>();
@@ -524,6 +581,65 @@ export async function fetchAnalyticsData(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, revenue]) => ({ period: formatPeriodLabel(key), revenue }));
 
+  // ── Payout stats ──────────────────────────────────────────────────────────
+  const totalGross = safeEarnings.reduce((s, e) => s + Number(e.gross_amount), 0);
+  const totalPlatformFees = safeEarnings.reduce((s, e) => s + Number(e.platform_fee_amount), 0);
+  const paidEarnings = safeEarnings.filter((e) => e.status === "paid");
+  const pendingEarnings = safeEarnings.filter((e) => e.status === "pending");
+  const totalInstructorPaid = paidEarnings.reduce((s, e) => s + Number(e.instructor_amount), 0);
+  const totalPending = pendingEarnings.reduce((s, e) => s + Number(e.instructor_amount), 0);
+  const payoutStats: PayoutStats = {
+    totalGross,
+    totalPlatformFees,
+    totalInstructorPaid,
+    totalPending,
+    pendingCount: pendingEarnings.length,
+  };
+
+  // ── Payouts over time ─────────────────────────────────────────────────────
+  const payoutFlowMap = new Map<string, { platformFee: number; instructorAmount: number }>();
+  safeEarnings.forEach((e) => {
+    const key = periodKey(e.created_at as string, useMonthly);
+    const existing = payoutFlowMap.get(key) ?? { platformFee: 0, instructorAmount: 0 };
+    existing.platformFee += Number(e.platform_fee_amount);
+    existing.instructorAmount += Number(e.instructor_amount);
+    payoutFlowMap.set(key, existing);
+  });
+  const payoutsOverTime: PayoutFlowPoint[] = Array.from(payoutFlowMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, val]) => ({
+      period: formatPeriodLabel(key),
+      platformFee: val.platformFee,
+      instructorAmount: val.instructorAmount,
+    }));
+
+  // ── Earnings by instructor ────────────────────────────────────────────────
+  const instructorEarningsMap = new Map<string, { gross: number; fee: number; instructor: number }>();
+  safeEarnings.forEach((e) => {
+    const iid = e.instructor_id as string;
+    const name = profileMap.get(iid) ?? "Unknown";
+    const existing = instructorEarningsMap.get(name) ?? { gross: 0, fee: 0, instructor: 0 };
+    existing.gross += Number(e.gross_amount);
+    existing.fee += Number(e.platform_fee_amount);
+    existing.instructor += Number(e.instructor_amount);
+    instructorEarningsMap.set(name, existing);
+  });
+  const earningsByInstructor: InstructorPayoutStat[] = Array.from(instructorEarningsMap.entries())
+    .map(([name, v]) => ({
+      name,
+      grossAmount: v.gross,
+      platformFee: v.fee,
+      instructorAmount: v.instructor,
+    }))
+    .sort((a, b) => b.grossAmount - a.grossAmount);
+
+  // ── Payout batch stats ────────────────────────────────────────────────────
+  const payoutBatchStats: PayoutBatchStats = {
+    totalBatches: safePayoutBatches.length,
+    succeededBatches: safePayoutBatches.filter((b) => b.status === "completed").length,
+    failedBatches: safePayoutBatches.filter((b) => b.status === "failed").length,
+  };
+
   // ── Merch products ────────────────────────────────────────────────────────
   const productMap = new Map<string, { units: number; revenue: number }>();
   safeOrderItems.forEach((item) => {
@@ -565,5 +681,10 @@ export async function fetchAnalyticsData(
     merchRevenueOverTime,
     merchProducts,
     lowStock: { count: safeLowStockVariants.length },
+    // Payouts
+    payoutStats,
+    payoutsOverTime,
+    earningsByInstructor,
+    payoutBatchStats,
   };
 }

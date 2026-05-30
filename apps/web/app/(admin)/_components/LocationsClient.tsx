@@ -6,12 +6,19 @@
  * inline delete confirmation. Used by: app/(admin)/admin/locations/page.tsx
  */
 
-import { useState, useCallback, useEffect } from "react";
-import { MapPin, Plus, Search, X } from "lucide-react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { Loader2, MapPin, Plus, Search, Upload } from "lucide-react";
+import LocationFormFields, {
+  blankLocationForm,
+  validateLocationForm,
+  type LocationFormState,
+} from "./LocationFormFields";
+import AddLocationPanel, { type NewLocationResult } from "./AddLocationPanel";
+import LocationImportPanel from "./LocationImportPanel";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-/** A locations row with a computed session count. */
+/** A locations row with a computed session count and last-used date. */
 export interface LocationWithCount {
   id: string;
   name: string;
@@ -23,167 +30,36 @@ export interface LocationWithCount {
   is_home_base: boolean;
   created_at: string;
   sessionCount: number;
-}
-
-/** Fields used for both add and edit forms. */
-interface LocationFormState {
-  name: string;
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
-  notes: string;
+  /** ISO timestamp of the most recent class session at this location, or null if never used. */
+  last_used_at: string | null;
 }
 
 interface LocationsClientProps {
   initialLocations: LocationWithCount[];
+  /** The viewing user's role — controls delete button visibility. */
+  userRole?: string;
 }
 
-// ── US state options ───────────────────────────────────────────────────────────
-const US_STATES = [
-  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
-  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
-  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
-  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
-  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
-];
+/** Two years in milliseconds — threshold for flagging a location as unused. */
+const TWO_YEARS_MS = 2 * 365.25 * 24 * 60 * 60 * 1000;
 
-/** Returns a blank form state. */
-function blankForm(): LocationFormState {
-  return { name: "", address: "", city: "", state: "", zip: "", notes: "" };
-}
-
-/** Validates a location form. Returns a map of field → error message. */
-function validateForm(
-  f: LocationFormState
-): Partial<Record<keyof LocationFormState, string>> {
-  const errors: Partial<Record<keyof LocationFormState, string>> = {};
-  if (!f.name.trim()) errors.name = "Name is required.";
-  if (!f.address.trim()) errors.address = "Address is required.";
-  if (!f.city.trim()) errors.city = "City is required.";
-  if (!f.state) errors.state = "State is required.";
-  if (!f.zip.trim()) errors.zip = "Zip code is required.";
-  return errors;
+/** A single address suggestion returned by the autocomplete proxy. */
+interface PlaceSuggestion {
+  place_id: string;
+  description: string;
 }
 
 /**
- * Sorts locations for the top list and enforces a hard cap of 10 rows.
- * @param locations - Candidate list to sort and trim.
+ * Sorts locations: home base first, then alphabetically by name.
+ * @param locations - Candidate list to sort.
  */
 function sortAndCapTopLocations(
   locations: LocationWithCount[]
 ): LocationWithCount[] {
-  return [...locations]
-    .sort(
-      (a, b) =>
-        Number(b.is_home_base) - Number(a.is_home_base) ||
-        a.name.localeCompare(b.name)
-    )
-    .slice(0, 10);
-}
-
-// ── Sub-component: location form fields ────────────────────────────────────────
-
-/**
- * Reusable set of form fields used in both the add panel and inline edit mode.
- * @param form - Current form values.
- * @param errors - Validation error messages keyed by field name.
- * @param onChange - Called when any field changes; receives field name and new value.
- * @param idPrefix - Prefix for label htmlFor / input id to avoid ID collisions.
- */
-function LocationFormFields({
-  form,
-  errors,
-  onChange,
-  idPrefix,
-}: {
-  form: LocationFormState;
-  errors: Partial<Record<keyof LocationFormState, string>>;
-  onChange: (field: keyof LocationFormState, value: string) => void;
-  idPrefix: string;
-}) {
-  const field = (
-    name: keyof LocationFormState,
-    label: string,
-    required = true
-  ) => (
-    <div>
-      <label
-        htmlFor={`${idPrefix}-${name}`}
-        className="mb-1 block text-xs font-medium text-gray-700"
-      >
-        {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
-      </label>
-      <input
-        id={`${idPrefix}-${name}`}
-        type="text"
-        value={form[name]}
-        onChange={(e) => onChange(name, e.target.value)}
-        className={`w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-red-500 ${
-          errors[name]
-            ? "border-red-400 focus:border-red-400"
-            : "border-gray-300 focus:border-red-500"
-        }`}
-      />
-      {errors[name] && (
-        <p className="mt-0.5 text-xs text-red-600">{errors[name]}</p>
-      )}
-    </div>
-  );
-
-  return (
-    <div className="space-y-3">
-      {field("name", "Location Name")}
-      {field("address", "Street Address")}
-      <div className="grid grid-cols-3 gap-3">
-        {field("city", "City")}
-        <div>
-          <label
-            htmlFor={`${idPrefix}-state`}
-            className="mb-1 block text-xs font-medium text-gray-700"
-          >
-            State<span className="ml-0.5 text-red-500">*</span>
-          </label>
-          <select
-            id={`${idPrefix}-state`}
-            value={form.state}
-            onChange={(e) => onChange("state", e.target.value)}
-            className={`w-full rounded-md border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-red-500 ${
-              errors.state
-                ? "border-red-400 focus:border-red-400"
-                : "border-gray-300 focus:border-red-500"
-            }`}
-          >
-            <option value="">-</option>
-            {US_STATES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          {errors.state && (
-            <p className="mt-0.5 text-xs text-red-600">{errors.state}</p>
-          )}
-        </div>
-        {field("zip", "Zip")}
-      </div>
-      <div>
-        <label
-          htmlFor={`${idPrefix}-notes`}
-          className="mb-1 block text-xs font-medium text-gray-700"
-        >
-          Notes
-        </label>
-        <textarea
-          id={`${idPrefix}-notes`}
-          rows={2}
-          value={form.notes}
-          onChange={(e) => onChange("notes", e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-        />
-      </div>
-    </div>
+  return [...locations].sort(
+    (a, b) =>
+      Number(b.is_home_base) - Number(a.is_home_base) ||
+      a.name.localeCompare(b.name)
   );
 }
 
@@ -192,6 +68,7 @@ function LocationFormFields({
 /** Client component for managing locations. */
 export default function LocationsClient({
   initialLocations,
+  userRole,
 }: LocationsClientProps) {
   const [topLocations, setTopLocations] = useState<LocationWithCount[]>(
     sortAndCapTopLocations(initialLocations)
@@ -199,6 +76,7 @@ export default function LocationsClient({
   const [searchResults, setSearchResults] = useState<LocationWithCount[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showUnused, setShowUnused] = useState(false);
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -230,16 +108,10 @@ export default function LocationsClient({
   }, [searchQuery]);
 
   const [showAddPanel, setShowAddPanel] = useState(false);
-  const [addForm, setAddForm] = useState<LocationFormState>(blankForm());
-  const [addErrors, setAddErrors] = useState<
-    Partial<Record<keyof LocationFormState, string>>
-  >({});
-  const [addSaving, setAddSaving] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
-  const [addSuccess, setAddSuccess] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<LocationFormState>(blankForm());
+  const [editForm, setEditForm] = useState<LocationFormState>(blankLocationForm());
   const [editErrors, setEditErrors] = useState<
     Partial<Record<keyof LocationFormState, string>>
   >({});
@@ -253,70 +125,117 @@ export default function LocationsClient({
   const [homeBaseLoading, setHomeBaseLoading] = useState<string | null>(null);
   const [homeBaseError, setHomeBaseError] = useState<string | null>(null);
 
+  // ── Edit address autocomplete state ────────────────────────────────────────
+  const [editSearchQuery, setEditSearchQuery] = useState("");
+  const [editSuggestions, setEditSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [editSearchLoading, setEditSearchLoading] = useState(false);
+  const [editSearchError, setEditSearchError] = useState<string | null>(null);
+  const [editShowSuggestions, setEditShowSuggestions] = useState(false);
+  /** Ref for the search container — used to close dropdown on outside click. */
+  const editSearchRef = useRef<HTMLDivElement>(null);
+
+  // Close the suggestions dropdown when the user clicks outside the search box.
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (editSearchRef.current && !editSearchRef.current.contains(e.target as Node)) {
+        setEditShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Debounce autocomplete calls while the user types in the edit search box.
+  useEffect(() => {
+    const q = editSearchQuery.trim();
+    if (q.length < 3) {
+      setEditSuggestions([]);
+      setEditShowSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setEditSearchLoading(true);
+      setEditSearchError(null);
+      try {
+        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        const json = (await res.json()) as {
+          success: boolean;
+          suggestions?: PlaceSuggestion[];
+          error?: string;
+        };
+        if (json.success && json.suggestions) {
+          setEditSuggestions(json.suggestions);
+          setEditShowSuggestions(json.suggestions.length > 0);
+        } else {
+          setEditSearchError(json.error ?? null);
+          setEditSuggestions([]);
+        }
+      } catch {
+        setEditSuggestions([]);
+      } finally {
+        setEditSearchLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [editSearchQuery]);
+
   /**
-   * Updates a single field in the add form.
-   * @param field - The field name to update.
-   * @param value - The new value.
+   * Called when a suggestion is selected from the edit-mode dropdown.
+   * Fetches full address details and populates the edit form fields.
+   * @param suggestion - The selected autocomplete suggestion.
    */
-  function handleAddChange(field: keyof LocationFormState, value: string) {
-    setAddForm((prev) => ({ ...prev, [field]: value }));
-    setAddErrors((prev) => ({ ...prev, [field]: undefined }));
+  const handleEditSelectSuggestion = useCallback(async (suggestion: PlaceSuggestion) => {
+    setEditSearchQuery(suggestion.description);
+    setEditShowSuggestions(false);
+    setEditSearchLoading(true);
+    try {
+      const res = await fetch(
+        `/api/places/details?place_id=${encodeURIComponent(suggestion.place_id)}`
+      );
+      const json = (await res.json()) as {
+        success: boolean;
+        parsed?: { address: string; city: string; state: string; zip: string };
+        error?: string;
+      };
+      if (json.success && json.parsed) {
+        const { address, city, state, zip } = json.parsed;
+        setEditForm((prev) => ({ ...prev, address, city, state, zip }));
+        setEditErrors((prev) => ({
+          ...prev,
+          address: undefined,
+          city: undefined,
+          state: undefined,
+          zip: undefined,
+        }));
+      }
+    } catch {
+      // Silent fail — form fields remain editable so the user can correct manually.
+    } finally {
+      setEditSearchLoading(false);
+    }
+  }, []);
+
+  /**
+   * Adds a newly created location to the top list.
+   * Called by AddLocationPanel after a successful save.
+   * @param location - The new location returned by POST /api/locations.
+   */
+  function handleLocationAdded(location: NewLocationResult) {
+    setTopLocations((prev) =>
+      sortAndCapTopLocations([...prev, { ...location, sessionCount: 0, last_used_at: null }])
+    );
   }
 
   /**
-   * Submits the add form. Creates a new location via POST /api/locations.
-   * @param e - Form submit event.
+   * Called by LocationImportPanel after a successful CSV import.
+   * Reloads the top-10 list from the server so newly imported locations appear.
+   * @param _count - Number of locations created (unused here — we just refetch).
    */
-  async function handleAddSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const errs = validateForm(addForm);
-    if (Object.keys(errs).length > 0) {
-      setAddErrors(errs);
-      return;
-    }
-
-    setAddSaving(true);
-    setAddError(null);
-
-    try {
-      const res = await fetch("/api/locations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: addForm.name.trim(),
-          address: addForm.address.trim(),
-          city: addForm.city.trim(),
-          state: addForm.state,
-          zip: addForm.zip.trim(),
-          notes: addForm.notes.trim() || null,
-        }),
-      });
-
-      const json = (await res.json()) as {
-        success: boolean;
-        location?: LocationWithCount;
-        error?: string;
-      };
-
-      if (!json.success || !json.location) {
-        setAddError(json.error ?? "Failed to add location.");
-        return;
-      }
-
-      setTopLocations((prev) =>
-        sortAndCapTopLocations([...prev, { ...json.location!, sessionCount: 0 }])
-      );
-      setAddSuccess(true);
-      setAddForm(blankForm());
-      setTimeout(() => {
-        setShowAddPanel(false);
-        setAddSuccess(false);
-      }, 1200);
-    } catch {
-      setAddError("Network error. Please try again.");
-    } finally {
-      setAddSaving(false);
-    }
+  async function handleImported(_count: number) {
+    setShowImportPanel(false);
+    // Trigger a full page reload so the server re-fetches the updated list.
+    // This matches how ClassTypePanel works after a save (router.refresh).
+    window.location.reload();
   }
 
   /**
@@ -335,6 +254,11 @@ export default function LocationsClient({
     });
     setEditErrors({});
     setEditError(null);
+    // Reset autocomplete search for this new edit session
+    setEditSearchQuery("");
+    setEditSuggestions([]);
+    setEditShowSuggestions(false);
+    setEditSearchError(null);
     if (deletingId === loc.id) setDeletingId(null);
   }
 
@@ -343,6 +267,10 @@ export default function LocationsClient({
     setEditingId(null);
     setEditErrors({});
     setEditError(null);
+    setEditSearchQuery("");
+    setEditSuggestions([]);
+    setEditShowSuggestions(false);
+    setEditSearchError(null);
   }
 
   /**
@@ -360,7 +288,7 @@ export default function LocationsClient({
    * @param id - The location ID being edited.
    */
   async function handleEditSave(id: string) {
-    const errs = validateForm(editForm);
+    const errs = validateLocationForm(editForm);
     if (Object.keys(errs).length > 0) {
       setEditErrors(errs);
       return;
@@ -485,38 +413,67 @@ export default function LocationsClient({
   }
 
   const isSearchMode = searchQuery.trim().length > 0;
-  const displayedLocations = isSearchMode ? searchResults : topLocations;
+  const isSuperAdmin = userRole === "super_admin";
+
+  // Apply unused filter on top of search/top-10 results
+  const rawDisplayed = isSearchMode ? searchResults : topLocations;
+  const displayedLocations = showUnused
+    ? rawDisplayed.filter(
+        (loc) =>
+          !loc.last_used_at ||
+          Date.now() - new Date(loc.last_used_at).getTime() > TWO_YEARS_MS
+      )
+    : rawDisplayed;
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Locations</h1>
-        <button
-          type="button"
-          onClick={() => {
-            setAddForm(blankForm());
-            setAddErrors({});
-            setAddError(null);
-            setAddSuccess(false);
-            setShowAddPanel(true);
-          }}
-          className="flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
-        >
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowImportPanel(true)}
+            className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+          >
+            <Upload className="h-4 w-4" />
+            Import CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAddPanel(true)}
+            className="flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
+          >
           <Plus className="h-4 w-4" />
           Add Location
-        </button>
+          </button>
+        </div>
       </div>
 
       {topLocations.length > 0 && (
-        <div className="relative mb-6 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            type="search"
-            placeholder="Search locations…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-          />
+        <div className="relative mb-6 flex items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              placeholder="Search locations…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+          </div>
+          {/* Toggle button: show only locations unused for 2+ years */}
+          <button
+            type="button"
+            onClick={() => setShowUnused((v) => !v)}
+            className={`shrink-0 rounded-md border px-3 py-2 text-sm font-semibold transition-colors ${
+              showUnused
+                ? "border-amber-500 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+            aria-pressed={showUnused}
+          >
+            {showUnused ? "Showing unused only" : "Show unused"}
+          </button>
         </div>
       )}
 
@@ -542,7 +499,11 @@ export default function LocationsClient({
         <p className="text-sm text-gray-500">Searching…</p>
       ) : isSearchMode && displayedLocations.length === 0 ? (
         <p className="text-sm text-gray-500">
-          No locations match &ldquo;{searchQuery}&rdquo;.
+          No locations match &ldquo;{searchQuery}&rdquo;{showUnused ? " (unused filter active)" : ""}.
+        </p>
+      ) : showUnused && displayedLocations.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No unused locations found — all locations have been used within the last 2 years.
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -553,19 +514,75 @@ export default function LocationsClient({
             return (
               <div
                 key={loc.id}
-                className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
+                className={`rounded-lg border bg-white p-5 shadow-sm ${
+                  loc.last_used_at === null ||
+                  Date.now() - new Date(loc.last_used_at).getTime() > TWO_YEARS_MS
+                    ? "border-amber-300"
+                    : "border-gray-200"
+                }`}
               >
                 {isEditing ? (
                   <div>
                     <p className="mb-3 text-sm font-semibold text-gray-700">
                       Edit Location
                     </p>
-                    <LocationFormFields
-                      form={editForm}
-                      errors={editErrors}
-                      onChange={handleEditChange}
-                      idPrefix={`edit-${loc.id}`}
-                    />
+
+                    {/* Address autocomplete search — same behaviour as Add Location panel */}
+                    <div ref={editSearchRef} className="relative mb-3">
+                      <label
+                        htmlFor={`edit-search-${loc.id}`}
+                        className="mb-1 block text-xs font-medium text-gray-700"
+                      >
+                        Search for an address
+                      </label>
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <input
+                          id={`edit-search-${loc.id}`}
+                          type="text"
+                          value={editSearchQuery}
+                          onChange={(e) => setEditSearchQuery(e.target.value)}
+                          onFocus={() => editSuggestions.length > 0 && setEditShowSuggestions(true)}
+                          placeholder="Start typing an address…"
+                          autoComplete="off"
+                          className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-9 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                        />
+                        {editSearchLoading && (
+                          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+                        )}
+                      </div>
+                      {editSearchError && (
+                        <p className="mt-0.5 text-xs text-amber-600">{editSearchError}</p>
+                      )}
+                      {editShowSuggestions && editSuggestions.length > 0 && (
+                        <ul
+                          role="listbox"
+                          className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg"
+                        >
+                          {editSuggestions.map((s) => (
+                            <li key={s.place_id} role="option" aria-selected={false}>
+                              <button
+                                type="button"
+                                onClick={() => handleEditSelectSuggestion(s)}
+                                className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 focus:bg-red-50 focus:outline-none"
+                              >
+                                {s.description}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    <div className="mb-3 border-t border-gray-100 pt-3">
+                      <p className="mb-2 text-xs text-gray-400">Or fill in the fields below manually:</p>
+                      <LocationFormFields
+                        form={editForm}
+                        errors={editErrors}
+                        onChange={handleEditChange}
+                        idPrefix={`edit-${loc.id}`}
+                      />
+                    </div>
                     {editError && (
                       <p className="mt-2 text-xs text-red-600">{editError}</p>
                     )}
@@ -592,11 +609,19 @@ export default function LocationsClient({
                   <div>
                     <div className="mb-1 flex items-start justify-between gap-2">
                       <h2 className="font-semibold text-gray-900">{loc.name}</h2>
-                      {loc.is_home_base && (
-                        <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                          Home Base
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                        {loc.is_home_base && (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                            Home Base
+                          </span>
+                        )}
+                        {(loc.last_used_at === null ||
+                          Date.now() - new Date(loc.last_used_at).getTime() > TWO_YEARS_MS) && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                            Unused 2y+
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <address className="not-italic text-sm text-gray-600">
@@ -612,13 +637,28 @@ export default function LocationsClient({
                     <p className="mt-2 text-xs text-gray-400">
                       Used in {loc.sessionCount}{" "}
                       {loc.sessionCount !== 1 ? "sessions" : "session"}
+                      {loc.last_used_at
+                        ? ` · Last used ${
+                            new Date(loc.last_used_at).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "short",
+                            })
+                          }`
+                        : " · Never used"}
                     </p>
 
                     {isConfirmingDelete && (
                       <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                        <p className="mb-2 text-sm font-medium text-red-700">
+                        <p className="mb-1 text-sm font-medium text-red-700">
                           Delete &ldquo;{loc.name}&rdquo;?
                         </p>
+                        {loc.sessionCount > 0 && (
+                          <p className="mb-2 text-xs text-red-600">
+                            This location is linked to {loc.sessionCount}{" "}
+                            {loc.sessionCount !== 1 ? "sessions" : "session"}.
+                            It cannot be deleted while sessions reference it.
+                          </p>
+                        )}
                         {deleteError && (
                           <p className="mb-1 text-xs text-red-600">
                             {deleteError}
@@ -676,7 +716,7 @@ export default function LocationsClient({
                           </button>
                         )}
 
-                        {loc.sessionCount === 0 && (
+                        {loc.sessionCount === 0 ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -687,7 +727,18 @@ export default function LocationsClient({
                           >
                             Delete
                           </button>
-                        )}
+                        ) : isSuperAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeletingId(loc.id);
+                              setDeleteError(null);
+                            }}
+                            className="rounded-md border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -699,67 +750,17 @@ export default function LocationsClient({
       )}
 
       {showAddPanel && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/30"
-            onClick={() => setShowAddPanel(false)}
-            aria-hidden="true"
-          />
-          <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-              <h2 className="text-base font-semibold text-gray-900">
-                Add Location
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowAddPanel(false)}
-                aria-label="Close panel"
-                className="rounded-md p-1 text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+        <AddLocationPanel
+          onClose={() => setShowAddPanel(false)}
+          onAdded={handleLocationAdded}
+        />
+      )}
 
-            <form
-              onSubmit={handleAddSubmit}
-              className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
-            >
-              <LocationFormFields
-                form={addForm}
-                errors={addErrors}
-                onChange={handleAddChange}
-                idPrefix="add"
-              />
-
-              {addError && (
-                <p className="text-sm text-red-600">{addError}</p>
-              )}
-              {addSuccess && (
-                <p className="text-sm font-medium text-green-600">
-                  Location added.
-                </p>
-              )}
-
-              <div className="mt-auto flex gap-2 border-t border-gray-200 pt-4">
-                <button
-                  type="submit"
-                  disabled={addSaving}
-                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  {addSaving ? "Adding…" : "Add Location"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAddPanel(false)}
-                  disabled={addSaving}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </aside>
-        </>
+      {showImportPanel && (
+        <LocationImportPanel
+          onClose={() => setShowImportPanel(false)}
+          onImported={handleImported}
+        />
       )}
     </div>
   );

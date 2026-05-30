@@ -10,6 +10,12 @@ import { useState } from "react";
 import Link from "next/link";
 import type { InvoiceStatus, InvoiceType } from "@/types/invoices";
 import type { PaymentPlatform, UserRole } from "@/types/users";
+import {
+  formatCurrency,
+  formatDate,
+  STATUS_BADGES,
+  PLATFORM_LABELS,
+} from "@/lib/invoice-utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,29 +74,6 @@ interface InvoiceDetailClientProps {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Formats a number as USD currency.
- * @param amount - Dollar amount
- */
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
-}
-
-/**
- * Formats an ISO date string as "Mon DD, YYYY".
- * @param iso - ISO 8601 date string
- */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-/**
  * Formats an ISO date string as "Mon DD, YYYY at H:MM AM/PM".
  * @param iso - ISO 8601 date string
  */
@@ -105,22 +88,7 @@ function formatDateTime(iso: string): string {
   });
 }
 
-/** Maps InvoiceStatus to display label and badge classes. */
-const STATUS_BADGES: Record<InvoiceStatus, { label: string; classes: string }> = {
-  sent: { label: "Sent", classes: "bg-blue-100 text-blue-700" },
-  paid: { label: "Paid", classes: "bg-green-100 text-green-700" },
-  cancelled: { label: "Cancelled", classes: "bg-gray-100 text-gray-500" },
-};
-
-/** Maps PaymentPlatform to a display label. */
-const PLATFORM_LABELS: Record<PaymentPlatform, string> = {
-  paypal: "PayPal",
-  square: "Square",
-  stripe: "Stripe",
-  venmo_business: "Venmo Business",
-};
-
-/** Maps raw action strings to readable labels for the activity log. */
+/** Maps raw action strings from invoice_activity_log to readable labels. */
 const ACTION_LABELS: Record<string, string> = {
   created: "Invoice created",
   sent: "Invoice sent",
@@ -179,6 +147,9 @@ export default function InvoiceDetailClient({
   ) {
     setLoading(true);
     setErrorMsg(null);
+    // Clear any prior success message so stale confirmations don't persist
+    // if the user triggers a second action in the same page session.
+    setSuccessMsg(null);
     try {
       const res = await fetch(url, {
         method: "POST",
@@ -199,6 +170,12 @@ export default function InvoiceDetailClient({
     }
   }
 
+  /**
+   * Marks the invoice as paid.
+   * Side effects: sets invoice status to 'paid' in DB, creates one booking row
+   * per student slot (booking_source='invoice'), logs to invoice_activity_log,
+   * and sends a paid notification email to the instructor.
+   */
   function handleMarkPaid() {
     callAction(
       "/api/invoices/mark-paid",
@@ -211,6 +188,11 @@ export default function InvoiceDetailClient({
     );
   }
 
+  /**
+   * Resends the invoice email, optionally to a corrected address.
+   * Side effects: updates recipient_email in DB if changed, re-sends via Resend,
+   * logs to invoice_activity_log with the destination address.
+   */
   function handleResend() {
     if (!resendEmail.trim()) return;
     callAction(
@@ -222,6 +204,12 @@ export default function InvoiceDetailClient({
     );
   }
 
+  /**
+   * Cancels the invoice.
+  * Side effects: voids the invoice on PayPal,
+   * sets invoice status to 'cancelled' in DB, and logs to invoice_activity_log.
+   * This action cannot be undone.
+   */
   function handleCancel() {
     callAction(
       "/api/invoices/cancel",
@@ -377,11 +365,10 @@ export default function InvoiceDetailClient({
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <h2 className="text-base font-semibold text-gray-900 mb-4">Activity</h2>
               <ol className="space-y-3">
-                {[...invoice.invoice_activity_log]
-                  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                {invoice.invoice_activity_log
                   .map((entry) => (
                     <li key={entry.id} className="flex gap-3 text-sm">
-                      <div className="mt-0.5 w-2 h-2 rounded-full bg-gray-300 shrink-0 mt-1.5" />
+                      <div className="mt-1.5 w-2 h-2 rounded-full bg-gray-300 shrink-0" />
                       <div>
                         <span className="font-medium text-gray-900">
                           {ACTION_LABELS[entry.action] ?? entry.action}

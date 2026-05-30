@@ -71,7 +71,7 @@ export default async function InvoicesPage() {
         id, starts_at,
         class_types ( name )
       ),
-      profiles ( first_name, last_name )
+      profiles ( id, first_name, last_name )
     `)
     .order("created_at", { ascending: false });
 
@@ -92,7 +92,6 @@ export default async function InvoicesPage() {
         invoices={(invoices ?? []) as unknown as InvoiceRow[]}
         instructors={instructors}
         userRole={role}
-        userId={profile.id}
       />
     </main>
   );

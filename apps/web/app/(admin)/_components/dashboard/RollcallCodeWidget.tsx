@@ -71,7 +71,7 @@ export default function RollcallCodeWidget({ initialCode }: Props) {
 
       {/* Quick link to Enrollware class list — useful when teaching a class */}
       <a
-        href="https://www.enrollware.com/admin/class-list.aspx"
+        href="https://www.enrollware.com/admin/class-edit.aspx?ret=class-list.aspx&id=new"
         target="_blank"
         rel="noopener noreferrer"
         className="mt-4 inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"

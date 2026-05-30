@@ -25,6 +25,9 @@ export default async function BookingsPage() {
 
   if (!user) redirect("/signin?redirect=/dashboard/bookings");
 
+  // Note: ordering by a foreign-table column via dot notation is not supported
+  // in Supabase JS v2 — it causes PostgREST to return an error and null data.
+  // Display order is handled entirely by the in-memory sorts below.
   const { data: bookings } = await supabase
     .from("bookings")
     .select(
@@ -37,8 +40,7 @@ export default async function BookingsPage() {
        ),
        payments ( status, payment_type, amount )`
     )
-    .eq("customer_id", user.id)
-    .order("class_sessions.starts_at", { ascending: false });
+    .eq("customer_id", user.id);
 
   const now = new Date();
   // Cast via unknown because Supabase infers array shapes for joined tables without

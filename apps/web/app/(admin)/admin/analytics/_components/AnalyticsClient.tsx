@@ -35,6 +35,7 @@ import {
   CheckCircle2,
   ChevronDown,
   LayoutDashboard,
+  Banknote,
 } from "lucide-react";
 import type { AnalyticsData } from "./analyticsData";
 import { OverviewCard } from "./OverviewCard";
@@ -199,6 +200,25 @@ function exportCSV(data: AnalyticsData, rangeStart: string, rangeEnd: string) {
     [],
     ["Merch Stats"],
     ...data.merchProducts.map((p) => [p.name, `${p.unitsSold} units`, `$${p.revenue.toFixed(2)}`]),
+    [],
+    ["Payout Stats"],
+    ["Total Gross Revenue", `$${data.payoutStats.totalGross.toFixed(2)}`],
+    ["Platform Fees Collected", `$${data.payoutStats.totalPlatformFees.toFixed(2)}`],
+    ["Total Paid to Instructors", `$${data.payoutStats.totalInstructorPaid.toFixed(2)}`],
+    ["Pending Instructor Balance", `$${data.payoutStats.totalPending.toFixed(2)}`],
+    [],
+    ["Payout Batches", String(data.payoutBatchStats.totalBatches)],
+    ["Succeeded", String(data.payoutBatchStats.succeededBatches)],
+    ["Failed", String(data.payoutBatchStats.failedBatches)],
+    [],
+    ["Earnings by Instructor"],
+    ["Instructor", "Gross", "Platform Fee", "Instructor Amount"],
+    ...data.earningsByInstructor.map((e) => [
+      e.name,
+      `$${e.grossAmount.toFixed(2)}`,
+      `$${e.platformFee.toFixed(2)}`,
+      `$${e.instructorAmount.toFixed(2)}`,
+    ]),
   ];
 
   const csv = rows
@@ -245,6 +265,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
     students: true,
     invoices: true,
     merch: true,
+    payouts: true,
   });
 
   /** Toggles the collapsed state for a named section. */
@@ -907,6 +928,134 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             All variants above low stock threshold.
           </div>
         )}
+        </div>
+      </div>
+
+      {/* ── Section 7: Payouts ───────────────────────────────────────── */}
+      <div className="mb-10">
+        <SectionHeading
+          icon={Banknote}
+          label="Payouts"
+          isCollapsed={!!collapsed["payouts"]}
+          onToggle={() => toggleSection("payouts")}
+        />
+        <div className={collapsed["payouts"] ? "hidden" : ""}>
+
+        {/* Four stat cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          {isPending ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="animate-pulse bg-gray-100 rounded-lg h-24" />
+            ))
+          ) : (
+            <>
+              <Card>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Platform Fees</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  ${data.payoutStats.totalPlatformFees.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">SuperHeroCPR&rsquo;s cut this period</p>
+              </Card>
+
+              <Card>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Paid Out</p>
+                <p className="text-2xl font-bold text-green-700">
+                  ${data.payoutStats.totalInstructorPaid.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">Sent to instructors via PayPal</p>
+              </Card>
+
+              <Card>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Pending Balance</p>
+                <p className="text-2xl font-bold text-amber-600">
+                  ${data.payoutStats.totalPending.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {data.payoutStats.pendingCount} earning{data.payoutStats.pendingCount !== 1 ? "s" : ""} awaiting payout
+                </p>
+              </Card>
+
+              <Card>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Batches</p>
+                <p className="text-2xl font-bold text-gray-900">{data.payoutBatchStats.totalBatches}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {data.payoutBatchStats.succeededBatches} succeeded
+                  {data.payoutBatchStats.failedBatches > 0 && (
+                    <span className="text-red-500 ml-1">· {data.payoutBatchStats.failedBatches} failed</span>
+                  )}
+                </p>
+              </Card>
+            </>
+          )}
+        </div>
+
+        {/* Payout flow over time — platform fee vs instructor payout */}
+        <Card className="mb-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Payout Flow Over Time</h3>
+          {isPending ? (
+            <ChartSkeleton />
+          ) : data.payoutsOverTime.length === 0 ? (
+            <EmptyState icon={Banknote} />
+          ) : (
+            <ResponsiveContainer width="100%" height={280} aria-label="Payout flow over time line chart">
+              <LineChart data={data.payoutsOverTime}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="period" tick={{ fontSize: 11, fill: GRAY }} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: GRAY }}
+                  tickFormatter={(v: number) => `$${v.toLocaleString()}`}
+                />
+                <Tooltip content={<ChartTooltip currency />} />
+                <Legend />
+                <Line type="monotone" dataKey="platformFee" name="Platform Fee" stroke={RED} dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="instructorAmount" name="Instructor Payout" stroke={GREEN} dot={false} strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
+
+        {/* Earnings by instructor — table */}
+        <Card>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Earnings by Instructor</h3>
+          {isPending ? (
+            <div className="animate-pulse space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-8 bg-gray-100 rounded" />
+              ))}
+            </div>
+          ) : data.earningsByInstructor.length === 0 ? (
+            <EmptyState icon={Banknote} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" aria-label="Instructor earnings breakdown">
+                <thead>
+                  <tr className="bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    <th className="text-left px-3 py-2">Instructor</th>
+                    <th className="text-right px-3 py-2">Gross</th>
+                    <th className="text-right px-3 py-2">Platform Fee</th>
+                    <th className="text-right px-3 py-2">Instructor Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {data.earningsByInstructor.map((row, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 text-gray-700 font-medium">{row.name}</td>
+                      <td className="px-3 py-2 text-right text-gray-500">
+                        ${row.grossAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-2 text-right text-red-600">
+                        ${row.platformFee.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-2 text-right text-green-700 font-medium">
+                        ${row.instructorAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
         </div>
       </div>
     </div>

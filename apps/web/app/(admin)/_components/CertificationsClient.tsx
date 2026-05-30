@@ -22,6 +22,7 @@ import {
   isCertificationExpiringSoon,
 } from "@/lib/cert-utils";
 import type { CertificationAdminRecord, CertTypeAdminRow } from "@/types/certifications";
+import CertCardDesignsTab from "./CertCardDesignsTab";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ interface CertificationsClientProps {
   remindersPaused: boolean;
 }
 
-type ActiveTab = "certifications" | "cert_types";
+type ActiveTab = "certifications" | "cert_types" | "card_designs";
 type StatusFilter = "all" | "active" | "expiring" | "expired";
 type ReminderFilter = "all" | "sent" | "not_sent";
 type ReminderBannerState = "idle" | "loading" | "sent" | "all_sent";
@@ -62,6 +63,8 @@ interface CertTypeFormState {
   description: string;
   validityMonths: string;
   issuingBody: string;
+  /** Card template: 'aha' or 'superherocpr' */
+  cardDesign: string;
   active: boolean;
 }
 
@@ -127,6 +130,7 @@ function blankCertTypeForm(): CertTypeFormState {
     description: "",
     validityMonths: "",
     issuingBody: "",
+    cardDesign: "aha",
     active: true,
   };
 }
@@ -610,6 +614,7 @@ export default function CertificationsClient({
           description: certTypeForm.description.trim() || null,
           validityMonths: parseInt(certTypeForm.validityMonths, 10),
           issuingBody: certTypeForm.issuingBody.trim() || null,
+          cardDesign: certTypeForm.cardDesign,
           active: certTypeForm.active,
         }),
       });
@@ -639,6 +644,7 @@ export default function CertificationsClient({
       description: ct.description ?? "",
       validityMonths: String(ct.validity_months),
       issuingBody: ct.issuing_body ?? "",
+      cardDesign: ct.card_design ?? "aha",
       active: ct.active,
     });
     setEditCertTypeFormErrors({});
@@ -665,6 +671,7 @@ export default function CertificationsClient({
           description: editCertTypeForm.description.trim() || null,
           validityMonths: parseInt(editCertTypeForm.validityMonths, 10),
           issuingBody: editCertTypeForm.issuingBody.trim() || null,
+          cardDesign: editCertTypeForm.cardDesign,
           active: editCertTypeForm.active,
         }),
       });
@@ -780,7 +787,7 @@ export default function CertificationsClient({
         aria-label="Certifications sections"
         className="mb-6 flex border-b border-gray-200"
       >
-        {(["certifications", "cert_types"] as ActiveTab[]).map((tab) => (
+        {(["certifications", "cert_types", "card_designs"] as ActiveTab[]).map((tab) => (
           <button
             key={tab}
             role="tab"
@@ -793,7 +800,7 @@ export default function CertificationsClient({
                 : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             }`}
           >
-            {tab === "certifications" ? "Certifications" : "Cert Types"}
+            {tab === "certifications" ? "Certifications" : tab === "cert_types" ? "Cert Types" : "Card Designs"}
           </button>
         ))}
       </div>
@@ -1203,6 +1210,18 @@ export default function CertificationsClient({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          TAB 3 — CARD DESIGNS
+         ══════════════════════════════════════════════════════════════════════ */}
+      <div
+        id="tabpanel-card_designs"
+        role="tabpanel"
+        aria-label="Card Designs"
+        hidden={activeTab !== "card_designs"}
+      >
+        <CertCardDesignsTab />
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -1695,15 +1714,37 @@ function CertTypeForm({ form, setForm, errors }: CertTypeFormProps) {
         <label className="mb-1 block text-sm font-medium text-gray-700">
           Issuing Body <span className="text-xs font-normal text-gray-400">(optional)</span>
         </label>
-        <input
-          type="text"
+        <select
           value={form.issuingBody}
           onChange={(e) =>
             setForm((prev) => ({ ...prev, issuingBody: e.target.value }))
           }
-          placeholder="e.g. American Heart Association"
           className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-        />
+        >
+          <option value="">— None —</option>
+          <option value="American Heart Association">American Heart Association</option>
+          <option value="SuperHero CPR">SuperHero CPR</option>
+        </select>
+      </div>
+
+      {/* Card design */}
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          Card Design
+        </label>
+        <select
+          value={form.cardDesign}
+          onChange={(e) =>
+            setForm((prev) => ({ ...prev, cardDesign: e.target.value }))
+          }
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+          <option value="aha">AHA eCard</option>
+          <option value="superherocpr">SuperHero CPR Card</option>
+        </select>
+        <p className="mt-1 text-xs text-gray-400">
+          Which card template is shown to the student on their certifications page.
+        </p>
       </div>
 
       {/* Active toggle */}

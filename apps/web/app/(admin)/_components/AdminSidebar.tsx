@@ -68,13 +68,13 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["manager", "super_admin"],
   },
   {
-    label: "Contact",
-    href: "/admin/contact",
-    roles: ["manager", "super_admin"],
+    label: "Payouts",
+    href: "/admin/payouts",
+    roles: ["super_admin"],
   },
   {
-    label: "Locations",
-    href: "/admin/locations",
+    label: "Contact",
+    href: "/admin/contact",
     roles: ["manager", "super_admin"],
   },
   {
@@ -85,7 +85,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Merch", href: "/admin/merch", roles: ["super_admin"] },
   { label: "Orders", href: "/admin/orders", roles: ["super_admin"] },
   { label: "Staff", href: "/admin/staff", roles: ["super_admin"] },
-  { label: "Settings", href: "/admin/settings", roles: ["instructor", "super_admin"] },
+  { label: "Settings", href: "/admin/settings", roles: ["instructor", "manager", "super_admin"] },
   {
     label: "Archived Accounts",
     href: "/admin/archived",
@@ -93,7 +93,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   { label: "Analytics", href: "/admin/analytics", roles: ["super_admin"] },
   {
-    label: "Payment Account",
+    label: "Payout Settings",
     href: "/admin/profile/payment",
     roles: ["instructor", "super_admin"],
     sectionLabel: "Profile",

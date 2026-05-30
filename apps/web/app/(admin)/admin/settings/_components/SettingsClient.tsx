@@ -4,7 +4,7 @@
  * SettingsClient component
  * Full client component owning all state and mutations for the settings page.
  * Sections: Appearance (dark mode), Class Types, Preset Grades, Zoho Mail,
- *           Instructor Payment Routing.
+ *           Social Feed, Locations, and Enrollware.
  * Used by: /admin/settings/page.tsx
  */
 
@@ -12,12 +12,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import ClassTypePanel from "./ClassTypePanel";
-import type { ClassType, PresetGrade, InstructorRoutingRow } from "../page";
+import ClassTypeImportPanel from "./ClassTypeImportPanel";
+import type { ClassType, CertTypeOption, PresetGrade } from "../page";
 
 interface SettingsClientProps {
   classTypes: ClassType[];
+  /** All active cert types — used to populate the linked cert dropdown in ClassTypePanel. */
+  certTypeOptions: CertTypeOption[];
   presetGrades: PresetGrade[];
-  instructors: InstructorRoutingRow[];
   zohoConnected: boolean;
   zohoEmail: string | null;
   /** Value of the ?zoho= query param — "connected" | "error" | null */
@@ -33,6 +35,19 @@ interface SettingsClientProps {
    * the bookmarklet's data dependencies (api key state, site URL, etc.).
    */
   enrollwareSlot?: React.ReactNode;
+  /**
+   * Optional fully-rendered Locations management block. When provided, the
+   * settings page exposes a "Locations" tab whose content is this node.
+   * Rendered as an opaque slot so this component doesn't need to know about
+   * the locations data dependencies.
+   */
+  locationsSlot?: React.ReactNode;
+  /**
+   * Optional payout settings panel (super_admin only). When provided, exposes
+   * a "Payouts" tab containing platform fee, trigger mode, and schedule controls.
+   * Rendered as an opaque slot so this component doesn't own payout data fetching.
+   */
+  payoutsSlot?: React.ReactNode;
 }
 
 /** All tab identifiers for the settings page. Order matches the nav. */
@@ -41,9 +56,10 @@ type SettingsTabId =
   | "class-types"
   | "grades"
   | "zoho"
-  | "routing"
   | "social"
-  | "enrollware";
+  | "locations"
+  | "enrollware"
+  | "payouts";
 
 /** Tab nav definition — label + id pairs in display order. */
 interface TabDef {
@@ -86,14 +102,16 @@ interface EditingGrade {
  */
 const SettingsClient: React.FC<SettingsClientProps> = ({
   classTypes: initialClassTypes,
+  certTypeOptions,
   presetGrades: initialPresetGrades,
-  instructors: initialInstructors,
   zohoConnected: initialZohoConnected,
   zohoEmail,
   zohoParam,
   legacySiteEnabled: initialLegacySiteEnabled,
   isSuperAdmin,
   enrollwareSlot,
+  locationsSlot,
+  payoutsSlot,
 }) => {
   const router = useRouter();
 
@@ -106,10 +124,11 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   const tabs: TabDef[] = [
     { id: "general", label: "General" },
     { id: "class-types", label: "Class Types" },
+    ...(locationsSlot ? [{ id: "locations" as const, label: "Locations" }] : []),
     { id: "grades", label: "Grades" },
-    { id: "zoho", label: "Zoho Mail" },
-    { id: "routing", label: "Payment Routing" },
     { id: "social", label: "Social Feed" },
+    { id: "zoho", label: "Zoho Mail" },
+    ...(payoutsSlot ? [{ id: "payouts" as const, label: "Payouts" }] : []),
     ...(enrollwareSlot ? [{ id: "enrollware" as const, label: "Enrollware" }] : []),
   ];
 
@@ -190,6 +209,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   // ── Class types ────────────────────────────────────────────────────────────
   const [classTypes, setClassTypes] = useState<ClassType[]>(initialClassTypes);
   const [classTypePanelOpen, setClassTypePanelOpen] = useState(false);
+  const [classTypeImportPanelOpen, setClassTypeImportPanelOpen] = useState(false);
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null);
   const [togglingClassTypeId, setTogglingClassTypeId] = useState<string | null>(null);
 
@@ -205,62 +225,6 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   // ── Zoho ───────────────────────────────────────────────────────────────────
   const [zohoConnected, setZohoConnected] = useState(initialZohoConnected);
   const [disconnectingZoho, setDisconnectingZoho] = useState(false);
-
-  // ── Instructor payment routing ─────────────────────────────────────────────
-  const [instructors, setInstructors] = useState<InstructorRoutingRow[]>(initialInstructors);
-  // Tracks which instructor row's toggle is currently saving — disables that row's buttons
-  const [savingRoutingId, setSavingRoutingId] = useState<string | null>(null);
-
-  /**
-   * Updates an instructor's payment_routing preference. Optimistically applies
-   * the change, then rolls back on error.
-   * @param instructorId - UUID of the instructor profile to update.
-   * @param next - New routing value.
-   */
-  async function handleRoutingChange(
-    instructorId: string,
-    next: "instructor" | "business"
-  ) {
-    const previous = instructors.find((i) => i.id === instructorId)?.payment_routing;
-    if (!previous || previous === next) return;
-
-    setSavingRoutingId(instructorId);
-    setInstructors((prev) =>
-      prev.map((i) => (i.id === instructorId ? { ...i, payment_routing: next } : i))
-    );
-
-    try {
-      const res = await fetch(`/api/settings/instructor-routing/${instructorId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payment_routing: next }),
-      });
-
-      if (!res.ok) {
-        // Roll back on failure
-        setInstructors((prev) =>
-          prev.map((i) =>
-            i.id === instructorId ? { ...i, payment_routing: previous } : i
-          )
-        );
-        showToast("error", "Failed to update payment routing.");
-        return;
-      }
-
-      const updated = instructors.find((i) => i.id === instructorId);
-      const name = updated ? `${updated.first_name} ${updated.last_name}` : "instructor";
-      showToast("success", `Payment routing updated for ${name}.`);
-    } catch {
-      setInstructors((prev) =>
-        prev.map((i) =>
-          i.id === instructorId ? { ...i, payment_routing: previous } : i
-        )
-      );
-      showToast("error", "Failed to update payment routing.");
-    } finally {
-      setSavingRoutingId(null);
-    }
-  }
 
   // ── Social feed refresh ───────────────────────────────────────────────────
   const [refreshingFeed, setRefreshingFeed] = useState(false);
@@ -366,6 +330,52 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
     setEditingClassType(null);
     showToast("success", message);
     router.refresh();
+  }
+
+  /**
+   * Called by ClassTypeImportPanel after a successful bulk import.
+   * Refreshes server data so imported class types appear in the list.
+   * @param count - Number of class types created by the import.
+   */
+  function handleClassTypesImported(count: number) {
+    setClassTypeImportPanelOpen(false);
+    showToast(
+      "success",
+      `${count} class type${count === 1 ? "" : "s"} imported.`
+    );
+    router.refresh();
+  }
+
+  // ── Class type delete ──────────────────────────────────────────────────────
+  const [deletingClassTypeId, setDeletingClassTypeId] = useState<string | null>(null);
+  const [deleteClassTypeLoading, setDeleteClassTypeLoading] = useState(false);
+  const [deleteClassTypeError, setDeleteClassTypeError] = useState<string | null>(null);
+
+  /**
+   * Deletes a class type via DELETE /api/settings/class-types/[id].
+   * Refused by the server if any sessions reference the class type.
+   * @param id - UUID of the class type to delete.
+   */
+  async function handleDeleteClassType(id: string) {
+    setDeleteClassTypeLoading(true);
+    setDeleteClassTypeError(null);
+    try {
+      const res = await fetch(`/api/settings/class-types/${id}`, { method: "DELETE" });
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (!json.success) {
+        setDeleteClassTypeError(json.error ?? "Failed to delete class type.");
+        return;
+      }
+      // Remove the deleted item from local state immediately so the UI updates
+      // without waiting for a server round-trip.
+      setClassTypes((prev) => prev.filter((ct) => ct.id !== id));
+      setDeletingClassTypeId(null);
+      showToast("success", "Class type deleted.");
+    } catch {
+      setDeleteClassTypeError("Network error. Please try again.");
+    } finally {
+      setDeleteClassTypeLoading(false);
+    }
   }
 
   // ── Preset grade actions ───────────────────────────────────────────────────
@@ -661,89 +671,149 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
               Manage the CPR course offerings available for booking and invoicing.
             </p>
           </div>
-          <button
-            onClick={() => {
-              setEditingClassType(null);
-              setClassTypePanelOpen(true);
-            }}
-            className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-          >
-            + Add Class Type
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setClassTypeImportPanelOpen(true)}
+              className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Import CSV / XLSX
+            </button>
+            <button
+              onClick={() => {
+                setEditingClassType(null);
+                setClassTypePanelOpen(true);
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              + Add Class Type
+            </button>
+          </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-700">
-          {classTypes.length === 0 ? (
-            <div className="text-center py-10 text-sm text-gray-500">
-              No class types yet. Add your first one.
-            </div>
-          ) : (
-            classTypes.map((ct) => (
-              <div key={ct.id} className="flex items-start justify-between gap-4 p-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm text-gray-900 dark:text-white">
-                      {ct.name}
-                    </span>
-                    {ct.active ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                        Inactive
-                      </span>
-                    )}
-                  </div>
-                  {ct.description && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                      {ct.description}
+        {classTypes.length === 0 ? (
+          <div className="text-center py-10 text-sm text-gray-500">
+            No class types yet. Add your first one.
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {classTypes.map((ct) => (
+              <div
+                key={ct.id}
+                className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+              >
+                {deletingClassTypeId === ct.id ? (
+                  // ── Inline delete confirmation ─────────────────────────
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3">
+                    <p className="mb-1 text-sm font-medium text-red-700">
+                      Delete &ldquo;{ct.name}&rdquo;?
                     </p>
-                  )}
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    <span>{ct.duration_minutes} minutes</span>
-                    <span>·</span>
-                    <span>Capacity: {ct.max_capacity}</span>
-                    <span>·</span>
-                    <span>
-                      $
-                      {ct.price.toLocaleString("en-US", {
+                    {deleteClassTypeError && (
+                      <p className="mb-2 text-xs text-red-600">{deleteClassTypeError}</p>
+                    )}
+                    <p className="mb-3 text-xs text-red-600">
+                      This cannot be undone. Class types linked to existing sessions cannot be deleted.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteClassType(ct.id)}
+                        disabled={deleteClassTypeLoading}
+                        className="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {deleteClassTypeLoading ? "Deleting…" : "Delete"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeletingClassTypeId(null);
+                          setDeleteClassTypeError(null);
+                        }}
+                        disabled={deleteClassTypeLoading}
+                        className="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-1 flex items-start justify-between gap-2">
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {ct.name}
+                      </span>
+                      {ct.active ? (
+                        <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                    {ct.description && (
+                      <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
+                        {ct.description}
+                      </p>
+                    )}
+                    <p className="mt-2 text-xs text-gray-400">
+                      {ct.duration_minutes} min · Capacity {ct.max_capacity} ·{" "}
+                      ${ct.price.toLocaleString("en-US", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
-                    </span>
+                    </p>
+                    {/* Show the linked cert type name if one is set */}
+                    {ct.cert_type_id && (
+                      <p className="mt-1 text-xs text-gray-400">
+                        Cert:{" "}
+                        {certTypeOptions.find((c) => c.id === ct.cert_type_id)?.name ?? "Unknown"}
+                      </p>
+                    )}
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingClassType(ct);
+                          setClassTypePanelOpen(true);
+                        }}
+                        className="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleClassType(ct)}
+                        disabled={togglingClassTypeId === ct.id}
+                        className={`rounded-md border px-3 py-1 text-xs font-semibold disabled:opacity-50 ${
+                          ct.active
+                            ? "border-orange-300 text-orange-600 hover:bg-orange-50"
+                            : "border-green-300 text-green-700 hover:bg-green-50"
+                        }`}
+                      >
+                        {togglingClassTypeId === ct.id
+                          ? "Saving…"
+                          : ct.active
+                          ? "Deactivate"
+                          : "Activate"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeletingClassTypeId(ct.id);
+                          setDeleteClassTypeError(null);
+                        }}
+                        className="rounded-md border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <button
-                    onClick={() => {
-                      setEditingClassType(ct);
-                      setClassTypePanelOpen(true);
-                    }}
-                    className="text-xs text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white underline underline-offset-2 font-medium"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleToggleClassType(ct)}
-                    disabled={togglingClassTypeId === ct.id}
-                    className={`text-xs underline underline-offset-2 font-medium disabled:opacity-50 ${
-                      ct.active
-                        ? "text-red-600 hover:text-red-800"
-                        : "text-green-700 hover:text-green-900"
-                    }`}
-                  >
-                    {togglingClassTypeId === ct.id
-                      ? "Saving…"
-                      : ct.active
-                      ? "Deactivate"
-                      : "Activate"}
-                  </button>
-                </div>
+                )}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── Section 3: Preset Grades ───────────────────────────────────────── */}
@@ -1026,117 +1096,6 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </div>
       </section>
 
-      {/* ── Section 5: Instructor Payment Routing ──────────────────────────── */}
-      <section aria-labelledby="section-routing" className={tabClass("routing")}>
-        <div className="mb-4">
-          <h2
-            id="section-routing"
-            className="text-lg font-semibold text-gray-900 dark:text-white"
-          >
-            Instructor Payment Routing
-          </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Control where online booking payments are sent for each instructor. Defaults
-            to the instructor&apos;s own PayPal account when one is connected.
-          </p>
-        </div>
-
-        {instructors.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 text-sm text-gray-500 dark:text-gray-400">
-            No active instructors found.
-          </div>
-        ) : (
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700">
-            {instructors.map((inst) => {
-              const fallbackActive =
-                inst.payment_routing === "instructor" && !inst.has_active_paypal;
-              const businessActive = inst.payment_routing === "business";
-              const isSaving = savingRoutingId === inst.id;
-
-              return (
-                <div key={inst.id} className="p-5 flex flex-col gap-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {inst.first_name} {inst.last_name}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {inst.email}
-                      </p>
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        <span
-                          className={`inline-block h-2 w-2 rounded-full ${
-                            inst.has_active_paypal ? "bg-green-500" : "bg-gray-300"
-                          }`}
-                          aria-hidden
-                        />
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {inst.has_active_paypal ? "PayPal connected" : "No PayPal"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Pill toggle */}
-                    <div
-                      role="radiogroup"
-                      aria-label="Payment routing"
-                      className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-full p-0.5 shrink-0"
-                    >
-                      <button
-                        role="radio"
-                        aria-checked={inst.payment_routing === "instructor"}
-                        onClick={() => handleRoutingChange(inst.id, "instructor")}
-                        disabled={isSaving}
-                        className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-colors disabled:opacity-50 ${
-                          inst.payment_routing === "instructor"
-                            ? "bg-white dark:bg-gray-900 text-red-600 shadow-sm"
-                            : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                        }`}
-                      >
-                        Instructor PayPal
-                      </button>
-                      <button
-                        role="radio"
-                        aria-checked={inst.payment_routing === "business"}
-                        onClick={() => handleRoutingChange(inst.id, "business")}
-                        disabled={isSaving}
-                        className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-colors disabled:opacity-50 ${
-                          inst.payment_routing === "business"
-                            ? "bg-white dark:bg-gray-900 text-red-600 shadow-sm"
-                            : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                        }`}
-                      >
-                        Business PayPal
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Inline warnings */}
-                  {fallbackActive && (
-                    <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded px-3 py-1.5">
-                      Will fall back to business PayPal until this instructor connects a
-                      PayPal account at <code>/admin/profile/payment</code>.
-                    </p>
-                  )}
-                  {businessActive && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Online booking payments always go to the business account for this
-                      instructor.
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* Instructor payment account note — grouped with Payment Routing tab */}
-      <div className={`bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300 ${tabClass("routing")}`}>
-        Instructors manage their payment account connections from their own profile
-        settings.
-      </div>
-
       {/* ── Section 6: Social Feed ─────────────────────────────────────────── */}
       <section className={`space-y-4 ${tabClass("social")}`}>
         <div>
@@ -1174,53 +1133,58 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </p>
       </section>
 
-      {/* ── Section 7: Enrollware Bookmarklet (optional slot) ─────────────── */}
+      {/* ── Section 7: Locations (optional slot) ──────────────────────────── */}
+      {locationsSlot && (
+        <section className={tabClass("locations")}>
+          {locationsSlot}
+        </section>
+      )}
+
+      {/* ── Section 8: Payouts (optional slot — super_admin only) ─────────── */}
+      {payoutsSlot && (
+        <section className={tabClass("payouts")}>
+          {payoutsSlot}
+        </section>
+      )}
+
+      {/* ── Section 9: Enrollware (optional slot) ────────────────────────── */}
       {enrollwareSlot && (
         <section className={tabClass("enrollware")}>
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Enrollware Bookmarklet
-            </h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              A one-click tool that auto-fills new classes on Enrollware from
-              your SuperheroCPR roster. Generate it once, save it to your
-              browser&apos;s bookmarks bar, and click it whenever you&apos;re on
-              an Enrollware class-edit page.
-            </p>
-          </div>
           {enrollwareSlot}
         </section>
       )}
 
-      {/* Class type add/edit panel */}
       <ClassTypePanel
         open={classTypePanelOpen}
         classType={editingClassType}
+        certTypeOptions={certTypeOptions}
         onClose={() => {
           setClassTypePanelOpen(false);
           setEditingClassType(null);
         }}
         onSaved={handleClassTypeSaved}
-        onError={(msg) => showToast("error", msg)}
+        onError={(message) => showToast("error", message)}
       />
 
-      {/* Toast */}
+      {classTypeImportPanelOpen && (
+        <ClassTypeImportPanel
+          onClose={() => setClassTypeImportPanelOpen(false)}
+          onImported={handleClassTypesImported}
+        />
+      )}
+
+      {/* ── Toast ─────────────────────────────────────────────────────────── */}
       {toast && (
         <div
-          className={`fixed bottom-4 right-4 z-50 max-w-sm w-full rounded-lg shadow-lg p-4 flex items-start gap-3 border ${
+          role="status"
+          aria-live="polite"
+          className={`fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border p-4 shadow-lg ${
             toast.type === "success"
-              ? "bg-green-50 border-green-200 text-green-800"
-              : "bg-red-50 border-red-200 text-red-800"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : "border-red-200 bg-red-50 text-red-800"
           }`}
         >
-          <p className="text-sm font-medium flex-1">{toast.message}</p>
-          <button
-            onClick={() => setToast(null)}
-            className="text-current opacity-60 hover:opacity-100 text-lg leading-none shrink-0"
-            aria-label="Dismiss notification"
-          >
-            ×
-          </button>
+          <p className="text-sm font-medium">{toast.message}</p>
         </div>
       )}
     </div>

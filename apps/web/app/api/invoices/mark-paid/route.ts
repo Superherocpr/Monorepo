@@ -3,16 +3,27 @@
  * Called by: InvoiceDetailClient (Mark as Paid confirmation)
  * Auth: Instructor (own invoice only) or super admin
  *
- * Marks an invoice as paid:
- * 1. Sets invoice status = 'paid', paid_at = now()
- * 2. Creates booking records for each student slot (booking_source = 'invoice')
- * 3. Logs the action in invoice_activity_log
- * 4. Sends a paid notification email to the instructor
+ * Marks an invoice as paid atomically via the mark_invoice_paid() Postgres RPC
+ * (migration 0016). The RPC acquires a row-level lock on the invoice row so
+ * concurrent requests cannot both pass the status='sent' check and double-insert
+ * booking records (THREAT-038).
+ *
+ * The RPC handles:
+ *   1. Locking the invoice row
+ *   2. Verifying status = 'sent'
+ *   3. Setting status = 'paid', paid_at = now()
+ *   4. Inserting one booking row per student slot (booking_source = 'invoice')
+ *   5. Logging the action in invoice_activity_log
+ *
+ * This route then records instructor earnings for PayPal Payouts and sends a
+ * paid notification email to the instructor (best-effort).
  */
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import { invoicePaidEmail } from "@/lib/emails";
+import { recordInvoiceEarning } from "@/lib/instructor-earnings";
+import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -57,8 +68,7 @@ export async function POST(request: Request) {
     .from("invoices")
     .select(`
       id, instructor_id, invoice_number, student_count,
-      recipient_name, status,
-      class_sessions ( id ),
+      recipient_name, status, total_amount,
       profiles ( email, first_name, last_name )
     `)
     .eq("id", invoiceId)
@@ -73,6 +83,8 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  // Fast-fail before acquiring a DB lock — the RPC will also check this
+  // atomically, but checking here avoids unnecessary lock contention.
   if (invoice.status !== "sent") {
     return Response.json(
       { success: false, error: "Invoice is not in sent status" },
@@ -80,42 +92,53 @@ export async function POST(request: Request) {
     );
   }
 
-  const sessionId = (invoice.class_sessions as unknown as { id: string } | null)?.id;
+  // Atomic mark-paid via RPC (migration 0016_mark_invoice_paid_atomic.sql).
+  // The RPC locks the invoice row, verifies status='sent', sets status='paid',
+  // inserts booking rows, and logs the action — all in one transaction.
+  const { data: rpcResult, error: rpcError } = await adminClient.rpc(
+    "mark_invoice_paid",
+    { p_invoice_id: invoiceId, p_actor_id: profile.id }
+  );
 
-  if (!sessionId) {
+  if (rpcError) {
+    // invoice_not_found → 404; invoice_not_sent → 400 (already paid/cancelled)
+    if (rpcError.message?.includes("invoice_not_found")) {
+      return Response.json(
+        { success: false, error: "Invoice not found" },
+        { status: 404 }
+      );
+    }
+    if (rpcError.message?.includes("invoice_not_sent")) {
+      return Response.json(
+        { success: false, error: "Invoice is not in sent status" },
+        { status: 400 }
+      );
+    }
+    console.error("[invoices/mark-paid] RPC error:", rpcError);
     return Response.json(
-      { success: false, error: "Invoice has no linked class session" },
-      { status: 400 }
+      { success: false, error: "Failed to mark invoice as paid. Please try again." },
+      { status: 500 }
     );
   }
 
-  const paidAt = new Date().toISOString();
+  const paidAt = (rpcResult as { paid_at?: string } | null)?.paid_at;
 
-  // Mark the invoice as paid
-  await adminClient
-    .from("invoices")
-    .update({ status: "paid", paid_at: paidAt })
-    .eq("id", invoiceId);
-
-  // Create one booking record per student slot — booking_source = 'invoice'
-  // These bookings represent the spots held by the invoice recipient's students.
-  // customer_id is the instructor who owns the invoice (acting as the booking agent).
-  const bookingRows = Array.from({ length: invoice.student_count as number }).map(() => ({
-    session_id: sessionId,
-    customer_id: invoice.instructor_id as string,
-    invoice_id: invoiceId,
-    booking_source: "invoice",
-    created_by: profile.id,
-  }));
-
-  await adminClient.from("bookings").insert(bookingRows);
-
-  // Log the action
-  await adminClient.from("invoice_activity_log").insert({
-    invoice_id: invoiceId,
-    actor_id: profile.id,
-    action: "marked_paid",
+  await recordInvoiceEarning(adminClient, {
+    instructorId: invoice.instructor_id,
+    invoiceId: invoice.id,
+    grossAmount: Number(invoice.total_amount),
+    note: `Invoice ${invoice.invoice_number} marked paid`,
+  }).catch((err: unknown) => {
+    console.error("[invoices/mark-paid] CRITICAL: instructor earning insert failed", {
+      invoiceId,
+      invoiceNumber: invoice.invoice_number,
+      error: err,
+    });
   });
+
+  // Fire a payout immediately if the system is configured for immediate trigger mode.
+  // Non-blocking: the invoice response is not delayed by the payout call.
+  await maybeTriggerImmediatePayout(adminClient);
 
   // Send paid notification email to the instructor
   const instructorProfile = invoice.profiles as unknown as {
@@ -150,5 +173,5 @@ export async function POST(request: Request) {
       });
   }
 
-  return Response.json({ success: true });
+  return Response.json({ success: true, paidAt });
 }
