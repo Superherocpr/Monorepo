@@ -14,6 +14,8 @@ export interface CertType {
   description: string | null;
   validity_months: number;
   issuing_body: string | null;
+  /** Which card template to render for this cert. 'aha' | 'superherocpr' */
+  card_design: string;
   active: boolean;
   created_at: string;
 }
@@ -58,6 +60,8 @@ export interface CertificationRecord {
     name: string;
     issuing_body: string | null;
     validity_months: number;
+    /** Which card template to render. 'aha' | 'superherocpr' */
+    card_design: string;
   };
   class_sessions: {
     starts_at: string;
@@ -118,6 +122,8 @@ export interface CertTypeAdminRow {
   description: string | null;
   validity_months: number;
   issuing_body: string | null;
+  /** Which card template to render for this cert. 'aha' | 'superherocpr' */
+  card_design: string;
   active: boolean;
   certCount: number;
 }

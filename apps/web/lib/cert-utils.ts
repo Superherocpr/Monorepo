@@ -162,7 +162,7 @@ export function getClassSlug(className: string): string {
  *
  * @param name - The cert_types.name value from the database
  */
-const CERT_CONFIGS: Record<
+export const CERT_CONFIGS: Record<
   string,
   { category: string; color: string; nameLine1: string; nameLine2: string }
 > = {

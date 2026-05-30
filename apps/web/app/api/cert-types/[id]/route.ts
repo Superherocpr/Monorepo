@@ -15,7 +15,7 @@ function isValidUuid(val: string): boolean {
 
 /**
  * Updates a cert type's editable fields.
- * Body (all optional): { name?, description?, validityMonths?, issuingBody?, active? }
+ * Body (all optional): { name?, description?, validityMonths?, issuingBody?, cardDesign?, active? }
  * @param request - Incoming PATCH request with JSON body
  * @param params - Route params containing { id }
  */
@@ -54,6 +54,7 @@ export async function PATCH(
     description?: string | null;
     validityMonths?: number;
     issuingBody?: string | null;
+    cardDesign?: string;
     active?: boolean;
   };
 
@@ -69,6 +70,10 @@ export async function PATCH(
   if (body.description !== undefined) update.description = body.description;
   if (body.validityMonths !== undefined) update.validity_months = body.validityMonths;
   if (body.issuingBody !== undefined) update.issuing_body = body.issuingBody;
+  // Only accept known design values to match the DB check constraint
+  if (body.cardDesign !== undefined) {
+    update.card_design = body.cardDesign === "superherocpr" ? "superherocpr" : "aha";
+  }
   if (body.active !== undefined) update.active = body.active;
 
   if (Object.keys(update).length === 0) {
@@ -79,7 +84,7 @@ export async function PATCH(
     .from("cert_types")
     .update(update)
     .eq("id", id)
-    .select("id, name, description, validity_months, issuing_body, active")
+    .select("id, name, description, validity_months, issuing_body, card_design, active")
     .single();
 
   if (error || !certType) {

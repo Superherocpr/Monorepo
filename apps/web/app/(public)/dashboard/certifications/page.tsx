@@ -45,7 +45,7 @@ export default async function CertificationsPage() {
       .from("certifications")
       .select(
         `id, cert_number, notes, issued_at, expires_at,
-         cert_types ( name, issuing_body, validity_months ),
+         cert_types ( name, issuing_body, validity_months, card_design ),
          class_sessions ( starts_at, class_types ( name ) )`
       )
       .eq("customer_id", user.id)

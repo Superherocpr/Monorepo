@@ -1,7 +1,9 @@
 /**
- * ActiveCertificationsList — shows all active/expiring-soon certifications as AHA eCards.
- * Each cert renders as an AHACertCard. A renewal CTA appears beneath the card when the
- * cert is within 90 days of expiry.
+ * ActiveCertificationsList — shows all active/expiring-soon certifications as cert cards.
+ * Each cert renders using the card template specified by cert_types.card_design:
+ *   'aha'          → AHACertCard (AHA eCard style)
+ *   'superherocpr' → SuperheroCPRCertCard (dark branded card)
+ * A renewal CTA appears beneath the card when the cert is within 90 days of expiry.
  * Renders an empty state with "Book a Class" CTA if the customer has no active certs.
  * Used by: app/(public)/dashboard/certifications/page.tsx
  */
@@ -10,6 +12,7 @@ import Link from "next/link";
 import { Award, AlertCircle } from "lucide-react";
 import { getCertStatus } from "@/lib/cert-utils";
 import AHACertCard from "./AHACertCard";
+import SuperheroCPRCertCard from "./SuperheroCPRCertCard";
 import type { CertificationRecord } from "@/types/certifications";
 
 interface ActiveCertificationsListProps {
@@ -58,7 +61,11 @@ export default function ActiveCertificationsList({
           const status = getCertStatus(cert.expires_at);
           return (
             <div key={cert.id} className="flex flex-col gap-2">
-              <AHACertCard cert={cert} studentName={studentName} />
+              {cert.cert_types.card_design === "superherocpr" ? (
+                <SuperheroCPRCertCard cert={cert} studentName={studentName} />
+              ) : (
+                <AHACertCard cert={cert} studentName={studentName} />
+              )}
               {/* Renewal CTA shown beneath the card when the cert is within 90 days of expiry */}
               {status.color !== "green" && (
                 <div className="flex justify-end">

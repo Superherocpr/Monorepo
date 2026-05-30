@@ -1,11 +1,14 @@
 /**
  * ExpiredCertificationsList — collapsible section of expired certifications.
- * Each cert renders as a grayscale AHACertCard with an "Expired" badge.
+ * Each cert renders using the card template specified by cert_types.card_design:
+ *   'aha'          → AHACertCard (grayscale + Expired badge)
+ *   'superherocpr' → SuperheroCPRCertCard (grayscale + Expired badge)
  * Collapsed by default. Returns null if no expired certs exist.
  * Used by: app/(public)/dashboard/certifications/page.tsx
  */
 
 import AHACertCard from "./AHACertCard";
+import SuperheroCPRCertCard from "./SuperheroCPRCertCard";
 import type { CertificationRecord } from "@/types/certifications";
 
 interface ExpiredCertificationsListProps {
@@ -43,12 +46,21 @@ export default function ExpiredCertificationsList({
         </summary>
         <div className="flex flex-col gap-4 border-t border-gray-100 p-4">
           {certifications.map((cert) => (
-            <AHACertCard
-              key={cert.id}
-              cert={cert}
-              studentName={studentName}
-              isExpired
-            />
+            cert.cert_types.card_design === "superherocpr" ? (
+              <SuperheroCPRCertCard
+                key={cert.id}
+                cert={cert}
+                studentName={studentName}
+                isExpired
+              />
+            ) : (
+              <AHACertCard
+                key={cert.id}
+                cert={cert}
+                studentName={studentName}
+                isExpired
+              />
+            )
           ))}
         </div>
       </details>
