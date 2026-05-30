@@ -141,6 +141,7 @@ export async function POST(request: Request) {
       locationZip: typeof locationZip === "string" ? locationZip : "",
       amount: 0,
       paymentProcessor: "Dev bypass (no charge)",
+      transactionId: null,
     });
 
     await resend.emails.send({
