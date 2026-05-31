@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import {
   getCertificationDaysUntilExpiry,
   isCertificationActive,
@@ -16,6 +16,7 @@ import CustomersClient, { CustomerWithMeta } from "@/app/(admin)/_components/Cus
 /** Server component — handles auth, access check, and initial data fetch. */
 export default async function CustomersPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   // ── Auth & access check ────────────────────────────────────────────────────
   const {
@@ -24,7 +25,7 @@ export default async function CustomersPage() {
 
   if (!user) redirect("/signin");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -42,7 +43,7 @@ export default async function CustomersPage() {
   // Use explicit FK hints on bookings because the bookings table has three FKs
   // back to profiles (customer_id, created_by, cancelled_by). Without the hint
   // PostgREST cannot resolve the join and the query returns no data.
-  const { data: initialCustomers } = await supabase
+  const { data: initialCustomers } = await admin
     .from("profiles")
     .select(
       `

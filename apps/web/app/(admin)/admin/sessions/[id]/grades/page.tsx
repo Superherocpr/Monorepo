@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import GradingClient, {
   type GradingStudent,
   type PresetGrade,
@@ -22,6 +22,7 @@ interface PageProps {
 export default async function GradesPage({ params }: PageProps) {
   const { id } = await params;
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
@@ -29,7 +30,7 @@ export default async function GradesPage({ params }: PageProps) {
 
   if (!user) redirect(`/signin?redirect=/admin/sessions/${id}/grades`);
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("id, role")
     .eq("id", user.id)
@@ -45,7 +46,7 @@ export default async function GradesPage({ params }: PageProps) {
   }
 
   // Fetch session info to verify access and populate the page header
-  const { data: rawSession } = await supabase
+  const { data: rawSession } = await admin
     .from("class_sessions")
     .select(
       `id, starts_at, status, instructor_id,
@@ -71,7 +72,7 @@ export default async function GradesPage({ params }: PageProps) {
   };
 
   // Fetch roster records — grading source is roster_records only, not bookings
-  const { data: rawStudents } = await supabase
+  const { data: rawStudents } = await admin
     .from("roster_records")
     .select("id, first_name, last_name, email, employer, grade")
     .eq("session_id", id)
@@ -80,7 +81,7 @@ export default async function GradesPage({ params }: PageProps) {
   const students: GradingStudent[] = (rawStudents ?? []) as GradingStudent[];
 
   // Fetch preset grades for the grade selector buttons
-  const { data: rawPresets } = await supabase
+  const { data: rawPresets } = await admin
     .from("preset_grades")
     .select("id, value, label")
     .order("value");

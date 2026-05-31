@@ -12,7 +12,7 @@
 import { redirect } from "next/navigation";
 import { CreditCard } from "lucide-react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 import CreateInvoiceClient, {
   type SessionOption,
@@ -36,6 +36,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
   const preSelectedInstructorId = resolvedParams.instructor ?? null;
 
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
@@ -43,7 +44,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
 
   if (!user) redirect("/signin?redirect=/admin/invoices/new");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("id, role, paypal_payout_email")
     .eq("id", user.id)
@@ -63,7 +64,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
   // Clicking an instructor navigates to ?instructor=[id], reloading with their sessions.
   // ---------------------------------------------------------------------------
   if (role === "super_admin" && !preSelectedSessionId && !preSelectedInstructorId) {
-    const { data: allInstructors } = await supabase
+    const { data: allInstructors } = await admin
       .from("profiles")
       .select("id, first_name, last_name")
       .eq("role", "instructor")
@@ -118,7 +119,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
     // Super admin arrived via ?session=[id] (e.g. "Send Invoice" from session detail).
     // Derive the instructor from that specific session so the list is scoped to the right
     // instructor and the preselect works correctly.
-    const { data: targetSession } = await supabase
+    const { data: targetSession } = await admin
       .from("class_sessions")
       .select("instructor_id")
       .eq("id", preSelectedSessionId)
@@ -129,7 +130,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
   } else {
     // Super admin arrived via ?instructor=[id] from the instructor selection step.
     // Validate the id against active instructors to prevent a confused wizard state.
-    const { data: instructorCheck } = await supabase
+    const { data: instructorCheck } = await admin
       .from("profiles")
       .select("id")
       .eq("id", preSelectedInstructorId)
@@ -144,7 +145,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
   // Fetch all approved sessions for this instructor (past and future).
   // Invoicing is not restricted to upcoming classes — instructors may invoice
   // after a class has already taken place, or on the day of the class.
-  const { data: rawSessions } = await supabase
+  const { data: rawSessions } = await admin
     .from("class_sessions")
     .select(`
       id, starts_at, ends_at, max_capacity,

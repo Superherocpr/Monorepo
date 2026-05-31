@@ -68,6 +68,7 @@ export default async function SettingsPage({
   if (!user) redirect("/signin?redirect=/admin/settings");
 
   // Role check — instructors see a restricted view, only super_admins see full settings
+  // Own-row lookup: safe with session client via profiles_auth_read_own RLS policy.
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
@@ -116,9 +117,13 @@ export default async function SettingsPage({
     );
   }
 
+  // Service-role client used for all data queries in manager and super_admin branches.
+  // Defined here (after the instructor early-return) so it's in scope for both branches.
+  const admin = await createAdminClient();
+
   // ── Manager view: locations panel only ───────────────────────────────────
   if (role === "manager") {
-    const { data: raw } = await supabase
+    const { data: raw } = await admin
       .from("locations")
       .select(
         `id, name, address, city, state, zip, notes, is_home_base, created_at,
@@ -158,22 +163,22 @@ export default async function SettingsPage({
   // Fetch class types, preset grades, bookmarklet status,
   // and locations in parallel
   const [{ data: classTypes }, { data: certTypeRows }, { data: presetGrades }, { data: locationRaw }] = await Promise.all([
-    supabase
+    admin
       .from("class_types")
       .select("id, name, description, duration_minutes, max_capacity, price, active, cert_type_id")
       .order("name"),
     // Cert types used to populate the linked cert dropdown in the class type add/edit panel.
     // Fetched separately from the certifications page so settings page is self-contained.
-    supabase
+    admin
       .from("cert_types")
       .select("id, name")
       .eq("active", true)
       .order("name"),
-    supabase
+    admin
       .from("preset_grades")
       .select("id, value, label")
       .order("value"),
-    supabase
+    admin
       .from("locations")
       .select(
         `id, name, address, city, state, zip, notes, is_home_base, created_at,
@@ -219,7 +224,7 @@ export default async function SettingsPage({
   let payoutTrigger: PayoutTrigger = "manual";
   let payoutSchedule: PayoutSchedule = "daily";
   try {
-    const { data: payoutRows } = await supabase
+    const { data: payoutRows } = await admin
       .from("system_settings")
       .select("key, value")
       .in("key", ["platform_fee_percent", "payout_trigger", "payout_schedule"]);
@@ -245,8 +250,7 @@ export default async function SettingsPage({
 
   // Fetch the super admin's own bookmarklet key status so they can manage it
   // from settings just like instructors can.
-  const adminClient = await createAdminClient();
-  const { data: existingKey } = await adminClient
+  const { data: existingKey } = await admin
     .from("api_keys")
     .select("id")
     .eq("profile_id", user.id)

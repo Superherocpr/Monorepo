@@ -77,7 +77,8 @@ export default async function BookPage({ searchParams }: BookPageProps) {
   // Compute spotsRemaining for each session.
   // Invoice students count against capacity even before payment —
   // an unpaid invoice still reserves spots to prevent overbooking.
-  const sessions: ScheduleSession[] = (rawSessions ?? []).map((session) => {
+  // Sessions with a missing or deleted class type are excluded — they cannot be priced or booked.
+  const sessions: ScheduleSession[] = (rawSessions ?? []).filter((session) => session.class_types != null).map((session) => {
     const raw = session as typeof session & {
       class_types: ScheduleSession["class_types"] | ScheduleSession["class_types"][];
       profiles: ScheduleSession["profiles"] | ScheduleSession["profiles"][];

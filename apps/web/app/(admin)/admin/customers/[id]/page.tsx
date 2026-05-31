@@ -7,7 +7,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import CustomerDetailClient, {
   type CustomerDetailData,
 } from "@/app/(admin)/_components/CustomerDetailClient";
@@ -21,6 +21,7 @@ interface PageProps {
 export default async function CustomerDetailPage({ params }: PageProps) {
   const { id: customerId } = await params;
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   // ── Auth & access check ────────────────────────────────────────────────────
   const {
@@ -29,7 +30,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
 
   if (!user) redirect("/signin");
 
-  const { data: actorProfile } = await supabase
+  const { data: actorProfile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -53,7 +54,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
     certTypesResult,
   ] = await Promise.all([
     // Customer profile
-    supabase
+    admin
       .from("profiles")
       .select(
         "id, first_name, last_name, email, phone, address, city, state, zip, role, archived, created_at, customer_notes"
@@ -62,7 +63,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       .single(),
 
     // Bookings with session, instructor, location, and payment info
-    supabase
+    admin
       .from("bookings")
       .select(
         `
@@ -82,7 +83,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       .order("created_at", { ascending: false }),
 
     // Certifications with cert type and originating session
-    supabase
+    admin
       .from("certifications")
       .select(
         `
@@ -95,7 +96,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       .order("expires_at", { ascending: true }),
 
     // Merch orders with line items
-    supabase
+    admin
       .from("orders")
       .select(
         `
@@ -112,7 +113,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       .order("created_at", { ascending: false }),
 
     // Payments with linked booking/session info
-    supabase
+    admin
       .from("payments")
       .select(
         `
@@ -127,7 +128,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       .order("created_at", { ascending: false }),
 
     // Approved upcoming sessions for the "Add Booking" panel
-    supabase
+    admin
       .from("class_sessions")
       .select(
         `
@@ -144,7 +145,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       .limit(50),
 
     // Active cert types for the "Issue Cert" panel
-    supabase
+    admin
       .from("cert_types")
       .select("id, name, issuing_body, validity_months")
       .eq("active", true)

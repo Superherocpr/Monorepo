@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 import InvoicesClient, {
   type InvoiceRow,
@@ -16,15 +16,15 @@ import InvoicesClient, {
 /**
  * Fetches all staff profiles for the instructor filter dropdown.
  * Only called for manager/super_admin roles.
- * @param supabase - Authenticated Supabase server client
+ * @param adminClient - Service-role Supabase client (bypasses RLS)
  * @returns Array of instructor profile stubs (id, first_name, last_name)
  */
 async function fetchInstructors(
-  supabase: Awaited<ReturnType<typeof createClient>>
+  adminClient: Awaited<ReturnType<typeof createAdminClient>>
 ): Promise<InstructorOption[]> {
   // Any non-customer profile may own invoices — include all active staff roles.
   // Staff use 'deactivated', not 'archived' (which is for customers only).
-  const { data } = await supabase
+  const { data } = await adminClient
     .from("profiles")
     .select("id, first_name, last_name")
     .neq("role", "customer")
@@ -39,6 +39,7 @@ async function fetchInstructors(
  */
 export default async function InvoicesPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
@@ -46,7 +47,7 @@ export default async function InvoicesPage() {
 
   if (!user) redirect("/signin?redirect=/admin/invoices");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("id, role")
     .eq("id", user.id)
@@ -60,7 +61,7 @@ export default async function InvoicesPage() {
   if (role === "inspector") redirect("/admin");
 
   // Build invoices query — instructors see only their own
-  let query = supabase
+  let query = admin
     .from("invoices")
     .select(`
       id, invoice_number, invoice_type, recipient_name,
@@ -83,7 +84,7 @@ export default async function InvoicesPage() {
 
   const instructors =
     role === "manager" || role === "super_admin"
-      ? await fetchInstructors(supabase)
+      ? await fetchInstructors(admin)
       : [];
 
   return (

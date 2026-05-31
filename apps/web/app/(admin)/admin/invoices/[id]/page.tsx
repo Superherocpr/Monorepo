@@ -6,7 +6,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 import InvoiceDetailClient, {
   type InvoiceDetail,
@@ -25,6 +25,7 @@ interface PageProps {
 export default async function InvoiceDetailPage({ params }: PageProps) {
   const { id } = await params;
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
@@ -32,7 +33,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
 
   if (!user) redirect(`/signin?redirect=/admin/invoices/${id}`);
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("id, role")
     .eq("id", user.id)
@@ -45,7 +46,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   // Inspectors have no access to invoices
   if (role === "inspector") redirect("/admin");
 
-  const { data: invoice } = await supabase
+  const { data: invoice } = await admin
     .from("invoices")
     .select(`
       id, invoice_number, invoice_type, recipient_name,

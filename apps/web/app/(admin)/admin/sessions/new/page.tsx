@@ -10,7 +10,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 import CreateSessionClient, {
   type ClassTypeOption,
@@ -27,6 +27,7 @@ const ALLOWED_ROLES: UserRole[] = ["instructor", "manager", "super_admin"];
  */
 export default async function NewSessionPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
@@ -34,7 +35,7 @@ export default async function NewSessionPage() {
 
   if (!user) redirect("/signin?redirect=/admin/sessions/new");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("id, role, first_name, last_name")
     .eq("id", user.id)
@@ -53,7 +54,7 @@ export default async function NewSessionPage() {
     : undefined;
 
   // ── Fetch active class types ───────────────────────────────────────────────
-  const { data: rawClassTypes } = await supabase
+  const { data: rawClassTypes } = await admin
     .from("class_types")
     .select("id, name, duration_minutes, max_capacity")
     .eq("active", true)
@@ -67,7 +68,7 @@ export default async function NewSessionPage() {
   }));
 
   // ── Fetch all locations ────────────────────────────────────────────────────
-  const { data: rawLocations } = await supabase
+  const { data: rawLocations } = await admin
     .from("locations")
     .select("id, name, address, city, state")
     .order("name");
@@ -83,7 +84,7 @@ export default async function NewSessionPage() {
   // ── Fetch instructor list (manager/super admin only) ───────────────────────
   let instructors: InstructorOption[] = [];
   if (!isInstructor) {
-    const { data: rawInstructors } = await supabase
+    const { data: rawInstructors } = await admin
       .from("profiles")
       .select("id, first_name, last_name")
       .in("role", ["instructor", "manager", "super_admin"])

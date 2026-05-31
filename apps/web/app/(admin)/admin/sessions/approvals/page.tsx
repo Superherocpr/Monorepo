@@ -8,7 +8,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 import ApprovalsHeader from "./_components/ApprovalsHeader";
 import ApprovalsEmptyState from "./_components/ApprovalsEmptyState";
@@ -23,6 +23,7 @@ import type { PendingSession } from "./_components/ApprovalCard";
  */
 export default async function ApprovalsPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   const {
     data: { user },
@@ -30,7 +31,7 @@ export default async function ApprovalsPage() {
 
   if (!user) redirect("/signin?redirect=/admin/sessions/approvals");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -45,7 +46,7 @@ export default async function ApprovalsPage() {
     redirect("/admin");
   }
 
-  const { data: pendingSessions } = await supabase
+  const { data: pendingSessions } = await admin
     .from("class_sessions")
     .select(`
       id, starts_at, ends_at, rejection_reason, created_at,

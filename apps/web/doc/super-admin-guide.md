@@ -15,13 +15,14 @@ Sign in at `/signin`. You'll land at `/admin` automatically.
 5. [Merchandise and Products](#5-merchandise-and-products)
 6. [Orders](#6-orders)
 7. [Analytics](#7-analytics)
-8. [Invoices](#8-invoices)
-9. [Customer Management](#9-customer-management)
-10. [Archived Customers](#10-archived-customers)
-11. [Payments Ledger](#11-payments-ledger)
-12. [Locations](#12-locations)
-13. [Contact Submissions](#13-contact-submissions)
-14. [System Settings](#14-system-settings)
+8. [Instructor Payouts](#8-instructor-payouts)
+9. [Invoices](#9-invoices)
+10. [Customer Management](#10-customer-management)
+11. [Archived Customers](#11-archived-customers)
+12. [Payments Ledger](#12-payments-ledger)
+13. [Locations](#13-locations)
+14. [Contact Submissions](#14-contact-submissions)
+15. [System Settings](#15-system-settings)
 
 ---
 
@@ -274,19 +275,61 @@ Use the analytics page to identify busy periods, revenue trends, and the impact 
 
 ---
 
-## 8. Invoices
+## 8. Instructor Payouts (`/admin/payouts`)
+
+This page is where you review pending instructor earnings and send out PayPal payout batches. Only super admins can access this page.
+
+### How Instructor Earnings Accumulate
+
+Whenever a customer pays for a booking or an invoice is marked paid, the system automatically calculates and records an earning for the instructor who ran that session. Each earning captures:
+- The gross amount (what the customer paid)
+- The platform fee (SuperHeroCPR's cut)
+- The instructor amount (what the instructor receives)
+
+Earnings sit as **pending** until you send a payout batch.
+
+### Pending Payouts
+
+The top section of the page groups pending earnings by instructor. Each row shows:
+- Instructor name and email
+- The PayPal email where their payout will be sent
+- Total pending gross, platform fee, and instructor payout amount
+- Number of individual earning records included
+
+**Instructors missing a PayPal payout email** are flagged separately — their earnings accumulate but cannot be paid out until they save a payout email on their profile page (`/admin/profile/payment`).
+
+### Sending a Payout Batch
+
+1. Review the pending amounts to confirm they look correct
+2. Click **"Send Payouts"** to initiate a PayPal Payouts batch for all eligible instructors
+3. The system submits the batch to PayPal and records the batch in the payout history
+
+PayPal processes the batch and deposits funds into each instructor's PayPal account. The status updates automatically once PayPal confirms the batch.
+
+### Payout Batch History
+
+The lower section shows all past payout batches, sorted most recent first. Each batch record shows:
+- Batch ID and PayPal batch reference
+- Status (Pending / Completed / Failed)
+- Total amount and number of payees
+- When it was submitted and completed
+- Error message if the batch failed
+
+---
+
+## 9. Invoices
 
 Full invoice management — same as described in the [Manager Guide — Invoices](manager-guide.md#6-invoices--full-management) section. Super admins can view, resend, mark paid, cancel, and edit all invoices.
 
 ---
 
-## 9. Customer Management
+## 10. Customer Management
 
 Full customer management — same as described in the [Manager Guide — Customer Management](manager-guide.md#7-customer-management) section.
 
 ---
 
-## 10. Archived Customers (`/admin/archived`)
+## 11. Archived Customers (`/admin/archived`)
 
 This page shows every customer account that has been archived.
 
@@ -310,25 +353,25 @@ Click **Delete** to permanently and irreversibly remove the customer's account a
 
 ---
 
-## 11. Payments Ledger
+## 12. Payments Ledger
 
 Full payments access — same as described in the [Manager Guide — Payments Ledger](manager-guide.md#8-payments-ledger) section.
 
 ---
 
-## 12. Locations
+## 13. Locations
 
 Full location management — same as described in the [Manager Guide — Locations](manager-guide.md#9-locations) section.
 
 ---
 
-## 13. Contact Submissions
+## 14. Contact Submissions
 
 Full contact submission management — same as described in the [Manager Guide — Contact Submissions](manager-guide.md#10-contact-submissions) section.
 
 ---
 
-## 14. System Settings (`/admin/settings`)
+## 15. System Settings (`/admin/settings`)
 
 This is the control center for the entire platform. Super admins have full access to all settings.
 

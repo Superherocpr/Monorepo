@@ -8,7 +8,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import AdminSidebar from "./_components/AdminSidebar";
 import AdminTopBar from "./_components/AdminTopBar";
 import type { UserRole } from "@/types/users";
@@ -31,13 +31,14 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
+  const admin = await createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/signin?redirect=/admin");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("first_name, last_name, role, archived, deactivated")
     .eq("id", user.id)
@@ -61,7 +62,7 @@ export default async function AdminLayout({
   // (e.g. column not yet added via migration 0020) cannot break the auth guard above.
   let showPaymentBanner = false;
   if (role === "instructor" || role === "super_admin") {
-    const { data: payoutRow, error: payoutError } = await supabase
+    const { data: payoutRow, error: payoutError } = await admin
       .from("profiles")
       .select("paypal_payout_email")
       .eq("id", user.id)

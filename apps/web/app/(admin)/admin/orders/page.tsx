@@ -9,7 +9,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import OrdersAdminClient, {
   type OrdersPageData,
 } from "@/app/(admin)/_components/OrdersAdminClient";
@@ -35,6 +35,7 @@ interface PageProps {
 export default async function AdminOrdersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   // ── Auth & role check ──────────────────────────────────────────────────────
   const {
@@ -43,7 +44,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
 
   if (!user) redirect("/signin");
 
-  const { data: actorProfile } = await supabase
+  const { data: actorProfile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -63,7 +64,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
   const customerFilter = sp.customer?.trim() ?? null;
 
   // ── Build query ────────────────────────────────────────────────────────────
-  let query = supabase
+  let query = admin
     .from("orders")
     .select(
       `id, status, total_amount, paypal_transaction_id,

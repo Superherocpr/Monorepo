@@ -15,6 +15,7 @@ import type { CertificationAdminRecord, CertTypeAdminRow } from "@/types/certifi
 /** Server component — handles auth, data fetching, and data shaping. */
 export default async function CertificationsPage() {
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   // ── Auth & access check ────────────────────────────────────────────────────
   const {
@@ -23,7 +24,7 @@ export default async function CertificationsPage() {
 
   if (!user) redirect("/signin");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -39,7 +40,7 @@ export default async function CertificationsPage() {
   const adminSupabase = await createAdminClient();
 
   const [certsResult, certTypesResult, remindersSetting] = await Promise.all([
-    supabase
+    admin
       .from("certifications")
       .select(`
         id, issued_at, expires_at, cert_number, notes, reminder_sent, session_id,
@@ -52,7 +53,7 @@ export default async function CertificationsPage() {
       `)
       .order("expires_at", { ascending: true }),
 
-    supabase
+    admin
       .from("cert_types")
       .select("id, name, description, validity_months, issuing_body, card_design, active")
       .order("name"),

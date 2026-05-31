@@ -10,7 +10,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import PaymentsClient, {
   type PaymentsPageData,
 } from "@/app/(admin)/_components/PaymentsClient";
@@ -46,6 +46,7 @@ interface PageProps {
 export default async function PaymentsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const supabase = await createClient();
+  const admin = await createAdminClient();
 
   // ── Auth & access check ────────────────────────────────────────────────────
   const {
@@ -54,7 +55,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
 
   if (!user) redirect("/signin");
 
-  const { data: actorProfile } = await supabase
+  const { data: actorProfile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -87,7 +88,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
   //   profiles!logged_by   — payments.logged_by → profiles
   // The instructor filter is applied via the session's instructor_id after fetch
   // because Supabase doesn't support deep-join filters server-side cleanly.
-  let query = supabase
+  let query = admin
     .from("payments")
     .select(
       `
@@ -160,7 +161,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
     1
   ).toISOString();
 
-  const { data: monthlyStats } = await supabase
+  const { data: monthlyStats } = await admin
     .from("payments")
     .select("amount, payment_type, status")
     .eq("status", "completed")
@@ -180,7 +181,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
     .reduce((sum, p) => sum + Number(p.amount), 0);
 
   // ── Instructors list for filter dropdown ───────────────────────────────────
-  const { data: instructors } = await supabase
+  const { data: instructors } = await admin
     .from("profiles")
     .select("id, first_name, last_name")
     .eq("role", "instructor")
