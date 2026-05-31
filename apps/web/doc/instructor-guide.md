@@ -13,7 +13,7 @@ Instructors access the admin area by signing in at `/signin`. You'll be taken to
 3. [Session Detail](#3-session-detail)
 4. [Grading Students](#4-grading-students)
 5. [Invoicing](#5-invoicing)
-6. [Connecting Your Payment Account](#6-connecting-your-payment-account)
+6. [Payout Settings](#6-payout-settings)
 7. [Enrollware Bookmarklet](#7-enrollware-bookmarklet)
 8. [Settings Access](#8-settings-access)
 

@@ -41,13 +41,14 @@ A super admin has full control over the platform. This includes everything a man
 | Book a class | Customers | [Customer Guide §2](customer-guide.md#2-booking-a-class) |
 | View upcoming bookings | Customers | [Customer Guide §3](customer-guide.md#3-your-dashboard) |
 | Download certifications / eCards | Customers | [Customer Guide §5](customer-guide.md#5-your-certifications) |
-| Shop for merchandise | Customers | [Customer Guide §8](customer-guide.md#8-shopping-for-merchandise) |
-| Roll call check-in | Customers (class day) | [Customer Guide §7](customer-guide.md#7-roll-call-check-in) |
-| Roster correction | Customers (group bookings) | [Customer Guide §9](customer-guide.md#9-roster-correction) |
+| Shop for merchandise | Customers | [Customer Guide §10](customer-guide.md#10-shopping-for-merchandise) |
+| Roll call check-in | Customers (class day) | [Customer Guide §8](customer-guide.md#8-checking-in-on-class-day-roll-call) |
+| Walk-in registration on class day (Recruit) | Customers (class day, first-time) | [Customer Guide §12](customer-guide.md#12-walk-in-registration-on-class-day-recruit) |
+| Roster correction | Customers (group bookings) | [Customer Guide §9](customer-guide.md#9-confirming-your-roster-info-group-classes) |
 | Create and manage sessions | Instructors + | [Instructor Guide §2](instructor-guide.md#2-managing-sessions) |
 | Grade students | Instructors + | [Instructor Guide §4](instructor-guide.md#4-grading-students) |
 | Create and send invoices | Instructors + | [Instructor Guide §5](instructor-guide.md#5-invoicing) |
-| Connect PayPal payment account | Instructors + | [Instructor Guide §6](instructor-guide.md#6-connecting-your-payment-account) |
+| Connect PayPal payment account | Instructors + | [Instructor Guide §6](instructor-guide.md#6-payout-settings) |
 | Use Enrollware bookmarklet | Instructors + | [Instructor Guide §7](instructor-guide.md#7-enrollware-bookmarklet) |
 | Approve / reject sessions | Managers + | [Manager Guide §3](manager-guide.md#3-approving-and-rejecting-sessions) |
 | Import a class roster (CSV) | Managers + | [Manager Guide §5](manager-guide.md#5-importing-a-roster) |
@@ -59,6 +60,7 @@ A super admin has full control over the platform. This includes everything a man
 | Issue and manage certifications | Super Admins only | [Super Admin Guide §4](super-admin-guide.md#4-certifications) |
 | Manage merchandise and products | Super Admins only | [Super Admin Guide §5](super-admin-guide.md#5-merchandise-and-products) |
 | Manage orders | Super Admins only | [Super Admin Guide §6](super-admin-guide.md#6-orders) |
+| Send instructor payouts | Super Admins only | [Super Admin Guide §8](super-admin-guide.md#8-instructor-payouts) |
 | View analytics | Super Admins only | [Super Admin Guide §7](super-admin-guide.md#7-analytics) |
-| Configure system settings | Super Admins only | [Super Admin Guide §14](super-admin-guide.md#14-system-settings) |
-| Permanently delete archived customers | Super Admins only | [Super Admin Guide §10](super-admin-guide.md#10-archived-customers) |
+| Configure system settings | Super Admins only | [Super Admin Guide §15](super-admin-guide.md#15-system-settings) |
+| Permanently delete archived customers | Super Admins only | [Super Admin Guide §11](super-admin-guide.md#11-archived-customers) |

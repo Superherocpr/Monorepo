@@ -17,6 +17,7 @@ This guide explains everything a customer can do on the SuperHero CPR website: b
 9. [Confirming Your Roster Info (Group Classes)](#9-confirming-your-roster-info-group-classes)
 10. [Shopping for Merchandise](#10-shopping-for-merchandise)
 11. [Contacting Us](#11-contacting-us)
+12. [Walk-in Registration on Class Day (Recruit)](#12-walk-in-registration-on-class-day-recruit)
 
 ---
 
@@ -238,7 +239,7 @@ You'll see a green checkmark and a confirmation that you're checked in, along wi
 
 ---
 
-## 9. Confirming Your Roster Info (Group Classes) (`/roster/[link]`)
+## 9. Confirming Your Roster Info (Group Classes) (`/roster/[session_token]`)
 
 If your employer registered you for a group CPR class, you may receive a personal link to confirm or correct your information before the class. This ensures your certification is issued with the correct details.
 
@@ -285,6 +286,32 @@ Use the contact form to reach out for any inquiry. Fill in:
 Click **"Send Message"**. You'll see a confirmation that your message was received. We'll follow up by email.
 
 The page also includes a **service area map** showing the counties we serve — Hillsborough, Manatee, and Sarasota — so you can confirm we operate in your area before reaching out.
+
+---
+
+## 12. Walk-in Registration on Class Day (Recruit) (`/recruit`)
+
+This page is for students attending a class where their employer or school paid in advance as a group, and the exact student list wasn't known ahead of time. If your instructor directs you here on class day, use this flow to register your account on the spot.
+
+This is different from Roll Call (`/rollcall`). Roll Call is for students who already have an account. Recruit is for first-time students creating an account right before class.
+
+### Step 1 — Enter the Access Code
+Your instructor gives you a 6-digit access code on class day. Enter it here. If the code is wrong, you'll see an error and can try again.
+
+### Step 2 — Select Your Session (if applicable)
+If your instructor has more than one class today, you'll be asked to pick which one you're attending. Each option shows the class name, time, and location.
+
+### Step 3 — Create Your Account
+Fill in:
+- First Name and Last Name
+- Phone number (optional)
+- Email address
+- Password (minimum 8 characters — a strength indicator shows how secure it is)
+
+Click **"Register & Check In"** to create your account and record your attendance in one step.
+
+### Step 4 — Confirmation
+You'll see a green checkmark confirming you're checked in. Your account is active immediately and you can sign in at `/signin` in the future.
 
 ---
 
