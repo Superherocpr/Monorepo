@@ -5,7 +5,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import BookingsPageHeader from "./_components/BookingsPageHeader";
 import UpcomingBookingsList from "./_components/UpcomingBookingsList";
 import PastBookingsList from "./_components/PastBookingsList";
@@ -25,10 +25,15 @@ export default async function BookingsPage() {
 
   if (!user) redirect("/signin?redirect=/dashboard/bookings");
 
-  // Note: ordering by a foreign-table column via dot notation is not supported
-  // in Supabase JS v2 — it causes PostgREST to return an error and null data.
-  // Display order is handled entirely by the in-memory sorts below.
-  const { data: bookings } = await supabase
+  // Service-role client required for this query because:
+  // - class_sessions RLS policy restricts to future sessions (starts_at > now()),
+  //   which would make all past booking session data return null.
+  // - payments has no authenticated SELECT policy, so the join always returns empty.
+  // The user has already been verified above; adminClient is scoped to their own
+  // customer_id in the query filter.
+  const adminClient = await createAdminClient();
+
+  const { data: bookings } = await adminClient
     .from("bookings")
     .select(
       `id, cancelled, cancellation_note, booking_source, created_at,
@@ -40,6 +45,8 @@ export default async function BookingsPage() {
        ),
        payments ( status, payment_type, amount )`
     )
+    // Note: ordering by a foreign-table column via dot notation is not supported
+    // in Supabase JS v2 — display order is handled by in-memory sorts below.
     .eq("customer_id", user.id);
 
   const now = new Date();

@@ -5,7 +5,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import OrdersPageHeader from "./_components/OrdersPageHeader";
 import OrdersList from "./_components/OrdersList";
 import type { OrderRecord } from "@/types/orders";
@@ -23,7 +23,12 @@ export default async function OrdersPage() {
 
   if (!user) redirect("/signin?redirect=/dashboard/orders");
 
-  const { data: orders } = await supabase
+  // Service-role client required: order_items has no authenticated SELECT RLS
+  // policy (intentionally — it is only read via admin client). The join would
+  // return empty arrays with the anon/session client.
+  const adminClient = await createAdminClient();
+
+  const { data: orders } = await adminClient
     .from("orders")
     .select(
       `id, status, total_amount, tracking_number,

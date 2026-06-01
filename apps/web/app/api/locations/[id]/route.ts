@@ -91,7 +91,7 @@ export async function PATCH(
   const notesValue = typeof notes === "string" && notes.trim() ? notes.trim() : null;
 
   // ── Update ─────────────────────────────────────────────────────────────────
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("locations")
     .update({
       name: name.trim(),

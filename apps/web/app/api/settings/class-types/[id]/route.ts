@@ -36,6 +36,8 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse and validate body ────────────────────────────────────────────────
   const body = await request.json();
   const { name, description, duration_minutes, max_capacity, price, active, cert_type_id } =
