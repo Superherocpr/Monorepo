@@ -5,7 +5,7 @@
  */
 
 import type { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import BookSessionSelector from "./_components/BookSessionSelector";
 import type { ScheduleSession, ClassTypeOption } from "@/types/schedule";
 
@@ -23,7 +23,11 @@ interface BookPageProps {
 /** Renders Step 1 of the booking wizard (session selection). */
 export default async function BookPage({ searchParams }: BookPageProps) {
   const params = await searchParams;
-  const supabase = await createClient();
+  // Service-role client required: the query joins bookings (need ALL bookings
+  // per session to count spots, not just the current user's own) and invoices
+  // (no anon/authenticated RLS policy exists). Using the anon client would
+  // return 0 bookings and 0 invoices, making every full class appear available.
+  const supabase = await createAdminClient();
 
   // CRITICAL: Must filter by both status = 'scheduled' AND approval_status = 'approved'
   // Sessions pending approval or rejected are not publicly bookable

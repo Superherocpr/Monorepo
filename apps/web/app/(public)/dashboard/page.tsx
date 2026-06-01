@@ -36,7 +36,9 @@ async function fetchProfile(supabase: SupabaseClient, userId: string) {
 
 /**
  * Fetches the customer's next 2 upcoming (non-cancelled) class bookings.
- * @param supabase - Server Supabase client
+ * Service-role client is used so that class_sessions, class_types, and locations
+ * can all be joined regardless of RLS status restrictions on the session row.
+ * @param supabase - Service-role Supabase client
  * @param userId - Auth user ID
  */
 async function fetchUpcomingBookings(
@@ -82,8 +84,10 @@ async function fetchCertifications(
 
 /**
  * Fetches the customer's most recent merch order with items.
+ * Service-role client required: order_items has no authenticated SELECT RLS
+ * policy — the join returns empty arrays with the anon/session client.
  * Returns null if the customer has no orders.
- * @param supabase - Server Supabase client
+ * @param supabase - Service-role Supabase client
  * @param userId - Auth user ID
  */
 async function fetchRecentOrder(
@@ -120,9 +124,9 @@ export default async function DashboardPage() {
   const [profile, upcomingBookings, certifications, recentOrder] =
     await Promise.all([
       fetchProfile(supabase, user.id),
-      fetchUpcomingBookings(supabase, user.id),
+      fetchUpcomingBookings(adminSupabase, user.id),
       fetchCertifications(adminSupabase, user.id),
-      fetchRecentOrder(supabase, user.id),
+      fetchRecentOrder(adminSupabase, user.id),
     ]);
 
   // A missing profile means the account exists in auth but has no profile row —
