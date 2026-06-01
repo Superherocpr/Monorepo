@@ -5,7 +5,7 @@
  * Creates a new preset_grades record. Rejects duplicate values.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 
 /**
@@ -32,6 +32,8 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse and validate body ────────────────────────────────────────────────
   const body = await request.json();
   const { value, label } = body as { value: number; label: string };
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
   }
 
   // ── Insert ─────────────────────────────────────────────────────────────────
-  const { data: grade, error } = await supabase
+  const { data: grade, error } = await adminClient
     .from("preset_grades")
     .insert({ value, label: label.trim() })
     .select("id, value, label")

@@ -15,7 +15,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /** A single row from the CSV as parsed by the client. */
 interface ImportRow {
@@ -143,7 +143,8 @@ export async function POST(request: Request) {
   }
 
   // ── Filter out names that already exist in the database ───────────────────
-  const { data: existingRaw } = await supabase
+  const admin = await createAdminClient();
+  const { data: existingRaw } = await admin
     .from("locations")
     .select("name");
   const existingNames = new Set((existingRaw ?? []).map((r) => r.name as string));
@@ -178,7 +179,7 @@ export async function POST(request: Request) {
   // ── Bulk insert ─────────────────────────────────────────────────────────────
   // Insert in one shot. Supabase/Postgres will apply NOT NULL constraints but
   // empty string satisfies them for text columns.
-  const { data: inserted, error } = await supabase
+  const { data: inserted, error } = await admin
     .from("locations")
     .insert(newRows)
     .select("id");

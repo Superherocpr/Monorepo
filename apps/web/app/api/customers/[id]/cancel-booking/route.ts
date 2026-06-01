@@ -5,7 +5,7 @@
  * Cancels a booking with a required reason. Records who cancelled it.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Cancels a booking for the specified customer.
@@ -38,6 +38,8 @@ export async function POST(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ─────────────────────────────────────────────────────────────
   let body: { bookingId?: unknown; reason?: unknown };
   try {
@@ -60,7 +62,7 @@ export async function POST(
   }
 
   // ── Cancel the booking — must belong to this customer ─────────────────────
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("bookings")
     .update({
       cancelled: true,

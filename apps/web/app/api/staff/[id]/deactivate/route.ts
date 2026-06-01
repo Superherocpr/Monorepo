@@ -43,8 +43,10 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminSupabase = await createAdminClient();
+
   // ── Owner protection ───────────────────────────────────────────────────────
-  const { data: target } = await supabase
+  const { data: target } = await adminSupabase
     .from("profiles")
     .select("email")
     .eq("id", targetId)
@@ -75,7 +77,7 @@ export async function PATCH(
 
   let profileError: { message?: string } | null = null;
   for (const payload of updateAttempts) {
-    const { error } = await supabase
+    const { error } = await adminSupabase
       .from("profiles")
       .update(payload)
       .eq("id", targetId);
@@ -95,7 +97,7 @@ export async function PATCH(
 
   // ── Block Supabase auth login ──────────────────────────────────────────────
   // ban_duration: 'none' means an indefinite ban — the user cannot log in
-  const adminSupabase = await createAdminClient();
+
   await adminSupabase.auth.admin.updateUserById(targetId, { ban_duration: "none" });
 
   return Response.json({ success: true });

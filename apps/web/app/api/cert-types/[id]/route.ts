@@ -6,7 +6,7 @@
  * fields are changed. Cert types are never deleted; use active=false to deactivate.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /** Validates that a value is a plausible UUID. */
 function isValidUuid(val: string): boolean {
@@ -44,6 +44,8 @@ export async function PATCH(
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   const { id } = await params;
   if (!isValidUuid(id)) {
     return Response.json({ error: "Invalid cert type ID." }, { status: 400 });
@@ -80,7 +82,7 @@ export async function PATCH(
     return Response.json({ error: "No fields to update." }, { status: 400 });
   }
 
-  const { data: certType, error } = await supabase
+  const { data: certType, error } = await adminClient
     .from("cert_types")
     .update(update)
     .eq("id", id)

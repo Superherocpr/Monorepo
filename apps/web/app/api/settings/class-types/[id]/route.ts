@@ -5,7 +5,7 @@
  * Updates an existing class_types record.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 
 /**
@@ -65,7 +65,7 @@ export async function PATCH(
   }
 
   // ── Update ─────────────────────────────────────────────────────────────────
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("class_types")
     .update({
       name: name.trim(),
@@ -122,8 +122,10 @@ export async function DELETE(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Verify no linked sessions ──────────────────────────────────────────────
-  const { count, error: countError } = await supabase
+  const { count, error: countError } = await adminClient
     .from("class_sessions")
     .select("id", { count: "exact", head: true })
     .eq("class_type_id", id);
@@ -147,7 +149,7 @@ export async function DELETE(
   }
 
   // ── Delete ─────────────────────────────────────────────────────────────────
-  const { error } = await supabase.from("class_types").delete().eq("id", id);
+  const { error } = await adminClient.from("class_types").delete().eq("id", id);
 
   if (error) {
     console.error("[DELETE /api/settings/class-types/[id]]", error);

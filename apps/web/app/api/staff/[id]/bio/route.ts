@@ -6,7 +6,7 @@
  * Fields are optional — omitting a field leaves the existing value unchanged.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 
 interface BioPayload {
@@ -48,6 +48,8 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ──────────────────────────────────────────────────────────────
   let body: BioPayload;
   try {
@@ -83,7 +85,7 @@ export async function PATCH(
   // ── Verify target exists and is staff (not a customer) ─────────────────────
   const { id: staffId } = await params;
 
-  const { data: targetProfile } = await supabase
+  const { data: targetProfile } = await adminClient
     .from("profiles")
     .select("id, role")
     .eq("id", staffId)
@@ -102,7 +104,7 @@ export async function PATCH(
   }
 
   // ── Apply update ────────────────────────────────────────────────────────────
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("profiles")
     .update(update)
     .eq("id", staffId);

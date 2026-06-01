@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /** Sets the target location as the sole home base. */
 export async function PATCH(
@@ -36,8 +36,10 @@ export async function PATCH(
     return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Verify target location exists ──────────────────────────────────────────
-  const { data: target, error: lookupError } = await supabase
+  const { data: target, error: lookupError } = await adminClient
     .from("locations")
     .select("id")
     .eq("id", id)
@@ -51,7 +53,7 @@ export async function PATCH(
   }
 
   // ── Clear all home bases ───────────────────────────────────────────────────
-  const { error: clearError } = await supabase
+  const { error: clearError } = await adminClient
     .from("locations")
     .update({ is_home_base: false })
     .neq("id", "00000000-0000-0000-0000-000000000000"); // matches all rows
@@ -65,7 +67,7 @@ export async function PATCH(
   }
 
   // ── Set the target location as home base ───────────────────────────────────
-  const { error: setError } = await supabase
+  const { error: setError } = await adminClient
     .from("locations")
     .update({ is_home_base: true })
     .eq("id", id);

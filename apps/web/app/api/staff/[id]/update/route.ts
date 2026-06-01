@@ -43,8 +43,10 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Owner protection ───────────────────────────────────────────────────────
-  const { data: target } = await supabase
+  const { data: target } = await adminClient
     .from("profiles")
     .select("email, role")
     .eq("id", targetId)
@@ -141,7 +143,7 @@ export async function PATCH(
   if (body.email !== undefined) profileUpdate.email = emailValue;
   if (body.phone !== undefined) profileUpdate.phone = phoneValue;
 
-  const { error: profileError } = await supabase
+  const { error: profileError } = await adminClient
     .from("profiles")
     .update(profileUpdate)
     .eq("id", targetId);
@@ -157,7 +159,6 @@ export async function PATCH(
   // Uses the service-role admin client. email_confirm: true skips confirmation
   // so the change is immediate — appropriate for admin-initiated corrections.
   if (emailValue && body.email !== undefined) {
-    const adminClient = await createAdminClient();
     const { error: authError } = await adminClient.auth.admin.updateUserById(
       targetId,
       { email: emailValue, email_confirm: true }
@@ -165,7 +166,7 @@ export async function PATCH(
 
     if (authError) {
       // Roll back the profiles update to keep both tables in sync
-      await supabase
+      await adminClient
         .from("profiles")
         .update({ email: target.email, updated_at: new Date().toISOString() })
         .eq("id", targetId);

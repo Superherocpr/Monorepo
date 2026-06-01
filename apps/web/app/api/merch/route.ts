@@ -6,7 +6,7 @@
  * Returns the newly created product with variants.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   // ── Auth guard ──────────────────────────────────────────────────────────────
@@ -28,6 +28,8 @@ export async function POST(request: Request) {
   if (!profile || profile.role !== "super_admin") {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
+
+  const adminClient = await createAdminClient();
 
   // ── Parse body ──────────────────────────────────────────────────────────────
   let body: Record<string, unknown>;
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
   }
 
   // ── Insert product ─────────────────────────────────────────────────────────
-  const { data: product, error: productError } = await supabase
+  const { data: product, error: productError } = await adminClient
     .from("products")
     .insert({
       name: (name as string).trim(),
@@ -89,7 +91,7 @@ export async function POST(request: Request) {
       stock_quantity: typeof v.stock_quantity === "number" ? Math.max(0, v.stock_quantity) : 0,
     }));
 
-    const { data: vData, error: variantError } = await supabase
+    const { data: vData, error: variantError } = await adminClient
       .from("product_variants")
       .insert(variantRows)
       .select("id, size, stock_quantity");

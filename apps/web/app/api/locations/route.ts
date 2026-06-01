@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /** Valid US state codes for server-side validation. */
 const VALID_STATES = new Set([
@@ -91,7 +91,8 @@ async function requireStaffAuth() {
 export async function GET(request: Request) {
   const result = await requireManagerAuth();
   if ("error" in result) return result.error;
-  const { supabase } = result;
+
+  const adminClient = await createAdminClient();
 
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") ?? "").trim();
@@ -102,7 +103,7 @@ export async function GET(request: Request) {
 
   // ilike-search across all text columns; Supabase parameterises the value safely
   const pattern = `%${q}%`;
-  const { data: raw, error } = await supabase
+  const { data: raw, error } = await adminClient
     .from("locations")
     .select(
       `id, name, address, city, state, zip,
@@ -149,7 +150,8 @@ export async function POST(request: Request) {
   // Instructors can create new locations (e.g. from the session creation form).
   const result = await requireStaffAuth();
   if ("error" in result) return result.error;
-  const { supabase } = result;
+
+  const adminClient = await createAdminClient();
 
   // ── Input validation ───────────────────────────────────────────────────────
   let body: unknown;
@@ -181,7 +183,7 @@ export async function POST(request: Request) {
   const notesValue = typeof notes === "string" && notes.trim() ? notes.trim() : null;
 
   // ── Insert ─────────────────────────────────────────────────────────────────
-  const { data: location, error } = await supabase
+  const { data: location, error } = await adminClient
     .from("locations")
     .insert({
       name: name.trim(),

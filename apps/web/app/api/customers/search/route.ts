@@ -6,7 +6,7 @@
  * with pre-computed booking and cert counts for client-side filter use.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import {
   getCertificationDaysUntilExpiry,
   isCertificationActive,
@@ -45,6 +45,8 @@ export async function GET(request: Request) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Query params ───────────────────────────────────────────────────────────
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q") ?? "";
@@ -53,7 +55,7 @@ export async function GET(request: Request) {
   // Use explicit FK hints on bookings because the bookings table has three FKs
   // back to profiles (customer_id, created_by, cancelled_by). Without the hint
   // PostgREST cannot resolve the join and the query returns no data.
-  let dbQuery = supabase
+  let dbQuery = adminClient
     .from("profiles")
     .select(
       `

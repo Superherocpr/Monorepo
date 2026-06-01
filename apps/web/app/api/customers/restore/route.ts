@@ -6,7 +6,7 @@
  * never deleted during archiving, so the customer can log in immediately after restore.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 
 /**
@@ -33,6 +33,8 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse and validate body ────────────────────────────────────────────────
   const body = await request.json();
   const { customerId } = body as { customerId: string };
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
   }
 
   // ── Restore — safety check ensures we only restore customer-role profiles ──
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("profiles")
     .update({
       archived: false,

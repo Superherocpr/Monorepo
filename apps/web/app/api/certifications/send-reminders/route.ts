@@ -60,7 +60,7 @@ export async function POST(_request: Request) {
   const now = new Date();
   const ninetyDaysFromNow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
-  const { data: certs, error: certsError } = await supabase
+  const { data: certs, error: certsError } = await adminSupabase
     .from("certifications")
     .select(`
       id, expires_at,
@@ -109,7 +109,7 @@ export async function POST(_request: Request) {
       });
 
       // Mark the cert as reminded immediately after a successful send
-      await supabase
+      await adminSupabase
         .from("certifications")
         .update({ reminder_sent: true })
         .eq("id", cert.id);

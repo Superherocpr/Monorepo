@@ -40,6 +40,8 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminSupabase = await createAdminClient();
+
   // ── Clear deactivated flag ─────────────────────────────────────────────────
   // Compatibility fallback: some older local schemas may not yet have updated_at.
   const nowIso = new Date().toISOString();
@@ -50,7 +52,7 @@ export async function PATCH(
 
   let profileError: { message?: string } | null = null;
   for (const payload of updateAttempts) {
-    const { error } = await supabase
+    const { error } = await adminSupabase
       .from("profiles")
       .update(payload)
       .eq("id", targetId);
@@ -70,7 +72,7 @@ export async function PATCH(
 
   // ── Restore Supabase auth login ────────────────────────────────────────────
   // ban_duration: '0' lifts any active ban — the user can log in again
-  const adminSupabase = await createAdminClient();
+
   await adminSupabase.auth.admin.updateUserById(targetId, { ban_duration: "0" });
 
   return Response.json({ success: true });

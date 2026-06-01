@@ -5,7 +5,7 @@
  * Creates a new cert type record.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Creates a new certification type.
@@ -33,6 +33,8 @@ export async function POST(request: Request) {
   if (!profile || profile.role !== "super_admin") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const adminClient = await createAdminClient();
 
   // ── Parse and validate body ────────────────────────────────────────────────
   let body: {
@@ -63,7 +65,7 @@ export async function POST(request: Request) {
   }
 
   // ── Insert ─────────────────────────────────────────────────────────────────
-  const { data: certType, error } = await supabase
+  const { data: certType, error } = await adminClient
     .from("cert_types")
     .insert({
       name: name.trim(),

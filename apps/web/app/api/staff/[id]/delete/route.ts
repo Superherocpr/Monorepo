@@ -54,6 +54,8 @@ export async function DELETE(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Cannot delete yourself ────────────────────────────────────────────────
   if (targetId === user.id) {
     return Response.json(
@@ -63,7 +65,7 @@ export async function DELETE(
   }
 
   // ── Owner protection ───────────────────────────────────────────────────────
-  const { data: target } = await supabase
+  const { data: target } = await adminClient
     .from("profiles")
     .select("email, first_name, last_name, role")
     .eq("id", targetId)
@@ -96,7 +98,7 @@ export async function DELETE(
   // Class sessions reference instructor_id → profiles(id). Deleting a profile
   // with existing sessions would either violate the FK or orphan those sessions.
   // Admins should deactivate instead of deleting accounts with session history.
-  const { count: sessionCount } = await supabase
+  const { count: sessionCount } = await adminClient
     .from("class_sessions")
     .select("id", { count: "exact", head: true })
     .eq("instructor_id", targetId);
@@ -115,7 +117,7 @@ export async function DELETE(
 
   // ── Dependency check — block if the member has issued invoices ─────────────
   // Invoices reference instructor_id with a NOT NULL constraint and no CASCADE.
-  const { count: invoiceCount } = await supabase
+  const { count: invoiceCount } = await adminClient
     .from("invoices")
     .select("id", { count: "exact", head: true })
     .eq("instructor_id", targetId);
@@ -137,9 +139,9 @@ export async function DELETE(
   // the booking record while removing the reference to the deleted account.
   // payments.logged_by is likewise nullable.
   await Promise.all([
-    supabase.from("bookings").update({ created_by: null }).eq("created_by", targetId),
-    supabase.from("bookings").update({ cancelled_by: null }).eq("cancelled_by", targetId),
-    supabase.from("payments").update({ logged_by: null }).eq("logged_by", targetId),
+    adminClient.from("bookings").update({ created_by: null }).eq("created_by", targetId),
+    adminClient.from("bookings").update({ cancelled_by: null }).eq("cancelled_by", targetId),
+    adminClient.from("payments").update({ logged_by: null }).eq("logged_by", targetId),
   ]);
 
   // ── Delete audit/log rows that reference this profile ─────────────────────
@@ -147,10 +149,10 @@ export async function DELETE(
   // delete. Since the admin is choosing to fully erase this account, removing
   // these records is the appropriate action.
   await Promise.all([
-    supabase.from("invoice_activity_log").delete().eq("actor_id", targetId),
-    supabase.from("contact_replies").delete().eq("sent_by", targetId),
-    supabase.from("stock_adjustments").delete().eq("adjusted_by", targetId),
-    supabase.from("certifications").delete().eq("customer_id", targetId),
+    adminClient.from("invoice_activity_log").delete().eq("actor_id", targetId),
+    adminClient.from("contact_replies").delete().eq("sent_by", targetId),
+    adminClient.from("stock_adjustments").delete().eq("adjusted_by", targetId),
+    adminClient.from("certifications").delete().eq("customer_id", targetId),
   ]);
 
   // ── Delete the profile ─────────────────────────────────────────────────────
@@ -158,7 +160,7 @@ export async function DELETE(
   // ON DELETE CASCADE (auth.users → profiles), deleting the auth user would
   // also delete the profile — but deleting the profile first is the safe
   // order since we control it explicitly.
-  const { error: profileDeleteError } = await supabase
+  const { error: profileDeleteError } = await adminClient
     .from("profiles")
     .delete()
     .eq("id", targetId);
@@ -177,7 +179,6 @@ export async function DELETE(
   }
 
   // ── Delete the auth user ───────────────────────────────────────────────────
-  const adminClient = await createAdminClient();
   const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(targetId);
 
   if (authDeleteError) {

@@ -10,7 +10,7 @@
  * Returns: { success, created, skipped, duplicates, errors, message }
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 
 /** Shape of a single row sent from the import panel. */
@@ -54,6 +54,8 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ─────────────────────────────────────────────────────────────
   let body: { classTypes?: unknown };
   try {
@@ -79,7 +81,7 @@ export async function POST(request: Request) {
   }
 
   // ── Load existing names to detect duplicates before inserting ───────────────
-  const { data: existingRaw } = await supabase
+  const { data: existingRaw } = await adminClient
     .from("class_types")
     .select("name");
   const existingNames = new Set((existingRaw ?? []).map((r) => r.name as string));
@@ -117,7 +119,7 @@ export async function POST(request: Request) {
         ? row.max_capacity
         : 20; // default: 20 seats — user edits after import
 
-    const { error } = await supabase.from("class_types").insert({
+    const { error } = await adminClient.from("class_types").insert({
       name,
       description: (row.description ?? "").trim() || null,
       price,

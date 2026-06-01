@@ -7,7 +7,7 @@
  * Expiry is computed server-side from the cert type's validity_months.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Issues a certification manually to the specified customer.
@@ -41,6 +41,8 @@ export async function POST(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ─────────────────────────────────────────────────────────────
   let body: { certTypeId?: unknown; issuedAt?: unknown; certNumber?: unknown; notes?: unknown };
   try {
@@ -60,7 +62,7 @@ export async function POST(
   }
 
   // ── Fetch cert type for validity_months ────────────────────────────────────
-  const { data: certType } = await supabase
+  const { data: certType } = await adminClient
     .from("cert_types")
     .select("id, validity_months")
     .eq("id", certTypeId)

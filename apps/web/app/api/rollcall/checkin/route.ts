@@ -9,7 +9,7 @@
  * Does NOT create a booking record — student already has one.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Signs in a returning student and creates their roster_record.
@@ -44,8 +44,10 @@ export async function POST(request: Request) {
 
   const userId = authData.user.id;
 
+  const adminClient = await createAdminClient();
+
   // ── 2. Check if already checked in ──────────────────────────────────────
-  const { data: existingRecord } = await supabase
+  const { data: existingRecord } = await adminClient
     .from("roster_records")
     .select("id")
     .eq("session_id", sessionId)
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
 
   if (existingRecord) {
     // Already on roster — confirm gracefully without blocking
-    const { data: profile } = await supabase
+    const { data: profile } = await adminClient
       .from("profiles")
       .select("first_name")
       .eq("id", userId)
@@ -71,7 +73,7 @@ export async function POST(request: Request) {
   // A non-cancelled booking proves the student paid (online, invoice, or was
   // added by an instructor). Without one, refuse the check-in — the instructor
   // can add them via the admin tools after collecting payment.
-  const { data: booking } = await supabase
+  const { data: booking } = await adminClient
     .from("bookings")
     .select("id")
     .eq("session_id", sessionId)
@@ -91,7 +93,7 @@ export async function POST(request: Request) {
   }
 
   // ── 4. Fetch profile details for roster record ───────────────────────────
-  const { data: profile } = await supabase
+  const { data: profile } = await adminClient
     .from("profiles")
     .select("first_name, last_name, phone, address, city, state, zip")
     .eq("id", userId)
@@ -105,7 +107,7 @@ export async function POST(request: Request) {
   }
 
   // ── 5. Create roster_record ──────────────────────────────────────────────
-  const { error: insertError } = await supabase.from("roster_records").insert({
+  const { error: insertError } = await adminClient.from("roster_records").insert({
     session_id: sessionId,
     booking_id: booking.id,
     first_name: profile.first_name,

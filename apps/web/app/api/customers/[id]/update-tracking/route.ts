@@ -5,7 +5,7 @@
  * Updates the tracking number on a merch order belonging to this customer.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Updates the tracking number for a specific order.
@@ -38,6 +38,8 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ─────────────────────────────────────────────────────────────
   let body: { orderId?: unknown; trackingNumber?: unknown };
   try {
@@ -58,7 +60,7 @@ export async function PATCH(
       : null;
 
   // ── Update tracking — must belong to this customer ─────────────────────────
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("orders")
     .update({
       tracking_number: cleanTracking,

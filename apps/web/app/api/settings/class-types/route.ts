@@ -5,7 +5,7 @@
  * Creates a new class_types record.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 
 /**
@@ -30,6 +30,8 @@ export async function POST(request: Request) {
   if (!actor || (actor.role as UserRole) !== "super_admin") {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
+
+  const adminClient = await createAdminClient();
 
   // ── Parse and validate body ────────────────────────────────────────────────
   const body = await request.json();
@@ -60,7 +62,7 @@ export async function POST(request: Request) {
   }
 
   // ── Insert ─────────────────────────────────────────────────────────────────
-  const { error } = await supabase.from("class_types").insert({
+  const { error } = await adminClient.from("class_types").insert({
     name: name.trim(),
     description: description?.trim() || null,
     duration_minutes,

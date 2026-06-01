@@ -5,7 +5,7 @@
  * Updates the internal fulfillment notes on an order. Not visible to customers.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 export async function PATCH(request: Request) {
   const supabase = await createClient();
@@ -27,6 +27,8 @@ export async function PATCH(request: Request) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ──────────────────────────────────────────────────────────────
   let body: Record<string, unknown>;
   try {
@@ -44,7 +46,7 @@ export async function PATCH(request: Request) {
   }
 
   // ── Update notes ───────────────────────────────────────────────────────────
-  const { error: updateError } = await supabase
+  const { error: updateError } = await adminClient
     .from("orders")
     .update({
       notes: notes.trim() || null,

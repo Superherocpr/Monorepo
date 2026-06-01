@@ -11,7 +11,7 @@
  * Returns the updated product with all current variants.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Validates that a string is UUID-shaped (8-4-4-4-12 hex groups).
@@ -56,6 +56,8 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ──────────────────────────────────────────────────────────────
   let body: Record<string, unknown>;
   try {
@@ -79,7 +81,7 @@ export async function PATCH(
       typeof body.image_url === "string" ? body.image_url : null;
 
   if (Object.keys(update).length > 0) {
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminClient
       .from("products")
       .update(update)
       .eq("id", productId);
@@ -109,7 +111,7 @@ export async function PATCH(
         size: v.size,
         stock_quantity: Math.max(0, v.stock_quantity ?? 0),
       }));
-      const { error: insertErr } = await supabase
+      const { error: insertErr } = await adminClient
         .from("product_variants")
         .insert(rows);
       if (insertErr) {
@@ -122,7 +124,7 @@ export async function PATCH(
     const existingIds = new Set(
       incomingVariants.filter((v) => v.id !== null).map((v) => v.id as string)
     );
-    const { data: dbVariants } = await supabase
+    const { data: dbVariants } = await adminClient
       .from("product_variants")
       .select("id, stock_quantity")
       .eq("product_id", productId);
@@ -132,12 +134,12 @@ export async function PATCH(
       .map((v) => v.id);
 
     if (toDelete.length > 0) {
-      await supabase.from("product_variants").delete().in("id", toDelete);
+      await adminClient.from("product_variants").delete().in("id", toDelete);
     }
   }
 
   // ── Return updated product with variants ───────────────────────────────────
-  const { data: updatedProduct, error: fetchError } = await supabase
+  const { data: updatedProduct, error: fetchError } = await adminClient
     .from("products")
     .select(
       "id, name, description, price, image_url, active, low_stock_threshold, created_at, product_variants ( id, size, stock_quantity )"

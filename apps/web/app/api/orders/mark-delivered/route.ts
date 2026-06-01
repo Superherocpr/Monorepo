@@ -5,7 +5,7 @@
  * Updates order status from 'shipped' to 'delivered'. No email is sent.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -27,6 +27,8 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ──────────────────────────────────────────────────────────────
   let body: Record<string, unknown>;
   try {
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
   }
 
   // ── Validate current status ─────────────────────────────────────────────────
-  const { data: order } = await supabase
+  const { data: order } = await adminClient
     .from("orders")
     .select("id, status")
     .eq("id", orderId)
@@ -58,7 +60,7 @@ export async function POST(request: Request) {
   }
 
   // ── Update order ───────────────────────────────────────────────────────────
-  const { error: updateError } = await supabase
+  const { error: updateError } = await adminClient
     .from("orders")
     .update({ status: "delivered", updated_at: new Date().toISOString() })
     .eq("id", orderId);

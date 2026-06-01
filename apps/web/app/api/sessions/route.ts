@@ -14,7 +14,7 @@
  * Managers and super admins may create sessions for any instructor.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 /** Staff roles that are permitted to create sessions. */
@@ -49,6 +49,8 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const isInstructor = profile.role === "instructor";
+
+  const adminClient = await createAdminClient();
 
   // ── Parse body ─────────────────────────────────────────────────────────────
   let body: unknown;
@@ -112,7 +114,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // ── Verify class_type exists and is active ─────────────────────────────────
-  const { data: classType } = await supabase
+  const { data: classType } = await adminClient
     .from("class_types")
     .select("id")
     .eq("id", class_type_id)
@@ -127,7 +129,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // ── Verify location exists ─────────────────────────────────────────────────
-  const { data: location } = await supabase
+  const { data: location } = await adminClient
     .from("locations")
     .select("id")
     .eq("id", location_id)
@@ -143,7 +145,7 @@ export async function POST(request: Request): Promise<Response> {
   // ── Verify instructor exists and is a staff member ─────────────────────────
   // Only check if a non-instructor user supplied an instructor_id.
   if (!isInstructor) {
-    const { data: instructor } = await supabase
+    const { data: instructor } = await adminClient
       .from("profiles")
       .select("id, role")
       .eq("id", resolvedInstructorId)
@@ -160,7 +162,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // ── Insert the new session ─────────────────────────────────────────────────
-  const { data: newSession, error: insertError } = await supabase
+  const { data: newSession, error: insertError } = await adminClient
     .from("class_sessions")
     .insert({
       class_type_id,

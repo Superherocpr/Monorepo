@@ -6,7 +6,7 @@
  * Returns the new active value so the client can update optimistically.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 
 /**
@@ -39,8 +39,10 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Read current active state ──────────────────────────────────────────────
-  const { data: current } = await supabase
+  const { data: current } = await adminClient
     .from("class_types")
     .select("active")
     .eq("id", id)
@@ -53,7 +55,7 @@ export async function PATCH(
   const newActive = !current.active;
 
   // ── Update ─────────────────────────────────────────────────────────────────
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("class_types")
     .update({ active: newActive })
     .eq("id", id);

@@ -6,7 +6,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /** Valid US state codes for server-side validation. */
 const VALID_STATES = new Set([
@@ -57,7 +57,9 @@ export async function PATCH(
 ) {
   const result = await authAndId(params);
   if ("error" in result) return result.error;
-  const { supabase, id } = result;
+  const { id } = result;
+
+  const adminClient = await createAdminClient();
 
   // ── Input validation ───────────────────────────────────────────────────────
   let body: unknown;
@@ -119,10 +121,12 @@ export async function DELETE(
 ) {
   const result = await authAndId(params);
   if ("error" in result) return result.error;
-  const { supabase, id } = result;
+  const { id } = result;
+
+  const adminClient = await createAdminClient();
 
   // ── Defensive check — reject if sessions are linked ────────────────────────
-  const { count, error: countError } = await supabase
+  const { count, error: countError } = await adminClient
     .from("class_sessions")
     .select("id", { count: "exact", head: true })
     .eq("location_id", id);
@@ -146,7 +150,7 @@ export async function DELETE(
   }
 
   // ── Delete ─────────────────────────────────────────────────────────────────
-  const { error } = await supabase.from("locations").delete().eq("id", id);
+  const { error } = await adminClient.from("locations").delete().eq("id", id);
 
   if (error) {
     console.error("[DELETE /api/locations/[id]]", error);
