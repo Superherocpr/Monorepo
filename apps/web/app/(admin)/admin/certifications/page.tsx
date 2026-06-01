@@ -39,7 +39,7 @@ export default async function CertificationsPage() {
   // Use admin client for system_settings to bypass any RLS restrictions.
   const adminSupabase = await createAdminClient();
 
-  const [certsResult, certTypesResult, remindersSetting] = await Promise.all([
+  const [certsResult, certTypesResult, classTypesResult, remindersSetting] = await Promise.all([
     admin
       .from("certifications")
       .select(`
@@ -56,6 +56,11 @@ export default async function CertificationsPage() {
     admin
       .from("cert_types")
       .select("id, name, description, validity_months, issuing_body, card_design, active")
+      .order("name"),
+
+    admin
+      .from("class_types")
+      .select("id, name, description")
       .order("name"),
 
     adminSupabase
@@ -95,11 +100,19 @@ export default async function CertificationsPage() {
     certCount: countByTypeId[ct.id] ?? 0,
   }));
 
+  // Class types for optional prefill in the Add/Edit Cert Type form
+  const classTypes = (classTypesResult.data ?? []).map((ct) => ({
+    id: ct.id,
+    name: ct.name,
+    description: ct.description ?? "",
+  }));
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <CertificationsClient
         initialCerts={rawCerts}
         initialCertTypes={certTypes}
+        initialClassTypes={classTypes}
         remindersPaused={remindersPaused}
       />
     </main>

@@ -29,6 +29,7 @@ import CertCardDesignsTab from "./CertCardDesignsTab";
 interface CertificationsClientProps {
   initialCerts: CertificationAdminRecord[];
   initialCertTypes: CertTypeAdminRow[];
+  initialClassTypes?: { id: string; name: string; description: string }[];
   remindersPaused: boolean;
 }
 
@@ -217,12 +218,16 @@ function ReminderBadge({ sent }: { sent: boolean }) {
 export default function CertificationsClient({
   initialCerts,
   initialCertTypes,
+  initialClassTypes = [],
   remindersPaused: initialRemindersPaused,
 }: CertificationsClientProps) {
 
   // ── Core state ─────────────────────────────────────────────────────────────
   const [certs, setCerts] = useState<CertificationAdminRecord[]>(initialCerts);
   const [certTypes, setCertTypes] = useState<CertTypeAdminRow[]>(initialCertTypes);
+  const [classTypes, setClassTypes] = useState<
+    { id: string; name: string; description: string }[]
+  >(initialClassTypes);
   const [remindersPaused, setRemindersPaused] = useState(initialRemindersPaused);
   const [activeTab, setActiveTab] = useState<ActiveTab>("certifications");
 
@@ -1351,6 +1356,7 @@ export default function CertificationsClient({
             form={certTypeForm}
             setForm={setCertTypeForm}
             errors={certTypeFormErrors}
+            classTypes={classTypes}
           />
           {certTypeFormError && (
             <p className="mt-2 text-sm text-red-600">{certTypeFormError}</p>
@@ -1385,6 +1391,7 @@ export default function CertificationsClient({
             form={editCertTypeForm}
             setForm={setEditCertTypeForm}
             errors={editCertTypeFormErrors}
+            classTypes={classTypes}
           />
           {editCertTypeFormError && (
             <p className="mt-2 text-sm text-red-600">{editCertTypeFormError}</p>
@@ -1646,6 +1653,7 @@ interface CertTypeFormProps {
   form: CertTypeFormState;
   setForm: React.Dispatch<React.SetStateAction<CertTypeFormState>>;
   errors: Partial<Record<keyof CertTypeFormState, string>>;
+  classTypes: { id: string; name: string; description: string }[];
 }
 
 /**
@@ -1654,9 +1662,44 @@ interface CertTypeFormProps {
  * @param setForm - State setter for the form
  * @param errors - Validation errors keyed by field name
  */
-function CertTypeForm({ form, setForm, errors }: CertTypeFormProps) {
+function CertTypeForm({ form, setForm, errors, classTypes }: CertTypeFormProps) {
+  const [selectedClassTypeId, setSelectedClassTypeId] = useState<string>("");
+
   return (
     <div className="space-y-4">
+      {/* Prefill from class type (optional) */}
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          Prefill from class type
+        </label>
+        <select
+          value={selectedClassTypeId}
+          onChange={(e) => {
+            const id = e.target.value;
+            setSelectedClassTypeId(id);
+            if (!id) return;
+            const ct = classTypes.find((c) => c.id === id);
+            if (!ct) return;
+            setForm((prev) => ({
+              ...prev,
+              name: ct.name,
+              description: ct.description ?? prev.description,
+            }));
+          }}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+          <option value="">— Select a class type (optional) —</option>
+          {classTypes.map((ct) => (
+            <option key={ct.id} value={ct.id}>
+              {ct.name}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-gray-400">
+          Selecting a class type will populate Name and Description; you can edit them after.
+        </p>
+      </div>
+
       {/* Name */}
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
