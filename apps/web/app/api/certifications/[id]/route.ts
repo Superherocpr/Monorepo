@@ -10,7 +10,7 @@
  * Deletes the certification record. No business-logic guard — any cert can be deleted.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /** Validates that a route param is a plausible UUID. */
 function isValidUuid(val: string): boolean {
@@ -56,6 +56,8 @@ export async function PATCH(
   const auth = await requireSuperAdmin(supabase);
   if (auth.error) return auth.error;
 
+  const adminClient = await createAdminClient();
+
   const { id } = await params;
   if (!isValidUuid(id)) {
     return Response.json({ error: "Invalid certification ID." }, { status: 400 });
@@ -89,7 +91,7 @@ export async function PATCH(
     return Response.json({ error: "No fields to update." }, { status: 400 });
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await adminClient
     .from("certifications")
     .update(update)
     .eq("id", id);
@@ -100,7 +102,7 @@ export async function PATCH(
   }
 
   // Fetch the full updated record to return to the client
-  const { data: cert, error: fetchError } = await supabase
+  const { data: cert, error: fetchError } = await adminClient
     .from("certifications")
     .select(`
       id, issued_at, expires_at, cert_number, notes, reminder_sent, session_id,
@@ -134,12 +136,14 @@ export async function DELETE(
   const auth = await requireSuperAdmin(supabase);
   if (auth.error) return auth.error;
 
+  const adminClient = await createAdminClient();
+
   const { id } = await params;
   if (!isValidUuid(id)) {
     return Response.json({ error: "Invalid certification ID." }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("certifications")
     .delete()
     .eq("id", id);

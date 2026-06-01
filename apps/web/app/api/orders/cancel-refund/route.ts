@@ -7,7 +7,7 @@
  * Supports partial refunds (minimum $0.01, maximum order total).
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 
 /**
@@ -35,6 +35,8 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ──────────────────────────────────────────────────────────────
   let body: Record<string, unknown>;
   try {
@@ -53,7 +55,7 @@ export async function POST(request: Request) {
   }
 
   // ── Fetch order ────────────────────────────────────────────────────────────
-  const { data: order } = await supabase
+  const { data: order } = await adminClient
     .from("orders")
     .select("id, status, total_amount, paypal_transaction_id")
     .eq("id", orderId)
@@ -125,7 +127,7 @@ export async function POST(request: Request) {
   // ── Cancel the order in DB ─────────────────────────────────────────────────
   const cancelNote = `Cancelled and refunded $${refundAmount.toFixed(2)} on ${new Date().toLocaleDateString("en-US")}`;
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await adminClient
     .from("orders")
     .update({
       status: "cancelled",
@@ -144,13 +146,13 @@ export async function POST(request: Request) {
   }
 
   // ── Restore stock for each line item ───────────────────────────────────────
-  const { data: items } = await supabase
+  const { data: items } = await adminClient
     .from("order_items")
     .select("variant_id, quantity")
     .eq("order_id", orderId);
 
   for (const item of items ?? []) {
-    const { error: rpcError } = await supabase.rpc("increment_stock", {
+    const { error: rpcError } = await adminClient.rpc("increment_stock", {
       variant_id: item.variant_id,
       amount: item.quantity,
     });

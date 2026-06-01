@@ -8,7 +8,7 @@
  * PATCH — Saves platform_fee_percent, payout_trigger, and payout_schedule.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 
 /** Valid values for the payout trigger setting. */
@@ -32,10 +32,11 @@ export interface PayoutSettings {
  * Returns the Supabase client and user id, or a Response on failure.
  */
 async function requireSuperAdmin(): Promise<
-  | { supabase: Awaited<ReturnType<typeof createClient>>; userId: string }
+  | { supabase: Awaited<ReturnType<typeof createClient>>; adminClient: Awaited<ReturnType<typeof createAdminClient>>; userId: string }
   | Response
 > {
   const supabase = await createClient();
+  const adminClient = await createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -59,7 +60,7 @@ async function requireSuperAdmin(): Promise<
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
-  return { supabase, userId: user.id };
+  return { supabase, adminClient, userId: user.id };
 }
 
 /**
@@ -68,9 +69,9 @@ async function requireSuperAdmin(): Promise<
  * @returns Current payout configuration.
  */
 async function readPayoutSettings(
-  supabase: Awaited<ReturnType<typeof createClient>>
+  adminClient: Awaited<ReturnType<typeof createAdminClient>>
 ): Promise<PayoutSettings> {
-  const { data } = await supabase
+  const { data } = await adminClient
     .from("system_settings")
     .select("key, value")
     .in("key", ["platform_fee_percent", "payout_trigger", "payout_schedule"]);
@@ -104,10 +105,10 @@ async function readPayoutSettings(
 export async function GET() {
   const result = await requireSuperAdmin();
   if (result instanceof Response) return result;
-  const { supabase } = result;
+  const { adminClient } = result;
 
   try {
-    const settings = await readPayoutSettings(supabase);
+    const settings = await readPayoutSettings(adminClient);
     return Response.json({ success: true, settings });
   } catch (err) {
     console.error("[/api/settings/payouts GET] Error:", err);
@@ -126,7 +127,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const result = await requireSuperAdmin();
   if (result instanceof Response) return result;
-  const { supabase } = result;
+  const { adminClient } = result;
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
@@ -168,7 +169,7 @@ export async function PATCH(request: Request) {
   ];
 
   for (const row of upserts) {
-    const { error } = await supabase
+    const { error } = await adminClient
       .from("system_settings")
       .upsert(row, { onConflict: "key" });
     if (error) {

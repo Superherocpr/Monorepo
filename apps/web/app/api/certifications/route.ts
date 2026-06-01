@@ -6,7 +6,7 @@
  * Returns the new cert with joined profiles, cert_types, and class_sessions.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Creates a new manually-issued certification.
@@ -35,6 +35,8 @@ export async function POST(request: Request) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse and validate body ────────────────────────────────────────────────
   let body: {
     customerId?: string;
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
   }
 
   // ── Verify the customer exists and is not archived ─────────────────────────
-  const { data: customer } = await supabase
+  const { data: customer } = await adminClient
     .from("profiles")
     .select("id, archived")
     .eq("id", customerId)
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
   }
 
   // ── Insert the certification ───────────────────────────────────────────────
-  const { data: inserted, error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await adminClient
     .from("certifications")
     .insert({
       customer_id: customerId,
@@ -99,7 +101,7 @@ export async function POST(request: Request) {
   }
 
   // ── Fetch the full record with joins to return to the client ───────────────
-  const { data: cert, error: fetchError } = await supabase
+  const { data: cert, error: fetchError } = await adminClient
     .from("certifications")
     .select(`
       id, issued_at, expires_at, cert_number, notes, reminder_sent, session_id,

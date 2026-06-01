@@ -7,7 +7,7 @@
  * Stock values are absolute (set to), not relative (add/subtract).
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Validates that a string is UUID-shaped (8-4-4-4-12 hex groups).
@@ -58,6 +58,8 @@ export async function POST(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ──────────────────────────────────────────────────────────────
   let body: Record<string, unknown>;
   try {
@@ -86,7 +88,7 @@ export async function POST(
   // ── Fetch current quantities for all variant ids ────────────────────────────
   const variantIds = (adjustments as AdjustmentItem[]).map((a) => a.variantId);
 
-  const { data: currentVariants, error: fetchError } = await supabase
+  const { data: currentVariants, error: fetchError } = await adminClient
     .from("product_variants")
     .select("id, stock_quantity")
     .in("id", variantIds)
@@ -120,7 +122,7 @@ export async function POST(
     const newQty = Math.max(0, Math.round(adj.newQuantity));
     if (newQty === previousQty) continue; // No change — skip
 
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await adminClient
       .from("product_variants")
       .update({ stock_quantity: newQty })
       .eq("id", adj.variantId);
@@ -142,7 +144,7 @@ export async function POST(
 
   // ── Write adjustment log ───────────────────────────────────────────────────
   if (logRows.length > 0) {
-    const { error: logError } = await supabase
+    const { error: logError } = await adminClient
       .from("stock_adjustments")
       .insert(logRows);
 

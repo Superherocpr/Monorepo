@@ -8,7 +8,7 @@
  * (logged server-side, order remains shipped).
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import { orderShippedEmail, OrderEmailItem } from "@/lib/emails";
 
@@ -32,6 +32,8 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ──────────────────────────────────────────────────────────────
   let body: Record<string, unknown>;
   try {
@@ -50,7 +52,7 @@ export async function POST(request: Request) {
   }
 
   // ── Fetch order + customer for validation and email ─────────────────────────
-  const { data: order } = await supabase
+  const { data: order } = await adminClient
     .from("orders")
     .select(
       `id, status, total_amount, shipping_name, shipping_city, shipping_state,
@@ -71,7 +73,7 @@ export async function POST(request: Request) {
   }
 
   // ── Update order ───────────────────────────────────────────────────────────
-  const { error: updateError } = await supabase
+  const { error: updateError } = await adminClient
     .from("orders")
     .update({
       status: "shipped",

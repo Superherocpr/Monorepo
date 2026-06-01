@@ -6,7 +6,7 @@
  * Protected: owner email cannot be changed. Self-demotion is blocked.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { OWNER_EMAILS } from "@/lib/constants";
 
 /**
@@ -41,6 +41,8 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Self-demotion prevention ───────────────────────────────────────────────
   if (user.id === targetId) {
     return Response.json(
@@ -59,7 +61,7 @@ export async function PATCH(
   }
 
   // ── Owner protection — fetch target email ──────────────────────────────────
-  const { data: target } = await supabase
+  const { data: target } = await adminClient
     .from("profiles")
     .select("email")
     .eq("id", targetId)
@@ -87,7 +89,7 @@ export async function PATCH(
 
   let updateError: { message?: string } | null = null;
   for (const payload of updateAttempts) {
-    const { error } = await supabase
+    const { error } = await adminClient
       .from("profiles")
       .update(payload)
       .eq("id", targetId);

@@ -8,7 +8,7 @@
  * 4. Marks the submission as replied.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getZohoToken, getSetting } from "@/lib/zoho";
 
 /**
@@ -36,6 +36,8 @@ export async function POST(request: Request) {
   if (!actor || (actor.role !== "manager" && actor.role !== "super_admin")) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
+
+  const adminClient = await createAdminClient();
 
   // ── Parse & validate body ──────────────────────────────────────────────────
   let body: {
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
     : [];
 
   // ── Fetch the submission to get the contact's email ───────────────────────
-  const { data: submission } = await supabase
+  const { data: submission } = await adminClient
     .from("contact_submissions")
     .select("id, email, name")
     .eq("id", submissionId)
@@ -140,7 +142,7 @@ export async function POST(request: Request) {
   const zohoMessageId = zohoData.data?.messageId ?? null;
 
   // ── Store reply in contact_replies ─────────────────────────────────────────
-  const { error: replyInsertError } = await supabase
+  const { error: replyInsertError } = await adminClient
     .from("contact_replies")
     .insert({
       submission_id: submissionId,
@@ -157,7 +159,7 @@ export async function POST(request: Request) {
   }
 
   // ── Mark submission as replied ─────────────────────────────────────────────
-  await supabase
+  await adminClient
     .from("contact_submissions")
     .update({ replied: true })
     .eq("id", submissionId);

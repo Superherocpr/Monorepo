@@ -6,7 +6,7 @@
  * shown to the customer — they are admin-only.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Saves staff notes for the specified customer.
@@ -39,6 +39,8 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ─────────────────────────────────────────────────────────────
   let body: { notes?: unknown };
   try {
@@ -53,7 +55,7 @@ export async function PATCH(
       : null;
 
   // ── Update notes ───────────────────────────────────────────────────────────
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("profiles")
     .update({
       customer_notes: cleanNotes,

@@ -6,7 +6,7 @@
  * Optionally links the payment to a specific booking.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /** Valid manual payment types that staff can log. Online payments are handled by PayPal. */
 const MANUAL_PAYMENT_TYPES = new Set(["cash", "check", "deposit"]);
@@ -43,6 +43,8 @@ export async function POST(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ─────────────────────────────────────────────────────────────
   let body: { paymentType?: unknown; amount?: unknown; bookingId?: unknown; notes?: unknown };
   try {
@@ -71,7 +73,7 @@ export async function POST(
   }
 
   // ── Insert payment record ──────────────────────────────────────────────────
-  const { error } = await supabase.from("payments").insert({
+  const { error } = await adminClient.from("payments").insert({
     customer_id: customerId,
     booking_id:
       typeof bookingId === "string" && bookingId.trim().length > 0

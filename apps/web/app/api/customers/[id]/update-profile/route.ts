@@ -56,6 +56,8 @@ export async function PATCH(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Parse body ─────────────────────────────────────────────────────────────
   let body: { field?: unknown; value?: unknown };
   try {
@@ -82,7 +84,7 @@ export async function PATCH(
   }
 
   // ── Update profile ─────────────────────────────────────────────────────────
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("profiles")
     .update({ [field]: cleanValue, updated_at: new Date().toISOString() })
     .eq("id", customerId)
@@ -96,14 +98,13 @@ export async function PATCH(
   // Uses the service-role admin client so no confirmation email is sent —
   // email_confirm: true marks the new address as verified immediately.
   if (field === "email" && cleanValue) {
-    const adminClient = await createAdminClient();
     const { error: authError } = await adminClient.auth.admin.updateUserById(
       customerId,
       { email: cleanValue, email_confirm: true }
     );
     if (authError) {
       // The profiles row was already updated — roll it back to keep things in sync.
-      await supabase
+      await adminClient
         .from("profiles")
         .update({ email: body.value, updated_at: new Date().toISOString() })
         .eq("id", customerId);

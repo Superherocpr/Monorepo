@@ -10,7 +10,7 @@
  * Deletes a preset grade only if no roster_records reference this grade value.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
 
 /**
@@ -56,7 +56,7 @@ export async function PATCH(
   }
 
   // ── Update ─────────────────────────────────────────────────────────────────
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("preset_grades")
     .update({ value, label: label.trim() })
     .eq("id", id);
@@ -104,8 +104,10 @@ export async function DELETE(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Fetch the grade to get its value for the roster check ──────────────────
-  const { data: grade } = await supabase
+  const { data: grade } = await adminClient
     .from("preset_grades")
     .select("value")
     .eq("id", id)
@@ -116,7 +118,7 @@ export async function DELETE(
   }
 
   // ── Block deletion if any roster records use this grade value ──────────────
-  const { count } = await supabase
+  const { count } = await adminClient
     .from("roster_records")
     .select("id", { count: "exact", head: true })
     .eq("grade", grade.value);
@@ -132,7 +134,7 @@ export async function DELETE(
   }
 
   // ── Delete ─────────────────────────────────────────────────────────────────
-  const { error } = await supabase.from("preset_grades").delete().eq("id", id);
+  const { error } = await adminClient.from("preset_grades").delete().eq("id", id);
 
   if (error) {
     return Response.json({ success: false, error: "Failed to delete grade." }, { status: 500 });

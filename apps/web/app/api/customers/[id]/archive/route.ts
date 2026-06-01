@@ -6,7 +6,7 @@
  * All data is preserved — this is a soft delete only.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Archives the specified customer account. Super admin only.
@@ -40,8 +40,10 @@ export async function POST(
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = await createAdminClient();
+
   // ── Archive the account ────────────────────────────────────────────────────
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("profiles")
     .update({
       archived: true,
