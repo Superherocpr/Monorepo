@@ -243,12 +243,16 @@ function formatDateTime(iso: string): string {
 }
 
 /**
- * Converts an ISO timestamp to the format expected by a datetime-local input.
- * Example: "2026-04-21T14:00:00+00:00" → "2026-04-21T14:00"
- * @param iso - ISO datetime string.
+ * Converts a UTC ISO timestamp to the format expected by a datetime-local input,
+ * expressed in the browser's local timezone so the displayed time matches the
+ * actual class time as seen by the user.
+ * Example: "2026-04-21T14:00:00Z" in CDT (UTC-5) → "2026-04-21T09:00"
+ * @param iso - UTC ISO datetime string from the database.
  */
 function toDatetimeLocal(iso: string): string {
-  return iso.slice(0, 16);
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /**
@@ -484,12 +488,14 @@ export default function SessionDetailClient({
   async function handleSaveEdit() {
     setIsSavingEdit(true);
     setActionError(null);
+    // datetime-local strings have no timezone — new Date() interprets them as
+    // local time, so .toISOString() correctly converts back to UTC for storage.
     const fields: SessionEditFields = {
       class_type_id: editClassTypeId,
       instructor_id: editInstructorId,
       location_id: editLocationId,
-      starts_at: editStartsAt,
-      ends_at: editEndsAt,
+      starts_at: new Date(editStartsAt).toISOString(),
+      ends_at: new Date(editEndsAt).toISOString(),
       max_capacity: editMaxCapacity,
       notes: editNotes,
     };

@@ -91,9 +91,9 @@ export interface SessionEditFields {
   class_type_id: string;
   instructor_id: string;
   location_id: string;
-  /** ISO datetime string (datetime-local input value). Stored as-is; timezone is UTC. */
+  /** UTC ISO datetime string. Client converts datetime-local (local time) to UTC before passing here. */
   starts_at: string;
-  /** ISO datetime string (datetime-local input value). Stored as-is; timezone is UTC. */
+  /** UTC ISO datetime string. Client converts datetime-local (local time) to UTC before passing here. */
   ends_at: string;
   max_capacity: number;
   notes: string;
