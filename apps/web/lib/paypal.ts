@@ -1,9 +1,11 @@
 /**
  * PayPal shared helpers — credentials, environment URLs, and business access tokens.
  *
- * The business REST API app credentials are `NEXT_PUBLIC_PAYPAL_CLIENT_ID`
- * + `PAYPAL_SECRET`. They are used to create checkout orders, capture payments,
- * create/send business invoices, issue refunds, and send PayPal Payouts.
+ * Two PayPal merchant accounts are in use:
+ *   - Main account (`NEXT_PUBLIC_PAYPAL_CLIENT_ID` + `PAYPAL_SECRET`): bookings,
+ *     instructor payouts, and invoices.
+ *   - Merch account (`NEXT_PUBLIC_PAYPAL_MERCH_CLIENT_ID` + `PAYPAL_MERCH_SECRET`):
+ *     merch store checkout, captures, and refunds only.
  *
  * `PAYPAL_API_BASE` controls the environment (sandbox vs live) for ALL PayPal
  * calls in the codebase. Production deployments must set it explicitly so a
@@ -88,6 +90,40 @@ export async function getPayPalAccessToken(): Promise<string> {
   if (!response.ok) {
     const err = await response.text().catch(() => "");
     throw new Error(`PayPal auth failed (${response.status}): ${err}`);
+  }
+
+  const data = (await response.json()) as { access_token: string };
+  return data.access_token;
+}
+
+/**
+ * Requests a PayPal access token for the **merch store** REST API app.
+ * Uses the separate merch merchant account (`NEXT_PUBLIC_PAYPAL_MERCH_CLIENT_ID`
+ * + `PAYPAL_MERCH_SECRET`). Only used by merch checkout, capture, and refund routes.
+ * @returns Bearer token string for use in PayPal REST API calls.
+ * @throws Error if credentials are missing or the auth call fails.
+ */
+export async function getMerchPayPalAccessToken(): Promise<string> {
+  const clientId = process.env.NEXT_PUBLIC_PAYPAL_MERCH_CLIENT_ID ?? "";
+  const clientSecret = process.env.PAYPAL_MERCH_SECRET ?? "";
+
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString(
+    "base64"
+  );
+
+  const response = await fetch(`${getPayPalApiBase()}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const err = await response.text().catch(() => "");
+    throw new Error(`PayPal merch auth failed (${response.status}): ${err}`);
   }
 
   const data = (await response.json()) as { access_token: string };

@@ -10,7 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
-import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
+import { getMerchPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import type { CartItem } from "@/lib/cart-store";
 
 /** Type guard — ensures a value is a non-null object. */
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   const shippingNum = typeof shippingCost === "number" ? shippingCost : parseFloat(String(shippingCost));
   const totalNum = typeof total === "number" ? total : parseFloat(String(total));
 
-  const accessToken = await getPayPalAccessToken();
+  const accessToken = await getMerchPayPalAccessToken();
 
   const orderPayload = {
     intent: "CAPTURE",
