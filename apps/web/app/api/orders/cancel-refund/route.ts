@@ -8,7 +8,7 @@
  */
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
+import { getMerchPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 
 /**
  * Refunds a paid merch order through PayPal, then cancels it locally and restores stock.
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
   // ── Issue PayPal refund (must succeed before DB update) ────────────────────
   if (order.paypal_transaction_id) {
     try {
-      const token = await getPayPalAccessToken();
+      const token = await getMerchPayPalAccessToken();
 
       const paypalRes = await fetch(
         `${getPayPalApiBase()}/v2/payments/captures/${order.paypal_transaction_id}/refund`,

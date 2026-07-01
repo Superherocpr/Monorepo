@@ -19,7 +19,7 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
-import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
+import { getMerchPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import type { CartItem } from "@/lib/cart-store";
 
 /** Flat shipping rate — mirrors NEXT_PUBLIC_SHIPPING_RATE used client-side. */
@@ -59,7 +59,7 @@ interface ShippingInfo {
  * @param captureId - The PayPal capture id returned from /capture.
  */
 async function refundCapture(captureId: string): Promise<void> {
-  const accessToken = await getPayPalAccessToken();
+  const accessToken = await getMerchPayPalAccessToken();
   const res = await fetch(
     `${getPayPalApiBase()}/v2/payments/captures/${captureId}/refund`,
     {
@@ -215,7 +215,7 @@ export async function POST(request: Request) {
   // We capture AFTER price validation so a bad payload never charges the buyer.
   let paypalTransactionId: string;
   try {
-    const accessToken = await getPayPalAccessToken();
+    const accessToken = await getMerchPayPalAccessToken();
     const captureResponse = await fetch(
         `${getPayPalApiBase()}/v2/checkout/orders/${paypalOrderId}/capture`,
       {
