@@ -281,6 +281,17 @@ export default function CreateSessionClient({
         </Link>
       </div>
 
+      {/* Bulk creation prompt */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600 flex items-center justify-between">
+        <span>Scheduling multiple sessions at once?</span>
+        <Link
+          href="/admin/sessions/bulk"
+          className="font-medium text-red-600 hover:text-red-700 transition-colors whitespace-nowrap ml-4"
+        >
+          Use the bulk creator →
+        </Link>
+      </div>
+
       {/* ── Form ── */}
       <form
         onSubmit={handleSubmit}
