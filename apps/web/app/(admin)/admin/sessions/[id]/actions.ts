@@ -86,6 +86,26 @@ export async function cancelSession(
   return null;
 }
 
+/**
+ * Approves multiple class sessions in a single batch update.
+ * Used by the inline "Approve All" action on the approvals queue page.
+ * @param sessionIds - Array of class_sessions UUIDs to approve.
+ * @returns An error message string on failure, or null on success.
+ * TODO: Send approval notification emails to each instructor via Resend.
+ */
+export async function bulkApproveSession(sessionIds: string[]): Promise<string | null> {
+  if (sessionIds.length === 0) return null;
+  const admin = await createAdminClient();
+  const { error } = await admin
+    .from("class_sessions")
+    .update({ approval_status: "approved" })
+    .in("id", sessionIds);
+  if (error) return error.message;
+  revalidatePath("/admin/sessions/approvals");
+  revalidatePath("/admin/sessions");
+  return null;
+}
+
 /** Shape of the editable fields on a class session. */
 export interface SessionEditFields {
   class_type_id: string;
