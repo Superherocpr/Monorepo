@@ -208,6 +208,15 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
 
   // ── Class types ────────────────────────────────────────────────────────────
   const [classTypes, setClassTypes] = useState<ClassType[]>(initialClassTypes);
+
+  // Sync local state when the server re-sends initialClassTypes after router.refresh().
+  // useState does not reinitialize on prop changes — the component stays mounted across
+  // router.refresh() calls in Next.js App Router, so edits (price, name, etc.) would
+  // otherwise remain stale in the list until a hard reload.
+  useEffect(() => {
+    setClassTypes(initialClassTypes);
+  }, [initialClassTypes]);
+
   const [classTypePanelOpen, setClassTypePanelOpen] = useState(false);
   const [classTypeImportPanelOpen, setClassTypeImportPanelOpen] = useState(false);
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null);
