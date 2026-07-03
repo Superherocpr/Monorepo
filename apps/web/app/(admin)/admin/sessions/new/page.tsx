@@ -56,7 +56,7 @@ export default async function NewSessionPage() {
   // ── Fetch active class types ───────────────────────────────────────────────
   const { data: rawClassTypes } = await admin
     .from("class_types")
-    .select("id, name, duration_minutes, max_capacity")
+    .select("id, name, duration_minutes, max_capacity, price")
     .eq("active", true)
     .order("name");
 
@@ -65,6 +65,7 @@ export default async function NewSessionPage() {
     name: t.name as string,
     duration_minutes: t.duration_minutes as number,
     max_capacity: t.max_capacity as number,
+    price: Number(t.price ?? 0),
   }));
 
   // ── Fetch all locations ────────────────────────────────────────────────────

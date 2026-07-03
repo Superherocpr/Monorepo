@@ -72,6 +72,7 @@ export async function POST(request: Request): Promise<Response> {
     ends_at,
     max_capacity,
     notes,
+    discount_percent,
   } = body as Record<string, unknown>;
 
   // ── Validate required fields ───────────────────────────────────────────────
@@ -102,6 +103,17 @@ export async function POST(request: Request): Promise<Response> {
       { status: 400 }
     );
   }
+
+  // ── Validate optional discount ─────────────────────────────────────────────
+  // discount_percent must be omitted/null (no discount) or a number between 0 and 50.
+  const hasDiscount = discount_percent !== null && discount_percent !== undefined;
+  if (hasDiscount && (typeof discount_percent !== "number" || discount_percent < 0 || discount_percent > 50)) {
+    return NextResponse.json(
+      { error: "discount_percent must be a number between 0 and 50." },
+      { status: 400 }
+    );
+  }
+  const resolvedDiscount: number | null = hasDiscount ? (discount_percent as number) : null;
 
   // ── Validate timestamps ────────────────────────────────────────────────────
   const start = new Date(starts_at);
@@ -171,6 +183,7 @@ export async function POST(request: Request): Promise<Response> {
       starts_at,
       ends_at,
       max_capacity,
+      discount_percent: resolvedDiscount,
       // notes is optional — only set if truthy to avoid storing empty strings
       ...(typeof notes === "string" && notes.trim() ? { notes: notes.trim() } : {}),
       // Defaults set by DB: status = 'scheduled', approval_status = 'pending_approval'

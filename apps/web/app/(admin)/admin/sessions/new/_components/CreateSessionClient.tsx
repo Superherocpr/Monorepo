@@ -18,6 +18,8 @@ export interface ClassTypeOption {
   name: string;
   duration_minutes: number;
   max_capacity: number;
+  /** Base price in USD — used for the discount preview. */
+  price: number;
 }
 
 /** A location option for the dropdown. */
@@ -63,6 +65,8 @@ interface SessionForm {
   duration_minutes: string;
   /** Max students — auto-filled from class type, editable */
   max_capacity: string;
+  /** Promotional discount as a percentage string (0–50). Empty = no discount. */
+  discount_percent: string;
   notes: string;
 }
 
@@ -74,6 +78,7 @@ const EMPTY_FORM: SessionForm = {
   start_time: "",
   duration_minutes: "",
   max_capacity: "",
+  discount_percent: "",
   notes: "",
 };
 
@@ -177,6 +182,12 @@ export default function CreateSessionClient({
       return;
     }
 
+    const parsedDiscount = form.discount_percent === "" ? null : parseFloat(form.discount_percent);
+    if (parsedDiscount !== null && (isNaN(parsedDiscount) || parsedDiscount < 0 || parsedDiscount > 50)) {
+      setError("Discount must be between 0% and 50%.");
+      return;
+    }
+
     // Compute starts_at / ends_at as UTC ISO strings
     const starts_at = toISO(form.date, form.start_time);
     const endsDate = new Date(starts_at);
@@ -191,6 +202,7 @@ export default function CreateSessionClient({
       starts_at,
       ends_at,
       max_capacity: capacity,
+      discount_percent: parsedDiscount,
       ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
     };
 
@@ -248,6 +260,18 @@ export default function CreateSessionClient({
     !!form.date &&
     !!form.start_time &&
     new Date(`${form.date}T${form.start_time}:00`) < new Date();
+
+  // ── Discount price preview ─────────────────────────────────────────────────
+
+  /** Base price of the currently selected class type. Null when no class type is selected. */
+  const selectedClassTypePrice = classTypes.find((t) => t.id === form.class_type_id)?.price ?? null;
+
+  /** Parsed discount percentage, or null when the field is empty or invalid. */
+  const parsedDiscountPreview = (() => {
+    if (!form.discount_percent) return null;
+    const n = parseFloat(form.discount_percent);
+    return isNaN(n) || n <= 0 || n > 50 ? null : n;
+  })();
 
   /**
    * Human-readable duration hint derived from the duration_minutes field.
@@ -474,6 +498,91 @@ export default function CreateSessionClient({
           {autoFilled && (
             <p className="text-xs text-gray-400">
               Duration and capacity were auto-filled from the class type — edit if needed.
+            </p>
+          )}
+        </div>
+
+        {/* Discount (optional) */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">
+              Discount <span className="text-gray-400 font-normal">(optional, max 50%)</span>
+            </label>
+            {parsedDiscountPreview !== null && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                {parsedDiscountPreview}% OFF
+              </span>
+            )}
+          </div>
+
+          {/* Quick-pick shortcut buttons */}
+          <div className="flex gap-2">
+            {([10, 20, 25, 50] as const).map((pct) => (
+              <button
+                key={pct}
+                type="button"
+                onClick={() => setField("discount_percent", String(pct))}
+                className={[
+                  "flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
+                  form.discount_percent === String(pct)
+                    ? "bg-red-600 text-white border-red-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600",
+                ].join(" ")}
+              >
+                {pct}%
+              </button>
+            ))}
+          </div>
+
+          {/* Custom percentage input */}
+          <div className="flex items-center gap-2">
+            <input
+              id="cs-discount"
+              type="number"
+              min={0}
+              max={50}
+              step={1}
+              value={form.discount_percent}
+              onChange={(e) => {
+                const raw = e.target.value;
+                // Allow clearing; clamp to 50 on blur, not on keystroke, so typing feels natural
+                if (raw === "" || parseFloat(raw) <= 50) {
+                  setField("discount_percent", raw);
+                }
+              }}
+              onBlur={() => {
+                const n = parseFloat(form.discount_percent);
+                if (!isNaN(n) && n > 50) setField("discount_percent", "50");
+              }}
+              placeholder="Custom % (0 – 50)"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
+            <span className="text-sm text-gray-500 select-none">%</span>
+            {form.discount_percent && (
+              <button
+                type="button"
+                onClick={() => setField("discount_percent", "")}
+                className="text-xs text-gray-400 hover:text-red-600 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 rounded"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Live price preview — only shown when a class type with a price is selected */}
+          {selectedClassTypePrice !== null && parsedDiscountPreview !== null && (
+            <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+              Price per person:{" "}
+              <span className="line-through text-gray-400 mr-1">
+                {selectedClassTypePrice === 0
+                  ? "Free"
+                  : `$${selectedClassTypePrice.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
+              </span>
+              <span className="font-semibold">
+                {selectedClassTypePrice === 0
+                  ? "Free"
+                  : `$${(selectedClassTypePrice * (1 - parsedDiscountPreview / 100)).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
+              </span>
             </p>
           )}
         </div>

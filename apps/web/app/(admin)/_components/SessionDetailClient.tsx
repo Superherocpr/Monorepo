@@ -85,6 +85,8 @@ export interface SessionDetailData {
   enrollware_submitted: boolean;
   roster_imported: boolean;
   correction_window_closes_at: string | null;
+  /** Promotional discount as a percentage (0–50). Null = no discount. */
+  discount_percent: number | null;
   class_type_id: string;
   instructor_id: string;
   location_id: string;
@@ -331,6 +333,9 @@ export default function SessionDetailClient({
   );
   const [editMaxCapacity, setEditMaxCapacity] = useState(session.max_capacity);
   const [editNotes, setEditNotes] = useState(session.notes ?? "");
+  const [editDiscountPercent, setEditDiscountPercent] = useState<string>(
+    session.discount_percent != null ? String(session.discount_percent) : ""
+  );
 
   // ── Derived values ────────────────────────────────────────────────────────
 
@@ -490,6 +495,7 @@ export default function SessionDetailClient({
     setActionError(null);
     // datetime-local strings have no timezone — new Date() interprets them as
     // local time, so .toISOString() correctly converts back to UTC for storage.
+    const parsedDiscount = editDiscountPercent === "" ? null : parseFloat(editDiscountPercent);
     const fields: SessionEditFields = {
       class_type_id: editClassTypeId,
       instructor_id: editInstructorId,
@@ -497,6 +503,7 @@ export default function SessionDetailClient({
       starts_at: new Date(editStartsAt).toISOString(),
       ends_at: new Date(editEndsAt).toISOString(),
       max_capacity: editMaxCapacity,
+      discount_percent: (parsedDiscount !== null && !isNaN(parsedDiscount)) ? parsedDiscount : null,
       notes: editNotes,
     };
     const wasApproved = session.approval_status === "approved";
@@ -608,6 +615,11 @@ export default function SessionDetailClient({
             >
               {sessionStatusLabel(session.status)}
             </span>
+            {session.discount_percent != null && session.discount_percent > 0 && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                {session.discount_percent}% OFF
+              </span>
+            )}
             {session.enrollware_submitted && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                 Submitted to Enrollware
@@ -653,6 +665,27 @@ export default function SessionDetailClient({
               {activeBookings} / {session.max_capacity} students
             </p>
           </div>
+          {session.class_types && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Price / Person
+              </p>
+              {session.discount_percent != null && session.discount_percent > 0 ? (
+                <p className="text-gray-800 mt-0.5">
+                  <span className="line-through text-gray-400 mr-1">
+                    {session.class_types.price === 0 ? "Free" : `$${Number(session.class_types.price).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
+                  </span>
+                  <span className="font-semibold text-green-700">
+                    {session.class_types.price === 0 ? "Free" : `$${(Number(session.class_types.price) * (1 - session.discount_percent / 100)).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
+                  </span>
+                </p>
+              ) : (
+                <p className="text-gray-800 mt-0.5">
+                  {session.class_types.price === 0 ? "Free" : `$${Number(session.class_types.price).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Rejection reason — shown when session is rejected */}
@@ -804,6 +837,66 @@ export default function SessionDetailClient({
                   onChange={(e) => setEditEndsAt(e.target.value)}
                   className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
+              </div>
+            </div>
+
+            {/* Discount */}
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-700">
+                  Discount (optional, max 50%)
+                </label>
+                {editDiscountPercent && parseFloat(editDiscountPercent) > 0 && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                    {parseFloat(editDiscountPercent)}% OFF
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-1.5 mb-2">
+                {([10, 20, 25, 50] as const).map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => setEditDiscountPercent(String(pct))}
+                    className={[
+                      "flex-1 py-1.5 rounded-md text-xs font-semibold border transition-colors duration-150",
+                      editDiscountPercent === String(pct)
+                        ? "bg-red-600 text-white border-red-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600",
+                    ].join(" ")}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step={1}
+                  value={editDiscountPercent}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "" || parseFloat(raw) <= 50) setEditDiscountPercent(raw);
+                  }}
+                  onBlur={() => {
+                    const n = parseFloat(editDiscountPercent);
+                    if (!isNaN(n) && n > 50) setEditDiscountPercent("50");
+                  }}
+                  placeholder="Custom % (0 – 50)"
+                  className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+                <span className="text-xs text-gray-500 select-none">%</span>
+                {editDiscountPercent && (
+                  <button
+                    type="button"
+                    onClick={() => setEditDiscountPercent("")}
+                    className="text-xs text-gray-400 hover:text-red-600 transition-colors whitespace-nowrap"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
             </div>
 

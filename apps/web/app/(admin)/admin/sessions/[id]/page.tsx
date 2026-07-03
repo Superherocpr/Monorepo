@@ -49,7 +49,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
     .select(
       `
       id, starts_at, ends_at, status, approval_status,
-      rejection_reason, max_capacity, notes,
+      rejection_reason, max_capacity, notes, discount_percent,
       enrollware_submitted, roster_imported,
       correction_window_closes_at,
       class_type_id, instructor_id, location_id,
@@ -96,6 +96,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
     rejection_reason: raw.rejection_reason ?? null,
     max_capacity: raw.max_capacity,
     notes: raw.notes ?? null,
+    discount_percent: raw.discount_percent != null ? Number(raw.discount_percent) : null,
     enrollware_submitted: raw.enrollware_submitted,
     roster_imported: raw.roster_imported,
     correction_window_closes_at: raw.correction_window_closes_at ?? null,

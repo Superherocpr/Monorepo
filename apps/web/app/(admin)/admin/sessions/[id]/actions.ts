@@ -116,6 +116,8 @@ export interface SessionEditFields {
   /** UTC ISO datetime string. Client converts datetime-local (local time) to UTC before passing here. */
   ends_at: string;
   max_capacity: number;
+  /** Promotional discount as a percentage (0–50). Null = no discount. */
+  discount_percent: number | null;
   notes: string;
 }
 
@@ -143,6 +145,7 @@ export async function updateSession(
     starts_at: fields.starts_at,
     ends_at: fields.ends_at,
     max_capacity: fields.max_capacity,
+    discount_percent: fields.discount_percent,
     notes: fields.notes || null,
   };
 

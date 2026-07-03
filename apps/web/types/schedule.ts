@@ -69,6 +69,8 @@ export interface ClassSession {
   correction_window_closes_at: string | null;
   enrollware_submitted: boolean;
   notes: string | null;
+  /** Optional promotional discount as a percentage (0–50). Null = no discount. */
+  discount_percent: number | null;
   created_at: string;
 }
 
@@ -92,6 +94,8 @@ export interface ScheduleSession {
   ends_at: string;
   max_capacity: number;
   status: string;
+  /** Optional promotional discount as a percentage (0–50). Null = no discount. */
+  discount_percent: number | null;
   spotsRemaining: number;
   isFull: boolean;
   class_types: {
