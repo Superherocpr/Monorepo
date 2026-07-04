@@ -22,81 +22,68 @@ interface NavItem {
 
 /** Full nav config — items are filtered to the current user's role at render time. */
 const NAV_ITEMS: NavItem[] = [
+  // ── Top-level ──────────────────────────────────────────────────────────────
   {
     label: "Dashboard",
     href: "/admin",
     roles: ["instructor", "manager", "super_admin", "inspector"],
   },
+  // Instructor-only quick-access items (no section label — small flat list)
+  { label: "My Class Sessions", href: "/admin/sessions", roles: ["instructor"] },
+  { label: "Rollcall", href: "/rollcall", roles: ["instructor"] },
+
+  // ── Operations ─────────────────────────────────────────────────────────────
   {
-    label: "My Class Sessions",
-    href: "/admin/sessions",
-    roles: ["instructor"],
-  },
-  {
-    label: "Grading",
-    href: "/admin/sessions",
-    roles: ["instructor"],
-  },
-  {
-    label: "Invoices",
-    href: "/admin/invoices",
-    roles: ["instructor", "manager", "super_admin"],
-  },
-  {
-    label: "Rollcall",
-    href: "/rollcall",
-    roles: ["instructor"],
-  },
-  {
-    label: "Class Sessions",
-    href: "/admin/sessions",
+    label: "Class Requests",
+    href: "/admin/class-requests",
     roles: ["manager", "super_admin"],
+    sectionLabel: "Operations",
   },
+  { label: "Class Sessions", href: "/admin/sessions", roles: ["manager", "super_admin"] },
+  { label: "Customers", href: "/admin/customers", roles: ["manager", "super_admin"] },
   {
     label: "Session Approvals",
     href: "/admin/sessions/approvals",
     roles: ["manager", "super_admin"],
   },
+
+  // ── Financial ──────────────────────────────────────────────────────────────
   {
-    label: "Class Requests",
-    href: "/admin/class-requests",
-    roles: ["manager", "super_admin"],
+    label: "Invoices",
+    href: "/admin/invoices",
+    roles: ["instructor", "manager", "super_admin"],
+    sectionLabel: "Financial",
   },
-  {
-    label: "Customers",
-    href: "/admin/customers",
-    roles: ["manager", "super_admin"],
-  },
-  {
-    label: "Payments",
-    href: "/admin/payments",
-    roles: ["manager", "super_admin"],
-  },
-  {
-    label: "Payouts",
-    href: "/admin/payouts",
-    roles: ["super_admin"],
-  },
-  {
-    label: "Contact",
-    href: "/admin/contact",
-    roles: ["manager", "super_admin"],
-  },
+  { label: "Payments", href: "/admin/payments", roles: ["manager", "super_admin"] },
+  { label: "Payouts", href: "/admin/payouts", roles: ["super_admin"] },
+
+  // ── Engagement ─────────────────────────────────────────────────────────────
   {
     label: "Certifications",
     href: "/admin/certifications",
     roles: ["super_admin"],
+    sectionLabel: "Engagement",
   },
+  { label: "Contact", href: "/admin/contact", roles: ["manager", "super_admin"] },
   { label: "Merch", href: "/admin/merch", roles: ["super_admin"] },
   { label: "Orders", href: "/admin/orders", roles: ["super_admin"] },
-  { label: "Staff", href: "/admin/staff", roles: ["super_admin"] },
-  { label: "Settings", href: "/admin/settings", roles: ["instructor", "manager", "super_admin"] },
+
+  // ── Management ─────────────────────────────────────────────────────────────
   {
-    label: "Archived Accounts",
-    href: "/admin/archived",
+    label: "Analytics",
+    href: "/admin/analytics",
     roles: ["super_admin"],
+    sectionLabel: "Management",
   },
-  { label: "Analytics", href: "/admin/analytics", roles: ["super_admin"] },
+  { label: "Archived Accounts", href: "/admin/archived", roles: ["super_admin"] },
+  {
+    label: "Settings",
+    href: "/admin/settings",
+    roles: ["instructor", "manager", "super_admin"],
+  },
+  { label: "Staff", href: "/admin/staff", roles: ["super_admin"] },
+
+  // ── Profile ────────────────────────────────────────────────────────────────
   {
     label: "Payout Settings",
     href: "/admin/profile/payment",
@@ -130,9 +117,11 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
             <li key={`${item.label}-${item.href}`}>
               {/* Section label — rendered above the first item in a new group */}
               {item.sectionLabel && (
-                <p className="px-4 pt-4 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                  {item.sectionLabel}
-                </p>
+                <div className="mt-5 mb-1 border-t border-gray-200">
+                  <p className="px-4 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-gray-100">
+                    {item.sectionLabel}
+                  </p>
+                </div>
               )}
               <Link
                 href={item.href}
