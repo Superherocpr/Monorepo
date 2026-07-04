@@ -189,7 +189,9 @@ export default function RequestClassForm({ classTypes }: Props) {
               <option value="">Select a class type…</option>
               {classTypes.map((ct) => (
                 <option key={ct.id} value={ct.id}>
-                  {ct.name} ({ct.duration_minutes} min)
+                  {ct.name} ({ct.duration_minutes % 60 === 0
+                    ? `${ct.duration_minutes / 60} hr${ct.duration_minutes / 60 !== 1 ? "s" : ""}`
+                    : `${Math.floor(ct.duration_minutes / 60)} hr ${ct.duration_minutes % 60} min`})
                 </option>
               ))}
             </select>

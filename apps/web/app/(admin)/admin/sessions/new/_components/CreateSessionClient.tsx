@@ -61,7 +61,7 @@ interface SessionForm {
   date: string;
   /** Local start time as HH:MM (24-hour) */
   start_time: string;
-  /** Duration in minutes — auto-filled from class type, editable */
+  /** Duration in hours — auto-filled from class type, editable. Stored as minutes in DB. */
   duration_minutes: string;
   /** Max students — auto-filled from class type, editable */
   max_capacity: string;
@@ -138,7 +138,7 @@ export default function CreateSessionClient({
     setForm((prev) => ({
       ...prev,
       class_type_id: id,
-      duration_minutes: type ? String(type.duration_minutes) : prev.duration_minutes,
+      duration_minutes: type ? String(type.duration_minutes / 60) : prev.duration_minutes,
       max_capacity: type ? String(type.max_capacity) : prev.max_capacity,
     }));
     // Show the auto-filled hint below the duration and capacity fields.
@@ -171,11 +171,12 @@ export default function CreateSessionClient({
       setError("Please enter a date and start time.");
       return;
     }
-    const durationMin = parseInt(form.duration_minutes, 10);
-    if (!form.duration_minutes || isNaN(durationMin) || durationMin < 1) {
+    const durationHours = parseFloat(form.duration_minutes);
+    if (!form.duration_minutes || isNaN(durationHours) || durationHours <= 0) {
       setError("Please enter a valid duration.");
       return;
     }
+    const durationMin = Math.round(durationHours * 60);
     const capacity = parseInt(form.max_capacity, 10);
     if (!form.max_capacity || isNaN(capacity) || capacity < 1) {
       setError("Please enter a valid max capacity.");
@@ -274,17 +275,14 @@ export default function CreateSessionClient({
   })();
 
   /**
-   * Human-readable duration hint derived from the duration_minutes field.
-   * Examples: "30 min", "2 hrs", "1 hr 30 min". Returns null when the field is empty.
+   * Shows the equivalent minutes when the user enters hours — helps verify the duration.
+   * e.g. "1.5" → "= 90 min". Returns null when the field is empty or invalid.
    */
   const durationHint = (() => {
-    const mins = parseInt(form.duration_minutes, 10);
-    if (!form.duration_minutes || isNaN(mins) || mins < 1) return null;
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    if (h === 0) return `${m} min`;
-    if (m === 0) return `${h} hr${h !== 1 ? "s" : ""}`;
-    return `${h} hr${h !== 1 ? "s" : ""} ${m} min`;
+    const hours = parseFloat(form.duration_minutes);
+    if (!form.duration_minutes || isNaN(hours) || hours <= 0) return null;
+    const mins = Math.round(hours * 60);
+    return `= ${mins} min`;
   })();
 
   return (
@@ -459,16 +457,17 @@ export default function CreateSessionClient({
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="cs-duration" className="text-sm font-medium text-gray-700">
-                Duration (minutes) <span className="text-red-500">*</span>
+                Duration (hours) <span className="text-red-500">*</span>
               </label>
               <input
                 id="cs-duration"
                 type="number"
-                min={1}
+                min={0.25}
+                step={0.25}
                 value={form.duration_minutes}
                 onChange={(e) => setField("duration_minutes", e.target.value)}
                 required
-                placeholder="e.g. 120"
+                placeholder="e.g. 2"
                 className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
               {/* Computed hours — helps staff verify the duration at a glance */}

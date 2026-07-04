@@ -146,7 +146,12 @@ export default function ClassRequestDetailClient({ request }: Props) {
             <dd className="text-sm font-medium text-gray-900">
               {classType?.name ?? "—"}
               {classType?.duration_minutes && (
-                <span className="text-gray-400 font-normal"> ({classType.duration_minutes} min)</span>
+                <span className="text-gray-400 font-normal">
+                  {" "}
+                  ({classType.duration_minutes % 60 === 0
+                    ? `${classType.duration_minutes / 60} hr${classType.duration_minutes / 60 !== 1 ? "s" : ""}`
+                    : `${Math.floor(classType.duration_minutes / 60)} hr ${classType.duration_minutes % 60} min`})
+                </span>
               )}
             </dd>
           </div>

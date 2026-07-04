@@ -200,7 +200,7 @@ export default function BulkCreateSessionClient({
     setShared((prev) => ({
       ...prev,
       class_type_id: id,
-      duration_minutes: type ? String(type.duration_minutes) : prev.duration_minutes,
+      duration_minutes: type ? String(type.duration_minutes / 60) : prev.duration_minutes,
       default_capacity: type ? String(type.max_capacity) : prev.default_capacity,
     }));
     if (type) setAutoFilled(true);
@@ -273,11 +273,12 @@ export default function BulkCreateSessionClient({
       setError("Please select a location.");
       return;
     }
-    const durationMins = parseInt(shared.duration_minutes, 10);
-    if (!shared.duration_minutes || isNaN(durationMins) || durationMins < 1) {
+    const durationHours = parseFloat(shared.duration_minutes);
+    if (!shared.duration_minutes || isNaN(durationHours) || durationHours <= 0) {
       setError("Please enter a valid duration.");
       return;
     }
+    const durationMins = Math.round(durationHours * 60);
 
     if (rows.length === 0) {
       setError("Add at least one session before reviewing.");
@@ -310,7 +311,7 @@ export default function BulkCreateSessionClient({
     setError(null);
     setLoading(true);
 
-    const durationMins = parseInt(shared.duration_minutes, 10);
+    const durationMins = Math.round(parseFloat(shared.duration_minutes) * 60);
 
     const sessions = rows.map((r) => {
       const starts_at = toISO(r.date, r.start_time);
@@ -362,7 +363,7 @@ export default function BulkCreateSessionClient({
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
-  const durationMins = parseInt(shared.duration_minutes, 10);
+  const durationMins = Math.round(parseFloat(shared.duration_minutes) * 60);
   const durationHint = durationLabel(durationMins);
 
   const selectedClassType = classTypes.find((t) => t.id === shared.class_type_id);
@@ -677,16 +678,17 @@ export default function BulkCreateSessionClient({
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="bs-duration" className="text-sm font-medium text-gray-700">
-                  Duration (minutes) <span className="text-red-500">*</span>
+                  Duration (hours) <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="bs-duration"
                   type="number"
-                  min={1}
+                  min={0.25}
+                  step={0.25}
                   value={shared.duration_minutes}
                   onChange={(e) => setSharedField("duration_minutes", e.target.value)}
                   required
-                  placeholder="e.g. 120"
+                  placeholder="e.g. 2"
                   className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
                 {durationHint && (
