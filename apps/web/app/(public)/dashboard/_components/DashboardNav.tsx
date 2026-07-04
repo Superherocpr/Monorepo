@@ -17,7 +17,6 @@ import {
   Settings,
   LogOut,
   ClipboardList,
-  PlusCircle,
 } from "lucide-react";
 
 const navLinks = [
@@ -25,7 +24,6 @@ const navLinks = [
   { href: "/dashboard/bookings", label: "My Bookings", icon: Calendar },
   { href: "/dashboard/certifications", label: "My Certifications", icon: Award },
   { href: "/dashboard/orders", label: "My Orders", icon: ShoppingBag },
-  { href: "/dashboard/request-class", label: "Request a Class", icon: PlusCircle },
   { href: "/dashboard/class-requests", label: "My Requests", icon: ClipboardList },
   { href: "/dashboard/settings", label: "Account Settings", icon: Settings },
 ];
