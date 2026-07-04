@@ -11,7 +11,7 @@ import { useState, useRef, useEffect, useTransition } from "react";
 import {
   VIEW_AS_ROLES,
   type ViewAsRole,
-} from "@/lib/auth/effective-role";
+} from "@/lib/auth/view-as-constants";
 import { setViewAsRole, clearViewAsRole } from "@/lib/auth/view-as-actions";
 import { ROLE_LABELS } from "./role-badges";
 import type { UserRole } from "@/types/users";

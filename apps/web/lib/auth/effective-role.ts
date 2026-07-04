@@ -21,15 +21,17 @@ import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/users";
-
-/** Cookie that stores a super admin's temporary view-as role. */
-export const VIEW_AS_COOKIE = "admin-view-as";
-
-/** Roles a super admin is allowed to view as. Never super_admin or customer. */
-export const VIEW_AS_ROLES = ["manager", "instructor", "inspector"] as const;
-
-/** A role value accepted by the view-as switcher. */
-export type ViewAsRole = (typeof VIEW_AS_ROLES)[number];
+// Client-safe constants are defined in view-as-constants.ts and imported here
+// for internal use, then re-exported so that server code has a single import
+// path while client components can import from view-as-constants.ts directly
+// (without transitively pulling in next/headers).
+import {
+  VIEW_AS_COOKIE,
+  VIEW_AS_ROLES,
+  type ViewAsRole,
+} from "@/lib/auth/view-as-constants";
+export { VIEW_AS_COOKIE, VIEW_AS_ROLES };
+export type { ViewAsRole };
 
 /** Roles permitted to access the admin area. */
 export const STAFF_ROLES: UserRole[] = [
