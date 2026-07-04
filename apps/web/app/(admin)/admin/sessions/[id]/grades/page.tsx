@@ -6,7 +6,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import GradingClient, {
   type GradingStudent,
   type PresetGrade,
@@ -21,29 +22,20 @@ interface PageProps {
 /** Fetches all grading data and renders GradingClient. */
 export default async function GradesPage({ params }: PageProps) {
   const { id } = await params;
-  const supabase = await createClient();
-  const admin = await createAdminClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Auth guard — honors view-as; ownership check below uses the effective role.
+  const actor = await getAdminActor();
+  if (!actor) redirect(`/signin?redirect=/admin/sessions/${id}/grades`);
 
-  if (!user) redirect(`/signin?redirect=/admin/sessions/${id}/grades`);
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/");
-
-  const role = profile.role as UserRole;
+  const user = actor.user;
+  const role = actor.effectiveRole;
 
   // Only instructors and super admins may access the grading tool
   if (role !== "instructor" && role !== "super_admin") {
     redirect("/admin/sessions");
   }
+
+  const admin = await createAdminClient();
 
   // Fetch session info to verify access and populate the page header
   const { data: rawSession } = await admin

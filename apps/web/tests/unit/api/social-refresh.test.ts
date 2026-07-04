@@ -5,8 +5,10 @@
  * successful upsert path, empty-feed edge case, and DB error handling.
  *
  * External dependencies are mocked:
- *   @/lib/supabase/server — prevents Next.js cookies() runtime requirement
- *   @/lib/facebook        — prevents real Graph API calls
+ *   @/lib/supabase/server     — prevents Next.js cookies() runtime requirement
+ *   @/lib/auth/effective-role — session auth resolution (tested separately in
+ *                               tests/unit/lib/effective-role.test.ts)
+ *   @/lib/facebook            — prevents real Graph API calls
  */
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { POST } from "@/app/api/social/refresh/route";
@@ -18,13 +20,18 @@ vi.mock("@/lib/supabase/server", () => ({
   createAdminClient: vi.fn(),
 }));
 
+vi.mock("@/lib/auth/effective-role", () => ({
+  getAdminActor: vi.fn(),
+}));
+
 vi.mock("@/lib/facebook", () => ({
   fetchFacebookPhotoPosts: vi.fn(),
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import { fetchFacebookPhotoPosts } from "@/lib/facebook";
 
 const CRON_SECRET = "test-cron-secret-abc123";
@@ -74,11 +81,8 @@ describe("POST /api/social/refresh", () => {
   });
 
   test("returns 401 when no Authorization header is provided and no session", async () => {
-    // createClient returns a user of null (not authenticated)
-    (createClient as ReturnType<typeof vi.fn>).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
-      from: vi.fn(),
-    });
+    // No authenticated admin actor
+    (getAdminActor as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     const req = new Request("https://superherocpr.com/api/social/refresh", {
       method: "POST",
     });
@@ -89,10 +93,7 @@ describe("POST /api/social/refresh", () => {
   });
 
   test("returns 401 when the cron secret does not match", async () => {
-    (createClient as ReturnType<typeof vi.fn>).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
-      from: vi.fn(),
-    });
+    (getAdminActor as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     const req = new Request("https://superherocpr.com/api/social/refresh", {
       method: "POST",
       headers: { Authorization: "Bearer wrong-secret" },
@@ -111,21 +112,28 @@ describe("POST /api/social/refresh", () => {
   test("returns 200 and allows a super_admin session to refresh", async () => {
     // No CRON_SECRET header — should fall through to session check
     delete process.env.CRON_SECRET;
-    (createClient as ReturnType<typeof vi.fn>).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) },
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: { role: "super_admin" } }),
-          }),
-        }),
-      }),
+    (getAdminActor as ReturnType<typeof vi.fn>).mockResolvedValue({
+      effectiveRole: "super_admin",
     });
     const req = new Request("https://superherocpr.com/api/social/refresh", {
       method: "POST",
     });
     const res = await POST(req);
     expect(res.status).toBe(200);
+  });
+
+  test("returns 401 for a super_admin currently viewing as a lower role", async () => {
+    delete process.env.CRON_SECRET;
+    (getAdminActor as ReturnType<typeof vi.fn>).mockResolvedValue({
+      realRole: "super_admin",
+      effectiveRole: "instructor",
+      isViewingAs: true,
+    });
+    const req = new Request("https://superherocpr.com/api/social/refresh", {
+      method: "POST",
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(401);
   });
 
   test("returns 200 with message when Facebook returns no photo posts", async () => {

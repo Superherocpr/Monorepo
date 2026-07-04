@@ -10,36 +10,12 @@
  * Deletes the certification record. No business-logic guard — any cert can be deleted.
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 
 /** Validates that a route param is a plausible UUID. */
 function isValidUuid(val: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-}
-
-/**
- * Shared auth helper — validates user session and enforces super_admin role.
- * @param supabase - Server-side Supabase client
- * Returns the user's profile, or a Response error if unauthorized.
- */
-async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { error: Response.json({ error: "Unauthorized" }, { status: 401 }) };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || profile.role !== "super_admin") {
-    return { error: Response.json({ error: "Forbidden" }, { status: 403 }) };
-  }
-
-  return { error: null };
 }
 
 /**
@@ -52,9 +28,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const auth = await requireSuperAdmin(supabase);
-  if (auth.error) return auth.error;
+  const authResult = await requireApiRole(["super_admin"]);
+  if ("error" in authResult) return authResult.error;
 
   const adminClient = await createAdminClient();
 
@@ -132,9 +107,8 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const auth = await requireSuperAdmin(supabase);
-  if (auth.error) return auth.error;
+  const authResult = await requireApiRole(["super_admin"]);
+  if ("error" in authResult) return authResult.error;
 
   const adminClient = await createAdminClient();
 

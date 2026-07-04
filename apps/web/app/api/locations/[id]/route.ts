@@ -6,7 +6,8 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 
 /** Valid US state codes for server-side validation. */
 const VALID_STATES = new Set([
@@ -18,36 +19,17 @@ const VALID_STATES = new Set([
 ]);
 
 /**
- * Resolves and validates the route param id and verifies manager/super_admin access.
- * Returns { supabase, id } on success or a NextResponse error.
+ * Resolves the route param id and verifies manager/super_admin access
+ * (honors view-as via requireApiRole).
+ * Returns { id } on success or { error: NextResponse } on failure.
  */
 async function authAndId(params: Promise<{ id: string }>) {
-  const supabase = await createClient();
   const { id } = await params;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const authResult = await requireApiRole(["manager", "super_admin"]);
+  if ("error" in authResult) return authResult;
 
-  if (!user) {
-    return {
-      error: NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 }),
-    };
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || (profile.role !== "manager" && profile.role !== "super_admin")) {
-    return {
-      error: NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 }),
-    };
-  }
-
-  return { supabase, id };
+  return { id };
 }
 
 /** Updates editable fields on a location record. */

@@ -6,7 +6,8 @@
  * with pre-computed booking and cert counts for client-side filter use.
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 import {
   getCertificationDaysUntilExpiry,
   isCertificationActive,
@@ -21,29 +22,11 @@ import {
  * @param request - Incoming GET request with URLSearchParams.
  */
 export async function GET(request: Request) {
-  const supabase = await createClient();
 
   // ── Auth & role check ──────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (
-    !profile ||
-    (profile.role !== "manager" && profile.role !== "super_admin")
-  ) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiRole(["manager", "super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
   const adminClient = await createAdminClient();
 

@@ -6,7 +6,8 @@
  * specific customer and booking. Sets status = 'completed' and logged_by = actor.
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 
 /** Allowed manual payment types — excludes online and invoice (system-generated). */
 const MANUAL_PAYMENT_TYPES = new Set(["cash", "check", "deposit"]);
@@ -16,26 +17,12 @@ const MANUAL_PAYMENT_TYPES = new Set(["cash", "check", "deposit"]);
  * @param request - POST request with JSON body: { customerId, bookingId, paymentType, amount, notes? }
  */
 export async function POST(request: Request) {
-  const supabase = await createClient();
 
   // ── Auth & role check ──────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: actor } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!actor || (actor.role !== "manager" && actor.role !== "super_admin")) {
-    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiRole(["manager", "super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
+  const user = actor.user;
 
   const adminClient = await createAdminClient();
 

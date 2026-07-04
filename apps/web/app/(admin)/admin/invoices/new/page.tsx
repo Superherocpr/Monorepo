@@ -12,8 +12,8 @@
 import { redirect } from "next/navigation";
 import { CreditCard } from "lucide-react";
 import Link from "next/link";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/users";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import CreateInvoiceClient, {
   type SessionOption,
   type InstructorOption,
@@ -35,29 +35,27 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
   // Super admin arrives with ?instructor=[id] after choosing from the instructor selector.
   const preSelectedInstructorId = resolvedParams.instructor ?? null;
 
-  const supabase = await createClient();
-  const admin = await createAdminClient();
+  // Auth guard — honors view-as; the wizard variant follows the effective role.
+  const actor = await getAdminActor();
+  if (!actor) redirect("/signin?redirect=/admin/invoices/new");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin?redirect=/admin/invoices/new");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, role, paypal_payout_email")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/");
-
-  const role = profile.role as UserRole;
+  const role = actor.effectiveRole;
 
   // Only instructors and super admins may create invoices
   if (role === "inspector" || role === "manager" || role === "customer") {
     redirect("/admin");
   }
+
+  const admin = await createAdminClient();
+
+  // paypal_payout_email isn't part of the shared actor profile — fetch it here.
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id, paypal_payout_email")
+    .eq("id", actor.user.id)
+    .single();
+
+  if (!profile) redirect("/");
 
   // ---------------------------------------------------------------------------
   // Super admin without instructor context — show instructor selector first.

@@ -9,7 +9,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import type { UserRole } from "@/types/users";
 import ApprovalsHeader from "./_components/ApprovalsHeader";
 import ApprovalsEmptyState from "./_components/ApprovalsEmptyState";
@@ -24,29 +25,13 @@ import type { PendingSession } from "./_components/ApprovalCard";
  * and renders the appropriate sections or an empty state.
  */
 export default async function ApprovalsPage() {
-  const supabase = await createClient();
-  const admin = await createAdminClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin?redirect=/admin/sessions/approvals");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/");
-
-  const role = profile.role as UserRole;
-
-  // Only managers and super admins may access the approvals queue
-  if (!["manager", "super_admin"].includes(role)) {
+  // Only managers and super admins may access the approvals queue (honors view-as)
+  const actor = await getAdminActor();
+  if (!actor || !["manager", "super_admin"].includes(actor.effectiveRole)) {
     redirect("/admin");
   }
+
+  const admin = await createAdminClient();
 
   const { data: pendingSessions } = await admin
     .from("class_sessions")

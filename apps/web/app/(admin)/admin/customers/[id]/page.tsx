@@ -7,7 +7,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import CustomerDetailClient, {
   type CustomerDetailData,
 } from "@/app/(admin)/_components/CustomerDetailClient";
@@ -20,28 +21,14 @@ interface PageProps {
 /** Server component — handles auth, access, and the full data fetch. */
 export default async function CustomerDetailPage({ params }: PageProps) {
   const { id: customerId } = await params;
-  const supabase = await createClient();
-  const admin = await createAdminClient();
 
-  // ── Auth & access check ────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin");
-
-  const { data: actorProfile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (
-    !actorProfile ||
-    (actorProfile.role !== "manager" && actorProfile.role !== "super_admin")
-  ) {
+  // ── Auth & access check (honors view-as) ───────────────────────────────────
+  const actor = await getAdminActor();
+  if (!actor || !["manager", "super_admin"].includes(actor.effectiveRole)) {
     redirect("/admin");
   }
+
+  const admin = await createAdminClient();
 
   // ── Full data fetch in one Promise.all ────────────────────────────────────
   const [
@@ -211,8 +198,8 @@ export default async function CustomerDetailPage({ params }: PageProps) {
     availableSessions,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     certTypes: (certTypesResult.data ?? []) as unknown as any,
-    actorRole: actorProfile.role,
-    actorId: user.id,
+    actorRole: actor.effectiveRole,
+    actorId: actor.user.id,
   };
 
   return (

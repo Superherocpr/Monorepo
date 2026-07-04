@@ -6,7 +6,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import SessionDetailClient, {
   type SessionDetailData,
   type ClassTypeOption,
@@ -24,24 +25,16 @@ interface PageProps {
 /** Fetches session detail and renders the interactive client view. */
 export default async function SessionDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const supabase = await createClient();
+
+  // Auth guard — honors view-as: the instructor ownership check below applies
+  // to a downgraded super admin too.
+  const actor = await getAdminActor();
+  if (!actor) redirect(`/signin?redirect=/admin/sessions/${id}`);
+
+  const user = actor.user;
+  const role = actor.effectiveRole;
+
   const admin = await createAdminClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect(`/signin?redirect=/admin/sessions/${id}`);
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/");
-
-  const role = profile.role as UserRole;
 
   // Fetch the full session with all related data needed to render the detail page
   const { data: raw } = await admin
@@ -50,6 +43,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
       `
       id, starts_at, ends_at, status, approval_status,
       rejection_reason, max_capacity, notes, discount_percent,
+      travel_fee, class_request_id,
       enrollware_submitted, roster_imported,
       correction_window_closes_at,
       class_type_id, instructor_id, location_id,
@@ -81,8 +75,13 @@ export default async function SessionDetailPage({ params }: PageProps) {
   // Session not found — send back to list
   if (!raw) redirect("/admin/sessions");
 
-  // Instructors may only view their own sessions
-  if (role === "instructor" && raw.instructor_id !== user.id) {
+  // Instructors may only view their own sessions, EXCEPT unassigned customer-requested
+  // sessions (class_request_id set, instructor_id null) — those are open for any instructor to accept.
+  if (
+    role === "instructor" &&
+    raw.instructor_id !== user.id &&
+    !(raw.class_request_id && raw.instructor_id === null)
+  ) {
     redirect("/admin/sessions");
   }
 
@@ -97,6 +96,8 @@ export default async function SessionDetailPage({ params }: PageProps) {
     max_capacity: raw.max_capacity,
     notes: raw.notes ?? null,
     discount_percent: raw.discount_percent != null ? Number(raw.discount_percent) : null,
+    travel_fee: raw.travel_fee != null ? Number(raw.travel_fee) : null,
+    class_request_id: raw.class_request_id ?? null,
     enrollware_submitted: raw.enrollware_submitted,
     roster_imported: raw.roster_imported,
     correction_window_closes_at: raw.correction_window_closes_at ?? null,

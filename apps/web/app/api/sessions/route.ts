@@ -14,7 +14,8 @@
  * Managers and super admins may create sessions for any instructor.
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 import { NextResponse } from "next/server";
 
 /** Staff roles that are permitted to create sessions. */
@@ -27,28 +28,12 @@ const ALLOWED_ROLES = ["instructor", "manager", "super_admin"] as const;
  * @returns JSON with `{ id }` on success, or an error message and status code.
  */
 export async function POST(request: Request): Promise<Response> {
-  const supabase = await createClient();
+  // ── Auth (honors view-as: a downgraded super admin creates as instructor) ──
+  const authResult = await requireApiRole([...ALLOWED_ROLES]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !ALLOWED_ROLES.includes(profile.role as (typeof ALLOWED_ROLES)[number])) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const isInstructor = profile.role === "instructor";
+  const isInstructor = actor.effectiveRole === "instructor";
 
   const adminClient = await createAdminClient();
 
@@ -92,7 +77,7 @@ export async function POST(request: Request): Promise<Response> {
   // Instructors are always their own instructor — reject attempts to impersonate.
   // Managers/super admins must supply an instructor_id.
   const resolvedInstructorId = isInstructor
-    ? profile.id
+    ? actor.user.id
     : typeof instructor_id === "string" && instructor_id
     ? instructor_id
     : null;

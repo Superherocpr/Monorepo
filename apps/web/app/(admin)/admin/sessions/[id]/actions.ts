@@ -7,16 +7,40 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor, type AdminActor } from "@/lib/auth/effective-role";
+import type { UserRole } from "@/types/users";
+
+/**
+ * Auth guard for these server actions. Server actions are network-invocable
+ * endpoints, so every mutation below must verify identity and role itself —
+ * the page-level guard does not protect direct invocations.
+ * Checks the EFFECTIVE role, so view-as is honored.
+ * @param allowed - Roles permitted to run the action.
+ * @returns The actor on success, or an error string matching the actions' return contract.
+ */
+async function requireActionRole(
+  allowed: UserRole[]
+): Promise<{ actor: AdminActor } | { error: string }> {
+  const actor = await getAdminActor();
+  if (!actor) return { error: "You must be signed in." };
+  if (!allowed.includes(actor.effectiveRole)) {
+    return { error: "You do not have permission to perform this action." };
+  }
+  return { actor };
+}
 
 /**
  * Approves a class session by setting approval_status to 'approved'.
+ * Auth: manager and super_admin only.
  * @param sessionId - UUID of the class_sessions record to approve.
  * @returns An error message string on failure, or null on success.
  * TODO: Send approval notification email to the instructor via Resend.
  */
 export async function approveSession(sessionId: string): Promise<string | null> {
-  const supabase = await createClient();
+  const auth = await requireActionRole(["manager", "super_admin"]);
+  if ("error" in auth) return auth.error;
+
   const admin = await createAdminClient();
   const { error } = await admin
     .from("class_sessions")
@@ -42,7 +66,9 @@ export async function rejectSession(
   if (reason.trim().length < 10) {
     return "Rejection reason must be at least 10 characters.";
   }
-  const supabase = await createClient();
+  const auth = await requireActionRole(["manager", "super_admin"]);
+  if ("error" in auth) return auth.error;
+
   const admin = await createAdminClient();
   const { error } = await admin
     .from("class_sessions")
@@ -71,7 +97,9 @@ export async function cancelSession(
   if (reason.trim().length < 10) {
     return "Cancellation reason must be at least 10 characters.";
   }
-  const supabase = await createClient();
+  const auth = await requireActionRole(["manager", "super_admin"]);
+  if ("error" in auth) return auth.error;
+
   const admin = await createAdminClient();
   const { error } = await admin
     .from("class_sessions")
@@ -95,6 +123,9 @@ export async function cancelSession(
  */
 export async function bulkApproveSession(sessionIds: string[]): Promise<string | null> {
   if (sessionIds.length === 0) return null;
+  const auth = await requireActionRole(["manager", "super_admin"]);
+  if ("error" in auth) return auth.error;
+
   const admin = await createAdminClient();
   const { error } = await admin
     .from("class_sessions")
@@ -125,6 +156,8 @@ export interface SessionEditFields {
  * Updates editable fields on a class session.
  * If the session was previously approved, resets approval_status to 'pending_approval'
  * so the session must be re-reviewed before returning to the public schedule.
+ * Auth: manager/super_admin for any session; instructors only for their own
+ * not-yet-approved sessions, and they may not reassign the instructor.
  * @param sessionId - UUID of the class_sessions record to update.
  * @param fields - The fields to update.
  * @param wasApproved - Pass true if the session's current approval_status is 'approved'.
@@ -135,8 +168,30 @@ export async function updateSession(
   fields: SessionEditFields,
   wasApproved: boolean
 ): Promise<string | null> {
-  const supabase = await createClient();
+  const auth = await requireActionRole(["instructor", "manager", "super_admin"]);
+  if ("error" in auth) return auth.error;
+  const { actor } = auth;
+
   const admin = await createAdminClient();
+
+  // Instructor constraints — mirror the UI's canEdit logic server-side:
+  // own session only, not yet approved, and no reassigning to someone else.
+  if (actor.effectiveRole === "instructor") {
+    const { data: current } = await admin
+      .from("class_sessions")
+      .select("instructor_id, approval_status")
+      .eq("id", sessionId)
+      .single();
+    if (!current || current.instructor_id !== actor.user.id) {
+      return "You may only edit your own sessions.";
+    }
+    if (current.approval_status === "approved") {
+      return "Approved sessions can only be edited by a manager.";
+    }
+    if (fields.instructor_id !== actor.user.id) {
+      return "You may not reassign this session to another instructor.";
+    }
+  }
 
   const update: Record<string, unknown> = {
     class_type_id: fields.class_type_id,

@@ -58,6 +58,11 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["manager", "super_admin"],
   },
   {
+    label: "Class Requests",
+    href: "/admin/class-requests",
+    roles: ["manager", "super_admin"],
+  },
+  {
     label: "Customers",
     href: "/admin/customers",
     roles: ["manager", "super_admin"],

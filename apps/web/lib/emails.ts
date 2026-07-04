@@ -1246,3 +1246,511 @@ export function selfServicePasswordResetEmail({
     `),
   };
 }
+
+// ── 16. Customer-Requested Class — Admin/Manager notification ─────────────────
+
+/**
+ * Sent to all super_admin and manager profiles when a customer submits a class request.
+ * Links directly to the request detail page in the admin panel for review.
+ * Triggered by: POST /api/class-requests
+ * @param customerName      - Full name of the requesting customer.
+ * @param customerEmail     - Email address of the requesting customer.
+ * @param className         - Name of the requested class type.
+ * @param preferredDate     - ISO date string (YYYY-MM-DD) of the preferred class date.
+ * @param preferredTimeLabel - Human-readable time preference label.
+ * @param groupSize         - Estimated number of attendees.
+ * @param venueName         - Name of the customer's requested venue.
+ * @param venueCity         - City of the requested venue.
+ * @param venueState        - State of the requested venue.
+ * @param requestId         - UUID of the class_requests row, used to build the admin link.
+ * @param baseUrl           - App base URL for constructing the admin link.
+ */
+export function classRequestAdminNotificationEmail({
+  customerName,
+  customerEmail,
+  className,
+  preferredDate,
+  preferredTimeLabel,
+  groupSize,
+  venueName,
+  venueCity,
+  venueState,
+  requestId,
+  baseUrl,
+}: {
+  customerName: string;
+  customerEmail: string;
+  className: string;
+  preferredDate: string;
+  preferredTimeLabel: string;
+  groupSize: number;
+  venueName: string;
+  venueCity: string;
+  venueState: string;
+  requestId: string;
+  baseUrl: string;
+}): EmailContent {
+  const safeName = escapeHtml(customerName.trim());
+  const safeEmail = escapeHtml(customerEmail.trim());
+  const safeClass = escapeHtml(className.trim());
+  const safeVenue = escapeHtml(venueName.trim());
+  const safeCity = escapeHtml(venueCity.trim());
+  const safeState = escapeHtml(venueState.trim());
+  const safeTime = escapeHtml(preferredTimeLabel.trim());
+
+  const formattedDate = new Date(preferredDate + "T12:00:00Z").toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const adminLink = `${baseUrl}/admin/class-requests/${requestId}`;
+
+  return {
+    subject: `New Class Request from ${safeName} — Action Required`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">New Class Request</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">
+        A customer has requested a class at their location. Please review and approve or reject this request.
+      </p>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;width:160px;">Customer:</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;">${safeName}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Email:</td>
+          <td style="padding:6px 0;font-size:14px;"><a href="mailto:${safeEmail}" style="color:#dc2626;">${safeEmail}</a></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Class Type:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeClass}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Preferred Date:</td>
+          <td style="padding:6px 0;font-size:14px;">${formattedDate}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Preferred Time:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeTime}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Group Size:</td>
+          <td style="padding:6px 0;font-size:14px;">${groupSize} attendee${groupSize === 1 ? "" : "s"}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Venue:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeVenue}, ${safeCity}, ${safeState}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Travel &amp; Setup Fee:</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;">$65.00 (flat)</td>
+        </tr>
+      </table>
+
+      <p style="margin:24px 0;">
+        <a href="${adminLink}"
+           style="display:inline-block;background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:600;">
+          Review Request →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        This request was submitted through the SuperHeroCPR customer portal.
+        Log in to the admin panel to approve or reject it.
+      </p>
+    `),
+  };
+}
+
+// ── 17. Customer-Requested Class — Customer submission confirmation ─────────────
+
+/**
+ * Sent to the customer immediately after they submit a class request.
+ * Confirms we received it and sets expectations for next steps.
+ * Triggered by: POST /api/class-requests
+ * @param firstName     - Customer's first name.
+ * @param className     - Name of the requested class type.
+ * @param preferredDate - ISO date string (YYYY-MM-DD) of the preferred class date.
+ * @param venueName     - Name of the customer's requested venue.
+ */
+export function classRequestCustomerConfirmEmail({
+  firstName,
+  className,
+  preferredDate,
+  venueName,
+}: {
+  firstName: string;
+  className: string;
+  preferredDate: string;
+  venueName: string;
+}): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
+  const safeClass = escapeHtml(className.trim());
+  const safeVenue = escapeHtml(venueName.trim());
+
+  const formattedDate = new Date(preferredDate + "T12:00:00Z").toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return {
+    subject: "We received your class request — SuperHeroCPR",
+    html: wrapEmail(`
+      <h1>We Got Your Request, ${safeFirstName}!</h1>
+      <p>Thank you for requesting a SuperHeroCPR class. Here's a summary of what you submitted:</p>
+
+      <table style="width:100%;border-collapse:collapse;margin:16px 0 24px;">
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;width:140px;">Class:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeClass}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Preferred Date:</td>
+          <td style="padding:6px 0;font-size:14px;">${formattedDate}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Venue:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeVenue}</td>
+        </tr>
+      </table>
+
+      <p>Our team will review your request and follow up within <strong>1–2 business days</strong>.
+         Once approved, we'll match you with an instructor and send you the confirmed class details.</p>
+
+      <p>Questions? Reach us at:</p>
+      <ul>
+        <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
+        <li>Email: <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a></li>
+      </ul>
+
+      <p>- The SuperHeroCPR Team</p>
+    `),
+  };
+}
+
+// ── 18. Customer-Requested Class — Approved notification to customer ───────────
+
+/**
+ * Sent to the customer when an admin approves their class request.
+ * Lets them know an instructor will be assigned and more details are coming.
+ * Triggered by: POST /api/class-requests/[id]/approve
+ * @param firstName     - Customer's first name.
+ * @param className     - Name of the approved class type.
+ * @param confirmedDate - ISO date string of the confirmed class date.
+ * @param venueName     - Name of the confirmed venue.
+ */
+export function classRequestApprovedCustomerEmail({
+  firstName,
+  className,
+  confirmedDate,
+  venueName,
+}: {
+  firstName: string;
+  className: string;
+  confirmedDate: string;
+  venueName: string;
+}): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
+  const safeClass = escapeHtml(className.trim());
+  const safeVenue = escapeHtml(venueName.trim());
+
+  const formattedDate = new Date(confirmedDate + "T12:00:00Z").toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return {
+    subject: "Your class request has been approved! — SuperHeroCPR",
+    html: wrapEmail(`
+      <h1>Great News, ${safeFirstName}!</h1>
+      <p>Your class request has been <strong>approved</strong>. Here are the confirmed details:</p>
+
+      <table style="width:100%;border-collapse:collapse;margin:16px 0 24px;">
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;width:140px;">Class:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeClass}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Date:</td>
+          <td style="padding:6px 0;font-size:14px;">${formattedDate}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Venue:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeVenue}</td>
+        </tr>
+      </table>
+
+      <p>We're now matching you with an available instructor.
+         You'll receive another email once an instructor has confirmed they'll teach your class.</p>
+
+      <p>Questions? We're here:</p>
+      <ul>
+        <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
+        <li>Email: <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a></li>
+      </ul>
+
+      <p>- The SuperHeroCPR Team</p>
+    `),
+  };
+}
+
+// ── 19. Customer-Requested Class — Rejected notification to customer ───────────
+
+/**
+ * Sent to the customer when an admin rejects their class request.
+ * Includes the rejection reason and an invitation to contact us.
+ * Triggered by: POST /api/class-requests/[id]/reject
+ * @param firstName - Customer's first name.
+ * @param className - Name of the requested class type.
+ * @param reason    - Staff-provided reason for the rejection.
+ */
+export function classRequestRejectedCustomerEmail({
+  firstName,
+  className,
+  reason,
+}: {
+  firstName: string;
+  className: string;
+  reason: string;
+}): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
+  const safeClass = escapeHtml(className.trim());
+  const safeReason = escapeHtml(reason.trim());
+
+  return {
+    subject: "Update on your class request — SuperHeroCPR",
+    html: wrapEmail(`
+      <h1>An Update on Your Request</h1>
+      <p>Hi ${safeFirstName},</p>
+      <p>Unfortunately, we're unable to fulfill your request for a <strong>${safeClass}</strong> class at this time.</p>
+
+      <div style="background:#fef2f2;border-left:4px solid #dc2626;padding:12px 16px;margin:16px 0;border-radius:0 6px 6px 0;">
+        <p style="margin:0;font-size:14px;color:#7f1d1d;"><strong>Reason:</strong> ${safeReason}</p>
+      </div>
+
+      <p>We'd love to find another way to help. You can:</p>
+      <ul>
+        <li><a href="https://superherocpr.com/book" style="color:#dc2626;">Book a scheduled class near you</a></li>
+        <li>Contact us to discuss other options</li>
+      </ul>
+
+      <p>Reach us at:</p>
+      <ul>
+        <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
+        <li>Email: <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a></li>
+      </ul>
+
+      <p>- The SuperHeroCPR Team</p>
+    `),
+  };
+}
+
+// ── 20. Customer-Requested Class — Instructor opportunity notification ──────────
+
+/**
+ * Sent to all active instructors when a customer-requested class is approved and needs
+ * an instructor. First instructor to click Accept gets the class (first-come-first-serve).
+ * Triggered by: POST /api/class-requests/[id]/approve
+ * @param className         - Name of the class type.
+ * @param confirmedDate     - ISO date string of the class date.
+ * @param preferredTimeLabel - Human-readable time preference label.
+ * @param groupSize         - Estimated number of attendees.
+ * @param venueName         - Name of the customer's venue.
+ * @param venueCity         - City of the venue.
+ * @param venueState        - State of the venue.
+ * @param sessionId         - UUID of the created class_sessions row.
+ * @param baseUrl           - App base URL for constructing the accept link.
+ */
+export function instructorClassOpportunityEmail({
+  className,
+  confirmedDate,
+  preferredTimeLabel,
+  groupSize,
+  venueName,
+  venueCity,
+  venueState,
+  sessionId,
+  baseUrl,
+}: {
+  className: string;
+  confirmedDate: string;
+  preferredTimeLabel: string;
+  groupSize: number;
+  venueName: string;
+  venueCity: string;
+  venueState: string;
+  sessionId: string;
+  baseUrl: string;
+}): EmailContent {
+  const safeClass = escapeHtml(className.trim());
+  const safeVenue = escapeHtml(venueName.trim());
+  const safeCity = escapeHtml(venueCity.trim());
+  const safeState = escapeHtml(venueState.trim());
+  const safeTime = escapeHtml(preferredTimeLabel.trim());
+
+  const formattedDate = new Date(confirmedDate + "T12:00:00Z").toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const acceptLink = `${baseUrl}/admin/sessions/${sessionId}`;
+
+  return {
+    subject: `New Class Available — ${safeClass} on ${formattedDate} (First Come, First Serve)`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">New Class Opportunity!</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:8px;">
+        A customer has requested a class at their location. The first instructor to accept gets it.
+      </p>
+      <p style="font-size:14px;font-weight:600;color:#dc2626;margin-bottom:24px;">⚡ First come, first serve — act quickly!</p>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;width:160px;">Class Type:</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;">${safeClass}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Date:</td>
+          <td style="padding:6px 0;font-size:14px;">${formattedDate}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Preferred Time:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeTime}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Group Size:</td>
+          <td style="padding:6px 0;font-size:14px;">${groupSize} attendee${groupSize === 1 ? "" : "s"}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Location:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeVenue}, ${safeCity}, ${safeState}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Travel &amp; Setup Fee:</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#059669;">+$65.00 included</td>
+        </tr>
+      </table>
+
+      <p style="margin:24px 0;">
+        <a href="${acceptLink}"
+           style="display:inline-block;background:#dc2626;color:white;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:700;">
+          View &amp; Accept This Class →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        Log in to the admin panel and click "Accept to Teach" on the session detail page.
+        If another instructor accepts first, the button will no longer be available.
+      </p>
+    `),
+  };
+}
+
+// ── 21. Customer-Requested Class — Instructor accepted notification to admins ───
+
+/**
+ * Sent to all super_admin and manager profiles when an instructor accepts a
+ * customer-requested class session.
+ * Triggered by: POST /api/sessions/[id]/accept-teach
+ * @param instructorName - Full name of the instructor who accepted.
+ * @param className      - Name of the class type.
+ * @param sessionDate    - ISO date string of the session.
+ * @param venueName      - Name of the venue.
+ * @param venueCity      - City of the venue.
+ * @param venueState     - State of the venue.
+ * @param sessionId      - UUID of the class session, used to build the admin link.
+ * @param baseUrl        - App base URL for constructing the session link.
+ */
+export function instructorAcceptedAdminEmail({
+  instructorName,
+  className,
+  sessionDate,
+  venueName,
+  venueCity,
+  venueState,
+  sessionId,
+  baseUrl,
+}: {
+  instructorName: string;
+  className: string;
+  sessionDate: string;
+  venueName: string;
+  venueCity: string;
+  venueState: string;
+  sessionId: string;
+  baseUrl: string;
+}): EmailContent {
+  const safeInstructor = escapeHtml(instructorName.trim());
+  const safeClass = escapeHtml(className.trim());
+  const safeVenue = escapeHtml(venueName.trim());
+  const safeCity = escapeHtml(venueCity.trim());
+  const safeState = escapeHtml(venueState.trim());
+
+  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+  });
+
+  const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
+
+  return {
+    subject: `${safeInstructor} accepted a class — ${safeClass}`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Instructor Accepted!</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">
+        An instructor has accepted a customer-requested class. No further action is needed unless you want to make changes.
+      </p>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;width:160px;">Instructor:</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;">${safeInstructor}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Class Type:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeClass}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Date &amp; Time:</td>
+          <td style="padding:6px 0;font-size:14px;">${formattedDate} ET</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Location:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeVenue}, ${safeCity}, ${safeState}</td>
+        </tr>
+      </table>
+
+      <p style="margin:24px 0;">
+        <a href="${sessionLink}"
+           style="display:inline-block;background:#111827;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:600;">
+          View Session →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        You can reassign the instructor or make other changes from the session detail page in the admin panel.
+      </p>
+    `),
+  };
+}
