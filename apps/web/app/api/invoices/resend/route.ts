@@ -8,7 +8,8 @@
  * Logs the action with a note indicating whether the address was corrected.
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 import { Resend } from "resend";
 import { invoiceResendEmail } from "@/lib/emails";
 
@@ -42,24 +43,9 @@ export async function POST(request: Request) {
   }
 
   // Auth check
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !["instructor", "super_admin"].includes(profile.role)) {
-    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiRole(["instructor", "super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
   const adminClient = await createAdminClient();
 
@@ -84,7 +70,7 @@ export async function POST(request: Request) {
   }
 
   // Instructors may only resend their own invoices
-  if (profile.role === "instructor" && invoice.instructor_id !== profile.id) {
+  if (actor.effectiveRole === "instructor" && invoice.instructor_id !== actor.user.id) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -158,7 +144,7 @@ export async function POST(request: Request) {
 
   await adminClient.from("invoice_activity_log").insert({
     invoice_id: invoiceId,
-    actor_id: profile.id,
+    actor_id: actor.user.id,
     action: "resent",
     notes: logNote,
   });

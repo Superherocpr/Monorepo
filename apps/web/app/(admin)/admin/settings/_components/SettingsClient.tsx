@@ -208,6 +208,15 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
 
   // ── Class types ────────────────────────────────────────────────────────────
   const [classTypes, setClassTypes] = useState<ClassType[]>(initialClassTypes);
+
+  // Sync local state when the server re-sends initialClassTypes after router.refresh().
+  // useState does not reinitialize on prop changes — the component stays mounted across
+  // router.refresh() calls in Next.js App Router, so edits (price, name, etc.) would
+  // otherwise remain stale in the list until a hard reload.
+  useEffect(() => {
+    setClassTypes(initialClassTypes);
+  }, [initialClassTypes]);
+
   const [classTypePanelOpen, setClassTypePanelOpen] = useState(false);
   const [classTypeImportPanelOpen, setClassTypeImportPanelOpen] = useState(false);
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null);
@@ -757,7 +766,10 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                       </p>
                     )}
                     <p className="mt-2 text-xs text-gray-400">
-                      {ct.duration_minutes} min · Capacity {ct.max_capacity} ·{" "}
+                      {ct.duration_minutes % 60 === 0
+                        ? `${ct.duration_minutes / 60} hr${ct.duration_minutes / 60 !== 1 ? "s" : ""}`
+                        : `${Math.floor(ct.duration_minutes / 60)} hr ${ct.duration_minutes % 60} min`}{" "}
+                      · Capacity {ct.max_capacity} ·{" "}
                       ${ct.price.toLocaleString("en-US", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,

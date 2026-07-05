@@ -6,8 +6,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/users";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import InvoicesClient, {
   type InvoiceRow,
   type InstructorOption,
@@ -38,27 +38,17 @@ async function fetchInstructors(
  * Fetches invoices (scoped by role), passes them to InvoicesClient for filtering and display.
  */
 export default async function InvoicesPage() {
-  const supabase = await createClient();
-  const admin = await createAdminClient();
+  // Auth guard — honors view-as; scoping below follows the effective role.
+  const actor = await getAdminActor();
+  if (!actor) redirect("/signin?redirect=/admin/invoices");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin?redirect=/admin/invoices");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/");
-
-  const role = profile.role as UserRole;
+  const profile = actor.profile;
+  const role = actor.effectiveRole;
 
   // Inspectors have no access to invoices
   if (role === "inspector") redirect("/admin");
+
+  const admin = await createAdminClient();
 
   // Build invoices query — instructors see only their own
   let query = admin

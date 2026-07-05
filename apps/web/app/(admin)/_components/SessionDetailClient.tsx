@@ -85,8 +85,15 @@ export interface SessionDetailData {
   enrollware_submitted: boolean;
   roster_imported: boolean;
   correction_window_closes_at: string | null;
+  /** Promotional discount as a percentage (0–50). Null = no discount. */
+  discount_percent: number | null;
+  /** Flat travel & setup fee for customer-requested sessions. Null for regular sessions. */
+  travel_fee: number | null;
+  /** UUID of the originating class_requests row. Null for staff-created sessions. */
+  class_request_id: string | null;
   class_type_id: string;
-  instructor_id: string;
+  /** Null until an instructor accepts a customer-requested session. */
+  instructor_id: string | null;
   location_id: string;
   class_types: { id: string; name: string; price: number; duration_minutes: number } | null;
   instructor: { id: string; first_name: string; last_name: string } | null;
@@ -243,12 +250,16 @@ function formatDateTime(iso: string): string {
 }
 
 /**
- * Converts an ISO timestamp to the format expected by a datetime-local input.
- * Example: "2026-04-21T14:00:00+00:00" → "2026-04-21T14:00"
- * @param iso - ISO datetime string.
+ * Converts a UTC ISO timestamp to the format expected by a datetime-local input,
+ * expressed in the browser's local timezone so the displayed time matches the
+ * actual class time as seen by the user.
+ * Example: "2026-04-21T14:00:00Z" in CDT (UTC-5) → "2026-04-21T09:00"
+ * @param iso - UTC ISO datetime string from the database.
  */
 function toDatetimeLocal(iso: string): string {
-  return iso.slice(0, 16);
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /**
@@ -307,8 +318,10 @@ export default function SessionDetailClient({
   const [isRejecting, setIsRejecting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
 
   const [actionError, setActionError] = useState<string | null>(null);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
 
   // ── Edit form state (pre-populated from session data) ─────────────────────
 
@@ -316,7 +329,7 @@ export default function SessionDetailClient({
     session.class_type_id
   );
   const [editInstructorId, setEditInstructorId] = useState(
-    session.instructor_id
+    session.instructor_id ?? ""
   );
   const [editLocationId, setEditLocationId] = useState(session.location_id);
   const [editStartsAt, setEditStartsAt] = useState(
@@ -327,6 +340,9 @@ export default function SessionDetailClient({
   );
   const [editMaxCapacity, setEditMaxCapacity] = useState(session.max_capacity);
   const [editNotes, setEditNotes] = useState(session.notes ?? "");
+  const [editDiscountPercent, setEditDiscountPercent] = useState<string>(
+    session.discount_percent != null ? String(session.discount_percent) : ""
+  );
 
   // ── Derived values ────────────────────────────────────────────────────────
 
@@ -484,13 +500,17 @@ export default function SessionDetailClient({
   async function handleSaveEdit() {
     setIsSavingEdit(true);
     setActionError(null);
+    // datetime-local strings have no timezone — new Date() interprets them as
+    // local time, so .toISOString() correctly converts back to UTC for storage.
+    const parsedDiscount = editDiscountPercent === "" ? null : parseFloat(editDiscountPercent);
     const fields: SessionEditFields = {
       class_type_id: editClassTypeId,
       instructor_id: editInstructorId,
       location_id: editLocationId,
-      starts_at: editStartsAt,
-      ends_at: editEndsAt,
+      starts_at: new Date(editStartsAt).toISOString(),
+      ends_at: new Date(editEndsAt).toISOString(),
       max_capacity: editMaxCapacity,
+      discount_percent: (parsedDiscount !== null && !isNaN(parsedDiscount)) ? parsedDiscount : null,
       notes: editNotes,
     };
     const wasApproved = session.approval_status === "approved";
@@ -562,6 +582,42 @@ export default function SessionDetailClient({
       isOwnSession &&
       session.approval_status !== "approved");
 
+  // ── Accept to Teach (customer-requested sessions with no instructor yet) ───
+
+  /**
+   * Claims the customer-requested session for the calling instructor.
+   * Uses a conditional server-side update (WHERE instructor_id IS NULL) so only
+   * the first caller succeeds. On 409 another instructor got there first.
+   */
+  async function handleAcceptTeach() {
+    setIsAccepting(true);
+    setAcceptError(null);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/accept-teach`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (res.status === 409) {
+        setAcceptError("This class was just claimed by another instructor.");
+        return;
+      }
+      if (!res.ok) {
+        setAcceptError(json.error ?? "Could not accept this class. Please try again.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setAcceptError("Network error. Please try again.");
+    } finally {
+      setIsAccepting(false);
+    }
+  }
+
+  // Whether this is an unassigned customer-requested session
+  const isCustomerRequested = session.class_request_id !== null;
+  const needsInstructor = isCustomerRequested && session.instructor_id === null;
+  const isAssignedToMe = session.instructor_id === userId;
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────────
@@ -573,6 +629,45 @@ export default function SessionDetailClient({
       {actionError && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
           {actionError}
+        </div>
+      )}
+
+      {/* ── Accept to Teach banner (customer-requested sessions only) ── */}
+      {isCustomerRequested && needsInstructor && (
+        <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-5">
+          <div className="flex items-start gap-4">
+            <div className="flex-1">
+              <h2 className="text-base font-bold text-amber-900 mb-1">
+                ⚡ This Class Needs an Instructor — First Come, First Serve
+              </h2>
+              <p className="text-sm text-amber-800">
+                A customer requested this class at their location. The first instructor to accept
+                will be assigned. A <strong>$65 travel &amp; setup fee</strong> is included.
+              </p>
+              {acceptError && (
+                <p className="text-sm text-red-700 font-medium mt-2">{acceptError}</p>
+              )}
+            </div>
+            <button
+              onClick={handleAcceptTeach}
+              disabled={isAccepting}
+              className="shrink-0 bg-amber-600 text-white font-bold px-5 py-2.5 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              {isAccepting ? "Claiming…" : "Accept to Teach"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Already assigned to me banner ── */}
+      {isCustomerRequested && isAssignedToMe && (
+        <div className="bg-green-50 border border-green-300 rounded-xl p-4 flex items-center gap-3">
+          <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <p className="text-sm font-medium text-green-800">
+            You accepted this customer-requested class. You are the assigned instructor.
+          </p>
         </div>
       )}
 
@@ -602,6 +697,11 @@ export default function SessionDetailClient({
             >
               {sessionStatusLabel(session.status)}
             </span>
+            {session.discount_percent != null && session.discount_percent > 0 && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                {session.discount_percent}% OFF
+              </span>
+            )}
             {session.enrollware_submitted && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                 Submitted to Enrollware
@@ -647,6 +747,50 @@ export default function SessionDetailClient({
               {activeBookings} / {session.max_capacity} students
             </p>
           </div>
+          {session.class_types && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Price / Person
+              </p>
+              {session.discount_percent != null && session.discount_percent > 0 ? (
+                <p className="text-gray-800 mt-0.5">
+                  <span className="line-through text-gray-400 mr-1">
+                    {session.class_types.price === 0 ? "Free" : `$${Number(session.class_types.price).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
+                  </span>
+                  <span className="font-semibold text-green-700">
+                    {session.class_types.price === 0 ? "Free" : `$${(Number(session.class_types.price) * (1 - session.discount_percent / 100)).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
+                  </span>
+                </p>
+              ) : (
+                <p className="text-gray-800 mt-0.5">
+                  {session.class_types.price === 0 ? "Free" : `$${Number(session.class_types.price).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
+                </p>
+              )}
+            </div>
+          )}
+          {session.travel_fee != null && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Travel &amp; Setup Fee
+              </p>
+              <p className="text-gray-800 mt-0.5 font-semibold">
+                ${Number(session.travel_fee).toFixed(2)}
+              </p>
+            </div>
+          )}
+          {session.class_request_id && isManager && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Source
+              </p>
+              <Link
+                href={`/admin/class-requests/${session.class_request_id}`}
+                className="text-sm text-red-600 hover:underline mt-0.5 inline-block"
+              >
+                Customer Request →
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Rejection reason — shown when session is rejected */}
@@ -798,6 +942,66 @@ export default function SessionDetailClient({
                   onChange={(e) => setEditEndsAt(e.target.value)}
                   className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
+              </div>
+            </div>
+
+            {/* Discount */}
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-700">
+                  Discount (optional, max 50%)
+                </label>
+                {editDiscountPercent && parseFloat(editDiscountPercent) > 0 && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                    {parseFloat(editDiscountPercent)}% OFF
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-1.5 mb-2">
+                {([10, 20, 25, 50] as const).map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => setEditDiscountPercent(String(pct))}
+                    className={[
+                      "flex-1 py-1.5 rounded-md text-xs font-semibold border transition-colors duration-150",
+                      editDiscountPercent === String(pct)
+                        ? "bg-red-600 text-white border-red-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600",
+                    ].join(" ")}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step={1}
+                  value={editDiscountPercent}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "" || parseFloat(raw) <= 50) setEditDiscountPercent(raw);
+                  }}
+                  onBlur={() => {
+                    const n = parseFloat(editDiscountPercent);
+                    if (!isNaN(n) && n > 50) setEditDiscountPercent("50");
+                  }}
+                  placeholder="Custom % (0 – 50)"
+                  className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+                <span className="text-xs text-gray-500 select-none">%</span>
+                {editDiscountPercent && (
+                  <button
+                    type="button"
+                    onClick={() => setEditDiscountPercent("")}
+                    className="text-xs text-gray-400 hover:text-red-600 transition-colors whitespace-nowrap"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
             </div>
 

@@ -16,7 +16,8 @@
  * earnings for the payout system.
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 import { Resend } from "resend";
 import { invoiceEmail } from "@/lib/emails";
 import {
@@ -277,24 +278,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role, email, first_name, last_name")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !["instructor", "super_admin"].includes(profile.role as string)) {
-    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiRole(["instructor", "super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
   const adminClient = await createAdminClient();
   const { data: sessionData } = await adminClient
@@ -316,7 +302,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (profile.role === "instructor" && sessionData.instructor_id !== profile.id) {
+  if (actor.effectiveRole === "instructor" && sessionData.instructor_id !== actor.user.id) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -350,12 +336,12 @@ export async function POST(request: Request) {
   }
 
   const instructorId =
-    profile.role === "instructor" ? profile.id : sessionData.instructor_id;
+    actor.effectiveRole === "instructor" ? actor.user.id : sessionData.instructor_id;
 
   let instructorName: string | null = null;
-  if (profile.role === "instructor") {
+  if (actor.effectiveRole === "instructor") {
     instructorName =
-      [profile.first_name, profile.last_name].filter(Boolean).join(" ") || null;
+      [actor.profile.first_name, actor.profile.last_name].filter(Boolean).join(" ") || null;
   } else {
     const { data: instructorProfile } = await adminClient
       .from("profiles")
@@ -449,13 +435,13 @@ export async function POST(request: Request) {
   await adminClient.from("invoice_activity_log").insert([
     {
       invoice_id: invoice.id,
-      actor_id: profile.id,
+      actor_id: actor.user.id,
       action: "created",
       notes: "Business PayPal invoice created",
     },
     {
       invoice_id: invoice.id,
-      actor_id: profile.id,
+      actor_id: actor.user.id,
       action: "sent",
       notes: null,
     },

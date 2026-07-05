@@ -10,7 +10,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import PaymentsClient, {
   type PaymentsPageData,
 } from "@/app/(admin)/_components/PaymentsClient";
@@ -45,28 +46,14 @@ interface PageProps {
 /** Server component — handles auth, filtering, pagination, and summary stats. */
 export default async function PaymentsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const supabase = await createClient();
-  const admin = await createAdminClient();
 
-  // ── Auth & access check ────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin");
-
-  const { data: actorProfile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (
-    !actorProfile ||
-    (actorProfile.role !== "manager" && actorProfile.role !== "super_admin")
-  ) {
+  // ── Auth & access check (honors view-as) ───────────────────────────────────
+  const actor = await getAdminActor();
+  if (!actor || !["manager", "super_admin"].includes(actor.effectiveRole)) {
     redirect("/admin");
   }
+
+  const admin = await createAdminClient();
 
   // ── Resolve filter params ──────────────────────────────────────────────────
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
@@ -197,8 +184,8 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
     onlineInvoiceTotal,
     cashCheckTotal,
     instructors: instructors ?? [],
-    actorRole: actorProfile.role,
-    actorId: user.id,
+    actorRole: actor.effectiveRole,
+    actorId: actor.user.id,
     filters: {
       type: typeFilter,
       status: statusFilter,

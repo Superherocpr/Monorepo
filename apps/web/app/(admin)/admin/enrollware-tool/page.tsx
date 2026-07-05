@@ -6,7 +6,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import { localDayWindow } from "@/lib/enrollware-api-auth";
 import BookmarkletSetup from "./_components/BookmarkletSetup";
 import type { UserRole } from "@/types/users";
@@ -87,23 +88,13 @@ function formatTime(iso: string): string {
 }
 
 export default async function EnrollwareToolPage() {
-  const supabase = await createClient();
-  const admin = await createAdminClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin?redirect=/admin/enrollware-tool");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, first_name, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !ALLOWED_ROLES.includes(profile.role as UserRole)) {
+  // Auth guard — honors view-as, so a downgraded super admin gets the
+  // effective role's access.
+  const actor = await getAdminActor();
+  if (!actor || !ALLOWED_ROLES.includes(actor.effectiveRole)) {
     redirect("/admin");
   }
+  const profile = actor.profile;
 
   const [sessions, existingKey] = await Promise.all([
     getTodaysSessions(profile.id),

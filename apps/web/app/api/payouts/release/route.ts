@@ -6,7 +6,8 @@
  * the admin has verified in PayPal that no payout was created.
  */
 
-import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 
 /** Body accepted by the release route. */
 interface ReleaseRequestBody {
@@ -25,31 +26,11 @@ interface ReleaseBatchRow {
  * @returns Profile id for authorized super admins, otherwise an HTTP Response.
  */
 async function requireSuperAdmin(): Promise<string | Response> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const authResult = await requireApiRole(["super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
-  if (!user) {
-    return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role, archived, deactivated")
-    .eq("id", user.id)
-    .single();
-
-  if (
-    !profile ||
-    profile.role !== "super_admin" ||
-    profile.archived ||
-    profile.deactivated
-  ) {
-    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
-  }
-
-  return profile.id as string;
+  return actor.user.id;
 }
 
 /** Type guard for release request bodies. */

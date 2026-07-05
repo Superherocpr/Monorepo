@@ -16,6 +16,12 @@ import {
   invoiceResendEmail,
   invoiceEmail,
   bookingConfirmationEmail,
+  classRequestAdminNotificationEmail,
+  classRequestCustomerConfirmEmail,
+  classRequestApprovedCustomerEmail,
+  classRequestRejectedCustomerEmail,
+  instructorClassOpportunityEmail,
+  instructorAcceptedAdminEmail,
 } from "@/lib/emails";
 
 // Dev-only preview page for all transactional emails.
@@ -161,6 +167,70 @@ export default async function Page() {
     instructorName: "Dana Morgan",
   });
   previews.push({ id: "booking-confirm", name: "Booking Confirmation", subject: booking.subject, src: b64(booking.html) });
+
+  // ── Customer-Requested Class emails ────────────────────────────────────────
+  const crAdmin = classRequestAdminNotificationEmail({
+    customerName: "Jordan Smith",
+    customerEmail: "jordan.smith@example.com",
+    className: "Heartsaver CPR/AED",
+    preferredDate: "2026-09-15",
+    preferredTimeLabel: "Morning (before noon)",
+    groupSize: 12,
+    venueName: "Acme Corp. HQ",
+    venueCity: "Tampa",
+    venueState: "FL",
+    requestId: "00000000-0000-0000-0000-000000000001",
+    baseUrl: "http://localhost:3000",
+  });
+  previews.push({ id: "cr-admin-notify", name: "Class Request — Admin Notification", subject: crAdmin.subject, src: b64(crAdmin.html) });
+
+  const crConfirm = classRequestCustomerConfirmEmail({
+    firstName: "Jordan",
+    className: "Heartsaver CPR/AED",
+    preferredDate: "2026-09-15",
+    venueName: "Acme Corp. HQ",
+  });
+  previews.push({ id: "cr-customer-confirm", name: "Class Request — Customer Confirmation", subject: crConfirm.subject, src: b64(crConfirm.html) });
+
+  const crApproved = classRequestApprovedCustomerEmail({
+    firstName: "Jordan",
+    className: "Heartsaver CPR/AED",
+    confirmedDate: "2026-09-15",
+    venueName: "Acme Corp. HQ",
+  });
+  previews.push({ id: "cr-customer-approved", name: "Class Request — Approved (Customer)", subject: crApproved.subject, src: b64(crApproved.html) });
+
+  const crRejected = classRequestRejectedCustomerEmail({
+    firstName: "Jordan",
+    className: "Heartsaver CPR/AED",
+    reason: "We are unable to service that area at this time. Please check back in the future.",
+  });
+  previews.push({ id: "cr-customer-rejected", name: "Class Request — Rejected (Customer)", subject: crRejected.subject, src: b64(crRejected.html) });
+
+  const crOpportunity = instructorClassOpportunityEmail({
+    className: "Heartsaver CPR/AED",
+    confirmedDate: "2026-09-15",
+    preferredTimeLabel: "Morning (before noon)",
+    groupSize: 12,
+    venueName: "Acme Corp. HQ",
+    venueCity: "Tampa",
+    venueState: "FL",
+    sessionId: "00000000-0000-0000-0000-000000000002",
+    baseUrl: "http://localhost:3000",
+  });
+  previews.push({ id: "cr-instructor-opportunity", name: "Class Request — Instructor Opportunity", subject: crOpportunity.subject, src: b64(crOpportunity.html) });
+
+  const crAccepted = instructorAcceptedAdminEmail({
+    instructorName: "Casey Rivera",
+    className: "Heartsaver CPR/AED",
+    sessionDate: "2026-09-15T12:00:00Z",
+    venueName: "Acme Corp. HQ",
+    venueCity: "Tampa",
+    venueState: "FL",
+    sessionId: "00000000-0000-0000-0000-000000000002",
+    baseUrl: "http://localhost:3000",
+  });
+  previews.push({ id: "cr-instructor-accepted", name: "Class Request — Instructor Accepted (Admin)", subject: crAccepted.subject, src: b64(crAccepted.html) });
 
   return (
     <main className="p-8">

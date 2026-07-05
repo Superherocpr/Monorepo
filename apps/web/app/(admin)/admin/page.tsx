@@ -8,7 +8,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import InstructorDashboard from "../_components/dashboard/InstructorDashboard";
 import type {
   TodaySession,
@@ -51,30 +52,28 @@ function getThisMonthUTCRange(): { start: string; end: string } {
 
 /** Server-rendered role-aware admin dashboard. */
 export default async function AdminDashboardPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   // Layout handles the primary auth guard, but we re-check here as a safeguard
-  // since this page fetches data — a missing user would cause runtime errors.
-  if (!user) redirect("/signin?redirect=/admin");
+  // since this page fetches data. Honors view-as: the dashboard variant shown
+  // matches the EFFECTIVE role.
+  const actor = await getAdminActor();
+  if (!actor) redirect("/signin?redirect=/admin");
+  const user = actor.user;
 
   // Use the service-role admin client for all data queries. RLS policies grant
   // only per-user row access to authenticated sessions; admin dashboard needs
   // full table visibility across all customers, sessions, and transactions.
   const admin = await createAdminClient();
 
+  // daily_access_code isn't part of the shared actor profile — fetch it here.
   const { data: profile } = await admin
     .from("profiles")
-    .select("first_name, role, daily_access_code")
+    .select("first_name, daily_access_code")
     .eq("id", user.id)
     .single();
 
   if (!profile) redirect("/");
 
-  const role = profile.role;
+  const role = actor.effectiveRole;
 
   // ── Instructor Dashboard ────────────────────────────────────────────────────
   if (role === "instructor") {

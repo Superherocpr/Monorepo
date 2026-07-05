@@ -9,54 +9,36 @@
 
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import AdminSidebar from "./_components/AdminSidebar";
 import AdminTopBar from "./_components/AdminTopBar";
-import type { UserRole } from "@/types/users";
-
-/** Roles permitted to access the admin area. */
-const STAFF_ROLES: UserRole[] = [
-  "instructor",
-  "manager",
-  "super_admin",
-  "inspector",
-];
+import ViewAsBanner from "./_components/ViewAsBanner";
 
 /**
  * Wraps all /admin/* pages with auth guard, sidebar, and top bar.
  * Redirects if: not logged in, not a staff role, archived, or deactivated.
+ * The chrome (sidebar, badges, banners) renders against the EFFECTIVE role so
+ * a super admin using "View As" experiences the downgraded role's UI.
  */
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const admin = await createAdminClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin?redirect=/admin");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("first_name, last_name, role, archived, deactivated")
-    .eq("id", user.id)
-    .single();
-
-  // Redirect archived, deactivated, or non-staff users immediately.
-  // The deactivated check here closes the JWT-window gap described in THREAT-018 —
-  // a deactivated staff member with an active session is bounced at the layout level.
-  if (
-    !profile ||
-    profile.archived ||
-    profile.deactivated ||
-    !STAFF_ROLES.includes(profile.role as UserRole)
-  ) {
-    redirect("/");
+  // getAdminActor handles the archived/deactivated/non-staff checks (THREAT-018)
+  // and resolves the view-as effective role from the admin-view-as cookie.
+  const actor = await getAdminActor();
+  if (!actor) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    redirect(user ? "/" : "/signin?redirect=/admin");
   }
 
-  const role = profile.role as UserRole;
+  const { user, profile, realRole, effectiveRole, isViewingAs } = actor;
+  const admin = await createAdminClient();
+  const role = effectiveRole;
 
   // Check if instructor has a payout email. Fetched separately so a DB error
   // (e.g. column not yet added via migration 0020) cannot break the auth guard above.
@@ -81,8 +63,12 @@ export default async function AdminLayout({
         <AdminTopBar
           firstName={profile.first_name}
           lastName={profile.last_name}
-          role={role}
+          realRole={realRole}
+          effectiveRole={effectiveRole}
+          isViewingAs={isViewingAs}
         />
+        {/* View-as indicator — always visible while a super admin is downgraded */}
+        {isViewingAs && <ViewAsBanner effectiveRole={effectiveRole} />}
         {/* Instructor onboarding banner — shown until a payout email is saved */}
         {showPaymentBanner && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center justify-between gap-4">

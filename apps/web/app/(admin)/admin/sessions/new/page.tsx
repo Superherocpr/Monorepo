@@ -10,7 +10,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import type { UserRole } from "@/types/users";
 import CreateSessionClient, {
   type ClassTypeOption,
@@ -26,26 +27,17 @@ const ALLOWED_ROLES: UserRole[] = ["instructor", "manager", "super_admin"];
  * and renders the CreateSessionClient form.
  */
 export default async function NewSessionPage() {
-  const supabase = await createClient();
-  const admin = await createAdminClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin?redirect=/admin/sessions/new");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, role, first_name, last_name")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !ALLOWED_ROLES.includes(profile.role as UserRole)) {
+  // Auth guard — honors view-as: a downgraded super admin gets the instructor
+  // variant of the form (own name locked in, no instructor selector).
+  const actor = await getAdminActor();
+  if (!actor || !ALLOWED_ROLES.includes(actor.effectiveRole)) {
     redirect("/admin");
   }
 
-  const isInstructor = profile.role === "instructor";
+  const profile = actor.profile;
+  const isInstructor = actor.effectiveRole === "instructor";
+
+  const admin = await createAdminClient();
 
   // The instructor's own full name — passed to the form so it can display a
   // read-only "Instructor" row in place of the selector when isInstructor is true.
@@ -56,7 +48,7 @@ export default async function NewSessionPage() {
   // ── Fetch active class types ───────────────────────────────────────────────
   const { data: rawClassTypes } = await admin
     .from("class_types")
-    .select("id, name, duration_minutes, max_capacity")
+    .select("id, name, duration_minutes, max_capacity, price")
     .eq("active", true)
     .order("name");
 
@@ -65,6 +57,7 @@ export default async function NewSessionPage() {
     name: t.name as string,
     duration_minutes: t.duration_minutes as number,
     max_capacity: t.max_capacity as number,
+    price: Number(t.price ?? 0),
   }));
 
   // ── Fetch all locations ────────────────────────────────────────────────────

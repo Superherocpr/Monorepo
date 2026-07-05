@@ -7,7 +7,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import SessionsClient from "../../_components/SessionsClient";
 import type { SessionApprovalStatus, SessionStatus } from "@/types/schedule";
 import type { UserRole } from "@/types/users";
@@ -38,25 +39,16 @@ export interface InstructorOption {
 
 /** Fetches data and renders the sessions list via SessionsClient. */
 export default async function SessionsPage() {
-  const supabase = await createClient();
-  const admin = await createAdminClient();
+  // Auth guard — honors view-as: a downgraded super admin gets instructor
+  // scoping ("their own" sessions, i.e. sessions assigned to them).
+  const actor = await getAdminActor();
+  if (!actor) redirect("/signin?redirect=/admin/sessions");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin?redirect=/admin/sessions");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/");
-
-  const role = profile.role as UserRole;
+  const user = actor.user;
+  const role = actor.effectiveRole;
   const isInstructor = role === "instructor";
+
+  const admin = await createAdminClient();
 
   // Build the sessions query — instructors only see their own sessions
   let query = admin

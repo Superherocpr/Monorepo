@@ -39,6 +39,7 @@ export default async function BookPage({ searchParams }: BookPageProps) {
       ends_at,
       max_capacity,
       status,
+      discount_percent,
       class_types (
         id,
         name,
@@ -107,6 +108,7 @@ export default async function BookPage({ searchParams }: BookPageProps) {
       ends_at: session.ends_at,
       max_capacity: session.max_capacity,
       status: session.status,
+      discount_percent: session.discount_percent != null ? Number(session.discount_percent) : null,
       class_types: classType,
       profiles: profile,
       locations: location,

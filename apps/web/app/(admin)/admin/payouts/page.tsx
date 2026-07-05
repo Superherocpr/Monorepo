@@ -5,7 +5,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import PayoutsClient, {
   type PayoutBatchSummary,
   type PayoutsPageData,
@@ -103,27 +104,10 @@ function mapPayoutBatches(rows: RawPayoutBatch[]): PayoutBatchSummary[] {
 
 /** Server component for the super-admin payout dashboard. */
 export default async function PayoutsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin?redirect=/admin/payouts");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, archived, deactivated")
-    .eq("id", user.id)
-    .single();
-
-  if (
-    !profile ||
-    profile.role !== "super_admin" ||
-    profile.archived ||
-    profile.deactivated
-  ) {
-    redirect("/admin");
-  }
+  // Auth guard — super_admin only, honors view-as (archived/deactivated
+  // handled inside getAdminActor).
+  const actor = await getAdminActor();
+  if (!actor || actor.effectiveRole !== "super_admin") redirect("/admin");
 
   const adminClient = await createAdminClient();
   const [{ data: pendingRows }, { data: batchRows }] = await Promise.all([

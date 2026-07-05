@@ -8,7 +8,8 @@
  * Blocked when the system_settings key cert_reminders_paused is "true".
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 import { Resend } from "resend";
 import { certReminderEmail } from "@/lib/emails";
 
@@ -18,26 +19,11 @@ import { certReminderEmail } from "@/lib/emails";
  * @param _request - Incoming POST request (no body required)
  */
 export async function POST(_request: Request) {
-  const supabase = await createClient();
 
   // ── Auth & role check ──────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || profile.role !== "super_admin") {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiRole(["super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
   // ── Check whether reminders are paused ────────────────────────────────────
   // Always verify at the API layer even though the client button is disabled

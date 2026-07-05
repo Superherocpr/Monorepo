@@ -8,6 +8,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 
 /**
  * Regenerates the calling instructor's daily_access_code and returns the new value.
@@ -16,33 +17,14 @@ import { createClient } from "@/lib/supabase/server";
  * @param _request - No body required
  */
 export async function POST(_request: Request) {
-  const supabase = await createClient();
-
   // ── Verify the caller is an authenticated instructor or super_admin ────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // super_admins are also instructors and may need to refresh their code.
+  // Honors view-as (deactivated check happens inside requireApiRole).
+  const authResult = await requireApiRole(["instructor", "super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const user = authResult.actor.user;
 
-  if (!user) {
-    return Response.json({ error: "Unauthorized." }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role, deactivated")
-    .eq("id", user.id)
-    .single();
-
-  // Null check must come before accessing profile fields
-  if (!profile) {
-    return Response.json({ error: "Profile not found." }, { status: 404 });
-  }
-
-  // super_admins are also instructors and may need to refresh their code
-  const isInstructor = profile.role === "instructor" || profile.role === "super_admin";
-  if (!isInstructor || profile.deactivated) {
-    return Response.json({ error: "Forbidden." }, { status: 403 });
-  }
+  const supabase = await createClient();
 
   // ── Generate and persist the new code ────────────────────────────────────
   const newCode = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");

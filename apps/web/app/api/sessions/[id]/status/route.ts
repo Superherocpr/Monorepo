@@ -7,7 +7,8 @@
  * to prevent arbitrary status tampering.
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 import { NextResponse } from "next/server";
 
 /** Staff roles permitted to update session status. */
@@ -33,29 +34,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: sessionId } = await params;
-  const supabase = await createClient();
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (
-    !profile ||
-    !ALLOWED_ROLES.includes(profile.role as (typeof ALLOWED_ROLES)[number])
-  ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  // ── Auth (honors view-as; ownership check below uses the effective role) ───
+  const authResult = await requireApiRole([...ALLOWED_ROLES]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
   // ── Parse body ─────────────────────────────────────────────────────────────
   let body: { status?: string };
@@ -84,7 +67,7 @@ export async function PATCH(
   }
 
   // ── Authorization: instructors may only update their own sessions ──────────
-  if (profile.role === "instructor" && session.instructor_id !== user.id) {
+  if (actor.effectiveRole === "instructor" && session.instructor_id !== actor.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

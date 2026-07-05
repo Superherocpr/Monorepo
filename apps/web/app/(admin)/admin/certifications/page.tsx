@@ -8,32 +8,18 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import CertificationsClient from "@/app/(admin)/_components/CertificationsClient";
 import type { CertificationAdminRecord, CertTypeAdminRow } from "@/types/certifications";
 
 /** Server component — handles auth, data fetching, and data shaping. */
 export default async function CertificationsPage() {
-  const supabase = await createClient();
+  // Certifications management is super_admin only (honors view-as)
+  const actor = await getAdminActor();
+  if (!actor || actor.effectiveRole !== "super_admin") redirect("/admin");
+
   const admin = await createAdminClient();
-
-  // ── Auth & access check ────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  // Certifications management is super_admin only
-  if (!profile || profile.role !== "super_admin") {
-    redirect("/admin");
-  }
 
   // ── Parallel data fetch ────────────────────────────────────────────────────
   // Use admin client for system_settings to bypass any RLS restrictions.

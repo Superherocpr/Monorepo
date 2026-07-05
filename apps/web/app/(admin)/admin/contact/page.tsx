@@ -7,7 +7,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import { getSetting } from "@/lib/zoho";
 import { CONTACT_INQUIRY_TYPES } from "@/lib/contact-constants";
 import ContactSubmissionsClient, {
@@ -33,28 +34,14 @@ export default async function ContactPage({
   }>;
 }) {
   const params = await searchParams;
-  const supabase = await createClient();
-  const admin = await createAdminClient();
 
-  // ── Auth & access check ────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (
-    !profile ||
-    (profile.role !== "manager" && profile.role !== "super_admin")
-  ) {
+  // ── Auth & access check (honors view-as) ───────────────────────────────────
+  const actor = await getAdminActor();
+  if (!actor || !["manager", "super_admin"].includes(actor.effectiveRole)) {
     redirect("/admin");
   }
+
+  const admin = await createAdminClient();
 
   // ── Zoho connection check ──────────────────────────────────────────────────
   // A usable connection requires the durable account ID plus a refresh token.

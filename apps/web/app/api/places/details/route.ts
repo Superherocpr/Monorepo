@@ -8,7 +8,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 
 /** Parsed address fields returned to the client after a place is selected. */
 export interface ParsedAddress {
@@ -24,30 +24,11 @@ export interface ParsedAddress {
 
 /**
  * Shared auth guard. Returns a NextResponse error or null on success.
- * Allows instructor, manager, and super_admin.
+ * Allows instructor, manager, and super_admin (honors view-as).
  */
 async function requireStaffAuth(): Promise<NextResponse | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const allowed = ["instructor", "manager", "super_admin"];
-  if (!profile || !allowed.includes(profile.role as string)) {
-    return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
-  }
-
-  return null;
+  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
+  return "error" in authResult ? authResult.error : null;
 }
 
 /** A single component from the Google Place Details address_components array. */

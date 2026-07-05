@@ -8,8 +8,8 @@
  * Query param: email — the contact's email address to search for
  */
 
-import { createClient } from "@/lib/supabase/server";
 import { getZohoToken, getSetting } from "@/lib/zoho";
+import { requireApiRole } from "@/lib/auth/effective-role";
 
 /** A single message in the email thread as returned to the client. */
 interface ThreadMessage {
@@ -37,26 +37,11 @@ export async function GET(request: Request) {
     );
   }
 
-  const supabase = await createClient();
 
   // ── Auth & role check ──────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: actor } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!actor || (actor.role !== "manager" && actor.role !== "super_admin")) {
-    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiRole(["manager", "super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
   // ── Fetch Zoho thread ──────────────────────────────────────────────────────
   let accessToken: string;

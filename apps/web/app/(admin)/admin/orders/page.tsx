@@ -9,7 +9,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import OrdersAdminClient, {
   type OrdersPageData,
 } from "@/app/(admin)/_components/OrdersAdminClient";
@@ -34,25 +35,12 @@ interface PageProps {
 /** Server component — handles auth, filtering, and pagination. */
 export default async function AdminOrdersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const supabase = await createClient();
+
+  // ── Auth & role check (honors view-as) ─────────────────────────────────────
+  const actor = await getAdminActor();
+  if (!actor || actor.effectiveRole !== "super_admin") redirect("/admin");
+
   const admin = await createAdminClient();
-
-  // ── Auth & role check ──────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin");
-
-  const { data: actorProfile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!actorProfile || actorProfile.role !== "super_admin") {
-    redirect("/admin");
-  }
 
   // ── Resolve filter params ──────────────────────────────────────────────────
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);

@@ -10,7 +10,17 @@
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Mail, RefreshCw, Search, Send, X } from "lucide-react";
+import {
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+  Mail,
+  RefreshCw,
+  Search,
+  Send,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { CONTACT_INQUIRY_TYPES } from "@/lib/contact-constants";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -115,6 +125,9 @@ function typeBadgeClass(type: string): string {
   }
 }
 
+/** Matches YYYY-MM-DD — used to validate date filter inputs before navigating. */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 /** Client component for the contact submissions page. */
@@ -125,24 +138,20 @@ export default function ContactSubmissionsClient({
 }: SubmissionsClientProps) {
   const router = useRouter();
 
-  // ── Local filter state (mirrors URL params for controlled inputs) ──────────
-  const [typeFilter, setTypeFilter] = useState(filters.type ?? "");
+  // ── Local state for date inputs (controlled, navigate on blur) ─────────────
   const [fromFilter, setFromFilter] = useState(filters.from ?? "");
   const [toFilter, setToFilter] = useState(filters.to ?? "");
 
-  // ── Client-side text search (filters the already-loaded list in real time) ─
-  const [searchQuery, setSearchQuery] = useState("");
-
-  // Sync filter inputs when the server re-renders with new filter props after
-  // router.push() — useState only initializes from props on first mount.
+  // Sync date inputs when the server re-renders with updated filter props.
   useEffect(() => {
-    setTypeFilter(filters.type ?? "");
     setFromFilter(filters.from ?? "");
     setToFilter(filters.to ?? "");
-  }, [filters.type, filters.from, filters.to]);
+  }, [filters.from, filters.to]);
+
+  // ── Client-side text search ────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
 
   // ── Accordion state ────────────────────────────────────────────────────────
-  /** ID of the currently expanded submission (only one open at a time). */
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // ── Thread state ──────────────────────────────────────────────────────────
@@ -158,21 +167,44 @@ export default function ContactSubmissionsClient({
   const [replySuccess, setReplySuccess] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
 
-  // ── Local submission list (updated after a successful reply send) ──────────
-  const [submissions, setSubmissions] = useState<SubmissionWithReplies[]>(
-    initialSubmissions
-  );
+  // ── Local submission list (updated optimistically after actions) ───────────
+  const [submissions, setSubmissions] = useState<SubmissionWithReplies[]>(initialSubmissions);
 
-  // Sync submission list when the server re-renders with new filtered results.
   useEffect(() => {
     setSubmissions(initialSubmissions);
   }, [initialSubmissions]);
 
+  // ── Inline mark-as-replied ─────────────────────────────────────────────────
+  const [markingReplied, setMarkingReplied] = useState<Set<string>>(new Set());
+
+  // ── Filter bar collapse ────────────────────────────────────────────────────
+  const hasActiveFilters = !!filters.type || !!filters.replied || !!filters.from || !!filters.to;
+  // Only count the collapsible filters (type, dates) in the badge — replied is shown via pills
+  const collapsibleFilterCount = [filters.type, filters.from, filters.to].filter(Boolean).length;
+  // Start open if any collapsible filters are active so users aren't confused by a filtered list
+  const [filtersOpen, setFiltersOpen] = useState(collapsibleFilterCount > 0);
+
+  // ── Draft persistence ──────────────────────────────────────────────────────
+  // Persist the reply draft to localStorage so it survives switching submissions.
+  useEffect(() => {
+    if (!expandedId) return;
+    try {
+      if (replyBody.trim() || replySubject.trim()) {
+        localStorage.setItem(
+          `contact-draft-${expandedId}`,
+          JSON.stringify({ subject: replySubject, body: replyBody })
+        );
+      }
+    } catch {
+      // localStorage unavailable — degrade silently
+    }
+  }, [expandedId, replySubject, replyBody]);
+
   // ── URL helpers ────────────────────────────────────────────────────────────
 
   /**
-   * Builds the URL with updated filter query params.
-   * Omits empty values to keep URLs clean.
+   * Builds the URL with updated filter query params, omitting empty values.
+   * @param overrides - Partial filter values to merge over the current URL filters.
    */
   function buildUrl(overrides: Partial<ContactFilters> = {}): string {
     const merged: ContactFilters = { ...filters, ...overrides };
@@ -185,59 +217,52 @@ export default function ContactSubmissionsClient({
     return `/admin/contact${qs ? `?${qs}` : ""}`;
   }
 
-  const hasActiveFilters =
-    !!filters.type || !!filters.replied || !!filters.from || !!filters.to;
-
   // ── Status pill navigation ─────────────────────────────────────────────────
 
   /**
-   * Navigates to the URL with the replied filter set.
+   * Navigates to the URL with the replied filter toggled.
    * @param value - "all" clears the filter; "false" = unanswered; "true" = replied.
    */
-  function setRepliedFilter(value: "all" | "false" | "true") {
+  function setRepliedFilter(value: "all" | "false" | "true"): void {
     router.push(buildUrl({ replied: value === "all" ? undefined : value }));
-  }
-
-  /**
-   * Submits the date range / type filter form by navigating to the new URL.
-   * @param e - The form submit event.
-   */
-  function handleFilterSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    router.push(
-      buildUrl({
-        type: typeFilter || undefined,
-        from: fromFilter || undefined,
-        to: toFilter || undefined,
-      })
-    );
   }
 
   // ── Accordion expand/collapse ──────────────────────────────────────────────
 
   /**
-   * Toggles the expand state for a submission row. When expanding, loads the
-   * Zoho thread for that submission's email if it hasn't been loaded yet.
-   * Resets the reply form when switching to a different submission.
+   * Toggles the expand state for a submission. When expanding, restores any
+   * saved draft from localStorage and loads the Zoho thread if not yet fetched.
    * @param sub - The submission being toggled.
    */
   const handleToggle = useCallback(
     async (sub: SubmissionWithReplies) => {
       if (expandedId === sub.id) {
-        // Collapse
         setExpandedId(null);
         return;
       }
 
-      // Expanding a new submission — reset reply form
       setExpandedId(sub.id);
-      setReplySubject(`Re: ${sub.inquiry_type} inquiry from ${sub.name}`);
-      setReplyBody("");
+
+      // Restore saved draft if one exists, otherwise populate default subject
+      let savedSubject = `Re: ${sub.inquiry_type} inquiry from ${sub.name}`;
+      let savedBody = "";
+      try {
+        const raw = localStorage.getItem(`contact-draft-${sub.id}`);
+        if (raw) {
+          const draft = JSON.parse(raw) as { subject?: string; body?: string };
+          if (draft.subject) savedSubject = draft.subject;
+          if (draft.body) savedBody = draft.body;
+        }
+      } catch {
+        // ignore — fall back to defaults
+      }
+
+      setReplySubject(savedSubject);
+      setReplyBody(savedBody);
       setReplyFiles([]);
       setReplySuccess(false);
       setReplyError(null);
 
-      // Load thread if not already loaded and Zoho is connected
       if (isZohoConnected && !threads[sub.id]) {
         setThreadLoading(sub.id);
         setThreadError(null);
@@ -265,36 +290,57 @@ export default function ContactSubmissionsClient({
     [expandedId, isZohoConnected, threads]
   );
 
+  // ── Inline mark-as-replied ─────────────────────────────────────────────────
+
+  /**
+   * Marks a submission as replied without sending an email — for cases where
+   * the conversation happened by phone or another channel.
+   * @param submissionId - ID of the submission to mark.
+   */
+  async function handleMarkReplied(submissionId: string): Promise<void> {
+    setMarkingReplied((prev) => new Set(prev).add(submissionId));
+    try {
+      const res = await fetch(`/api/contact/${submissionId}`, { method: "PATCH" });
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (json.success) {
+        setSubmissions((prev) =>
+          prev.map((s) => (s.id === submissionId ? { ...s, replied: true } : s))
+        );
+      }
+    } catch {
+      // Non-fatal — row stays in unanswered, user can retry
+    } finally {
+      setMarkingReplied((prev) => {
+        const next = new Set(prev);
+        next.delete(submissionId);
+        return next;
+      });
+    }
+  }
+
   // ── Reply send ─────────────────────────────────────────────────────────────
 
   /**
-   * Submits the reply form. Sends the email via Zoho (POST /api/contact/reply)
-   * and updates the local submission list to reflect the replied status.
-   * Attachments are included if S3 upload is configured — see TODO below.
+   * Sends the reply email via Zoho (POST /api/contact/reply) with any selected
+   * attachments. Updates the local submission list and clears the saved draft on success.
    * @param submissionId - The ID of the submission being replied to.
    */
-  async function handleSendReply(submissionId: string) {
+  async function handleSendReply(submissionId: string): Promise<void> {
     if (!replySubject.trim() || !replyBody.trim()) return;
 
     setReplySending(true);
     setReplyError(null);
 
-    // TODO: Upload replyFiles to S3 via /api/contact/upload-attachment before sending.
-    // AWS SDK not yet installed. For now, attachmentUrls is always empty.
-    const attachmentUrls: string[] = [];
-
     try {
-      const res = await fetch("/api/contact/reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId,
-          subject: replySubject.trim(),
-          body: replyBody.trim(),
-          attachmentUrls,
-        }),
-      });
+      const form = new FormData();
+      form.append("submissionId", submissionId);
+      form.append("subject", replySubject.trim());
+      form.append("body", replyBody.trim());
+      for (const file of replyFiles) {
+        form.append("files", file);
+      }
 
+      const res = await fetch("/api/contact/reply", { method: "POST", body: form });
       const json = (await res.json()) as { success: boolean; error?: string };
 
       if (!json.success) {
@@ -302,7 +348,6 @@ export default function ContactSubmissionsClient({
         return;
       }
 
-      // Mark submission as replied locally so UI updates immediately
       setSubmissions((prev) =>
         prev.map((s) =>
           s.id === submissionId
@@ -318,7 +363,10 @@ export default function ContactSubmissionsClient({
         )
       );
 
-      // Reload the thread to show the new reply
+      // Clear the saved draft on successful send
+      try { localStorage.removeItem(`contact-draft-${submissionId}`); } catch {}
+
+      // Reload the thread to show the new outbound message
       if (isZohoConnected) {
         const sub = submissions.find((s) => s.id === submissionId);
         if (sub) {
@@ -347,7 +395,6 @@ export default function ContactSubmissionsClient({
   }
 
   // ── Client-side search filtering ────────────────────────────────────────────
-  // Matches name, email, phone, and message body — case-insensitive.
   const displayedSubmissions = searchQuery.trim()
     ? submissions.filter((s) => {
         const q = searchQuery.toLowerCase();
@@ -360,13 +407,12 @@ export default function ContactSubmissionsClient({
       })
     : submissions;
 
-  // ── Split submissions into two sections ────────────────────────────────────
   const unanswered = displayedSubmissions.filter((s) => !s.replied);
   const replied = displayedSubmissions.filter((s) => s.replied);
 
   // ── Pill button helper ────────────────────────────────────────────────────
 
-  function pillClass(active: boolean) {
+  function pillClass(active: boolean): string {
     return active
       ? "rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white"
       : "rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-300 hover:bg-gray-50";
@@ -375,14 +421,13 @@ export default function ContactSubmissionsClient({
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Zoho not connected — setup prompt */}
       {!isZohoConnected && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <Mail className="h-5 w-5 shrink-0 text-amber-500" />
           <p className="text-sm text-amber-800">
-            Zoho Mail is not connected. Email threads and reply sending are
-            unavailable.{" "}
+            Zoho Mail is not connected. Email threads and reply sending are unavailable.{" "}
             <Link
               href="/admin/settings"
               className="font-semibold underline hover:text-amber-900"
@@ -398,7 +443,7 @@ export default function ContactSubmissionsClient({
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
           type="search"
-          placeholder="Search by name, email, phone, or message… (set Status to All for best results)"
+          placeholder="Search by name, email, phone, or message…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-4 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -416,103 +461,132 @@ export default function ContactSubmissionsClient({
       </div>
 
       {/* ── Filter bar ──────────────────────────────────────────────────────── */}
-      <form
-        onSubmit={handleFilterSubmit}
-        className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3"
-      >
-        {/* Status pills */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-medium text-gray-500">Status:</span>
+      <div className="rounded-lg border border-gray-200 bg-white">
+        {/* Always-visible row: status pills + filter toggle */}
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5">
+          <div className="flex flex-1 flex-wrap items-center gap-1.5">
+            <span className="text-xs font-medium text-gray-500">Status:</span>
+            <button
+              type="button"
+              onClick={() => setRepliedFilter("all")}
+              className={pillClass(!filters.replied)}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setRepliedFilter("false")}
+              className={pillClass(filters.replied === "false")}
+            >
+              Unanswered
+            </button>
+            <button
+              type="button"
+              onClick={() => setRepliedFilter("true")}
+              className={pillClass(filters.replied === "true")}
+            >
+              Replied
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={() => setRepliedFilter("all")}
-            className={pillClass(!filters.replied)}
+            onClick={() => setFiltersOpen((o) => !o)}
+            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
           >
-            All
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Filters
+            {collapsibleFilterCount > 0 && (
+              <span className="rounded-full bg-red-600 px-1.5 text-xs font-semibold leading-5 text-white">
+                {collapsibleFilterCount}
+              </span>
+            )}
+            {filtersOpen ? (
+              <ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
+            )}
           </button>
-          <button
-            type="button"
-            onClick={() => setRepliedFilter("false")}
-            className={pillClass(filters.replied === "false")}
-          >
-            Unanswered
-          </button>
-          <button
-            type="button"
-            onClick={() => setRepliedFilter("true")}
-            className={pillClass(filters.replied === "true")}
-          >
-            Replied
-          </button>
+
+          {hasActiveFilters && (
+            <Link
+              href="/admin/contact"
+              onClick={() => {
+                setFromFilter("");
+                setToFilter("");
+              }}
+              className="whitespace-nowrap text-xs text-red-600 hover:underline"
+            >
+              Clear all
+            </Link>
+          )}
         </div>
 
-        {/* Inquiry type dropdown */}
-        <div className="flex items-center gap-2">
-          <label htmlFor="typeFilter" className="text-xs font-medium text-gray-500">
-            Type:
-          </label>
-          <select
-            id="typeFilter"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-          >
-            <option value="">All</option>
-            {CONTACT_INQUIRY_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Collapsible filter controls — type and date range */}
+        {filtersOpen && (
+          <div className="flex flex-wrap items-end gap-3 border-t border-gray-100 px-4 py-3">
+            {/* Inquiry type — auto-navigates on change, no Apply button needed */}
+            <div className="flex items-center gap-2">
+              <label htmlFor="typeFilter" className="text-xs font-medium text-gray-500">
+                Type:
+              </label>
+              <select
+                id="typeFilter"
+                value={filters.type ?? ""}
+                onChange={(e) =>
+                  router.push(buildUrl({ type: e.target.value || undefined }))
+                }
+                className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              >
+                <option value="">All</option>
+                {CONTACT_INQUIRY_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        {/* Date range */}
-        <div className="flex items-center gap-1.5">
-          <label htmlFor="fromFilter" className="text-xs font-medium text-gray-500">
-            From:
-          </label>
-          <input
-            id="fromFilter"
-            type="date"
-            value={fromFilter}
-            onChange={(e) => setFromFilter(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-          />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <label htmlFor="toFilter" className="text-xs font-medium text-gray-500">
-            To:
-          </label>
-          <input
-            id="toFilter"
-            type="date"
-            value={toFilter}
-            onChange={(e) => setToFilter(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
-        >
-          Apply
-        </button>
-
-        {hasActiveFilters && (
-          <Link
-            href="/admin/contact"
-            onClick={() => {
-              setTypeFilter("");
-              setFromFilter("");
-              setToFilter("");
-            }}
-            className="text-xs text-red-600 hover:underline"
-          >
-            Clear filters
-          </Link>
+            {/* Date range — controlled locally, navigates on blur */}
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="fromFilter" className="text-xs font-medium text-gray-500">
+                From:
+              </label>
+              <input
+                id="fromFilter"
+                type="date"
+                value={fromFilter}
+                onChange={(e) => setFromFilter(e.target.value)}
+                onBlur={(e) => {
+                  const val = e.target.value;
+                  if (!val || DATE_RE.test(val)) {
+                    router.push(buildUrl({ from: val || undefined }));
+                  }
+                }}
+                className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="toFilter" className="text-xs font-medium text-gray-500">
+                To:
+              </label>
+              <input
+                id="toFilter"
+                type="date"
+                value={toFilter}
+                onChange={(e) => setToFilter(e.target.value)}
+                onBlur={(e) => {
+                  const val = e.target.value;
+                  if (!val || DATE_RE.test(val)) {
+                    router.push(buildUrl({ to: val || undefined }));
+                  }
+                }}
+                className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+            </div>
+          </div>
         )}
-      </form>
+      </div>
 
       {/* ── Submissions list ─────────────────────────────────────────────────── */}
       {displayedSubmissions.length === 0 ? (
@@ -534,7 +608,12 @@ export default function ContactSubmissionsClient({
               }}
               className="mt-2 text-sm text-red-600 hover:underline"
             >
-              Clear {searchQuery.trim() && hasActiveFilters ? "search and filters" : searchQuery.trim() ? "search" : "filters"}
+              Clear{" "}
+              {searchQuery.trim() && hasActiveFilters
+                ? "search and filters"
+                : searchQuery.trim()
+                ? "search"
+                : "filters"}
             </button>
           )}
         </div>
@@ -544,7 +623,7 @@ export default function ContactSubmissionsClient({
           {unanswered.length > 0 && (
             <section aria-label="Unanswered submissions">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-600">
-                Unanswered
+                Unanswered ({unanswered.length})
               </p>
               <div className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 bg-white">
                 {unanswered.map((sub) => (
@@ -563,11 +642,13 @@ export default function ContactSubmissionsClient({
                     replySending={expandedId === sub.id && replySending}
                     replySuccess={expandedId === sub.id && replySuccess}
                     replyError={expandedId === sub.id ? replyError : null}
+                    markingReplied={markingReplied.has(sub.id)}
                     onToggle={() => handleToggle(sub)}
                     onSubjectChange={setReplySubject}
                     onBodyChange={setReplyBody}
                     onFilesChange={setReplyFiles}
                     onSend={() => handleSendReply(sub.id)}
+                    onMarkReplied={() => handleMarkReplied(sub.id)}
                   />
                 ))}
               </div>
@@ -578,7 +659,7 @@ export default function ContactSubmissionsClient({
           {replied.length > 0 && (
             <section aria-label="Replied submissions">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-green-600">
-                Replied
+                Replied ({replied.length})
               </p>
               <div className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 bg-white">
                 {replied.map((sub) => (
@@ -597,11 +678,13 @@ export default function ContactSubmissionsClient({
                     replySending={expandedId === sub.id && replySending}
                     replySuccess={expandedId === sub.id && replySuccess}
                     replyError={expandedId === sub.id ? replyError : null}
+                    markingReplied={false}
                     onToggle={() => handleToggle(sub)}
                     onSubjectChange={setReplySubject}
                     onBodyChange={setReplyBody}
                     onFilesChange={setReplyFiles}
                     onSend={() => handleSendReply(sub.id)}
+                    onMarkReplied={undefined}
                   />
                 ))}
               </div>
@@ -629,11 +712,15 @@ interface SubmissionRowProps {
   replySending: boolean;
   replySuccess: boolean;
   replyError: string | null;
+  /** Whether this row's inline "mark replied" action is in flight. */
+  markingReplied: boolean;
   onToggle: () => void;
   onSubjectChange: (v: string) => void;
   onBodyChange: (v: string) => void;
   onFilesChange: (files: File[]) => void;
   onSend: () => void;
+  /** Undefined on already-replied rows — hides the button. */
+  onMarkReplied: (() => void) | undefined;
 }
 
 /**
@@ -654,83 +741,98 @@ function SubmissionRow({
   replySending,
   replySuccess,
   replyError,
+  markingReplied,
   onToggle,
   onSubjectChange,
   onBodyChange,
   onFilesChange,
   onSend,
+  onMarkReplied,
 }: SubmissionRowProps) {
   return (
     <div className={accentClass}>
       {/* Summary row — always visible */}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={isExpanded}
-        className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 focus:outline-none"
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-gray-900">{sub.name}</span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${typeBadgeClass(sub.inquiry_type)}`}
-            >
-              {sub.inquiry_type}
-            </span>
-            {sub.replied ? (
-              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                Replied
+      <div className="flex w-full items-start gap-3 px-4 py-3">
+        {/* Clickable expand area */}
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+          className="flex flex-1 min-w-0 items-start gap-3 text-left focus:outline-none"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-gray-900">{sub.name}</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${typeBadgeClass(sub.inquiry_type)}`}
+              >
+                {sub.inquiry_type}
               </span>
-            ) : (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                Awaiting Reply
-              </span>
-            )}
-            {sub.contact_replies.length > 0 && (
-              <span className="text-xs text-gray-400">
-                {sub.contact_replies.length}{" "}
-                {sub.contact_replies.length === 1 ? "reply" : "replies"}
-              </span>
-            )}
+              {sub.contact_replies.length > 0 && (
+                <span className="text-xs text-gray-400">
+                  {sub.contact_replies.length}{" "}
+                  {sub.contact_replies.length === 1 ? "reply" : "replies"}
+                </span>
+              )}
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-gray-500">
+              <a
+                href={`mailto:${sub.email}`}
+                className="hover:text-red-600 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {sub.email}
+              </a>
+              {sub.phone && <span>{sub.phone}</span>}
+            </div>
+            <p className="mt-1 text-sm text-gray-600 line-clamp-1">
+              {sub.message.slice(0, 120)}
+              {sub.message.length > 120 ? "..." : ""}
+            </p>
           </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-gray-500">
-            <a
-              href={`mailto:${sub.email}`}
-              className="hover:text-red-600 hover:underline"
-              onClick={(e) => e.stopPropagation()}
+        </button>
+
+        {/* Right-side actions: mark replied + timestamp + chevron */}
+        <div className="flex shrink-0 items-center gap-2">
+          {onMarkReplied && (
+            <button
+              type="button"
+              onClick={onMarkReplied}
+              disabled={markingReplied}
+              title="Mark as replied"
+              className="rounded p-1 text-gray-400 hover:bg-amber-50 hover:text-amber-600 disabled:opacity-50"
             >
-              {sub.email}
-            </a>
-            {sub.phone && <span>{sub.phone}</span>}
-          </div>
-          <p className="mt-1 text-sm text-gray-600 line-clamp-1">
-            {sub.message.slice(0, 120)}
-            {sub.message.length > 120 ? "..." : ""}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <span
-            title={fullDate(sub.created_at)}
-            className="text-xs text-gray-400"
-          >
-            {relativeTime(sub.created_at)}
-          </span>
-          {isExpanded ? (
-            <ChevronUp className="h-4 w-4 text-gray-400" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-gray-400" />
+              {markingReplied ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4" />
+              )}
+            </button>
           )}
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={isExpanded}
+            className="flex flex-col items-end gap-1 focus:outline-none"
+          >
+            <span title={fullDate(sub.created_at)} className="text-xs text-gray-400">
+              {relativeTime(sub.created_at)}
+            </span>
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4 text-gray-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-gray-400" />
+            )}
+          </button>
         </div>
-      </button>
+      </div>
 
       {/* Expanded detail panel */}
       {isExpanded && (
         <div className="border-t border-gray-100 px-4 py-5 space-y-6 bg-gray-50">
           {/* Original message */}
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-gray-700">
-              Original Message
-            </h3>
+            <h3 className="mb-2 text-sm font-semibold text-gray-700">Original Message</h3>
             <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-800 whitespace-pre-wrap">
               {sub.message}
             </div>
@@ -742,9 +844,7 @@ function SubmissionRow({
           {/* Zoho email thread */}
           {isZohoConnected && (
             <section>
-              <h3 className="mb-2 text-sm font-semibold text-gray-700">
-                Email Thread
-              </h3>
+              <h3 className="mb-2 text-sm font-semibold text-gray-700">Email Thread</h3>
 
               {threadLoading ? (
                 <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -754,9 +854,7 @@ function SubmissionRow({
               ) : threadError ? (
                 <p className="text-sm text-red-600">{threadError}</p>
               ) : !thread || thread.length === 0 ? (
-                <p className="text-sm text-gray-400">
-                  No previous emails with this contact.
-                </p>
+                <p className="text-sm text-gray-400">No previous emails with this contact.</p>
               ) : (
                 <div className="space-y-3">
                   {thread.map((msg) => (
@@ -772,12 +870,8 @@ function SubmissionRow({
                         }`}
                       >
                         <div className="mb-1 flex flex-wrap items-center gap-2">
-                          <span className="font-semibold text-xs">
-                            {msg.from}
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            {fullDate(msg.date)}
-                          </span>
+                          <span className="font-semibold text-xs">{msg.from}</span>
+                          <span className="text-xs text-gray-400">{fullDate(msg.date)}</span>
                         </div>
                         <p className="whitespace-pre-wrap">{msg.body}</p>
                       </div>
@@ -790,17 +884,12 @@ function SubmissionRow({
 
           {/* Reply form */}
           <section>
-            <h3 className="mb-3 text-sm font-semibold text-gray-700">
-              Send Reply
-            </h3>
+            <h3 className="mb-3 text-sm font-semibold text-gray-700">Send Reply</h3>
 
             {!isZohoConnected ? (
               <p className="text-sm text-gray-500">
                 Connect Zoho Mail in{" "}
-                <Link
-                  href="/admin/settings"
-                  className="text-red-600 underline hover:text-red-700"
-                >
+                <Link href="/admin/settings" className="text-red-600 underline hover:text-red-700">
                   Settings
                 </Link>{" "}
                 to send replies.
@@ -838,7 +927,7 @@ function SubmissionRow({
                     value={replyBody}
                     onChange={(e) => onBodyChange(e.target.value)}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                    placeholder="Type your reply here..."
+                    placeholder="Type your reply here…"
                   />
                 </div>
 
@@ -850,7 +939,7 @@ function SubmissionRow({
                   >
                     Attachments{" "}
                     <span className="font-normal text-gray-400">
-                      (PDF, DOC, DOCX, JPG, PNG - max 10MB each)
+                      (PDF, DOC, DOCX, JPG, PNG — max 10 MB each)
                     </span>
                   </label>
                   <input
@@ -858,27 +947,17 @@ function SubmissionRow({
                     type="file"
                     multiple
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                    onChange={(e) =>
-                      onFilesChange(Array.from(e.target.files ?? []))
-                    }
+                    onChange={(e) => onFilesChange(Array.from(e.target.files ?? []))}
                     className="block w-full text-xs text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-gray-700 hover:file:bg-gray-200"
                   />
-                  {/* Show selected file names */}
                   {replyFiles.length > 0 && (
                     <ul className="mt-1.5 space-y-0.5">
                       {replyFiles.map((f, i) => (
-                        <li
-                          key={i}
-                          className="flex items-center gap-1.5 text-xs text-gray-500"
-                        >
+                        <li key={i} className="flex items-center gap-1.5 text-xs text-gray-500">
                           <span>{f.name}</span>
                           <button
                             type="button"
-                            onClick={() =>
-                              onFilesChange(
-                                replyFiles.filter((_, idx) => idx !== i)
-                              )
-                            }
+                            onClick={() => onFilesChange(replyFiles.filter((_, idx) => idx !== i))}
                             className="text-gray-400 hover:text-red-600"
                             aria-label={`Remove ${f.name}`}
                           >
@@ -892,27 +971,21 @@ function SubmissionRow({
 
                 {/* Feedback */}
                 {replySuccess && (
-                  <p className="text-sm font-semibold text-green-600">
-                    Reply sent successfully.
-                  </p>
+                  <p className="text-sm font-semibold text-green-600">Reply sent successfully.</p>
                 )}
-                {replyError && (
-                  <p className="text-sm text-red-600">{replyError}</p>
-                )}
+                {replyError && <p className="text-sm text-red-600">{replyError}</p>}
 
                 {/* Send button */}
                 <button
                   type="button"
                   onClick={onSend}
-                  disabled={
-                    replySending || !replySubject.trim() || !replyBody.trim()
-                  }
+                  disabled={replySending || !replySubject.trim() || !replyBody.trim()}
                   className="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {replySending ? (
                     <>
                       <RefreshCw className="h-4 w-4 animate-spin" />
-                      Sending...
+                      Sending…
                     </>
                   ) : (
                     <>
