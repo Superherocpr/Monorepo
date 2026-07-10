@@ -139,10 +139,16 @@ export async function GET(request: NextRequest): Promise<Response> {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Students");
 
-  // Write to a Node Buffer — no temp file, lives only in memory
-  const buf = XLSX.write(wb, { bookType: "xlsx", type: "buffer" }) as Buffer;
+  // Write to a Uint8Array — no temp file, lives only in memory.
+  // XLSX.write returns Uint8Array<ArrayBufferLike>; TypeScript 5.9 requires
+  // Uint8Array<ArrayBuffer> for BlobPart. new Uint8Array(raw) copies the bytes
+  // into a fresh ArrayBuffer-backed view that satisfies the stricter constraint.
+  const raw = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as Uint8Array;
+  const blob = new Blob([new Uint8Array(raw)], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
 
-  return new Response(buf, {
+  return new Response(blob, {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
