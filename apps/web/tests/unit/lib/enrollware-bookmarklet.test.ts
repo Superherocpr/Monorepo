@@ -37,6 +37,24 @@ describe("getBookmarkletSource", () => {
     expect(SOURCE).toContain("fetchTodaysClasses");
   });
 
+  test("includes the fetchStudentXLSX function", () => {
+    expect(SOURCE).toContain("fetchStudentXLSX");
+  });
+
+  test("includes the injectStudentFile function", () => {
+    expect(SOURCE).toContain("injectStudentFile");
+  });
+
+  test("does not contain CSV generation code", () => {
+    expect(SOURCE).not.toContain("buildStudentCSV");
+    expect(SOURCE).not.toContain("text/csv");
+    expect(SOURCE).not.toContain("injectStudentCSV");
+  });
+
+  test("references the student-xlsx API endpoint", () => {
+    expect(SOURCE).toContain("/api/enrollware/student-xlsx");
+  });
+
   test("uses different API base URLs for different environments", () => {
     const staging = getBookmarkletSource("https://staging.superherocpr.com");
     const prod = getBookmarkletSource("https://superherocpr.com");
