@@ -75,12 +75,17 @@ export default async function SessionDetailPage({ params }: PageProps) {
   // Session not found — send back to list
   if (!raw) redirect("/admin/sessions");
 
-  // Instructors may only view their own sessions, EXCEPT unassigned customer-requested
-  // sessions (class_request_id set, instructor_id null) — those are open for any instructor to accept.
+  // Instructors may only view their own sessions, EXCEPT open opportunities:
+  // unassigned customer-requested sessions (class_request_id set, instructor_id
+  // null), and cancelled sessions reopened for any instructor to claim
+  // (status = 'cancelled', instructor_id null).
+  const isUnassignedCustomerRequest = raw.class_request_id !== null && raw.instructor_id === null;
+  const isOpenOpportunity = raw.status === "cancelled" && raw.instructor_id === null;
   if (
     role === "instructor" &&
     raw.instructor_id !== user.id &&
-    !(raw.class_request_id && raw.instructor_id === null)
+    !isUnassignedCustomerRequest &&
+    !isOpenOpportunity
   ) {
     redirect("/admin/sessions");
   }

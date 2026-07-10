@@ -8,10 +8,12 @@ import Link from "next/link";
 import RollcallCodeWidget from "./RollcallCodeWidget";
 import PendingGradesWidget from "./PendingGradesWidget";
 import PendingInvoicesWidget from "./PendingInvoicesWidget";
+import OpenOpportunitiesWidget from "./OpenOpportunitiesWidget";
 import type { PendingGradeSession } from "./PendingGradesWidget";
 import type { PendingInvoice } from "./PendingInvoicesWidget";
+import type { OpenOpportunity } from "./OpenOpportunitiesWidget";
 
-export type { PendingGradeSession, PendingInvoice };
+export type { PendingGradeSession, PendingInvoice, OpenOpportunity };
 
 /** A single class session happening today for this instructor. */
 export interface TodaySession {
@@ -28,6 +30,7 @@ export interface InstructorDashboardProps {
   todaySessions: TodaySession[];
   pendingGrades: PendingGradeSession[];
   pendingInvoices: PendingInvoice[];
+  openOpportunities: OpenOpportunity[];
   dailyAccessCode: string | null;
 }
 
@@ -59,6 +62,7 @@ export default function InstructorDashboard({
   todaySessions,
   pendingGrades,
   pendingInvoices,
+  openOpportunities,
   dailyAccessCode,
 }: InstructorDashboardProps) {
   return (
@@ -70,6 +74,9 @@ export default function InstructorDashboard({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Widget: Daily Rollcall Code ── */}
         <RollcallCodeWidget initialCode={dailyAccessCode} />
+
+        {/* ── Widget: Open Opportunities ── */}
+        <OpenOpportunitiesWidget opportunities={openOpportunities} />
 
         {/* ── Widget: Today's Classes ── */}
         {todaySessions.length > 0 && (

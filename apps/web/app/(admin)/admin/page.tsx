@@ -15,6 +15,7 @@ import type {
   TodaySession,
   PendingGradeSession,
   PendingInvoice,
+  OpenOpportunity,
 } from "../_components/dashboard/InstructorDashboard";
 import ManagerDashboard from "../_components/dashboard/ManagerDashboard";
 import SuperAdminDashboard from "../_components/dashboard/SuperAdminDashboard";
@@ -83,6 +84,7 @@ export default async function AdminDashboardPage() {
       { data: rawTodaySessions },
       { data: completedSessionsWithRoster },
       { data: pendingInvoices },
+      { data: rawOpenOpportunities },
     ] = await Promise.all([
       admin
         .from("class_sessions")
@@ -112,6 +114,14 @@ export default async function AdminDashboardPage() {
         .eq("instructor_id", user.id)
         .eq("status", "sent")
         .order("created_at", { ascending: false }),
+
+      // Cancelled sessions with no instructor yet — open for any instructor to claim
+      admin
+        .from("class_sessions")
+        .select("id, starts_at, class_types ( name ), locations ( name, city )")
+        .eq("status", "cancelled")
+        .is("instructor_id", null)
+        .order("starts_at"),
     ]);
 
     // Filter completed sessions down to those with at least one ungraded roster record
@@ -139,6 +149,9 @@ export default async function AdminDashboardPage() {
         pendingGrades={pendingGrades}
         pendingInvoices={
           (pendingInvoices ?? []) as unknown as PendingInvoice[]
+        }
+        openOpportunities={
+          (rawOpenOpportunities ?? []) as unknown as OpenOpportunity[]
         }
         dailyAccessCode={profile.daily_access_code ?? null}
       />
