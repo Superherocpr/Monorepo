@@ -14,3 +14,9 @@ export const OWNER_EMAILS: string[] = (process.env.OWNER_EMAIL ?? "contact@super
   .split(",")
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
+
+/**
+ * Direct phone number for Daniel Hedgeman, shown to instructors who are
+ * blocked from cancelling a class online because it starts within 48 hours.
+ */
+export const OWNER_DIRECT_PHONE = "(813) 966-3969";

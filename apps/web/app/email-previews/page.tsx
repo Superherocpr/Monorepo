@@ -22,6 +22,11 @@ import {
   classRequestRejectedCustomerEmail,
   instructorClassOpportunityEmail,
   instructorAcceptedAdminEmail,
+  sessionCancelledAdminEmail,
+  openOpportunityInstructorEmail,
+  sessionClaimedStudentEmail,
+  sessionClaimedAdminEmail,
+  unclaimedOpportunityEscalationEmail,
 } from "@/lib/emails";
 
 // Dev-only preview page for all transactional emails.
@@ -231,6 +236,69 @@ export default async function Page() {
     baseUrl: "http://localhost:3000",
   });
   previews.push({ id: "cr-instructor-accepted", name: "Class Request — Instructor Accepted (Admin)", subject: crAccepted.subject, src: b64(crAccepted.html) });
+
+  // ── Open Opportunity (cancel → claim) emails ───────────────────────────────
+  const ooCancelledAdmin = sessionCancelledAdminEmail({
+    className: "BLS for Healthcare Providers",
+    sessionDate: "2026-09-15T14:00:00Z",
+    venueName: "Main Street Training Center",
+    cancelledByName: "Dana Morgan",
+    reason: "Family emergency — unable to teach this session.",
+    sessionId: "00000000-0000-0000-0000-000000000003",
+    baseUrl: "http://localhost:3000",
+  });
+  previews.push({ id: "oo-cancelled-admin", name: "Session Cancelled — Admin Notification", subject: ooCancelledAdmin.subject, src: b64(ooCancelledAdmin.html) });
+
+  const ooInstructorBroadcast = openOpportunityInstructorEmail({
+    className: "BLS for Healthcare Providers",
+    sessionDate: "2026-09-15T14:00:00Z",
+    venueName: "Main Street Training Center",
+    venueCity: "Tampa",
+    venueState: "FL",
+    sessionId: "00000000-0000-0000-0000-000000000003",
+    baseUrl: "http://localhost:3000",
+  });
+  previews.push({ id: "oo-instructor-broadcast", name: "Open Opportunity — Instructor Broadcast", subject: ooInstructorBroadcast.subject, src: b64(ooInstructorBroadcast.html) });
+
+  const ooClaimedStudent = sessionClaimedStudentEmail({
+    firstName: "Alex",
+    className: "BLS for Healthcare Providers",
+    sessionDate: "2026-09-15T14:00:00Z",
+    newInstructorName: "Casey Rivera",
+    newInstructorPhone: "(813) 555-0142",
+    newVenueName: "Westshore Training Center",
+    newVenueCity: "Tampa",
+    newVenueState: "FL",
+  });
+  previews.push({ id: "oo-claimed-student", name: "Session Claimed — Student Notification", subject: ooClaimedStudent.subject, src: b64(ooClaimedStudent.html) });
+
+  const ooClaimedAdmin = sessionClaimedAdminEmail({
+    className: "BLS for Healthcare Providers",
+    sessionDate: "2026-09-15T14:00:00Z",
+    newInstructorName: "Casey Rivera",
+    sessionId: "00000000-0000-0000-0000-000000000003",
+    baseUrl: "http://localhost:3000",
+  });
+  previews.push({ id: "oo-claimed-admin", name: "Session Claimed — Admin Notification", subject: ooClaimedAdmin.subject, src: b64(ooClaimedAdmin.html) });
+
+  const ooEscalation = unclaimedOpportunityEscalationEmail({
+    sessions: [
+      {
+        sessionId: "00000000-0000-0000-0000-000000000003",
+        className: "BLS for Healthcare Providers",
+        sessionDate: "2026-09-15T14:00:00Z",
+        venueName: "Main Street Training Center",
+      },
+      {
+        sessionId: "00000000-0000-0000-0000-000000000004",
+        className: "Heartsaver CPR/AED",
+        sessionDate: "2026-09-16T09:00:00Z",
+        venueName: "Acme Corp. HQ",
+      },
+    ],
+    baseUrl: "http://localhost:3000",
+  });
+  previews.push({ id: "oo-escalation", name: "Unclaimed Opportunities — Super Admin Escalation", subject: ooEscalation.subject, src: b64(ooEscalation.html) });
 
   return (
     <main className="p-8">

@@ -3,14 +3,18 @@
  * Called by: book/payment page (PayPalOneTimePaymentButton createOrder callback)
  * Auth: None required — creates a pending PayPal order that the buyer approves
  *
- * Accepts a session ID, re-fetches the class price/name from the database,
- * and creates a PayPal order in CAPTURE intent against the SuperHeroCPR
- * business PayPal account. Returns { orderId } to the client.
+ * Accepts a session ID and an optional promo code. Re-fetches the class price/name
+ * and validates the promo code (if any) server-side. Creates a PayPal order for
+ * the final discounted amount against the SuperHeroCPR business PayPal account.
+ * Returns { orderId, finalAmount } to the client.
  *
  * Actual capture and booking creation happen in /api/bookings/confirm after approval.
  *
  * Security: price is ALWAYS resolved server-side from the sessionId — the client
- * cannot supply or override the amount charged.
+ * cannot supply or override the amount charged. Promo codes are re-validated here
+ * against the DB; a tampered client code is rejected before an order is created.
+ *
+ * Note: free (100% off) bookings skip PayPal entirely and use /api/bookings/confirm-free.
  */
 
 import { NextResponse } from "next/server";
@@ -20,6 +24,7 @@ import {
   getPayPalApiBase,
 } from "@/lib/paypal";
 import { createAdminClient } from "@/lib/supabase/server";
+import { resolvePromoDiscount } from "@/lib/promo-codes";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -28,8 +33,9 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 /**
  * Creates a PayPal order for a selected booking session using DB-owned price.
+ * Applies a validated promo discount if a code is provided.
  * Side effects: PayPal order creation only; no payment is captured here.
- * @param request - JSON request containing sessionId.
+ * @param request - JSON request containing sessionId and optional promoCode.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -38,7 +44,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { sessionId } = body;
+  const { sessionId, promoCode } = body;
 
   if (typeof sessionId !== "string") {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -71,14 +77,27 @@ export async function POST(request: Request) {
     }
   ).class_types;
   const classType = Array.isArray(classTypeJoin) ? classTypeJoin[0] : classTypeJoin;
-  const amount =
+  const baseAmount =
     typeof classType?.price === "number"
       ? classType.price
       : parseFloat(String(classType?.price ?? ""));
   const className = classType?.name?.trim() || "CPR Class";
 
-  if (!Number.isFinite(amount) || amount <= 0) {
+  if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
     return NextResponse.json({ error: "Session pricing unavailable" }, { status: 500 });
+  }
+
+  // ── Apply promo code discount (server-side re-validation) ─────────────────
+  let finalAmount = baseAmount;
+  let promoDescription = "";
+
+  if (typeof promoCode === "string" && promoCode.trim()) {
+    const promoResult = await resolvePromoDiscount(supabase, promoCode.trim(), sessionId, baseAmount);
+    if (!promoResult.valid) {
+      return NextResponse.json({ error: promoResult.error }, { status: 422 });
+    }
+    finalAmount = promoResult.finalPrice;
+    promoDescription = ` (promo: ${promoResult.code})`;
   }
 
   // ── Get business PayPal access token (always — required to create the order) ──
@@ -90,19 +109,19 @@ export async function POST(request: Request) {
       {
         amount: {
           currency_code: "USD",
-          value: amount.toFixed(2),
+          value: finalAmount.toFixed(2),
         },
-        description: `SuperHeroCPR — ${className}`,
+        description: `SuperHeroCPR — ${className}${promoDescription}`,
       },
     ],
   };
 
   // ── Build request headers ──────────────────────────────────────────────
-  // Deterministic idempotency key — same session + amount
+  // Deterministic idempotency key — same session + final amount
   // collapses retries into a single PayPal order. Random per-request keys
   // (e.g. Date.now()) defeat the purpose of PayPal-Request-Id.
   const idempotencyKey = createHash("sha256")
-    .update(`${sessionId}:${amount.toFixed(2)}:business`)
+    .update(`${sessionId}:${finalAmount.toFixed(2)}:business`)
     .digest("hex")
     .slice(0, 32);
 
@@ -130,5 +149,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "PayPal order ID missing" }, { status: 502 });
   }
 
-  return NextResponse.json({ orderId: data.id });
+  return NextResponse.json({ orderId: data.id, finalAmount });
 }

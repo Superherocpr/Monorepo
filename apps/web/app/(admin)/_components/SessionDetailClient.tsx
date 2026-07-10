@@ -11,10 +11,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { UserRole } from "@/types/users";
 import type { SessionStatus, SessionApprovalStatus } from "@/types/schedule";
+import { OWNER_DIRECT_PHONE } from "@/lib/constants";
 import {
   approveSession,
   rejectSession,
-  cancelSession,
   updateSession,
   type SessionEditFields,
 } from "@/app/(admin)/admin/sessions/[id]/actions";
@@ -310,18 +310,22 @@ export default function SessionDetailClient({
   const [showEditForm, setShowEditForm] = useState(false);
   const [showApproveEditWarning, setShowApproveEditWarning] = useState(false);
   const [showCancelForm, setShowCancelForm] = useState(false);
+  const [showCallDanielModal, setShowCallDanielModal] = useState(false);
 
   const [rejectReason, setRejectReason] = useState("");
   const [cancelReason, setCancelReason] = useState("");
+  const [claimLocationId, setClaimLocationId] = useState(session.location_id);
 
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   // ── Edit form state (pre-populated from session data) ─────────────────────
 
@@ -463,20 +467,31 @@ export default function SessionDetailClient({
   }
 
   /**
-   * Submits the cancellation form. Validates min length before calling server action.
-   * Side effect: DB update via server action, form hidden, page refresh on success.
+   * Submits the cancellation form. Validates min length, then calls the cancel
+   * API route, which sets the session to an open opportunity any instructor
+   * can claim. Side effect: DB update, form hidden, page refresh on success.
    */
   async function handleCancel() {
     setIsCancelling(true);
     setActionError(null);
-    const error = await cancelSession(session.id, cancelReason);
-    setIsCancelling(false);
-    if (error) {
-      setActionError(error);
-    } else {
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: cancelReason }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setActionError(json.error ?? "Could not cancel this session. Please try again.");
+        return;
+      }
       setShowCancelForm(false);
       setCancelReason("");
       router.refresh();
+    } catch {
+      setActionError("Network error. Please try again.");
+    } finally {
+      setIsCancelling(false);
     }
   }
 
@@ -618,6 +633,56 @@ export default function SessionDetailClient({
   const needsInstructor = isCustomerRequested && session.instructor_id === null;
   const isAssignedToMe = session.instructor_id === userId;
 
+  // ── Claim This Class (cancelled sessions reopened as an open opportunity) ──
+
+  /**
+   * Claims a cancelled, unclaimed session for the calling instructor, setting
+   * the location they'll teach from. Uses a conditional server-side update
+   * (WHERE instructor_id IS NULL) so only the first caller succeeds.
+   * On 409 another instructor got there first.
+   */
+  async function handleClaim() {
+    setIsClaiming(true);
+    setClaimError(null);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location_id: claimLocationId }),
+      });
+      const json = await res.json();
+      if (res.status === 409) {
+        setClaimError("This class was just claimed by another instructor.");
+        return;
+      }
+      if (!res.ok) {
+        setClaimError(json.error ?? "Could not claim this class. Please try again.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setClaimError("Network error. Please try again.");
+    } finally {
+      setIsClaiming(false);
+    }
+  }
+
+  // Whether this session was cancelled and is open for any instructor to claim
+  const isOpenOpportunity = session.status === "cancelled" && session.instructor_id === null;
+
+  // ── Cancel eligibility ────────────────────────────────────────────────────
+
+  const canCancel =
+    session.status !== "cancelled" &&
+    (isManager || (isInstructor && isOwnSession));
+
+  // Instructors cannot cancel online within 48 hours of the class starting —
+  // they're directed to call the owner directly instead. Managers/super_admins
+  // are never restricted by this window.
+  const hoursUntilStart = new Date(session.starts_at).getTime() - Date.now();
+  const instructorBlockedByWindow =
+    isInstructor && !isManager && hoursUntilStart < 48 * 60 * 60 * 1000;
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────────
@@ -629,6 +694,69 @@ export default function SessionDetailClient({
       {actionError && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
           {actionError}
+        </div>
+      )}
+
+      {/* ── Call Daniel modal (instructor blocked from cancelling within 48hrs) ── */}
+      {showCallDanielModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full space-y-3">
+            <h2 className="text-base font-bold text-gray-900">
+              This class starts in less than 48 hours
+            </h2>
+            <p className="text-sm text-gray-600">
+              Classes within 48 hours can&apos;t be cancelled online. Please call Daniel Hedgeman
+              directly to cancel:
+            </p>
+            <a
+              href={`tel:${OWNER_DIRECT_PHONE.replace(/[^\d+]/g, "")}`}
+              className="block text-center px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 transition-colors"
+            >
+              Call {OWNER_DIRECT_PHONE}
+            </a>
+            <button
+              type="button"
+              onClick={() => setShowCallDanielModal(false)}
+              className="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Claim This Class banner (cancelled session reopened as an open opportunity) ── */}
+      {isOpenOpportunity && (
+        <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-5 space-y-3">
+          <h2 className="text-base font-bold text-amber-900">
+            ⚡ This Class Is Open — First Come, First Serve
+          </h2>
+          <p className="text-sm text-amber-800">
+            This class was cancelled by its previous instructor and needs a new one. Choose the
+            location you&apos;ll teach from and claim it.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <select
+              value={claimLocationId}
+              onChange={(e) => setClaimLocationId(e.target.value)}
+              className="text-sm border border-amber-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+            >
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleClaim}
+              disabled={isClaiming}
+              className="shrink-0 bg-amber-600 text-white font-bold px-5 py-2.5 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              {isClaiming ? "Claiming…" : "Claim This Class"}
+            </button>
+          </div>
+          {claimError && <p className="text-sm text-red-700 font-medium">{claimError}</p>}
         </div>
       )}
 
@@ -1077,11 +1205,16 @@ export default function SessionDetailClient({
               </button>
             )}
 
-            {/* Cancel session — manager/super admin only, non-cancelled sessions */}
-            {isManager && session.status !== "cancelled" && (
+            {/* Cancel session — manager/super_admin any time; instructor on their
+                own session, but blocked within 48hrs of start (see modal) */}
+            {canCancel && (
               <button
                 type="button"
                 onClick={() => {
+                  if (instructorBlockedByWindow) {
+                    setShowCallDanielModal(true);
+                    return;
+                  }
                   setShowCancelForm(!showCancelForm);
                   setActionError(null);
                 }}
@@ -1136,7 +1269,8 @@ export default function SessionDetailClient({
               Cancel This Session?
             </h3>
             <p className="text-sm text-red-700">
-              This cannot be undone. All booked students will be notified.
+              This class becomes an open opportunity for other instructors to claim. Booked
+              students are only notified once a new instructor picks it up — not now.
             </p>
             <textarea
               value={cancelReason}

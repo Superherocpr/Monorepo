@@ -2,7 +2,9 @@
 
 /**
  * Server actions for the admin session detail page (/admin/sessions/[id]).
- * Handles approve, reject, cancel, and edit mutations on class_sessions.
+ * Handles approve, reject, and edit mutations on class_sessions.
+ * (Cancel/claim moved to POST /api/sessions/[id]/cancel and /claim — those need
+ * to send emails from a route context and be callable by instructors too.)
  * All successful mutations revalidate the session detail and list paths.
  */
 
@@ -75,37 +77,6 @@ export async function rejectSession(
     .update({
       approval_status: "rejected",
       rejection_reason: reason.trim(),
-    })
-    .eq("id", sessionId);
-  if (error) return error.message;
-  revalidatePath(`/admin/sessions/${sessionId}`);
-  revalidatePath("/admin/sessions");
-  return null;
-}
-
-/**
- * Cancels a class session. Sets status to 'cancelled' and stores the reason in notes.
- * @param sessionId - UUID of the class_sessions record to cancel.
- * @param reason - Cancellation reason stored in the session notes. Must be at least 10 characters.
- * @returns An error message string on failure, or null on success.
- * TODO: Send cancellation notification email to all booked students via Resend.
- */
-export async function cancelSession(
-  sessionId: string,
-  reason: string
-): Promise<string | null> {
-  if (reason.trim().length < 10) {
-    return "Cancellation reason must be at least 10 characters.";
-  }
-  const auth = await requireActionRole(["manager", "super_admin"]);
-  if ("error" in auth) return auth.error;
-
-  const admin = await createAdminClient();
-  const { error } = await admin
-    .from("class_sessions")
-    .update({
-      status: "cancelled",
-      notes: reason.trim(),
     })
     .eq("id", sessionId);
   if (error) return error.message;

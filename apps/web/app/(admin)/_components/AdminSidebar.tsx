@@ -56,6 +56,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   { label: "Payments", href: "/admin/payments", roles: ["manager", "super_admin"] },
   { label: "Payouts", href: "/admin/payouts", roles: ["super_admin"] },
+  { label: "Promo Codes", href: "/admin/promo-codes", roles: ["super_admin"] },
 
   // ── Engagement ─────────────────────────────────────────────────────────────
   {

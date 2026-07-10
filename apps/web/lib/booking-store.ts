@@ -4,6 +4,16 @@
  * Used by: all pages under app/(public)/book/
  */
 
+/** Validated promo code applied at checkout — populated by /api/promo-codes/validate. */
+export interface AppliedPromoCode {
+  code: string;
+  discountType: "fixed" | "percent" | "free";
+  discountValue: number;
+  originalPrice: number;
+  discountAmount: number;
+  finalPrice: number;
+}
+
 export interface BookingStore {
   /** UUID of the selected class_sessions record */
   sessionId: string | null;
@@ -36,6 +46,8 @@ export interface BookingStore {
   isNewCustomer: boolean;
   /** Supabase auth user.id — set after sign-in (step 2a) or account creation (step 3) */
   customerId: string | null;
+  /** Validated promo code applied at the payment step — null if none applied */
+  appliedPromoCode: AppliedPromoCode | null;
 }
 
 const STORE_KEY = "superhero_cpr_booking";
@@ -82,5 +94,6 @@ function emptyStore(): BookingStore {
     customerDetails: null,
     isNewCustomer: false,
     customerId: null,
+    appliedPromoCode: null,
   };
 }
