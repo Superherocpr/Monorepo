@@ -16,6 +16,7 @@ import type {
   PendingGradeSession,
   PendingInvoice,
   OpenOpportunity,
+  ActivePromoCode,
 } from "../_components/dashboard/InstructorDashboard";
 import ManagerDashboard from "../_components/dashboard/ManagerDashboard";
 import SuperAdminDashboard from "../_components/dashboard/SuperAdminDashboard";
@@ -49,6 +50,66 @@ function getThisMonthUTCRange(): { start: string; end: string } {
     start: new Date(Date.UTC(y, m, 1)).toISOString(),
     end: new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)).toISOString(),
   };
+}
+
+/**
+ * Transforms raw promo code rows from Supabase into ActivePromoCode props.
+ * Resolves nested class type names and session labels from the joined data.
+ * @param rows - Raw rows from the promo_codes query with nested joins
+ */
+function buildActivePromoCodes(rows: unknown[]): ActivePromoCode[] {
+  return (rows as Record<string, unknown>[]).map((row) => {
+    const scope = (row.scope as string ?? "session") as ActivePromoCode["scope"];
+
+    // Extract class type names for session_type scope
+    const classTypeLinks = Array.isArray(row.promo_code_class_types)
+      ? (row.promo_code_class_types as Record<string, unknown>[])
+      : [];
+    const class_type_names = classTypeLinks.flatMap((link) => {
+      const ct = link.class_types as { name?: string } | null;
+      return ct?.name ? [ct.name] : [];
+    });
+
+    // Extract session labels for session scope
+    const sessionLinks = Array.isArray(row.promo_code_sessions)
+      ? (row.promo_code_sessions as Record<string, unknown>[])
+      : [];
+    const allSessionLabels = sessionLinks.flatMap((link) => {
+      const s = link.class_sessions as {
+        starts_at?: string;
+        class_types?: { name?: string } | null;
+        locations?: { name?: string } | null;
+      } | null;
+      if (!s?.starts_at) return [];
+      const className = s.class_types?.name ?? "Class";
+      const locName = s.locations?.name ?? "";
+      const time = new Date(s.starts_at).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      return [`${className}${locName ? ` — ${locName}` : ""} · ${time}`];
+    });
+
+    const MAX_SESSION_LABELS = 3;
+    const session_labels = allSessionLabels.slice(0, MAX_SESSION_LABELS);
+    const overflow_count = Math.max(0, allSessionLabels.length - MAX_SESSION_LABELS);
+
+    return {
+      code: row.code as string,
+      discount_type: row.discount_type as ActivePromoCode["discount_type"],
+      discount_value:
+        typeof row.discount_value === "number"
+          ? row.discount_value
+          : parseFloat(String(row.discount_value)),
+      expires_at: (row.expires_at as string | null) ?? null,
+      scope,
+      class_type_names,
+      session_labels,
+      overflow_count,
+    };
+  });
 }
 
 /** Server-rendered role-aware admin dashboard. */
@@ -85,6 +146,7 @@ export default async function AdminDashboardPage() {
       { data: completedSessionsWithRoster },
       { data: pendingInvoices },
       { data: rawOpenOpportunities },
+      { data: rawActivePromoCodes },
     ] = await Promise.all([
       admin
         .from("class_sessions")
@@ -122,6 +184,18 @@ export default async function AdminDashboardPage() {
         .eq("status", "cancelled")
         .is("instructor_id", null)
         .order("starts_at"),
+
+      // Active promo codes with scope details — instructors use this as a quick reference
+      admin
+        .from("promo_codes")
+        .select(`
+          code, discount_type, discount_value, expires_at, scope,
+          promo_code_class_types ( class_types ( name ) ),
+          promo_code_sessions ( class_sessions ( starts_at, class_types ( name ), locations ( name ) ) )
+        `)
+        .eq("active", true)
+        .or("expires_at.is.null,expires_at.gt.now()")
+        .order("expires_at", { ascending: true, nullsFirst: false }),
     ]);
 
     // Filter completed sessions down to those with at least one ungraded roster record
@@ -154,6 +228,7 @@ export default async function AdminDashboardPage() {
           (rawOpenOpportunities ?? []) as unknown as OpenOpportunity[]
         }
         dailyAccessCode={profile.daily_access_code ?? null}
+        activePromoCodes={buildActivePromoCodes(rawActivePromoCodes ?? [])}
       />
     );
   }

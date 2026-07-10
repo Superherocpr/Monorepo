@@ -9,11 +9,13 @@ import RollcallCodeWidget from "./RollcallCodeWidget";
 import PendingGradesWidget from "./PendingGradesWidget";
 import PendingInvoicesWidget from "./PendingInvoicesWidget";
 import OpenOpportunitiesWidget from "./OpenOpportunitiesWidget";
+import PromoCodesWidget from "./PromoCodesWidget";
 import type { PendingGradeSession } from "./PendingGradesWidget";
 import type { PendingInvoice } from "./PendingInvoicesWidget";
 import type { OpenOpportunity } from "./OpenOpportunitiesWidget";
+import type { ActivePromoCode } from "./PromoCodesWidget";
 
-export type { PendingGradeSession, PendingInvoice, OpenOpportunity };
+export type { PendingGradeSession, PendingInvoice, OpenOpportunity, ActivePromoCode };
 
 /** A single class session happening today for this instructor. */
 export interface TodaySession {
@@ -32,6 +34,7 @@ export interface InstructorDashboardProps {
   pendingInvoices: PendingInvoice[];
   openOpportunities: OpenOpportunity[];
   dailyAccessCode: string | null;
+  activePromoCodes: ActivePromoCode[];
 }
 
 /** Status badge color map for session status values. */
@@ -64,6 +67,7 @@ export default function InstructorDashboard({
   pendingInvoices,
   openOpportunities,
   dailyAccessCode,
+  activePromoCodes,
 }: InstructorDashboardProps) {
   return (
     <div className="space-y-6">
@@ -116,6 +120,9 @@ export default function InstructorDashboard({
             </ul>
           </div>
         )}
+
+        {/* ── Widget: Active Promo Codes ── */}
+        <PromoCodesWidget codes={activePromoCodes} />
 
         {/* ── Widget: Pending Grades ── */}
         <PendingGradesWidget sessions={pendingGrades} />
