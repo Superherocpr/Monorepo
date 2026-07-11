@@ -6,7 +6,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import type { Metadata } from "next";
 import type { UserRole } from "@/types/users";
 import PayoutSettingsClient from "./_components/PayoutSettingsClient";
@@ -20,30 +21,25 @@ const ALLOWED_ROLES: UserRole[] = ["instructor", "super_admin"];
 
 /**
  * Fetches and renders the payout settings page.
- * Redirects to /admin if the user's role is not instructor or super_admin.
+ * Redirects to /admin unless the effective role is instructor or super_admin.
  */
 export default async function PaymentAccountPage() {
-  const supabase = await createClient();
-  const admin = await createAdminClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/signin?redirect=/admin/profile/payment");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, role, paypal_payout_email")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !ALLOWED_ROLES.includes(profile.role as UserRole)) {
+  const actor = await getAdminActor();
+  if (!actor || !ALLOWED_ROLES.includes(actor.effectiveRole)) {
     redirect("/admin");
   }
 
+  // paypal_payout_email isn't part of the shared actor profile — fetch it here.
+  const admin = await createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("paypal_payout_email")
+    .eq("id", actor.user.id)
+    .single();
+
   return (
     <PayoutSettingsClient
-      initialPaypalPayoutEmail={profile.paypal_payout_email ?? null}
+      initialPaypalPayoutEmail={profile?.paypal_payout_email ?? null}
     />
   );
 }

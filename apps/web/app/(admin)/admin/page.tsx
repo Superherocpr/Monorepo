@@ -8,12 +8,15 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import InstructorDashboard from "../_components/dashboard/InstructorDashboard";
 import type {
   TodaySession,
   PendingGradeSession,
   PendingInvoice,
+  OpenOpportunity,
+  ActivePromoCode,
 } from "../_components/dashboard/InstructorDashboard";
 import ManagerDashboard from "../_components/dashboard/ManagerDashboard";
 import SuperAdminDashboard from "../_components/dashboard/SuperAdminDashboard";
@@ -49,32 +52,90 @@ function getThisMonthUTCRange(): { start: string; end: string } {
   };
 }
 
+/**
+ * Transforms raw promo code rows from Supabase into ActivePromoCode props.
+ * Resolves nested class type names and session labels from the joined data.
+ * @param rows - Raw rows from the promo_codes query with nested joins
+ */
+function buildActivePromoCodes(rows: unknown[]): ActivePromoCode[] {
+  return (rows as Record<string, unknown>[]).map((row) => {
+    const scope = (row.scope as string ?? "session") as ActivePromoCode["scope"];
+
+    // Extract class type names for session_type scope
+    const classTypeLinks = Array.isArray(row.promo_code_class_types)
+      ? (row.promo_code_class_types as Record<string, unknown>[])
+      : [];
+    const class_type_names = classTypeLinks.flatMap((link) => {
+      const ct = link.class_types as { name?: string } | null;
+      return ct?.name ? [ct.name] : [];
+    });
+
+    // Extract session labels for session scope
+    const sessionLinks = Array.isArray(row.promo_code_sessions)
+      ? (row.promo_code_sessions as Record<string, unknown>[])
+      : [];
+    const allSessionLabels = sessionLinks.flatMap((link) => {
+      const s = link.class_sessions as {
+        starts_at?: string;
+        class_types?: { name?: string } | null;
+        locations?: { name?: string } | null;
+      } | null;
+      if (!s?.starts_at) return [];
+      const className = s.class_types?.name ?? "Class";
+      const locName = s.locations?.name ?? "";
+      const time = new Date(s.starts_at).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      return [`${className}${locName ? ` — ${locName}` : ""} · ${time}`];
+    });
+
+    const MAX_SESSION_LABELS = 3;
+    const session_labels = allSessionLabels.slice(0, MAX_SESSION_LABELS);
+    const overflow_count = Math.max(0, allSessionLabels.length - MAX_SESSION_LABELS);
+
+    return {
+      code: row.code as string,
+      discount_type: row.discount_type as ActivePromoCode["discount_type"],
+      discount_value:
+        typeof row.discount_value === "number"
+          ? row.discount_value
+          : parseFloat(String(row.discount_value)),
+      expires_at: (row.expires_at as string | null) ?? null,
+      scope,
+      class_type_names,
+      session_labels,
+      overflow_count,
+    };
+  });
+}
+
 /** Server-rendered role-aware admin dashboard. */
 export default async function AdminDashboardPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   // Layout handles the primary auth guard, but we re-check here as a safeguard
-  // since this page fetches data — a missing user would cause runtime errors.
-  if (!user) redirect("/signin?redirect=/admin");
+  // since this page fetches data. Honors view-as: the dashboard variant shown
+  // matches the EFFECTIVE role.
+  const actor = await getAdminActor();
+  if (!actor) redirect("/signin?redirect=/admin");
+  const user = actor.user;
 
   // Use the service-role admin client for all data queries. RLS policies grant
   // only per-user row access to authenticated sessions; admin dashboard needs
   // full table visibility across all customers, sessions, and transactions.
   const admin = await createAdminClient();
 
+  // daily_access_code isn't part of the shared actor profile — fetch it here.
   const { data: profile } = await admin
     .from("profiles")
-    .select("first_name, role, daily_access_code")
+    .select("first_name, daily_access_code")
     .eq("id", user.id)
     .single();
 
   if (!profile) redirect("/");
 
-  const role = profile.role;
+  const role = actor.effectiveRole;
 
   // ── Instructor Dashboard ────────────────────────────────────────────────────
   if (role === "instructor") {
@@ -84,6 +145,8 @@ export default async function AdminDashboardPage() {
       { data: rawTodaySessions },
       { data: completedSessionsWithRoster },
       { data: pendingInvoices },
+      { data: rawOpenOpportunities },
+      { data: rawActivePromoCodes },
     ] = await Promise.all([
       admin
         .from("class_sessions")
@@ -113,6 +176,26 @@ export default async function AdminDashboardPage() {
         .eq("instructor_id", user.id)
         .eq("status", "sent")
         .order("created_at", { ascending: false }),
+
+      // Cancelled sessions with no instructor yet — open for any instructor to claim
+      admin
+        .from("class_sessions")
+        .select("id, starts_at, class_types ( name ), locations ( name, city )")
+        .eq("status", "cancelled")
+        .is("instructor_id", null)
+        .order("starts_at"),
+
+      // Active promo codes with scope details — instructors use this as a quick reference
+      admin
+        .from("promo_codes")
+        .select(`
+          code, discount_type, discount_value, expires_at, scope,
+          promo_code_class_types ( class_types ( name ) ),
+          promo_code_sessions ( class_sessions ( starts_at, class_types ( name ), locations ( name ) ) )
+        `)
+        .eq("active", true)
+        .or("expires_at.is.null,expires_at.gt.now()")
+        .order("expires_at", { ascending: true, nullsFirst: false }),
     ]);
 
     // Filter completed sessions down to those with at least one ungraded roster record
@@ -141,7 +224,11 @@ export default async function AdminDashboardPage() {
         pendingInvoices={
           (pendingInvoices ?? []) as unknown as PendingInvoice[]
         }
+        openOpportunities={
+          (rawOpenOpportunities ?? []) as unknown as OpenOpportunity[]
+        }
         dailyAccessCode={profile.daily_access_code ?? null}
+        activePromoCodes={buildActivePromoCodes(rawActivePromoCodes ?? [])}
       />
     );
   }

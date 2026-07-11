@@ -55,7 +55,8 @@ export type SessionApprovalStatus =
 export interface ClassSession {
   id: string;
   class_type_id: string;
-  instructor_id: string;
+  /** Null for customer-requested sessions awaiting acceptance, or cancelled sessions awaiting a claim. */
+  instructor_id: string | null;
   location_id: string;
   starts_at: string;
   ends_at: string;
@@ -69,6 +70,16 @@ export interface ClassSession {
   correction_window_closes_at: string | null;
   enrollware_submitted: boolean;
   notes: string | null;
+  /** Optional promotional discount as a percentage (0–50). Null = no discount. */
+  discount_percent: number | null;
+  /** Set when status = 'cancelled'. Timestamp the cancellation occurred. */
+  cancelled_at: string | null;
+  /** Set when status = 'cancelled'. Profile id of whoever cancelled it. */
+  cancelled_by: string | null;
+  /** Set when status = 'cancelled'. Free-text reason provided by the canceller. */
+  cancellation_reason: string | null;
+  /** Set once the 48hr-unclaimed escalation email has been sent for this session, to avoid re-notifying. */
+  unclaimed_escalation_sent_at: string | null;
   created_at: string;
 }
 
@@ -92,6 +103,8 @@ export interface ScheduleSession {
   ends_at: string;
   max_capacity: number;
   status: string;
+  /** Optional promotional discount as a percentage (0–50). Null = no discount. */
+  discount_percent: number | null;
   spotsRemaining: number;
   isFull: boolean;
   class_types: {

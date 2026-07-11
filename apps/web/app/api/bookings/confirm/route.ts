@@ -4,13 +4,15 @@
  * Auth: None required — PayPal order ID is the verification
  *
  * 1. Validates required fields.
- * 2. Re-fetches the class session price from the DB and verifies the client-
- *    supplied amount matches (THREAT-013).
+ * 2. Re-fetches the class session price from the DB and re-validates any promo
+ *    code server-side, then verifies the client-supplied amount matches (THREAT-013).
  * 3. Captures the PayPal payment server-side.
  * 4. Atomically reserves a spot via book_spot RPC (THREAT-006). If the class
  *    filled up during checkout, the PayPal capture is refunded automatically.
  * 5. Creates the payment record and instructor earning record.
  * 6. Sends booking confirmation email via Resend (best-effort).
+ *
+ * Note: free (100% off) bookings use /api/bookings/confirm-free instead.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
@@ -19,6 +21,7 @@ import { Resend } from "resend";
 import { bookingConfirmationEmail } from "@/lib/emails";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
 import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
+import { resolvePromoDiscount } from "@/lib/promo-codes";
 
 /** Acceptable rounding tolerance when comparing client/server prices. */
 const PRICE_TOLERANCE = 0.01;
@@ -64,6 +67,7 @@ export async function POST(request: Request) {
     sessionId,
     customerId,
     amount,
+    promoCode,
     customerEmail,
     customerFirstName,
     className,
@@ -86,11 +90,10 @@ export async function POST(request: Request) {
 
   const supabase = await createAdminClient();
 
-  // ── Step 1: Server-side price verification (THREAT-013) ──────────────────
+  // ── Step 1: Server-side price + promo verification (THREAT-013) ──────────
   // Never trust the client's amount — fetch the canonical price via the
-  // class_types join and reject if it doesn't match.
-  // `.maybeSingle()` (vs `.single()`) so a missing row returns null instead of
-  // throwing — a missing session is a 404, not a 500.
+  // class_types join, re-validate the promo code (if any), then reject if the
+  // client-supplied amount doesn't match the server-computed final price.
   const { data: sessionPriceRow, error: sessionFetchError } = await supabase
     .from("class_sessions")
     .select("instructor_id, class_types(price)")
@@ -125,7 +128,25 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Session pricing unavailable" }, { status: 500 });
   }
 
-  if (Math.abs(amount - dbPrice) > PRICE_TOLERANCE) {
+  // Re-validate the promo code server-side and compute the authoritative final price.
+  let expectedPrice = dbPrice;
+  let appliedPromoCode: string | null = null;
+  let discountAmount = 0;
+
+  if (typeof promoCode === "string" && promoCode.trim()) {
+    const promoResult = await resolvePromoDiscount(supabase, promoCode.trim(), sessionId, dbPrice);
+    if (!promoResult.valid) {
+      return Response.json(
+        { success: false, error: `Promo code invalid: ${promoResult.error}` },
+        { status: 422 }
+      );
+    }
+    expectedPrice = promoResult.finalPrice;
+    appliedPromoCode = promoResult.code;
+    discountAmount = promoResult.discountAmount;
+  }
+
+  if (Math.abs(amount - expectedPrice) > PRICE_TOLERANCE) {
     return Response.json(
       { success: false, error: "Pricing has changed. Please refresh and try again." },
       { status: 409 }
@@ -227,7 +248,9 @@ export async function POST(request: Request) {
   // ── Step 4: Create payment + instructor earning records ─────────────────
   // All online booking funds now land in the SuperHeroCPR business PayPal
   // account. The instructor receives their share through the payout system.
-  const routingNote = "Collected by SuperHeroCPR business PayPal — instructor payout pending";
+  const routingNote = appliedPromoCode
+    ? `Collected by SuperHeroCPR business PayPal (promo: ${appliedPromoCode}, discount: $${discountAmount.toFixed(2)}) — instructor payout pending`
+    : "Collected by SuperHeroCPR business PayPal — instructor payout pending";
   const paymentProcessor = "SuperHeroCPR via PayPal";
 
   const { data: paymentRow, error: paymentInsertError } = await supabase
@@ -235,7 +258,8 @@ export async function POST(request: Request) {
     .insert({
       customer_id: customerId,
       booking_id: bookingId,
-      amount: dbPrice,
+      // Record the actual amount charged (after discount), not the base price.
+      amount: expectedPrice,
       status: "completed",
       payment_type: "online",
       paypal_transaction_id: paypalTransactionId,
@@ -263,13 +287,13 @@ export async function POST(request: Request) {
     instructorId,
     bookingId: bookingId as string,
     paymentId: (paymentRow as { id?: string } | null)?.id ?? null,
-    grossAmount: dbPrice,
+    grossAmount: expectedPrice,
     note: routingNote,
   }).catch((err: unknown) => {
     console.error("[bookings/confirm] CRITICAL: instructor earning insert failed", {
       bookingId,
       paypalTransactionId,
-      amount: dbPrice,
+      amount: expectedPrice,
       error: err,
     });
   });
@@ -295,7 +319,7 @@ export async function POST(request: Request) {
       locationCity: typeof locationCity === "string" ? locationCity : "",
       locationState: typeof locationState === "string" ? locationState : "",
       locationZip: typeof locationZip === "string" ? locationZip : "",
-      amount: dbPrice,
+      amount: expectedPrice,
       paymentProcessor,
       transactionId: paypalTransactionId,
       instructorName: null,

@@ -217,6 +217,12 @@ export default function BookSessionSelector({
     setErrorMessage(null);
     setSelecting(session.id);
 
+    const basePrice = session.class_types.price;
+    const effectivePrice =
+      session.discount_percent != null && session.discount_percent > 0
+        ? basePrice * (1 - session.discount_percent / 100)
+        : basePrice;
+
     setBookingStore({
       sessionId: session.id,
       sessionDetails: {
@@ -229,7 +235,7 @@ export default function BookSessionSelector({
         locationCity: session.locations.city,
         locationState: session.locations.state,
         locationZip: session.locations.zip,
-        price: session.class_types.price,
+        price: effectivePrice,
         spotsRemaining: session.spotsRemaining,
       },
     });
@@ -501,15 +507,26 @@ interface BookingSessionCardProps {
 function BookingSessionCard({ session, isSelecting, onSelect }: BookingSessionCardProps) {
   const timeRange = formatTimeRange(session.starts_at, session.ends_at);
   const formattedDate = formatShortDate(session.starts_at);
-  const price = (session.class_types?.price ?? 0).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-  });
+
+  const basePrice = session.class_types?.price ?? 0;
+  const hasDiscount = session.discount_percent != null && session.discount_percent > 0;
+  const effectivePrice = hasDiscount ? basePrice * (1 - (session.discount_percent as number) / 100) : basePrice;
+
+  const formatPrice = (amount: number) =>
+    amount === 0
+      ? "Free"
+      : amount.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 });
 
   return (
     <article className="border border-gray-200 rounded-xl p-5 flex flex-col gap-3 hover:border-gray-300 transition-colors duration-150">
-      <h3 className="text-lg font-bold text-gray-900">{session.class_types.name}</h3>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-lg font-bold text-gray-900">{session.class_types.name}</h3>
+        {hasDiscount && (
+          <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+            {session.discount_percent}% OFF
+          </span>
+        )}
+      </div>
 
       <p className="text-sm text-gray-500">
         Instructor:{" "}
@@ -531,7 +548,16 @@ function BookingSessionCard({ session, isSelecting, onSelect }: BookingSessionCa
       </address>
 
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-gray-900">{price} / person</span>
+        <div className="flex items-baseline gap-1.5">
+          {hasDiscount && (
+            <span className="text-sm text-gray-400 line-through">
+              {formatPrice(basePrice)}
+            </span>
+          )}
+          <span className={`text-sm font-semibold ${hasDiscount ? "text-green-700" : "text-gray-900"}`}>
+            {formatPrice(effectivePrice)} / person
+          </span>
+        </div>
         <SpotsIndicator
           spotsRemaining={session.spotsRemaining}
           isFull={session.isFull}

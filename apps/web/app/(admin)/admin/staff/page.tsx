@@ -8,37 +8,25 @@
  */
 
 import { redirect } from "next/navigation";
-import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import { OWNER_EMAILS } from "@/lib/constants";
 import StaffManagement from "./_components/StaffManagement";
-import type { UserRole } from "@/types/users";
 import type { StaffMember } from "./_components/StaffManagement";
 
 export const metadata = { title: "Staff Management" };
 
 /**
  * Server component — fetches all staff members and current user info.
- * Redirects non-super-admins back to /admin.
+ * Redirects non-super-admins (by effective role) back to /admin.
  */
 export default async function StaffPage() {
-  const supabase = await createClient();
+  // Role check — super admin only (honors view-as)
+  const actor = await getAdminActor();
+  if (!actor || actor.effectiveRole !== "super_admin") redirect("/admin");
+
+  const user = actor.user;
   const admin = await createAdminClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin?redirect=/admin/staff");
-
-  // Role check — super admin only
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || (profile.role as UserRole) !== "super_admin") {
-    redirect("/admin");
-  }
 
   // Try a full-column staff query first. If local schema is older, retry with
   // a legacy column set and synthesize defaults used by the UI.

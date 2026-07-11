@@ -14,7 +14,8 @@
  * Managers and super admins may create sessions for any instructor.
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 import { NextResponse } from "next/server";
 
 /** Staff roles that are permitted to create sessions. */
@@ -27,28 +28,12 @@ const ALLOWED_ROLES = ["instructor", "manager", "super_admin"] as const;
  * @returns JSON with `{ id }` on success, or an error message and status code.
  */
 export async function POST(request: Request): Promise<Response> {
-  const supabase = await createClient();
+  // ── Auth (honors view-as: a downgraded super admin creates as instructor) ──
+  const authResult = await requireApiRole([...ALLOWED_ROLES]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !ALLOWED_ROLES.includes(profile.role as (typeof ALLOWED_ROLES)[number])) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const isInstructor = profile.role === "instructor";
+  const isInstructor = actor.effectiveRole === "instructor";
 
   const adminClient = await createAdminClient();
 
@@ -72,6 +57,7 @@ export async function POST(request: Request): Promise<Response> {
     ends_at,
     max_capacity,
     notes,
+    discount_percent,
   } = body as Record<string, unknown>;
 
   // ── Validate required fields ───────────────────────────────────────────────
@@ -91,7 +77,7 @@ export async function POST(request: Request): Promise<Response> {
   // Instructors are always their own instructor — reject attempts to impersonate.
   // Managers/super admins must supply an instructor_id.
   const resolvedInstructorId = isInstructor
-    ? profile.id
+    ? actor.user.id
     : typeof instructor_id === "string" && instructor_id
     ? instructor_id
     : null;
@@ -102,6 +88,17 @@ export async function POST(request: Request): Promise<Response> {
       { status: 400 }
     );
   }
+
+  // ── Validate optional discount ─────────────────────────────────────────────
+  // discount_percent must be omitted/null (no discount) or a number between 0 and 50.
+  const hasDiscount = discount_percent !== null && discount_percent !== undefined;
+  if (hasDiscount && (typeof discount_percent !== "number" || discount_percent < 0 || discount_percent > 50)) {
+    return NextResponse.json(
+      { error: "discount_percent must be a number between 0 and 50." },
+      { status: 400 }
+    );
+  }
+  const resolvedDiscount: number | null = hasDiscount ? (discount_percent as number) : null;
 
   // ── Validate timestamps ────────────────────────────────────────────────────
   const start = new Date(starts_at);
@@ -171,6 +168,7 @@ export async function POST(request: Request): Promise<Response> {
       starts_at,
       ends_at,
       max_capacity,
+      discount_percent: resolvedDiscount,
       // notes is optional — only set if truthy to avoid storing empty strings
       ...(typeof notes === "string" && notes.trim() ? { notes: notes.trim() } : {}),
       // Defaults set by DB: status = 'scheduled', approval_status = 'pending_approval'

@@ -7,8 +7,9 @@
  * Supports partial refunds (minimum $0.01, maximum order total).
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
+import { getMerchPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 
 /**
  * Refunds a paid merch order through PayPal, then cancels it locally and restores stock.
@@ -16,24 +17,11 @@ import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
  * @param request - JSON request containing orderId and refundAmount.
  */
 export async function POST(request: Request) {
-  const supabase = await createClient();
 
   // ── Auth guard ──────────────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  if (!profile || profile.role !== "super_admin") {
-    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiRole(["super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
   const adminClient = await createAdminClient();
 
@@ -86,7 +74,7 @@ export async function POST(request: Request) {
   // ── Issue PayPal refund (must succeed before DB update) ────────────────────
   if (order.paypal_transaction_id) {
     try {
-      const token = await getPayPalAccessToken();
+      const token = await getMerchPayPalAccessToken();
 
       const paypalRes = await fetch(
         `${getPayPalApiBase()}/v2/payments/captures/${order.paypal_transaction_id}/refund`,

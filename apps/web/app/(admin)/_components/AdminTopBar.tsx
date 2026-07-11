@@ -2,43 +2,36 @@
 
 /**
  * AdminTopBar — top navigation bar for the admin area.
- * Shows the current user's name, role badge, and a sign-out button.
+ * Shows the current user's name, role badge, a "View as" switcher for real
+ * super admins, and a sign-out button. The badge reflects the EFFECTIVE role
+ * (with a "viewing" marker while view-as is active).
  * Used by: app/(admin)/layout.tsx
  */
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/types/users";
-
-/** Human-readable labels for each staff role. */
-const ROLE_LABELS: Record<UserRole, string> = {
-  customer: "Customer",
-  instructor: "Instructor",
-  manager: "Manager",
-  super_admin: "Super Admin",
-  inspector: "Inspector",
-};
-
-/** Tailwind color classes for each role badge. */
-const ROLE_COLORS: Record<UserRole, string> = {
-  customer: "bg-gray-100 text-gray-600",
-  instructor: "bg-blue-100 text-blue-700",
-  manager: "bg-amber-100 text-amber-700",
-  super_admin: "bg-red-100 text-red-700",
-  inspector: "bg-green-100 text-green-700",
-};
+import { ROLE_LABELS, ROLE_COLORS } from "./role-badges";
+import ViewAsSwitcher from "./ViewAsSwitcher";
 
 interface AdminTopBarProps {
   firstName: string;
   lastName: string;
-  role: UserRole;
+  /** The user's real role from profiles.role. */
+  realRole: UserRole;
+  /** The role currently in effect (differs from realRole during view-as). */
+  effectiveRole: UserRole;
+  /** True while a super admin is viewing as a lower role. */
+  isViewingAs: boolean;
 }
 
-/** Top bar with user identity, role badge, and sign-out for the admin area. */
+/** Top bar with user identity, role badge, view-as switcher, and sign-out. */
 export default function AdminTopBar({
   firstName,
   lastName,
-  role,
+  realRole,
+  effectiveRole,
+  isViewingAs,
 }: AdminTopBarProps) {
   const router = useRouter();
 
@@ -56,7 +49,7 @@ export default function AdminTopBar({
       {/* Left: spacer on desktop (sidebar takes this space), page title placeholder on mobile */}
       <div className="lg:hidden w-10" aria-hidden="true" />
 
-      {/* Right: user info + sign out */}
+      {/* Right: user info + view-as + sign out */}
       <div className="flex items-center gap-4 ml-auto">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-900">
@@ -65,12 +58,23 @@ export default function AdminTopBar({
           <span
             className={[
               "text-xs font-semibold px-2 py-0.5 rounded-full",
-              ROLE_COLORS[role],
+              ROLE_COLORS[effectiveRole],
+              // Dashed ring marks a temporary view-as badge vs. a real role.
+              isViewingAs ? "ring-1 ring-dashed ring-current" : "",
             ].join(" ")}
           >
-            {ROLE_LABELS[role]}
+            {ROLE_LABELS[effectiveRole]}
+            {isViewingAs && " (viewing)"}
           </span>
         </div>
+
+        {/* Only real super admins ever see the switcher; server actions re-verify. */}
+        {realRole === "super_admin" && (
+          <ViewAsSwitcher
+            effectiveRole={effectiveRole}
+            isViewingAs={isViewingAs}
+          />
+        )}
 
         <button
           type="button"

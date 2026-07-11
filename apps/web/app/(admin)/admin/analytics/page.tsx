@@ -6,33 +6,20 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/users";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import { AnalyticsClient } from "./_components/AnalyticsClient";
 import { fetchAnalyticsData } from "./_components/analyticsData";
 
 /**
  * Server component entry point for /admin/analytics.
- * Enforces super_admin gate and supplies initial 90-day data to the client.
+ * Enforces super_admin gate (honors view-as) and supplies initial 90-day data.
  */
 export default async function AdminAnalyticsPage() {
-  const supabase = await createClient();
+  const actor = await getAdminActor();
+  if (!actor || actor.effectiveRole !== "super_admin") redirect("/admin");
+
   const admin = await createAdminClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/signin");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || (profile.role as UserRole) !== "super_admin") {
-    redirect("/admin");
-  }
 
   // Default range: last 90 days
   const now = new Date();

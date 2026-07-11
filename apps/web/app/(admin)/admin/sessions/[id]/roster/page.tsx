@@ -6,7 +6,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import RosterImportClient, {
   type RosterSessionInfo,
   type PendingUpload,
@@ -21,29 +22,14 @@ interface PageProps {
 /** Fetches prerequisite data and renders the roster import UI. */
 export default async function RosterImportPage({ params }: PageProps) {
   const { id } = await params;
-  const supabase = await createClient();
-  const admin = await createAdminClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect(`/signin?redirect=/admin/sessions/${id}/roster`);
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/");
-
-  const role = profile.role as UserRole;
-
-  // Only managers and super admins may access the roster import tool
-  if (!["manager", "super_admin"].includes(role)) {
+  // Only managers and super admins may access the roster import tool (honors view-as)
+  const actor = await getAdminActor();
+  if (!actor || !["manager", "super_admin"].includes(actor.effectiveRole)) {
     redirect(`/admin/sessions/${id}`);
   }
+
+  const admin = await createAdminClient();
 
   // Fetch session info needed to display the page header
   const { data: session } = await admin

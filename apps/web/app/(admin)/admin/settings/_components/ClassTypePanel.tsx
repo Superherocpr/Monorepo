@@ -52,7 +52,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState("");
+  const [durationHours, setDurationHours] = useState("");
   const [maxCapacity, setMaxCapacity] = useState("");
   const [price, setPrice] = useState("");
   const [active, setActive] = useState(true);
@@ -69,7 +69,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
       if (classType) {
         setName(classType.name);
         setDescription(classType.description ?? "");
-        setDurationMinutes(String(classType.duration_minutes));
+        setDurationHours(String(classType.duration_minutes / 60));
         setMaxCapacity(String(classType.max_capacity));
         setPrice(String(classType.price));
         setActive(classType.active);
@@ -77,7 +77,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
       } else {
         setName("");
         setDescription("");
-        setDurationMinutes("");
+        setDurationHours("");
         setMaxCapacity("");
         setPrice("");
         setActive(true);
@@ -132,11 +132,12 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const parsedDuration = parseInt(durationMinutes, 10);
+    const parsedDurationHours = parseFloat(durationHours);
+    const parsedDuration = Math.round(parsedDurationHours * 60);
     const parsedCapacity = parseInt(maxCapacity, 10);
     const parsedPrice = parseFloat(price);
 
-    if (isNaN(parsedDuration) || parsedDuration <= 0) {
+    if (isNaN(parsedDurationHours) || parsedDurationHours <= 0) {
       onError("Duration must be a positive number.");
       return;
     }
@@ -269,16 +270,17 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
                   htmlFor="ct-duration"
                   className="block text-sm font-semibold text-gray-700 mb-1"
                 >
-                  Duration (minutes) <span className="text-red-600">*</span>
+                  Duration (hours) <span className="text-red-600">*</span>
                 </label>
                 <input
                   id="ct-duration"
                   type="number"
-                  min={1}
-                  value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(e.target.value)}
+                  min={0.25}
+                  step={0.25}
+                  value={durationHours}
+                  onChange={(e) => setDurationHours(e.target.value)}
                   className={inputClass}
-                  placeholder="120"
+                  placeholder="2"
                   required
                 />
               </div>

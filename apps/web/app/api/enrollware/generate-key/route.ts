@@ -17,37 +17,15 @@
  */
 
 import { createHash, randomBytes } from "crypto";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 
 export async function POST() {
-  // Authenticate via Supabase session (companion page caller is always logged in)
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, archived, deactivated")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) {
-    return Response.json({ error: "Account not found." }, { status: 401 });
-  }
-
-  if (profile.archived || profile.deactivated) {
-    return Response.json({ error: "Account is deactivated." }, { status: 403 });
-  }
-
-  const allowedRoles = ["instructor", "manager", "super_admin"];
-  if (!allowedRoles.includes(profile.role)) {
-    return Response.json({ error: "Forbidden." }, { status: 403 });
-  }
+  // Authenticate via Supabase session (companion page caller is always logged in).
+  // Honors view-as; archived/deactivated checks happen inside requireApiRole.
+  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const user = authResult.actor.user;
 
   const admin = await createAdminClient();
 

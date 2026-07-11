@@ -4,16 +4,19 @@
  * Shows all class sessions currently pending approval, split into two prioritized groups:
  *   1. Resubmissions — previously rejected sessions that have been updated (shown first)
  *   2. New Submissions — fresh sessions never previously rejected
- * Approve/reject actions are on the session detail page; this is a review queue only.
+ * Cards support inline approve/reject actions. A global Approve All button sits at the
+ * bottom of the queue to clear everything in one action.
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import type { UserRole } from "@/types/users";
 import ApprovalsHeader from "./_components/ApprovalsHeader";
 import ApprovalsEmptyState from "./_components/ApprovalsEmptyState";
 import ResubmissionsSection from "./_components/ResubmissionsSection";
 import NewSubmissionsSection from "./_components/NewSubmissionsSection";
+import GlobalApproveAllButton from "./_components/GlobalApproveAllButton";
 import type { PendingSession } from "./_components/ApprovalCard";
 
 /**
@@ -22,29 +25,13 @@ import type { PendingSession } from "./_components/ApprovalCard";
  * and renders the appropriate sections or an empty state.
  */
 export default async function ApprovalsPage() {
-  const supabase = await createClient();
-  const admin = await createAdminClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin?redirect=/admin/sessions/approvals");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/");
-
-  const role = profile.role as UserRole;
-
-  // Only managers and super admins may access the approvals queue
-  if (!["manager", "super_admin"].includes(role)) {
+  // Only managers and super admins may access the approvals queue (honors view-as)
+  const actor = await getAdminActor();
+  if (!actor || !["manager", "super_admin"].includes(actor.effectiveRole)) {
     redirect("/admin");
   }
+
+  const admin = await createAdminClient();
 
   const { data: pendingSessions } = await admin
     .from("class_sessions")
@@ -77,6 +64,9 @@ export default async function ApprovalsPage() {
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
         <ResubmissionsSection sessions={resubmissions} />
         <NewSubmissionsSection sessions={newSubmissions} />
+        {totalPending > 1 && (
+          <GlobalApproveAllButton sessionIds={sessions.map((s) => s.id)} />
+        )}
       </div>
     </main>
   );

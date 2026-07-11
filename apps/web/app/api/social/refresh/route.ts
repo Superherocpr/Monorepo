@@ -16,7 +16,8 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import { fetchFacebookPhotoPosts } from "@/lib/facebook";
 
 /**
@@ -34,21 +35,10 @@ async function isAuthorized(req: Request): Promise<boolean> {
     return true;
   }
 
-  // Admin session path
+  // Admin session path — honors view-as (a downgraded super admin is denied)
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return false;
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    return profile?.role === "super_admin";
+    const actor = await getAdminActor();
+    return actor?.effectiveRole === "super_admin";
   } catch {
     return false;
   }

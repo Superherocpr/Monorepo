@@ -6,8 +6,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/users";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import InvoiceDetailClient, {
   type InvoiceDetail,
 } from "../../../_components/InvoiceDetailClient";
@@ -24,27 +24,19 @@ interface PageProps {
  */
 export default async function InvoiceDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const supabase = await createClient();
-  const admin = await createAdminClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Auth guard — honors view-as; instructor ownership check below uses the
+  // effective role so a downgraded super admin sees instructor-level scoping.
+  const actor = await getAdminActor();
+  if (!actor) redirect(`/signin?redirect=/admin/invoices/${id}`);
 
-  if (!user) redirect(`/signin?redirect=/admin/invoices/${id}`);
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/");
-
-  const role = profile.role as UserRole;
+  const profile = actor.profile;
+  const role = actor.effectiveRole;
 
   // Inspectors have no access to invoices
   if (role === "inspector") redirect("/admin");
+
+  const admin = await createAdminClient();
 
   const { data: invoice } = await admin
     .from("invoices")

@@ -6,7 +6,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import {
   getCertificationDaysUntilExpiry,
   isCertificationActive,
@@ -15,29 +16,13 @@ import CustomersClient, { CustomerWithMeta } from "@/app/(admin)/_components/Cus
 
 /** Server component — handles auth, access check, and initial data fetch. */
 export default async function CustomersPage() {
-  const supabase = await createClient();
-  const admin = await createAdminClient();
-
-  // ── Auth & access check ────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  // Only managers and super admins may access this page.
-  if (
-    !profile ||
-    (profile.role !== "manager" && profile.role !== "super_admin")
-  ) {
+  // Only managers and super admins may access this page (honors view-as).
+  const actor = await getAdminActor();
+  if (!actor || !["manager", "super_admin"].includes(actor.effectiveRole)) {
     redirect("/admin");
   }
+
+  const admin = await createAdminClient();
 
   // ── Initial data fetch — first 50 customers ordered by last name ──────────
   // Use explicit FK hints on bookings because the bookings table has three FKs
@@ -106,7 +91,7 @@ export default async function CustomersPage() {
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <CustomersClient
         initialCustomers={customersWithMeta}
-        userRole={profile.role}
+        userRole={actor.effectiveRole}
       />
     </main>
   );

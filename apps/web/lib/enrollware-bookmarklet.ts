@@ -241,56 +241,43 @@ export function getBookmarkletSource(apiBase: string): string {
   function pad2(n) { return n < 10 ? '0' + n : String(n); }
 
   // =========================================================
-  // Student CSV generation and injection
+  // Student XLSX fetch and injection
   // =========================================================
 
   /**
-   * Builds a CSV string from the student roster in the format expected by the
-   * Enrollware student import (matching the column order on the import spec).
-   * Column order matches the Enrollware sample: Last Name first, Phone (not Primary Phone).
-   * Score is populated from the student's grade. Status is always "Complete".
-   * License, Price, and Codes are left blank — managed by Enrollware.
+   * Fetches a pre-built .xlsx roster from the SuperheroCPR API for the given
+   * session. The server generates the workbook in memory — nothing is stored.
+   * Returns a Promise that resolves to the raw Blob.
    */
-  function buildStudentCSV(students) {
-    var header = 'Last Name,First Name,Email Address,Phone,Address 1,Address 2,City,State,Zip,Score,Status,License,Price,Codes';
-    var rows = students.map(function(s) {
-      return [
-        s.last_name   || '',
-        s.first_name  || '',
-        s.email       || '',
-        s.phone       || '',
-        s.address_1   || '',
-        s.address_2   || '',
-        s.city        || '',
-        s.state       || '',
-        s.zip         || '',
-        s.grade != null ? String(s.grade) : '',  // numeric score (e.g. 100)
-        s.grade != null ? 'Complete' : '',        // status only set when graded
-        '',  // License — managed by Enrollware
-        '',  // Price — managed by Enrollware
-        ''   // Codes — managed by Enrollware
-      ].map(function(v) {
-        // Wrap every field in quotes and escape any internal quotes
-        return '"' + String(v).replace(/"/g, '""') + '"';
-      }).join(',');
+  function fetchStudentXLSX(sessionId) {
+    return fetch(
+      API_BASE + '/api/enrollware/student-xlsx?sessionId=' + encodeURIComponent(sessionId),
+      { headers: { 'Authorization': 'Bearer ' + __k } }
+    ).then(function(r) {
+      if (!r.ok) {
+        return r.json().then(function(data) {
+          throw new Error(data.error || ('API error ' + r.status));
+        });
+      }
+      return r.blob();
     });
-    // Use CRLF line endings — Enrollware runs on .NET/Windows and its CSV
-    // parser expects Windows-style line endings.
-    return header + '\\r\\n' + rows.join('\\r\\n');
   }
 
   /**
-   * Injects a CSV string into Enrollware's file import input using a DataTransfer
+   * Injects an xlsx Blob into Enrollware's file import input using a DataTransfer
    * object, then makes the import panel visible. Returns true if successful.
    * Falls back gracefully if DataTransfer is not available (some older browsers).
    */
-  function injectStudentCSV(csvContent) {
+  function injectStudentFile(blob) {
     var fileInput = document.getElementById('mainContent_impFileUpl');
     if (!fileInput) return false;
 
     try {
-      var blob = new Blob([csvContent], { type: 'text/csv' });
-      var file = new File([blob], 'students.csv', { type: 'text/csv' });
+      var file = new File(
+        [blob],
+        'students.xlsx',
+        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+      );
       var dt = new DataTransfer();
       dt.items.add(file);
       fileInput.files = dt.files;
@@ -475,47 +462,54 @@ export function getBookmarkletSource(apiBase: string): string {
       return;
     }
 
-    var csvContent = buildStudentCSV(students);
-    var injected = injectStudentCSV(csvContent);
     var count = students.length;
-
     showPanel(panelHeader() +
-      (injected
-        ? '<div style="color:#2d7a2d;margin-bottom:6px">&#x2713; ' + count + ' student' + (count !== 1 ? 's' : '') + ' loaded into the import file!</div>' +
-          '<div style="font-size:12px;color:#555;margin-bottom:10px">Scroll up and click <b>Import Students</b> to add them to this class.</div>'
-        : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not inject file automatically. Use the download button below.</div>'
-      ) +
-      '<button onclick="window.__SCPR_DOWNLOAD()" ' +
-      'style="width:100%;padding:6px;background:#444;color:#fff;border:none;' +
-      'border-radius:4px;cursor:pointer;font-size:12px;margin-bottom:6px">' +
-      '&#x2193; Download student CSV' +
-      '</button>' +
-      '<button onclick="window.__SCPR_MARK_DONE(\\\'' + session.id + '\\\')" ' +
-      'style="width:100%;padding:6px;background:#c8102e;color:#fff;border:none;' +
-      'border-radius:4px;cursor:pointer;font-size:12px">' +
-      '&#x2713; Mark class as submitted' +
-      '</button>'
+      '<div style="text-align:center;padding:8px 0;color:#666">Preparing student file&hellip;</div>'
     );
 
-    window.__SCPR_DOWNLOAD = function() {
-      var blob = new Blob([csvContent], { type: 'text/csv' });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url; a.download = 'students.csv'; a.click();
-      URL.revokeObjectURL(url);
-    };
+    fetchStudentXLSX(session.id).then(function(blob) {
+      var injected = injectStudentFile(blob);
 
-    window.__SCPR_MARK_DONE = function(id) {
-      markSubmitted(id).then(function() {
-        sessionStorage.removeItem('scpr_session_id');
-        sessionStorage.removeItem('scpr_session_data');
-        showPanel(panelHeader() +
-          '<div style="color:#2d7a2d">&#x2713; Marked as submitted in SuperheroCPR.</div>'
-        );
-      }).catch(function() {
-        showError('Failed to mark as submitted. Please update manually in the SuperheroCPR admin.');
-      });
-    };
+      showPanel(panelHeader() +
+        (injected
+          ? '<div style="color:#2d7a2d;margin-bottom:6px">&#x2713; ' + count + ' student' + (count !== 1 ? 's' : '') + ' loaded into the import file!</div>' +
+            '<div style="font-size:12px;color:#555;margin-bottom:10px">Scroll up and click <b>Import Students</b> to add them to this class.</div>'
+          : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not inject file automatically. Use the download button below.</div>'
+        ) +
+        '<button onclick="window.__SCPR_DOWNLOAD()" ' +
+        'style="width:100%;padding:6px;background:#444;color:#fff;border:none;' +
+        'border-radius:4px;cursor:pointer;font-size:12px;margin-bottom:6px">' +
+        '&#x2193; Download student file (.xlsx)' +
+        '</button>' +
+        '<button onclick="window.__SCPR_MARK_DONE(\\\'' + session.id + '\\\')" ' +
+        'style="width:100%;padding:6px;background:#c8102e;color:#fff;border:none;' +
+        'border-radius:4px;cursor:pointer;font-size:12px">' +
+        '&#x2713; Mark class as submitted' +
+        '</button>'
+      );
+
+      window.__SCPR_DOWNLOAD = function() {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = 'students.xlsx'; a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      window.__SCPR_MARK_DONE = function(id) {
+        markSubmitted(id).then(function() {
+          sessionStorage.removeItem('scpr_session_id');
+          sessionStorage.removeItem('scpr_session_data');
+          showPanel(panelHeader() +
+            '<div style="color:#2d7a2d">&#x2713; Marked as submitted in SuperheroCPR.</div>'
+          );
+        }).catch(function() {
+          showError('Failed to mark as submitted. Please update manually in the SuperheroCPR admin.');
+        });
+      };
+
+    }).catch(function(err) {
+      showError('Failed to prepare student file: ' + (err.message || 'Unknown error'));
+    });
   }
 
   // =========================================================

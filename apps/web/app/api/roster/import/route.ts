@@ -13,7 +13,8 @@
  * Returns 500 on database error.
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 import { randomUUID } from "crypto";
 
 /** Shape of a single student row sent from the client. */
@@ -58,22 +59,9 @@ export async function POST(request: Request) {
   }
 
   // Auth check — must be logged in and have manager or super_admin role
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !["manager", "super_admin"].includes(profile.role)) {
-    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiRole(["manager", "super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
   // Use admin client for writes to bypass RLS restrictions on staff-side inserts
   const admin = await createAdminClient();

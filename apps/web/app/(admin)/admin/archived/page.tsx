@@ -6,7 +6,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import type { Metadata } from "next";
 import ArchivedClient from "./_components/ArchivedClient";
 
@@ -33,24 +34,11 @@ export interface ArchivedCustomer {
  * Redirects non-super-admins to /admin.
  */
 export default async function ArchivedPage() {
-  const supabase = await createClient();
+  // ── Auth & access check (honors view-as) ───────────────────────────────────
+  const actor = await getAdminActor();
+  if (!actor || actor.effectiveRole !== "super_admin") redirect("/admin");
+
   const admin = await createAdminClient();
-
-  // ── Auth & access check ────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/signin?redirect=/admin/archived");
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || profile.role !== "super_admin") {
-    redirect("/admin");
-  }
 
   // ── Fetch archived customers with related counts ───────────────────────────
   // bookings uses the customer_id FK hint to avoid PostgREST ambiguity

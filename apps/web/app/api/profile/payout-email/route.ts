@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 import type { UserRole } from "@/types/users";
 
 /** Roles permitted to save payout email settings. */
@@ -38,34 +39,16 @@ export async function PATCH(request: Request) {
     return Response.json({ success: false, error: "Enter a valid PayPal email address." }, { status: 400 });
   }
 
+  // Honors view-as; archived/deactivated checks happen inside requireApiRole.
+  const authResult = await requireApiRole(ALLOWED_ROLES);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
+
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role, archived, deactivated")
-    .eq("id", user.id)
-    .single();
-
-  if (
-    !profile ||
-    profile.archived ||
-    profile.deactivated ||
-    !ALLOWED_ROLES.includes(profile.role as UserRole)
-  ) {
-    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
-  }
-
   const { error } = await supabase
     .from("profiles")
     .update({ paypal_payout_email: paypalPayoutEmail })
-    .eq("id", profile.id);
+    .eq("id", actor.user.id);
 
   if (error) {
     console.error("[profile/payout-email] Update failed:", error);

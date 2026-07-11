@@ -6,37 +6,22 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import MerchAdminClient from "../../_components/MerchAdminClient";
 import type { ProductWithVariants } from "@/types/merch";
 
 /**
  * Server component for /admin/merch.
- * Redirects non-super-admin users to /admin.
+ * Redirects non-super-admin users (by effective role) to /admin.
  * Fetches all products with variants and passes them to the client component.
  */
 export default async function AdminMerchPage() {
-  const supabase = await createClient();
+  // ── Auth guard (honors view-as) ────────────────────────────────────────────
+  const actor = await getAdminActor();
+  if (!actor || actor.effectiveRole !== "super_admin") redirect("/admin");
+
   const admin = await createAdminClient();
-
-  // ── Auth guard ─────────────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/signin");
-  }
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || profile.role !== "super_admin") {
-    redirect("/admin");
-  }
 
   // ── Fetch all products with variants ──────────────────────────────────────
   const { data: rawProducts, error } = await admin
@@ -60,7 +45,7 @@ export default async function AdminMerchPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <MerchAdminClient initialProducts={products} actorId={user.id} />
+      <MerchAdminClient initialProducts={products} actorId={actor.user.id} />
     </main>
   );
 }

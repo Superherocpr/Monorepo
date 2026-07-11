@@ -6,7 +6,8 @@
  * All data is preserved — this is a soft delete only.
  */
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/effective-role";
 
 /**
  * Archives the specified customer account. Super admin only.
@@ -19,26 +20,11 @@ export async function POST(
 ) {
   void request;
   const { id: customerId } = await params;
-  const supabase = await createClient();
 
   // ── Auth & role check — super_admin only ───────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: actor } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!actor || actor.role !== "super_admin") {
-    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiRole(["super_admin"]);
+  if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
   const adminClient = await createAdminClient();
 

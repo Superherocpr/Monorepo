@@ -10,7 +10,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAdminActor } from "@/lib/auth/effective-role";
 import { updateSetting, fetchZohoAccountId } from "@/lib/zoho";
 
 /**
@@ -27,24 +27,10 @@ export async function GET(request: Request) {
     redirect(`/admin/settings?zoho=error&reason=${encodeURIComponent(error ?? "no_code")}`);
   }
 
-  const supabase = await createClient();
-
-  // ── Auth & role check — super_admin only ───────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/signin");
-
-  const { data: actor } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!actor || actor.role !== "super_admin") {
-    redirect("/admin");
-  }
+  // ── Auth & role check — super_admin only (honors view-as) ──────────────────
+  const actor = await getAdminActor();
+  if (!actor) redirect("/signin");
+  if (actor.effectiveRole !== "super_admin") redirect("/admin");
 
   // ── Exchange code for tokens ──────────────────────────────────────────────
   const clientId = process.env.ZOHO_CLIENT_ID;

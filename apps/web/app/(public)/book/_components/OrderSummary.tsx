@@ -3,15 +3,18 @@
 /**
  * OrderSummary — right-sidebar order summary displayed on booking steps 2–4.
  * Shows selected class details pulled from the booking store.
+ * When a promo code is applied, shows an original price, discount line, and final total.
  * Used by: book/signin, book/details, book/create-account, book/payment
  */
 
-import { MapPin, Clock, User, DollarSign } from "lucide-react";
-import type { BookingStore } from "@/lib/booking-store";
+import { MapPin, Clock, User, DollarSign, Tag } from "lucide-react";
+import type { BookingStore, AppliedPromoCode } from "@/lib/booking-store";
 
 interface OrderSummaryProps {
   /** Session details from the booking store — null-safe (renders loading skeleton) */
   details: BookingStore["sessionDetails"];
+  /** Applied promo code discount breakdown — null if no code applied */
+  appliedPromoCode?: AppliedPromoCode | null;
 }
 
 /** Formats an ISO timestamp to a readable date string, e.g. "Tuesday, April 22, 2025". */
@@ -38,8 +41,9 @@ function formatTimeRange(startsAt: string, endsAt: string): string {
 /**
  * Renders a card summarizing the selected class session.
  * Displays class name, date, time, instructor, location, and price.
+ * When appliedPromoCode is provided, shows original price, discount, and final total.
  */
-export default function OrderSummary({ details }: OrderSummaryProps) {
+export default function OrderSummary({ details, appliedPromoCode }: OrderSummaryProps) {
   if (!details) {
     // Skeleton while store hydrates on mount
     return (
@@ -54,11 +58,10 @@ export default function OrderSummary({ details }: OrderSummaryProps) {
     );
   }
 
-  const price = details.price.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-  });
+  const fmt = (n: number) =>
+    n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 });
+
+  const displayPrice = appliedPromoCode ? appliedPromoCode.finalPrice : details.price;
 
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 flex flex-col gap-4">
@@ -92,10 +95,38 @@ export default function OrderSummary({ details }: OrderSummaryProps) {
           </address>
         </div>
 
-        {/* Price */}
-        <div className="flex items-center gap-2.5 pt-2 border-t border-gray-200 mt-1">
-          <DollarSign size={15} className="text-gray-400 shrink-0" aria-hidden="true" />
-          <p className="text-lg font-bold text-gray-900">{price} <span className="text-sm font-normal text-gray-500">per person</span></p>
+        {/* Price — shows discount breakdown when a promo code is applied */}
+        <div className="pt-2 border-t border-gray-200 mt-1">
+          {appliedPromoCode ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-sm text-gray-500">
+                <span>Original price</span>
+                <span className="line-through">{fmt(appliedPromoCode.originalPrice)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm text-green-700">
+                <span className="flex items-center gap-1.5">
+                  <Tag size={13} aria-hidden="true" />
+                  {appliedPromoCode.code}
+                </span>
+                <span>−{fmt(appliedPromoCode.discountAmount)}</span>
+              </div>
+              <div className="flex items-center gap-2.5 pt-1 border-t border-gray-100">
+                <DollarSign size={15} className="text-gray-400 shrink-0" aria-hidden="true" />
+                <p className="text-lg font-bold text-gray-900">
+                  {fmt(displayPrice)}{" "}
+                  <span className="text-sm font-normal text-gray-500">per person</span>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5">
+              <DollarSign size={15} className="text-gray-400 shrink-0" aria-hidden="true" />
+              <p className="text-lg font-bold text-gray-900">
+                {fmt(displayPrice)}{" "}
+                <span className="text-sm font-normal text-gray-500">per person</span>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
