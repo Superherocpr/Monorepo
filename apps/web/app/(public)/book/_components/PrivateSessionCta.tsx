@@ -2,35 +2,14 @@
 
 /**
  * PrivateSessionCta — "Can't Find a Time?" CTA below the session list.
- * Checks auth state on mount: authenticated customers are linked directly to
- * the request form; unauthenticated visitors are sent to sign-in first with a
- * redirect back to the request form after login.
+ * Links to /request-class, which handles auth inline — no redirect needed.
  * Used by: app/(public)/book/_components/BookSessionSelector.tsx
  */
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-
-const REQUEST_PATH = "/dashboard/request-class";
 
 /** Renders the private group session call-to-action with a "Request a Class" button. */
 export default function PrivateSessionCta() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  // Resolve auth state once on mount; default to unauthenticated until resolved.
-  useEffect(() => {
-    createClient()
-      .auth.getUser()
-      .then(({ data: { user } }) => {
-        setIsAuthenticated(!!user);
-      });
-  }, []);
-
-  const requestHref = isAuthenticated
-    ? REQUEST_PATH
-    : `/signin?redirect=${REQUEST_PATH}`;
-
   return (
     <section className="py-16 px-4 bg-gray-50 text-center">
       <div className="max-w-2xl mx-auto flex flex-col items-center gap-4">
@@ -43,7 +22,7 @@ export default function PrivateSessionCta() {
         </p>
         <div className="flex flex-col sm:flex-row items-center gap-3 mt-1">
           <Link
-            href={requestHref}
+            href="/request-class"
             className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-150"
           >
             Request a Class
