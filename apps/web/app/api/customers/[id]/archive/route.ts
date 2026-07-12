@@ -29,11 +29,13 @@ export async function POST(
   const adminClient = await createAdminClient();
 
   // ── Archive the account ────────────────────────────────────────────────────
+  const now = new Date().toISOString();
   const { error } = await adminClient
     .from("profiles")
     .update({
       archived: true,
-      updated_at: new Date().toISOString(),
+      archived_at: now,
+      updated_at: now,
     })
     .eq("id", customerId)
     .eq("role", "customer"); // Safety: only archive customer profiles

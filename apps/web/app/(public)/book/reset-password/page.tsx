@@ -30,55 +30,69 @@ export default function ResetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  // On mount: extract the recovery tokens Supabase places in the URL hash and
-  // exchange them for a live session. The hash is never sent to the server, so
-  // this exchange must happen client-side.
+  // On mount: wait for Supabase to process the recovery tokens in the URL.
+  // createBrowserClient auto-detects recovery tokens in the URL hash via
+  // detectSessionInUrl and fires a PASSWORD_RECOVERY auth event, clearing the
+  // hash in the process. Reading window.location.hash manually is unreliable —
+  // it is often already gone by the time a useEffect runs.
   useEffect(() => {
-    async function exchangeToken() {
-      const hash = window.location.hash.slice(1); // strip leading #
+    // Snapshot whether the URL looks like a recovery link before Supabase
+    // clears the hash. Used only as a gate — token extraction is Supabase's job.
+    const looksLikeRecoveryLink =
+      window.location.hash.includes("access_token") ||
+      window.location.hash.includes("type=recovery");
 
-      if (!hash) {
-        setLinkError(
-          "This link is invalid or has already been used. Request a new one below."
-        );
-        setStatus("error");
-        return;
-      }
+    const supabase = createClient();
+    let resolved = false;
 
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get("access_token");
-      const refreshToken = params.get("refresh_token");
-      const tokenType = params.get("type");
-
-      // Only accept recovery-type tokens — reject invite or other flows here.
-      if (!accessToken || !refreshToken || tokenType !== "recovery") {
-        setLinkError(
-          "This link is invalid or has already been used. Request a new one below."
-        );
-        setStatus("error");
-        return;
-      }
-
-      const supabase = createClient();
-      const { error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-
-      if (error) {
-        setLinkError(
-          "This reset link has expired. Please request a new one."
-        );
-        setStatus("error");
-        return;
-      }
-
-      // Remove tokens from the address bar so they aren't visible or re-used.
+    function markReady() {
+      if (resolved) return;
+      resolved = true;
       window.history.replaceState(null, "", window.location.pathname);
       setStatus("ready");
     }
 
-    exchangeToken();
+    function markError(msg: string) {
+      if (resolved) return;
+      resolved = true;
+      setLinkError(msg);
+      setStatus("error");
+    }
+
+    if (!looksLikeRecoveryLink) {
+      // No recovery tokens in the URL. Check for an existing session —
+      // this handles the page-refresh case where the hash is gone but
+      // Supabase already established a recovery session on the prior load.
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          markReady();
+        } else {
+          markError("This link is invalid or has already been used. Request a new one below.");
+        }
+      });
+      return;
+    }
+
+    // Recovery tokens detected — listen for Supabase to process them.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") markReady();
+    });
+
+    // Race-condition fallback: the event may have fired before we subscribed.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) markReady();
+    });
+
+    // If neither resolves within 3 s, the link is expired or already used.
+    const giveUp = setTimeout(
+      () => markError("This reset link has expired. Please request a new one."),
+      3000
+    );
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(giveUp);
+    };
   }, []);
 
   /**
