@@ -96,6 +96,77 @@ export async function getPayPalAccessToken(): Promise<string> {
   return data.access_token;
 }
 
+// ---------------------------------------------------------------------------
+// Webhook signature verification
+// ---------------------------------------------------------------------------
+
+/** The five PayPal transmission headers required to verify a webhook event. */
+export interface PayPalWebhookHeaders {
+  transmissionId: string;
+  transmissionTime: string;
+  certUrl: string;
+  authAlgo: string;
+  transmissionSig: string;
+}
+
+/**
+ * Verifies a PayPal webhook event's signature via PayPal's
+ * `/v1/notifications/verify-webhook-signature` endpoint, using the business
+ * account's OAuth token and the `PAYPAL_INVOICE_WEBHOOK_ID` configured for
+ * the INVOICING.INVOICE.PAID webhook subscription (set in the PayPal
+ * business dashboard). Distinct from any other webhook ID this account may
+ * have registered for other event types — each PayPal webhook subscription
+ * gets its own unique ID, scoped to its own target URL.
+ * This is the sole authentication mechanism for inbound PayPal webhooks —
+ * there is no shared-secret header, so a valid signature is required before
+ * acting on any webhook payload.
+ * @param headers - The five `paypal-*` transmission headers from the request.
+ * @param webhookEvent - The parsed JSON body of the webhook request.
+ * @returns True only if PayPal confirms the signature is valid for this webhook ID.
+ */
+export async function verifyPayPalWebhookSignature(
+  headers: PayPalWebhookHeaders,
+  webhookEvent: unknown
+): Promise<boolean> {
+  const webhookId = process.env.PAYPAL_INVOICE_WEBHOOK_ID;
+  if (!webhookId) {
+    console.error(
+      "[paypal] PAYPAL_INVOICE_WEBHOOK_ID is not set — cannot verify webhook signatures."
+    );
+    return false;
+  }
+
+  const accessToken = await getPayPalAccessToken();
+  const apiBase = getPayPalApiBase();
+
+  const response = await fetch(`${apiBase}/v1/notifications/verify-webhook-signature`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      transmission_id: headers.transmissionId,
+      transmission_time: headers.transmissionTime,
+      cert_url: headers.certUrl,
+      auth_algo: headers.authAlgo,
+      transmission_sig: headers.transmissionSig,
+      webhook_id: webhookId,
+      webhook_event: webhookEvent,
+    }),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const err = await response.text().catch(() => "");
+    console.error(`[paypal] Webhook signature verification request failed (${response.status}):`, err);
+    return false;
+  }
+
+  const data = (await response.json()) as { verification_status?: string };
+  return data.verification_status === "SUCCESS";
+}
+
 /**
  * Requests a PayPal access token for the **merch store** REST API app.
  * Uses the separate merch merchant account (`NEXT_PUBLIC_PAYPAL_MERCH_CLIENT_ID`
