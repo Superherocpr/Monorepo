@@ -427,7 +427,7 @@ export default function SessionsClient({
                                 type="button"
                                 disabled={startingSessionId === session.id}
                                 onClick={() => handleStartClass(session.id)}
-                                className="text-sm font-semibold px-3 py-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-md transition-colors"
+                                className="text-sm font-semibold px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-md transition-colors"
                               >
                                 {startingSessionId === session.id
                                   ? "Starting…"

@@ -1,6 +1,6 @@
 /**
  * PATCH /api/sessions/[id]/status
- * Called by: SessionsClient — "Start Class" button
+ * Called by: SessionDetailClient — "Start Class" button
  * Auth: Instructor (own session only), Manager, or Super Admin
  * Updates a session's status field. Currently used to transition
  * scheduled → in_progress. The allowed transitions are validated here
