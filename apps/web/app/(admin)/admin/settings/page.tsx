@@ -15,6 +15,7 @@ import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getSetting } from "@/lib/zoho";
 import SettingsClient from "./_components/SettingsClient";
+import InstructorSettingsClient from "./_components/InstructorSettingsClient";
 import PayoutSettingsPanel from "./_components/PayoutSettingsPanel";
 import BookmarkletSetup from "@/app/(admin)/admin/enrollware-tool/_components/BookmarkletSetup";
 import LocationsClient, {
@@ -81,38 +82,38 @@ export default async function SettingsPage({
     redirect("/admin");
   }
 
-  // ── Instructor view: bookmarklet section only ─────────────────────────────
+  // ── Instructor view: Enrollware + About Page bio tabs ────────────────────
   if (role === "instructor") {
     const admin = await createAdminClient();
-    // maybeSingle avoids a PGRST116 error log for users without a key yet
-    const { data: existingKey } = await admin
-      .from("api_keys")
-      .select("id")
-      .eq("profile_id", user.id)
-      .eq("label", "enrollware-bookmarklet")
-      .maybeSingle();
+
+    // Fetch bookmarklet key and current bio in parallel
+    const [{ data: existingKey }, { data: bioProfile }] = await Promise.all([
+      // maybeSingle avoids a PGRST116 error log for users without a key yet
+      admin
+        .from("api_keys")
+        .select("id")
+        .eq("profile_id", user.id)
+        .eq("label", "enrollware-bookmarklet")
+        .maybeSingle(),
+      admin
+        .from("profiles")
+        .select("bio_photo, bio_description, bio_credentials")
+        .eq("id", user.id)
+        .single(),
+    ]);
 
     const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
 
     return (
-      <div className="max-w-2xl mx-auto py-10 px-4">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
-        <p className="text-sm text-gray-500 mb-8">Manage your Enrollware integration.</p>
-
-        <section>
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Enrollware Bookmarklet
-            </h2>
-            <p className="mt-1 text-sm text-gray-600">
-              A one-click tool that auto-fills new classes on Enrollware from
-              your SuperheroCPR roster. Generate it once, save it to your
-              browser&apos;s bookmarks bar, and click it whenever you&apos;re on
-              an Enrollware class-edit page.
-            </p>
-          </div>
-          <BookmarkletSetup hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
-        </section>
+      <div className="mx-auto max-w-3xl px-4 py-10">
+        <InstructorSettingsClient
+          enrollwareSlot={
+            <BookmarkletSetup key="enrollware-slot" hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
+          }
+          initialPhoto={bioProfile?.bio_photo ?? null}
+          initialDescription={bioProfile?.bio_description ?? ""}
+          initialCredentials={bioProfile?.bio_credentials ?? ""}
+        />
       </div>
     );
   }

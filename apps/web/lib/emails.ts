@@ -1755,6 +1755,189 @@ export function instructorAcceptedAdminEmail({
   };
 }
 
+// ── 22b. Customer-Requested Class — Instructor confirmed notification to customer ──
+
+/**
+ * Sent to the customer as soon as an instructor accepts their class request.
+ * Fulfils the promise made in classRequestApprovedCustomerEmail ("you'll
+ * receive another email once an instructor has confirmed"). Payment details
+ * follow separately via the invoice email, since invoicing can fail
+ * independently of instructor assignment.
+ * Triggered by: POST /api/sessions/[id]/accept-teach
+ * @param firstName      - Customer's first name.
+ * @param instructorName - Full name of the instructor who accepted.
+ * @param className      - Name of the class type.
+ * @param sessionDate    - ISO datetime string of the class.
+ * @param venueName      - Name of the venue.
+ * @param venueCity      - City of the venue.
+ * @param venueState     - State of the venue.
+ */
+export function instructorConfirmedCustomerEmail({
+  firstName,
+  instructorName,
+  className,
+  sessionDate,
+  venueName,
+  venueCity,
+  venueState,
+}: {
+  firstName: string;
+  instructorName: string;
+  className: string;
+  sessionDate: string;
+  venueName: string;
+  venueCity: string;
+  venueState: string;
+}): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
+  const safeInstructor = escapeHtml(instructorName.trim());
+  const safeClass = escapeHtml(className.trim());
+  const safeVenue = escapeHtml(venueName.trim());
+  const safeCity = escapeHtml(venueCity.trim());
+  const safeState = escapeHtml(venueState.trim());
+
+  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+  });
+
+  return {
+    subject: `An instructor has been confirmed for your ${safeClass} class!`,
+    html: wrapEmail(`
+      <h1>Great News, ${safeFirstName}!</h1>
+      <p><strong>${safeInstructor}</strong> has been confirmed as your instructor. Here are your class details:</p>
+
+      <table style="width:100%;border-collapse:collapse;margin:16px 0 24px;">
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;width:140px;">Class:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeClass}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Instructor:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeInstructor}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Date &amp; Time:</td>
+          <td style="padding:6px 0;font-size:14px;">${formattedDate} ET</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Venue:</td>
+          <td style="padding:6px 0;font-size:14px;">${safeVenue}, ${safeCity}, ${safeState}</td>
+        </tr>
+      </table>
+
+      <p>You'll receive a separate invoice email shortly with payment instructions to confirm your class.</p>
+
+      <p>Questions? We're here:</p>
+      <ul>
+        <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
+        <li>Email: <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a></li>
+      </ul>
+
+      <p>- The SuperHeroCPR Team</p>
+    `),
+  };
+}
+
+// ── 22c. Invoice payment confirmed notification to customer ────────────────────
+
+/**
+ * Sent to the invoice recipient once their invoice is marked paid — the only
+ * customer-facing confirmation that payment was received (PayPal's own
+ * generic receipt does not include class/roster specifics). Includes the
+ * roster-upload link for group invoices, since attendee info is still needed
+ * ahead of class day.
+ * Triggered by: markInvoicePaidAndNotify() (lib/invoice-actions.ts), called
+ * from both POST /api/invoices/mark-paid and the PayPal paid-invoice webhook.
+ * @param recipientName - Name of the invoice recipient.
+ * @param invoiceNumber - Invoice number.
+ * @param invoiceType   - "individual" or "group" — gates the roster-upload section.
+ * @param className     - Name of the CPR class.
+ * @param classDate     - ISO date string for the class.
+ * @param totalAmount   - Amount paid, in dollars.
+ */
+export function invoicePaymentConfirmedCustomerEmail({
+  recipientName,
+  invoiceNumber,
+  invoiceType,
+  className,
+  classDate,
+  totalAmount,
+}: {
+  recipientName: string;
+  invoiceNumber: string;
+  invoiceType: "individual" | "group";
+  className: string;
+  classDate: string;
+  totalAmount: number;
+}): EmailContent {
+  const formattedDate = new Date(classDate).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const formattedAmount = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(totalAmount);
+
+  // Group invoices need an attendee roster ahead of class day — same link and
+  // copy pattern as invoiceEmail()'s pre-payment roster prompt.
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
+  const rosterSection =
+    invoiceType === "group"
+      ? `<hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+         <p style="font-size:14px;color:#374151;font-weight:600;">One more thing — your attendee roster</p>
+         <p style="font-size:14px;color:#6b7280;">
+           If you haven't already, submit your list of attendees so we can prepare for class day.
+         </p>
+         <p>
+           <a href="${baseUrl}/submit-roster?invoice=${invoiceNumber}"
+              style="display:inline-block;background:#dc2626;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:600;">
+             Submit Your Roster →
+           </a>
+         </p>`
+      : "";
+
+  return {
+    subject: `Payment received — Invoice ${invoiceNumber}`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Payment Confirmed!</h1>
+      <p>Hi ${recipientName},</p>
+      <p>We've received your payment for invoice <strong>${invoiceNumber}</strong>. Your class is confirmed.</p>
+
+      <table style="width:100%;border-collapse:collapse;margin:16px 0 24px;">
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;width:140px;">Class:</td>
+          <td style="padding:6px 0;font-size:14px;">${className}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Date:</td>
+          <td style="padding:6px 0;font-size:14px;">${formattedDate}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Amount Paid:</td>
+          <td style="padding:6px 0;font-size:16px;font-weight:700;color:#111827;">${formattedAmount}</td>
+        </tr>
+      </table>
+
+      ${rosterSection}
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        Questions about your invoice? Reply to this email or call us at (813) 966-3969.
+      </p>
+    `),
+  };
+}
+
 // ── 23. Open Opportunity — Session cancelled, notify admins/managers ───────────
 
 /**
