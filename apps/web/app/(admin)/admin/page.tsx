@@ -129,11 +129,34 @@ export default async function AdminDashboardPage() {
   // daily_access_code isn't part of the shared actor profile — fetch it here.
   const { data: profile } = await admin
     .from("profiles")
-    .select("first_name, daily_access_code")
+    .select("first_name, daily_access_code, access_code_generated_at")
     .eq("id", user.id)
     .single();
 
   if (!profile) redirect("/");
+
+  // Auto-generate a fresh code if none exists or the current one is > 1 hour old.
+  // Ensures the instructor always has a valid code when they open the dashboard.
+  const ONE_HOUR_MS = 60 * 60 * 1000;
+  const codeIsStale =
+    !profile.access_code_generated_at ||
+    Date.now() - new Date(profile.access_code_generated_at).getTime() > ONE_HOUR_MS;
+
+  let accessCode = profile.daily_access_code ?? null;
+  let accessCodeGeneratedAt = profile.access_code_generated_at ?? null;
+
+  if (codeIsStale) {
+    const freshCode = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+    const now = new Date().toISOString();
+    const { error: codeError } = await admin
+      .from("profiles")
+      .update({ daily_access_code: freshCode, access_code_generated_at: now, updated_at: now })
+      .eq("id", user.id);
+    if (!codeError) {
+      accessCode = freshCode;
+      accessCodeGeneratedAt = now;
+    }
+  }
 
   const role = actor.effectiveRole;
 
@@ -227,7 +250,8 @@ export default async function AdminDashboardPage() {
         openOpportunities={
           (rawOpenOpportunities ?? []) as unknown as OpenOpportunity[]
         }
-        dailyAccessCode={profile.daily_access_code ?? null}
+        dailyAccessCode={accessCode}
+        dailyAccessCodeGeneratedAt={accessCodeGeneratedAt}
         activePromoCodes={buildActivePromoCodes(rawActivePromoCodes ?? [])}
       />
     );
@@ -556,7 +580,8 @@ export default async function AdminDashboardPage() {
           invoiceRevenueThisMonth,
         }}
         recentActivity={activityItems}
-        dailyAccessCode={profile.daily_access_code ?? null}
+        dailyAccessCode={accessCode}
+        dailyAccessCodeGeneratedAt={accessCodeGeneratedAt}
         pendingGrades={superAdminPendingGrades}
         pendingInvoices={
           (rawPendingInvoicesForSuperAdmin ?? []) as unknown as PendingInvoice[]

@@ -51,7 +51,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: "Invoices",
     href: "/admin/invoices",
-    roles: ["instructor", "manager", "super_admin"],
+    roles: ["manager", "super_admin"],
     sectionLabel: "Financial",
   },
   { label: "Payments", href: "/admin/payments", roles: ["manager", "super_admin"] },

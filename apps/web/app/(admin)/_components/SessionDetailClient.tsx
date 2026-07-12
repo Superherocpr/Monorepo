@@ -322,6 +322,7 @@ export default function SessionDetailClient({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [acceptError, setAcceptError] = useState<string | null>(null);
@@ -669,6 +670,40 @@ export default function SessionDetailClient({
 
   // Whether this session was cancelled and is open for any instructor to claim
   const isOpenOpportunity = session.status === "cancelled" && session.instructor_id === null;
+
+  // ── Start Class ───────────────────────────────────────────────────────────
+
+  /**
+   * Transitions a scheduled, approved session to in_progress.
+   * Available to the assigned instructor and managers/super admins.
+   * Side effect: PATCH /api/sessions/[id]/status, page refresh on success.
+   */
+  async function handleStartClass() {
+    setIsStarting(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "in_progress" }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setActionError(json.error ?? "Could not start the class. Please try again.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setActionError("Network error. Please try again.");
+    } finally {
+      setIsStarting(false);
+    }
+  }
+
+  const canStartClass =
+    session.status === "scheduled" &&
+    session.approval_status === "approved" &&
+    (isManager || (isInstructor && isOwnSession));
 
   // ── Cancel eligibility ────────────────────────────────────────────────────
 
@@ -1192,6 +1227,18 @@ export default function SessionDetailClient({
                   Reject
                 </button>
               </>
+            )}
+
+            {/* Start Class button — approved + scheduled sessions only */}
+            {canStartClass && (
+              <button
+                type="button"
+                onClick={handleStartClass}
+                disabled={isStarting}
+                className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isStarting ? "Starting…" : "Start Class"}
+              </button>
             )}
 
             {/* Edit button */}

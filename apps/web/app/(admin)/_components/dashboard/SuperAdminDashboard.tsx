@@ -34,6 +34,8 @@ export interface SuperAdminDashboardProps extends ManagerDashboardProps {
   recentActivity: ActivityItem[];
   /** Daily rollcall code — super_admins are also instructors. */
   dailyAccessCode: string | null;
+  /** ISO timestamp when the current rollcall code was generated. */
+  dailyAccessCodeGeneratedAt: string | null;
   /** Completed sessions with ungraded students for this super_admin as instructor. */
   pendingGrades: PendingGradeSession[];
   /** Sent-but-unpaid invoices for this super_admin as instructor. */
@@ -87,6 +89,7 @@ export default function SuperAdminDashboard({
   quickStats,
   recentActivity,
   dailyAccessCode,
+  dailyAccessCodeGeneratedAt,
   pendingGrades,
   pendingInvoices,
   ...managerProps
@@ -138,7 +141,7 @@ export default function SuperAdminDashboard({
 
       {/* ── Instructor widgets: rollcall code, pending grades, pending invoices ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RollcallCodeWidget initialCode={dailyAccessCode} />
+        <RollcallCodeWidget initialCode={dailyAccessCode} initialGeneratedAt={dailyAccessCodeGeneratedAt} />
         <PendingGradesWidget sessions={pendingGrades} />
         <PendingInvoicesWidget invoices={pendingInvoices} />
       </div>
