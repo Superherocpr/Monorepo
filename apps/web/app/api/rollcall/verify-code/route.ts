@@ -100,16 +100,11 @@ export async function POST(request: Request) {
     return Response.json({ valid: false }, { status: 200 });
   }
 
-  // Reject codes generated on a previous UTC day — stale codes must not remain valid
+  // Reject codes older than 1 hour — stale codes must not remain valid
   if (instructor.access_code_generated_at) {
-    const generatedDate = new Date(instructor.access_code_generated_at);
-    const todayUTC = new Date();
-    const codeIsFromToday =
-      generatedDate.getUTCFullYear() === todayUTC.getUTCFullYear() &&
-      generatedDate.getUTCMonth() === todayUTC.getUTCMonth() &&
-      generatedDate.getUTCDate() === todayUTC.getUTCDate();
-
-    if (!codeIsFromToday) {
+    const generatedAt = new Date(instructor.access_code_generated_at).getTime();
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    if (Date.now() - generatedAt > ONE_HOUR_MS) {
       return Response.json({ valid: false }, { status: 200 });
     }
   } else {

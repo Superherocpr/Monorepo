@@ -724,8 +724,8 @@ export default function RollcallPage() {
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-1">
+          <div className="grid grid-cols-4 gap-3">
+            <div className="col-span-2">
               <label htmlFor="edit-city" className="sr-only">City</label>
               <input
                 id="edit-city"
@@ -744,7 +744,7 @@ export default function RollcallPage() {
                 type="text"
                 value={editState}
                 onChange={(e) => setEditState(e.target.value)}
-                placeholder="State"
+                placeholder="ST"
                 maxLength={2}
                 className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-red-500 text-gray-900 bg-white uppercase"
                 autoComplete="address-level1"

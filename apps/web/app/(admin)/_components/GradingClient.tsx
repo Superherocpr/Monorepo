@@ -9,7 +9,6 @@
 
 import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 
 // ─── Exported types (used by the server component) ────────────────────────────
 
@@ -54,8 +53,6 @@ interface Props {
  * Grade state is managed client-side. Each grade selection immediately saves to Supabase.
  */
 export default function GradingClient({ session, students, presetGrades }: Props) {
-  const supabase = createClient();
-
   /**
    * Current grade values keyed by roster_record ID.
    * Initialized from server-fetched data; updated as grades are saved.
@@ -99,7 +96,9 @@ export default function GradingClient({ session, students, presetGrades }: Props
   // ── Save logic ────────────────────────────────────────────────────────────
 
   /**
-   * Saves a grade for a single roster_record to Supabase.
+   * Saves a grade for a single roster_record via the server API route.
+   * The direct Supabase client update was silently failing because roster_records
+   * has no UPDATE RLS policy — the API route uses the admin client to bypass RLS.
    * Shows a green checkmark for 2 seconds on success.
    * Shows a persistent error indicator on failure.
    * @param studentId - The roster_record id.
@@ -115,12 +114,17 @@ export default function GradingClient({ session, students, presetGrades }: Props
       });
 
       try {
-        const { error } = await supabase
-          .from("roster_records")
-          .update({ grade, updated_at: new Date().toISOString() })
-          .eq("id", studentId);
+        const res = await fetch(`/api/sessions/${session.id}/grade`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roster_record_id: studentId, grade }),
+        });
 
-        if (error) throw error;
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          console.error("[grading] Save failed:", json.error ?? res.status);
+          throw new Error(json.error ?? "Save failed");
+        }
 
         // Update local grade state
         setGrades((prev) => ({ ...prev, [studentId]: grade }));
@@ -140,7 +144,7 @@ export default function GradingClient({ session, students, presetGrades }: Props
         setSavingId(null);
       }
     },
-    [supabase]
+    [session.id]
   );
 
   /**

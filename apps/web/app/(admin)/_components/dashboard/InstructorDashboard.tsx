@@ -34,6 +34,7 @@ export interface InstructorDashboardProps {
   pendingInvoices: PendingInvoice[];
   openOpportunities: OpenOpportunity[];
   dailyAccessCode: string | null;
+  dailyAccessCodeGeneratedAt: string | null;
   activePromoCodes: ActivePromoCode[];
 }
 
@@ -67,6 +68,7 @@ export default function InstructorDashboard({
   pendingInvoices,
   openOpportunities,
   dailyAccessCode,
+  dailyAccessCodeGeneratedAt,
   activePromoCodes,
 }: InstructorDashboardProps) {
   return (
@@ -77,7 +79,7 @@ export default function InstructorDashboard({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Widget: Daily Rollcall Code ── */}
-        <RollcallCodeWidget initialCode={dailyAccessCode} />
+        <RollcallCodeWidget initialCode={dailyAccessCode} initialGeneratedAt={dailyAccessCodeGeneratedAt} />
 
         {/* ── Widget: Open Opportunities ── */}
         <OpenOpportunitiesWidget opportunities={openOpportunities} />
