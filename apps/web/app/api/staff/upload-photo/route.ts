@@ -8,7 +8,7 @@
  */
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getS3Region } from "@/lib/s3";
+import { getS3BucketName, getS3Region } from "@/lib/s3";
 import { requireApiRole } from "@/lib/auth/effective-role";
 
 export const runtime = "nodejs";
@@ -45,13 +45,6 @@ function sanitiseFilename(filename: string): string {
  */
 function getS3Client(): S3Client {
   return new S3Client({});
-}
-
-/**
- * Returns the configured S3 bucket name from S3_BUCKET_NAME.
- */
-function getBucketName(): string | null {
-  return process.env.S3_BUCKET_NAME ?? null;
 }
 
 /**
@@ -95,15 +88,9 @@ export async function POST(request: Request) {
   }
 
   // ── Upload to S3 ────────────────────────────────────────────────────────────
-  const bucketName = getBucketName();
+  // Both helpers fall back to deployment defaults, so they always return values.
+  const bucketName = getS3BucketName();
   const region = getS3Region();
-  if (!bucketName || !region) {
-    console.error("[staff/upload-photo] S3 bucket or region is not configured.");
-    return Response.json(
-      { success: false, error: "Storage is not configured." },
-      { status: 500 }
-    );
-  }
 
   let url: string;
   try {
