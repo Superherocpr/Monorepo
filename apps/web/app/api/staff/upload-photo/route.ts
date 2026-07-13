@@ -8,6 +8,7 @@
  */
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getS3Region } from "@/lib/s3";
 import { requireApiRole } from "@/lib/auth/effective-role";
 
 export const runtime = "nodejs";
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
 
   // ── Upload to S3 ────────────────────────────────────────────────────────────
   const bucketName = getBucketName();
-  const region = process.env.AWS_REGION;
+  const region = getS3Region();
   if (!bucketName || !region) {
     console.error("[staff/upload-photo] S3 bucket or region is not configured.");
     return Response.json(

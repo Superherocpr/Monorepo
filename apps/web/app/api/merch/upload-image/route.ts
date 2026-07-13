@@ -8,6 +8,7 @@
  */
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getS3Region } from "@/lib/s3";
 import { requireApiRole } from "@/lib/auth/effective-role";
 
 export const runtime = "nodejs";
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
   // ── Upload to S3 ──────────────────────────────────────────────────────────
   try {
     const bucket = getBucketName();
-    const region = process.env.AWS_REGION;
+    const region = getS3Region();
     if (!bucket || !region) {
       return Response.json(
         {

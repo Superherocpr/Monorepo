@@ -11,6 +11,7 @@
  */
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getS3Region } from "@/lib/s3";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { getZohoToken, getSetting } from "@/lib/zoho";
@@ -101,7 +102,7 @@ async function uploadToS3ForRecord(
   contentType: string
 ): Promise<void> {
   const bucket = process.env.S3_BUCKET_NAME;
-  const region = process.env.AWS_REGION;
+  const region = getS3Region();
   if (!bucket || !region) return;
 
   const key = `contact-attachments/${submissionId}/${Date.now()}-${sanitiseFilename(filename)}`;

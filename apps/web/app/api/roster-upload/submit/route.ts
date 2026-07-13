@@ -8,6 +8,7 @@
  */
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getS3Region } from "@/lib/s3";
 import { createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 
@@ -213,7 +214,7 @@ export async function POST(request: Request) {
 
   // ── Upload to S3 ───────────────────────────────────────────────────────────
   const bucket = getBucketName();
-  const region = process.env.AWS_REGION;
+  const region = getS3Region();
   if (!bucket || !region) {
     return Response.json(
       { success: false, error: "File storage is not configured. Please contact support." },
