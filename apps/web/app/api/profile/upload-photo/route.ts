@@ -82,13 +82,14 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ success: false, error: "Storage is not configured." }, { status: 500 });
   }
 
-  const s3 = new S3Client({});
-  const safeFilename = sanitiseFilename(file.name);
-  // Timestamp prefix ensures unique S3 keys and prevents stale CDN caching
-  const key = `staff-photos/${Date.now()}-${safeFilename}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-
+  let url: string;
   try {
+    const s3 = new S3Client({});
+    const safeFilename = sanitiseFilename(file.name);
+    // Timestamp prefix ensures unique S3 keys and prevents stale CDN caching
+    const key = `staff-photos/${Date.now()}-${safeFilename}`;
+    const buffer = Buffer.from(await file.arrayBuffer());
+
     await s3.send(
       new PutObjectCommand({
         Bucket: bucketName,
@@ -97,11 +98,12 @@ export async function POST(request: Request): Promise<Response> {
         ContentType: file.type,
       })
     );
+
+    url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
   } catch (err) {
     console.error("[profile/upload-photo] S3 upload failed:", err);
     return Response.json({ success: false, error: "Upload failed. Please try again." }, { status: 500 });
   }
 
-  const url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
   return Response.json({ success: true, url });
 }

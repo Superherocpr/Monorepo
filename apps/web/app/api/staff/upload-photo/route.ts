@@ -104,13 +104,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const s3 = getS3Client();
-  const safeFilename = sanitiseFilename(file.name);
-  // Timestamp prefix ensures each upload gets a unique key — prevents stale CDN caching
-  const key = `staff-photos/${Date.now()}-${safeFilename}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-
+  let url: string;
   try {
+    const s3 = getS3Client();
+    const safeFilename = sanitiseFilename(file.name);
+    // Timestamp prefix ensures each upload gets a unique key — prevents stale CDN caching
+    const key = `staff-photos/${Date.now()}-${safeFilename}`;
+    const buffer = Buffer.from(await file.arrayBuffer());
+
     await s3.send(
       new PutObjectCommand({
         Bucket: bucketName,
@@ -119,6 +120,8 @@ export async function POST(request: Request) {
         ContentType: file.type,
       })
     );
+
+    url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
   } catch (err) {
     console.error("[staff/upload-photo] S3 upload failed:", err);
     return Response.json(
@@ -126,8 +129,6 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-
-  const url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 
   return Response.json({ success: true, url });
 }
