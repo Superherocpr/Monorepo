@@ -46,9 +46,11 @@ export default async function BookPage({ searchParams }: BookPageProps) {
         price,
         duration_minutes
       ),
-      profiles (
+      profiles!instructor_id (
         first_name,
-        last_name
+        last_name,
+        email,
+        phone
       ),
       locations (
         name,

@@ -228,6 +228,8 @@ export default function BookSessionSelector({
       sessionDetails: {
         className: session.class_types.name,
         instructorName: `${session.profiles.first_name} ${session.profiles.last_name}`,
+        instructorEmail: session.profiles.email ?? null,
+        instructorPhone: session.profiles.phone ?? null,
         startsAt: session.starts_at,
         endsAt: session.ends_at,
         locationName: session.locations.name,

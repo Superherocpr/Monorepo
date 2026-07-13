@@ -10,7 +10,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle, Clock, MapPin } from "lucide-react";
+import { CheckCircle, Clock, MapPin, User } from "lucide-react";
 import { getBookingStore, clearBookingStore } from "@/lib/booking-store";
 import BookingProgress from "../_components/BookingProgress";
 import type { BookingStore } from "@/lib/booking-store";
@@ -94,6 +94,31 @@ export default function BookConfirmationPage() {
                 <br />
                 {details.locationCity}, {details.locationState} {details.locationZip}
               </address>
+            </div>
+
+            <div className="flex items-start gap-3 text-sm text-gray-700">
+              <User size={16} className="text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
+              <div className="leading-relaxed">
+                <p className="font-medium">{details.instructorName}</p>
+                {details.instructorEmail && (
+                  <a
+                    href={`mailto:${details.instructorEmail}`}
+                    className="text-red-600 hover:text-red-700 transition-colors duration-150"
+                  >
+                    {details.instructorEmail}
+                  </a>
+                )}
+                {details.instructorPhone && (
+                  <p className="text-gray-500">
+                    <a
+                      href={`tel:${details.instructorPhone}`}
+                      className="hover:text-red-600 transition-colors duration-150"
+                    >
+                      {details.instructorPhone}
+                    </a>
+                  </p>
+                )}
+              </div>
             </div>
 
             <p className="text-sm text-gray-500 border-t border-gray-200 pt-4">

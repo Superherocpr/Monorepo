@@ -54,6 +54,8 @@ describe("setBookingStore", () => {
     const details: BookingStore["sessionDetails"] = {
       className: "BLS Provider",
       instructorName: "Jane Doe",
+      instructorEmail: "jane@example.com",
+      instructorPhone: null,
       startsAt: "2026-06-01T09:00:00Z",
       endsAt: "2026-06-01T13:00:00Z",
       locationName: "Tampa HQ",

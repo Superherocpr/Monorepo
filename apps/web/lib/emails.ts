@@ -955,10 +955,12 @@ export function invoiceResendEmail({
 
 /**
  * Sent to a customer immediately after their online booking payment is captured.
- * Includes class details, location, amount paid, and transaction ID.
- * Triggered by: POST /api/bookings/confirm
+ * Includes class details, instructor contact, location, amount paid, and transaction ID.
+ * Triggered by: POST /api/bookings/confirm and /api/bookings/confirm-free
  * @param firstName         - Customer's first name (falls back to "there" if null).
  * @param instructorName    - Instructor's full name.
+ * @param instructorEmail   - Instructor's email address (null if unavailable).
+ * @param instructorPhone   - Instructor's phone number (null if unavailable).
  * @param className         - Name of the booked class.
  * @param startsAt          - ISO date-time string for the class start.
  * @param locationName      - Venue name.
@@ -983,6 +985,8 @@ export function bookingConfirmationEmail({
   paymentProcessor,
   transactionId,
   instructorName,
+  instructorEmail,
+  instructorPhone,
 }: {
   firstName: string | null;
   className: string;
@@ -996,6 +1000,8 @@ export function bookingConfirmationEmail({
   paymentProcessor: string;
   transactionId: string | null;
   instructorName?: string | null;
+  instructorEmail?: string | null;
+  instructorPhone?: string | null;
 }): EmailContent {
   const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
     weekday: "long",
@@ -1011,8 +1017,19 @@ export function bookingConfirmationEmail({
   });
 
   const safeInstructorName = instructorName ? escapeHtml(instructorName.trim()) : null;
-  const instructorRow = safeInstructorName
-    ? `<tr><td><strong>Instructor:</strong></td><td>${safeInstructorName}</td></tr>`
+  const safeInstructorEmail = instructorEmail ? escapeHtml(instructorEmail.trim()) : null;
+  const safeInstructorPhone = instructorPhone ? escapeHtml(instructorPhone.trim()) : null;
+
+  const instructorRows = safeInstructorName
+    ? [
+        `<tr><td><strong>Instructor:</strong></td><td>${safeInstructorName}</td></tr>`,
+        safeInstructorEmail
+          ? `<tr><td><strong>Instructor email:</strong></td><td><a href="mailto:${safeInstructorEmail}" style="color:#c0392b">${safeInstructorEmail}</a></td></tr>`
+          : "",
+        safeInstructorPhone
+          ? `<tr><td><strong>Instructor phone:</strong></td><td>${safeInstructorPhone}</td></tr>`
+          : "",
+      ].join("")
     : "";
 
   return {
@@ -1029,7 +1046,7 @@ export function bookingConfirmationEmail({
           <td style="vertical-align:top"><strong>Location:</strong></td>
           <td>${locationName}<br>${locationAddress}<br>${locationCity}, ${locationState} ${locationZip}</td>
         </tr>
-        ${instructorRow}
+        ${instructorRows}
         <tr><td><strong>Amount paid:</strong></td><td>$${amount.toFixed(2)}</td></tr>
         <tr><td><strong>Payment processed by:</strong></td><td>${paymentProcessor}</td></tr>
         <tr><td><strong>Transaction ID:</strong></td><td>${transactionId ?? "N/A"}</td></tr>
