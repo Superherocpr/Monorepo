@@ -87,8 +87,10 @@ export default defineConfig({
   webServer: {
     command: "npm run dev",
     url: BASE_URL,
-    // Reuse an already-running server in local dev to avoid double-start.
-    reuseExistingServer: !process.env.CI,
+    // Reuse an already-running server in local dev to avoid double-start; always
+    // start fresh in CI. Playwright 1.60 types this as `true | undefined`, so we
+    // omit it (undefined) in CI rather than passing `false`.
+    reuseExistingServer: process.env.CI ? undefined : true,
     timeout: 120_000,
   },
 });
