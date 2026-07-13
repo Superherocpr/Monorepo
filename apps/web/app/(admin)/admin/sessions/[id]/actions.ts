@@ -51,6 +51,9 @@ export async function approveSession(sessionId: string): Promise<string | null> 
   if (error) return error.message;
   revalidatePath(`/admin/sessions/${sessionId}`);
   revalidatePath("/admin/sessions");
+  // Revalidate public pages so the newly approved session appears immediately
+  revalidatePath("/book");
+  revalidatePath("/");
   return null;
 }
 
@@ -82,6 +85,9 @@ export async function rejectSession(
   if (error) return error.message;
   revalidatePath(`/admin/sessions/${sessionId}`);
   revalidatePath("/admin/sessions");
+  // Revalidate public pages in case the session was previously approved
+  revalidatePath("/book");
+  revalidatePath("/");
   return null;
 }
 
@@ -105,6 +111,9 @@ export async function bulkApproveSession(sessionIds: string[]): Promise<string |
   if (error) return error.message;
   revalidatePath("/admin/sessions/approvals");
   revalidatePath("/admin/sessions");
+  // Revalidate public pages so newly approved sessions appear immediately
+  revalidatePath("/book");
+  revalidatePath("/");
   return null;
 }
 
@@ -187,5 +196,10 @@ export async function updateSession(
   if (error) return error.message;
   revalidatePath(`/admin/sessions/${sessionId}`);
   revalidatePath("/admin/sessions");
+  // If approval was reset, remove the session from public pages immediately
+  if (wasApproved) {
+    revalidatePath("/book");
+    revalidatePath("/");
+  }
   return null;
 }

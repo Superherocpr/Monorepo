@@ -8,6 +8,7 @@
  */
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getS3BucketName, getS3Region } from "@/lib/s3";
 import { createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 
@@ -42,13 +43,6 @@ function sanitiseFilename(filename: string): string {
  */
 function getS3Client(): S3Client {
   return new S3Client({});
-}
-
-/**
- * Returns the configured S3 bucket name from S3_BUCKET_NAME.
- */
-function getBucketName(): string | null {
-  return process.env.S3_BUCKET_NAME ?? null;
 }
 
 /**
@@ -212,14 +206,9 @@ export async function POST(request: Request) {
   }
 
   // ── Upload to S3 ───────────────────────────────────────────────────────────
-  const bucket = getBucketName();
-  const region = process.env.AWS_REGION;
-  if (!bucket || !region) {
-    return Response.json(
-      { success: false, error: "File storage is not configured. Please contact support." },
-      { status: 500 }
-    );
-  }
+  // Both helpers fall back to deployment defaults, so they always return values.
+  const bucket = getS3BucketName();
+  const region = getS3Region();
 
   let s3Url: string;
   try {
