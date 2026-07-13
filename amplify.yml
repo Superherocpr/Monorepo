@@ -15,22 +15,20 @@ applications:
             # other code that reads server-only env vars throws at runtime.
             - |
               echo "Writing server-side env vars to .env.production for SSR runtime..."
-              env | grep -E '^(NEXT_PUBLIC_|SUPABASE_SERVICE_ROLE_KEY|PAYPAL_|OWNER_EMAIL|FACEBOOK_PAGE_ID|FACEBOOK_PAGE_ACCESS_TOKEN|PLATFORM_FEE_PERCENT|ZOHO_CLIENT_ID|ZOHO_CLIENT_SECRET|ZOHO_REDIRECT_URI|RESEND_API_KEY|RESEND_FROM_EMAIL|CRON_SECRET|TWILIO_|S3_|AWS_S3_|GOOGLE_PLACES_API_KEY|TURNSTILE_SECRET_KEY)=' >> .env.production
+              # NOTE: prefix-style entries (NEXT_PUBLIC_, PAYPAL_, S3_, AWS_S3_, TWILIO_)
+              # must NOT have "=" anchored to them here — "=" only belongs after an
+              # EXACT var name. Anchoring "=" to the whole alternation group (the old
+              # bug) silently matched zero vars for every prefix entry, since e.g.
+              # "PAYPAL_" required the literal var name "PAYPAL_" with nothing after it.
+              # Found 2026-07-13 after PAYPAL_*, S3_BUCKET_NAME, and NEXT_PUBLIC_* were
+              # missing from every prod build despite being set correctly in Amplify.
+              env | grep -E '^(NEXT_PUBLIC_|PAYPAL_|S3_|AWS_S3_|TWILIO_|SUPABASE_SERVICE_ROLE_KEY=|OWNER_EMAIL=|FACEBOOK_PAGE_ID=|FACEBOOK_PAGE_ACCESS_TOKEN=|PLATFORM_FEE_PERCENT=|ZOHO_CLIENT_ID=|ZOHO_CLIENT_SECRET=|ZOHO_REDIRECT_URI=|RESEND_API_KEY=|RESEND_FROM_EMAIL=|CRON_SECRET=|GOOGLE_PLACES_API_KEY=|TURNSTILE_SECRET_KEY=)' >> .env.production
               echo "Wrote $(wc -l < .env.production) env var lines (values redacted)."
-              # Diagnostic: log which var NAMES made it into the build env (never values).
-              # Amplify has been observed to silently drop app/branch env vars from
-              # builds (S3_BUCKET_NAME, 2026-07-13), so this line is the ground truth
-              # for exactly what the deployed runtime will see.
+              # Names-only guard against a future regression of the bug above —
+              # e.g. adding a new prefix entry with a trailing "=" by mistake.
               echo "Env var names written: $(cut -d= -f1 < .env.production | sort | tr '\n' ' ')"
-              # Full name dump (values never printed): proves which vars the preBuild
-              # shell actually has. Compared against the build-phase dump below to
-              # locate where Amplify's selective env injection happens.
-              echo "ALL preBuild env names: $(env | cut -d= -f1 | sort | tr '\n' ' ')"
         build:
           commands:
-            # Diagnostic pair with the preBuild dump above — compares which env vars
-            # exist in each phase (names only, never values).
-            - echo "ALL build-phase env names is $(env | cut -d= -f1 | sort | tr '\n' ' ')"
             - npm run build
       artifacts:
         baseDirectory: .next
