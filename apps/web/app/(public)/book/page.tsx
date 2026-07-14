@@ -119,10 +119,17 @@ export default async function BookPage({ searchParams }: BookPageProps) {
     };
   });
 
+  // Only show filter pills for class types that have at least one upcoming bookable session.
+  // Avoids pills that would always result in "No classes found".
+  const sessionClassTypeIds = new Set(sessions.map((s) => s.class_types.id));
+  const availableClassTypes = (classTypes ?? []).filter((ct) =>
+    sessionClassTypeIds.has(ct.id)
+  ) as ClassTypeOption[];
+
   return (
     <BookSessionSelector
       sessions={sessions}
-      classTypes={(classTypes ?? []) as ClassTypeOption[]}
+      classTypes={availableClassTypes}
       preSelectedSessionId={params.session ?? null}
       preSelectedClassSlug={params.class ?? null}
     />

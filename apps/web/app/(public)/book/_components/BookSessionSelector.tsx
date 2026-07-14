@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Loader2, MapPin, X } from "lucide-react";
+import { Calendar, ChevronDown, Loader2, MapPin, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { setBookingStore } from "@/lib/booking-store";
 import BookingProgress from "./BookingProgress";
@@ -131,6 +131,7 @@ export default function BookSessionSelector({
   const [zipCoordsCache, setZipCoordsCache] = useState<Map<string, ZipCoords>>(new Map());
   const [zipError, setZipError] = useState<string | null>(null);
   const [zipLoading, setZipLoading] = useState(false);
+  const [classTypeOpen, setClassTypeOpen] = useState(false);
 
   const isFiltered = !!activeClassType || !!dateFrom || !!dateTo || !!zipFilter;
 
@@ -287,171 +288,178 @@ export default function BookSessionSelector({
         <BookingProgress currentStep={1} />
       </div>
 
-      {/* Body — filters sidebar on the left, cards on the right */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-5xl mx-auto px-6 pt-6 pb-16">
 
-        {/* ── Left: sticky filters sidebar ── */}
-        <aside className="w-72 shrink-0 border-r border-gray-100 bg-white overflow-y-auto px-6 pt-6 pb-10 flex flex-col gap-6">
-          <div>
+          {/* Title */}
+          <div className="mb-5">
             <h1 className="text-2xl font-bold text-gray-900">Choose Your Class</h1>
             <p className="text-gray-500 mt-1 text-sm">
               Select an upcoming session to reserve your spot.
             </p>
           </div>
 
-          {/* ── Zip code proximity filter — prominent, top of sidebar ── */}
-          <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <MapPin className="text-red-600 shrink-0" size={18} aria-hidden="true" />
-              <p className="text-sm font-semibold text-red-700">Find Classes Near You</p>
-            </div>
-            <div className="flex gap-2">
-              <input
-                id="book-zip-input"
-                type="text"
-                inputMode="numeric"
-                maxLength={5}
-                value={zipInput}
-                onChange={(e) => {
-                  // Allow only digits
-                  setZipInput(e.target.value.replace(/\D/g, ""));
-                  setZipError(null);
-                }}
-                onKeyDown={(e) => { if (e.key === "Enter") handleZipSearch(); }}
-                placeholder="e.g. 34205"
-                aria-label="Enter your zip code"
-                className="flex-1 min-w-0 border border-red-200 bg-white rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
-              <button
-                onClick={handleZipSearch}
-                disabled={zipLoading || zipInput.trim().length !== 5}
-                aria-label="Search classes by zip code"
-                className="shrink-0 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 flex items-center gap-1.5"
-              >
-                {zipLoading ? (
-                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                ) : (
-                  "Search"
-                )}
-              </button>
-            </div>
+          {/* Filter bar */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl mb-6 overflow-hidden">
 
-            {/* Error state */}
-            {zipError && (
-              <p role="alert" className="text-xs text-red-600 font-medium">
-                {zipError}
-              </p>
-            )}
+            {/* Row 1: zip + date range + clear */}
+            <div className="flex flex-wrap items-end gap-x-6 gap-y-4 px-4 pt-4 pb-4">
 
-            {/* Active filter badge */}
-            {zipFilter && !zipLoading && (
-              <div className="flex items-center justify-between bg-white border border-red-200 rounded-lg px-3 py-2">
-                <span className="text-xs text-gray-700">
-                  Within <span className="font-semibold">{ZIP_RADIUS_MILES} mi</span> of{" "}
-                  <span className="font-semibold">{zipFilter}</span>
-                </span>
-                <button
-                  onClick={() => {
-                    setZipFilter("");
-                    setZipCoords(null);
-                    setZipError(null);
-                  }}
-                  aria-label="Clear zip code filter"
-                  className="text-gray-400 hover:text-red-600 transition-colors duration-150 ml-2"
-                >
-                  <X size={13} aria-hidden="true" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Class type filter pills */}
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-              Class type
-            </p>
-            <div
-              className="flex flex-wrap gap-2"
-              role="group"
-              aria-label="Filter by class type"
-            >
-              <button
-                onClick={() => setActiveClassType(null)}
-                aria-pressed={activeClassType === null}
-                className={[
-                  "px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
-                  activeClassType === null
-                    ? "bg-red-600 text-white"
-                    : "bg-white border border-gray-200 text-gray-700 hover:border-red-300",
-                ].join(" ")}
-              >
-                All
-              </button>
-              {classTypes.map((ct) => {
-                const slug = toSlug(ct.name);
-                const isActive = activeClassType === slug;
-                return (
+              {/* Zip code proximity filter */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex gap-2">
+                  <input
+                    id="book-zip-input"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={5}
+                    value={zipInput}
+                    onChange={(e) => {
+                      // Allow only digits
+                      setZipInput(e.target.value.replace(/\D/g, ""));
+                      setZipError(null);
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleZipSearch(); }}
+                    placeholder="Zip Code"
+                    aria-label="Enter your zip code"
+                    className="w-32 border border-gray-300 bg-white rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
                   <button
-                    key={ct.id}
-                    onClick={() => setActiveClassType(isActive ? null : slug)}
-                    aria-pressed={isActive}
+                    onClick={handleZipSearch}
+                    disabled={zipLoading || zipInput.trim().length !== 5}
+                    aria-label="Search classes by zip code"
+                    className="shrink-0 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 flex items-center gap-1.5"
+                  >
+                    {zipLoading ? (
+                      <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                    ) : (
+                      "Search"
+                    )}
+                  </button>
+                </div>
+                {zipError && (
+                  <p role="alert" className="text-xs text-red-600 font-medium">
+                    {zipError}
+                  </p>
+                )}
+                {zipFilter && !zipLoading && (
+                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
+                    <span className="text-xs text-gray-700">
+                      Within <span className="font-semibold">{ZIP_RADIUS_MILES} mi</span> of{" "}
+                      <span className="font-semibold">{zipFilter}</span>
+                    </span>
+                    <button
+                      onClick={() => { setZipFilter(""); setZipCoords(null); setZipError(null); }}
+                      aria-label="Clear zip code filter"
+                      className="text-gray-400 hover:text-red-600 transition-colors duration-150"
+                    >
+                      <X size={12} aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="hidden sm:block self-stretch w-px bg-gray-200" aria-hidden="true" />
+
+              {/* Date range filter */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-end gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="book-date-from" className="text-xs font-medium text-gray-500">
+                      From
+                    </label>
+                    <input
+                      id="book-date-from"
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="book-date-to" className="text-xs font-medium text-gray-500">
+                      To
+                    </label>
+                    <input
+                      id="book-date-to"
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Clear all filters */}
+              {isFiltered && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 rounded-sm pb-2"
+                >
+                  <X size={14} aria-hidden="true" />
+                  Clear filters
+                </button>
+              )}
+            </div>
+
+            {/* Row 2: collapsable class type section */}
+            <div className="border-t border-gray-200">
+              <button
+                onClick={() => setClassTypeOpen((o) => !o)}
+                aria-expanded={classTypeOpen}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-widest hover:bg-gray-100 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500"
+              >
+                <span>Certification Type{activeClassType ? ` · ${classTypes.find(ct => toSlug(ct.name) === activeClassType)?.name ?? ""}` : ""}</span>
+                <ChevronDown
+                  size={14}
+                  aria-hidden="true"
+                  className={`text-gray-400 transition-transform duration-200 ${classTypeOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {classTypeOpen && (
+                <div
+                  className="flex flex-wrap gap-2 px-4 pb-4 pt-1"
+                  role="group"
+                  aria-label="Filter by certification type"
+                >
+                  <button
+                    onClick={() => setActiveClassType(null)}
+                    aria-pressed={activeClassType === null}
                     className={[
                       "px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
-                      isActive
+                      activeClassType === null
                         ? "bg-red-600 text-white"
                         : "bg-white border border-gray-200 text-gray-700 hover:border-red-300",
                     ].join(" ")}
                   >
-                    {ct.name}
+                    All
                   </button>
-                );
-              })}
+                  {classTypes.map((ct) => {
+                    const slug = toSlug(ct.name);
+                    const isActive = activeClassType === slug;
+                    return (
+                      <button
+                        key={ct.id}
+                        onClick={() => setActiveClassType(isActive ? null : slug)}
+                        aria-pressed={isActive}
+                        className={[
+                          "px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
+                          isActive
+                            ? "bg-red-600 text-white"
+                            : "bg-white border border-gray-200 text-gray-700 hover:border-red-300",
+                        ].join(" ")}
+                      >
+                        {ct.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* Date range filter */}
-          <div className="flex flex-col gap-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-              Date range
-            </p>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="book-date-from" className="text-sm font-medium text-gray-700">
-                From
-              </label>
-              <input
-                id="book-date-from"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="book-date-to" className="text-sm font-medium text-gray-700">
-                To
-              </label>
-              <input
-                id="book-date-to"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
-            </div>
-            {isFiltered && (
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 rounded-sm"
-              >
-                <X size={14} aria-hidden="true" />
-                Clear filters
-              </button>
-            )}
-          </div>
-        </aside>
-
-        {/* ── Right: scrollable cards ── */}
-        <section className="flex-1 overflow-y-auto pb-16 px-6 pt-6">
+          </div>{/* end filter bar */}
 
           {/* Error toast */}
           {errorMessage && (
@@ -474,7 +482,7 @@ export default function BookSessionSelector({
           {filteredSessions.length === 0 ? (
             <BookingEmptyState isFiltered={isFiltered} onClearFilters={clearFilters} />
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {filteredSessions.map((session) => (
                 <BookingSessionCard
                   key={session.id}
@@ -486,12 +494,12 @@ export default function BookSessionSelector({
             </div>
           )}
 
-          {/* Private session CTA — shown below the grid for users who can't find a suitable time */}
+          {/* Private session CTA — shown below the grid */}
           <div className="-mx-6 mt-8">
             <PrivateSessionCta />
           </div>
-        </section>
 
+        </div>
       </div>
     </div>
   );
