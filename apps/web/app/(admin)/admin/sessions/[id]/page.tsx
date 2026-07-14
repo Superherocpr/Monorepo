@@ -47,8 +47,10 @@ export default async function SessionDetailPage({ params }: PageProps) {
       enrollware_submitted, roster_imported,
       correction_window_closes_at,
       class_type_id, instructor_id, location_id,
-      class_types ( id, name, price, duration_minutes ),
+      assistant_instructor_id, assistant_name,
+      class_types ( id, name, price, duration_minutes, requires_assistant_at_capacity ),
       profiles!class_sessions_instructor_id_fkey ( id, first_name, last_name ),
+      assistant_instructor:profiles!class_sessions_assistant_instructor_id_fkey ( id, first_name, last_name ),
       locations ( id, name, address, city, state, zip ),
       bookings (
         id, cancelled, booking_source, grade,
@@ -109,8 +111,11 @@ export default async function SessionDetailPage({ params }: PageProps) {
     class_type_id: raw.class_type_id,
     instructor_id: raw.instructor_id,
     location_id: raw.location_id,
+    assistant_instructor_id: raw.assistant_instructor_id ?? null,
+    assistant_name: raw.assistant_name ?? null,
     class_types: raw.class_types as unknown as SessionDetailData["class_types"],
     instructor: raw.profiles as unknown as SessionDetailData["instructor"],
+    assistant_instructor: raw.assistant_instructor as unknown as SessionDetailData["assistant_instructor"],
     locations: raw.locations as unknown as SessionDetailData["locations"],
     bookings: (raw.bookings as unknown as SessionDetailData["bookings"]) ?? [],
     roster_records:
@@ -137,18 +142,16 @@ export default async function SessionDetailPage({ params }: PageProps) {
 
   const locations: LocationOption[] = (rawLocations ?? []) as LocationOption[];
 
-  // Fetch active staff for the edit form — managers and super admins can reassign.
-  // Any non-customer profile may be assigned as the session instructor.
-  let instructors: InstructorOption[] = [];
-  if (role === "manager" || role === "super_admin") {
-    const { data: rawInstructors } = await admin
-      .from("profiles")
-      .select("id, first_name, last_name")
-      .neq("role", "customer")
-      .eq("deactivated", false)
-      .order("first_name");
-    instructors = (rawInstructors ?? []) as InstructorOption[];
-  }
+  // Fetch active staff for the edit form (reassignment, managers/super admins
+  // only) and the assistant-instructor dropdown (all staff roles).
+  // Any non-customer profile may be assigned as session instructor or assistant.
+  const { data: rawInstructors } = await admin
+    .from("profiles")
+    .select("id, first_name, last_name")
+    .neq("role", "customer")
+    .eq("deactivated", false)
+    .order("first_name");
+  const instructors: InstructorOption[] = (rawInstructors ?? []) as InstructorOption[];
 
   return (
     <SessionDetailClient

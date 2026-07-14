@@ -2360,3 +2360,78 @@ export function unclaimedOpportunityEscalationEmail({
     `),
   };
 }
+
+// ── 28. Class Assistant — Enrollment threshold reached, notify instructor ──────
+
+/**
+ * Sent once to the assigned instructor when a BLS/ACLS class reaches 9 paid
+ * students and no assistant has been assigned yet. One-time send — the
+ * caller stamps class_sessions.assistant_reminder_sent_at to guarantee this
+ * never fires twice for the same session.
+ * Triggered by: lib/assistant-reminder.ts, called from
+ * POST /api/bookings/confirm and POST /api/bookings/confirm-free after the
+ * booking that crosses the threshold is created.
+ * @param instructorName - Full name of the assigned instructor.
+ * @param className      - Name of the class type (e.g. "BLS Provider").
+ * @param sessionDate    - ISO datetime string of the session start.
+ * @param studentCount   - Current paid enrollment count.
+ * @param sessionId      - UUID of the class_sessions row, for the admin link.
+ * @param baseUrl        - App base URL for constructing the session link.
+ */
+export function assistantNeededEmail({
+  instructorName,
+  className,
+  sessionDate,
+  studentCount,
+  sessionId,
+  baseUrl,
+}: {
+  instructorName: string;
+  className: string;
+  sessionDate: string;
+  studentCount: number;
+  sessionId: string;
+  baseUrl: string;
+}): EmailContent {
+  const safeInstructor = escapeHtml(instructorName.trim());
+  const safeClass = escapeHtml(className.trim());
+
+  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+  });
+
+  const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
+
+  return {
+    subject: `Assistant needed — ${safeClass} on ${formattedDate}`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">You Need an Assistant for This Class</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Hi ${safeInstructor},</p>
+
+      <p style="font-size:14px;color:#374151;margin-bottom:16px;">
+        Your <strong>${safeClass}</strong> class on <strong>${formattedDate}</strong> now has
+        <strong>${studentCount} paid students</strong>. Classes of this size require an in-room
+        assistant — please arrange one before class day.
+      </p>
+
+      <p style="margin:24px 0;">
+        <a href="${sessionLink}"
+           style="display:inline-block;background:#dc2626;color:white;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:700;">
+          Add an Assistant →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        You can assign another instructor from the dropdown, or enter the name of someone
+        outside the platform. The assistant is for documentation only and does not affect payout.
+      </p>
+    `),
+  };
+}

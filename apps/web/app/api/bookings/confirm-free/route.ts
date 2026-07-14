@@ -19,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import { bookingConfirmationEmail } from "@/lib/emails";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
+import { maybeSendAssistantReminder } from "@/lib/assistant-reminder";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -144,6 +145,13 @@ export async function POST(request: Request): Promise<Response> {
     console.error("[bookings/confirm-free] book_spot failed:", rpcError);
     return Response.json({ success: false, error: "Failed to create booking." }, { status: 500 });
   }
+
+  // Best-effort: notify the instructor if this booking pushed a BLS/ACLS
+  // class to the assistant-required threshold (9 paid students).
+  const assistantBaseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
+  await maybeSendAssistantReminder(supabase, sessionId, assistantBaseUrl).catch((err: unknown) => {
+    console.error("[bookings/confirm-free] Assistant reminder check failed (non-fatal):", err);
+  });
 
   // ── Step 3: Create $0 payment record ─────────────────────────────────────
   const routingNote = `Free booking via promo code ${promoResult.code} (${dbPrice.toFixed(2)} discount)`;
