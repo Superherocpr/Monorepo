@@ -203,3 +203,52 @@ export async function updateSession(
   }
   return null;
 }
+
+/**
+ * Assigns or clears the documentation-only class assistant on a session.
+ * Exactly one of instructorId/name may be set (or both null to clear).
+ * Not gated on approval status or the 9-student threshold — staff can add
+ * an assistant at any time. Does not affect payout in any way.
+ * Auth: manager/super_admin for any session; instructors only for their own.
+ * @param sessionId - UUID of the class_sessions record to update.
+ * @param assistant - Either a platform instructor id, a free-text name, or both null to clear.
+ * @returns An error message string on failure, or null on success.
+ */
+export async function setSessionAssistant(
+  sessionId: string,
+  assistant: { instructorId: string | null; name: string | null }
+): Promise<string | null> {
+  if (assistant.instructorId && assistant.name) {
+    return "An assistant may be a platform instructor or a name, not both.";
+  }
+
+  const auth = await requireActionRole(["instructor", "manager", "super_admin"]);
+  if ("error" in auth) return auth.error;
+  const { actor } = auth;
+
+  const admin = await createAdminClient();
+
+  if (actor.effectiveRole === "instructor") {
+    const { data: current } = await admin
+      .from("class_sessions")
+      .select("instructor_id")
+      .eq("id", sessionId)
+      .single();
+    if (!current || current.instructor_id !== actor.user.id) {
+      return "You may only manage the assistant on your own sessions.";
+    }
+  }
+
+  const trimmedName = assistant.name?.trim() || null;
+
+  const { error } = await admin
+    .from("class_sessions")
+    .update({
+      assistant_instructor_id: assistant.instructorId,
+      assistant_name: trimmedName,
+    })
+    .eq("id", sessionId);
+  if (error) return error.message;
+  revalidatePath(`/admin/sessions/${sessionId}`);
+  return null;
+}
