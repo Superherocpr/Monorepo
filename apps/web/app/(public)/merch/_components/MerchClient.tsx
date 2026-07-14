@@ -205,6 +205,7 @@ export default function MerchClient({ products }: MerchClientProps) {
     // causes React 19 to block the injected <script> tag on each re-mount
     <PayPalProvider
       clientId={process.env.NEXT_PUBLIC_PAYPAL_MERCH_CLIENT_ID ?? ""}
+      environment={process.env.NEXT_PUBLIC_PAYPAL_ENV === "production" ? "production" : "sandbox"}
       components={["paypal-payments"]}
       pageType="checkout"
     >
