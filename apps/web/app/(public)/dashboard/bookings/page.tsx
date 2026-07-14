@@ -40,7 +40,7 @@ export default async function BookingsPage() {
        class_sessions (
          starts_at, ends_at, status,
          class_types ( name ),
-         profiles ( first_name, last_name ),
+         profiles!instructor_id ( first_name, last_name ),
          locations ( name, address, city, state, zip )
        ),
        payments ( status, payment_type, amount )`
