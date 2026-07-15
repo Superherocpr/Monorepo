@@ -218,6 +218,19 @@ export default function RollcallPage() {
     codeRef.current?.focus();
   }, []);
 
+  // If the URL contains ?code=XXXXXX (e.g. from a QR scan), auto-submit it
+  // so the student skips typing and goes straight to verification.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlCode = params.get("code");
+    if (urlCode && /^\d{6}$/.test(urlCode)) {
+      void handleCodeChange(urlCode);
+    }
+  // handleCodeChange is defined below — intentionally not in the dep array;
+  // this must only fire once on mount, not on every re-render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Step 1: Verify access code ────────────────────────────────────────────
 
   /**
