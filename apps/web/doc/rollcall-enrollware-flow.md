@@ -62,51 +62,51 @@ one they are attending. The chosen `sessionId` is used for all subsequent steps.
 
 ---
 
-### Step 1d — Student identifies themselves
+### Step 1d — Student picks their name from the roster
 
-**Code:** `POST /api/rollcall/check-email`
+**Code:** `POST /api/rollcall/session-students`
 
-The student enters their email. The API checks whether an account with that
-email already exists:
+The page lists every enrolled (non-cancelled-booking) student for the session —
+names only, no contact details. The student taps their own name. No email entry,
+no password.
 
-- **Existing account** → proceeds to sign-in (Step 1e)
-- **No account found** → proceeds to registration (Step 1f)
-
----
-
-### Step 1e — Returning student signs in
-
-**Code:** `POST /api/rollcall/checkin`
-
-The student enters their password. The API:
-
-1. Signs the student in via Supabase `signInWithPassword`
-2. **Requires an existing non-cancelled booking** for this session (THREAT-007) —
-   unpaid walk-ups are rejected. The student must have booked online, been added
-   via invoice, or been manually added by an instructor.
-3. If already checked in: confirms gracefully (idempotent — double-tap is safe)
-4. Inserts a `roster_records` row with the student's details for this session
-
-**Plain English:** The student proves they already paid by signing in. If they
-haven't paid, check-in is refused. If they tap the button twice, nothing breaks.
+> Students who don't see their name are directed to contact the instructor —
+> a booking must already exist (online, invoice, or manual admin creation)
+> before check-in is possible (THREAT-007: unpaid walk-ups are rejected).
 
 ---
 
-### Step 1f — New student creates an account
+### Step 1e — Student reviews their contact info
 
-**Code:** `POST /api/rollcall/register`
+**Code:** `POST /api/rollcall/student-profile`
 
-For walk-in students who have been manually added to the class by the instructor,
-or whose booking was created via invoice, the rollcall page allows account creation
-on the spot. The API:
+The API returns the student's profile details (gated by an active-booking
+check) so they can confirm the info their certification will be issued with.
 
-1. Creates a Supabase auth user + `profiles` row with `role = 'customer'`
-2. Inserts a `roster_records` row for this session
-3. Sends a welcome email via Resend
+---
 
-> **Note:** Registration on rollcall does NOT create a booking — the booking
-> must already exist (from invoice or manual admin creation). The roster record
-> is the check-in proof; the booking is the payment proof.
+### Step 1f — Student confirms (or corrects) and checks in
+
+**Code:** `POST /api/rollcall/checkin-by-profile`
+
+- **"This is correct — Check Me In"** → inserts a `roster_records` row with
+  `confirmed = true`. No password needed — the 6-digit code plus an existing
+  booking is the gate.
+- **"Update My Info"** → the student edits their details and must enter their
+  **password**; the API verifies it via `signInWithPassword` before applying
+  the profile updates, then inserts the roster record with `confirmed = true`
+  and `corrected = true`.
+- Already checked in → confirms gracefully (idempotent — double-tap is safe).
+
+**Plain English:** The student proves who they are by being in the room (the
+code) and having paid (the booking). Changing personal data requires their
+password so nobody else can edit it. `confirmed = true` is what the admin
+session page's **Verified** column reads.
+
+> **History:** an earlier email + password flow (`check-email`, `checkin`,
+> `register` routes) was replaced by this profile-based flow; those routes
+> were removed 2026-07-15 (the unauthenticated `check-email` endpoint was
+> also an email-enumeration oracle — THREAT-046).
 
 **Plain English:** A student who doesn't have an account yet can create one on
 the spot. The app still requires that they were already registered for the class
@@ -258,10 +258,9 @@ Instructor clicks "Mark as Submitted"
 |---|---|
 | `app/(admin)/_components/dashboard/RollcallCodeWidget.tsx` | Daily code display on instructor dashboard |
 | `app/api/rollcall/verify-code/route.ts` | Validates 6-digit code, returns today's sessions |
-| `app/api/rollcall/check-email/route.ts` | Checks whether student email has an account |
-| `app/api/rollcall/checkin/route.ts` | Authenticates + creates roster record (returning student) |
-| `app/api/rollcall/register/route.ts` | Creates account + roster record (new student) |
-| `app/api/rollcall/session-students/route.ts` | Returns live roster for instructor view |
+| `app/api/rollcall/session-students/route.ts` | Returns enrolled student names for the roster picker |
+| `app/api/rollcall/student-profile/route.ts` | Returns contact details for the info-review step |
+| `app/api/rollcall/checkin-by-profile/route.ts` | Creates confirmed roster record; password-gated profile edits |
 | `app/api/rollcall/refresh-my-code/route.ts` | Manually regenerates instructor's daily code |
 | `app/api/enrollware/generate-key/route.ts` | Creates instructor API key for bookmarklet auth |
 | `app/api/enrollware/bookmarklet/route.ts` | Serves the live bookmarklet JavaScript |

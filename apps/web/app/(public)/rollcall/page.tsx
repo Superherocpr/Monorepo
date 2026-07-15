@@ -33,6 +33,8 @@ interface VerifyCodeResult {
   instructorId: string;
   instructorName: string;
   sessions: RollcallSession[];
+  /** Server-provided message (e.g. rate limit). Present only on failures. */
+  error?: string;
 }
 
 /** Minimal student data returned by the roster listing — no sensitive fields. */
@@ -239,8 +241,24 @@ export default function RollcallPage() {
       });
       const result = (await res.json()) as VerifyCodeResult;
 
-      if (!result.valid || result.sessions.length === 0) {
-        setError("That code doesn't match. Check with your instructor.");
+      // Distinguish the three failure states so backend problems don't
+      // masquerade as "wrong code" (that conflation hid an RLS bug once):
+      //   invalid code → wrong code message
+      //   valid code, zero sessions → "no classes right now" message
+      //   rate limited / server error → the server's own message
+      if (!result.valid) {
+        setError(
+          result.error ?? "That code doesn't match. Check with your instructor."
+        );
+        setCode("");
+        codeRef.current?.focus();
+        return;
+      }
+
+      if (result.sessions.length === 0) {
+        setError(
+          "Code accepted, but no classes are scheduled for this instructor right now. Please check with your instructor."
+        );
         setCode("");
         codeRef.current?.focus();
         return;
