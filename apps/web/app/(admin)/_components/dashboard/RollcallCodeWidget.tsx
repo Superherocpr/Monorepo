@@ -1,7 +1,9 @@
 /**
- * RollcallCodeWidget — displays the instructor's rollcall code with a live countdown and auto-refresh.
- * The code is valid for 1 hour from generation. Calls POST /api/rollcall/refresh-my-code
- * automatically when the hour expires, and supports manual refresh as well.
+ * RollcallCodeWidget — displays the instructor's rollcall code with auto-refresh.
+ * The code is valid for the whole business day (Eastern) it was generated on —
+ * matches /api/rollcall/verify-code. Auto-refreshes via
+ * POST /api/rollcall/refresh-my-code at the midnight rollover, and supports
+ * manual refresh as well.
  * Used by: InstructorDashboard, SuperAdminDashboard
  */
 
@@ -9,8 +11,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-
-const CODE_TTL_MS = 60 * 60 * 1000; // 1 hour
+import { isSameBusinessDay } from "@/lib/business-time";
 
 interface Props {
   /** The current daily_access_code from the server. Null if none has been generated yet. */
@@ -20,36 +21,25 @@ interface Props {
 }
 
 /**
- * Computes milliseconds remaining until the code expires.
- * Returns 0 if already expired or no timestamp provided.
+ * True when the code is no longer valid — i.e. it was generated on a previous
+ * business day (or never). Mirrors the server-side check in verify-code.
  * @param generatedAt - ISO timestamp the code was generated
  */
-function msRemaining(generatedAt: string | null): number {
-  if (!generatedAt) return 0;
-  return Math.max(0, CODE_TTL_MS - (Date.now() - new Date(generatedAt).getTime()));
+function isExpired(generatedAt: string | null): boolean {
+  if (!generatedAt) return true;
+  return !isSameBusinessDay(new Date(generatedAt), new Date());
 }
 
 /**
- * Formats milliseconds as "MM:SS".
- * @param ms - milliseconds remaining
- */
-function formatCountdown(ms: number): string {
-  const totalSeconds = Math.ceil(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-/**
- * Shows the 6-digit rollcall code, a live countdown to expiry, and lets the
- * instructor request a fresh one manually. Auto-refreshes when the hour is up.
+ * Shows the 6-digit rollcall code and lets the instructor request a fresh one
+ * manually. Auto-refreshes when the business day rolls over at midnight ET.
  * @param initialCode - Server-rendered code value passed at page load
  * @param initialGeneratedAt - ISO timestamp the current code was generated
  */
 export default function RollcallCodeWidget({ initialCode, initialGeneratedAt }: Props) {
   const [code, setCode] = useState<string | null>(initialCode);
   const [generatedAt, setGeneratedAt] = useState<string | null>(initialGeneratedAt);
-  const [remaining, setRemaining] = useState<number>(() => msRemaining(initialGeneratedAt));
+  const [expired, setExpired] = useState<boolean>(() => isExpired(initialGeneratedAt));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoRefreshScheduled = useRef(false);
@@ -71,7 +61,7 @@ export default function RollcallCodeWidget({ initialCode, initialGeneratedAt }: 
       const now = new Date().toISOString();
       setCode(data.code);
       setGeneratedAt(now);
-      setRemaining(CODE_TTL_MS);
+      setExpired(false);
     } catch {
       setError("A network error occurred. Please try again.");
     } finally {
@@ -79,23 +69,22 @@ export default function RollcallCodeWidget({ initialCode, initialGeneratedAt }: 
     }
   }
 
-  // Tick the countdown every second and auto-refresh when it hits zero.
+  // Check for the midnight-ET rollover twice a minute and auto-refresh when
+  // the business day changes (e.g. dashboard left open overnight).
   useEffect(() => {
     const interval = setInterval(() => {
-      const ms = msRemaining(generatedAt);
-      setRemaining(ms);
+      const stale = isExpired(generatedAt);
+      setExpired(stale);
 
-      if (ms === 0 && !autoRefreshScheduled.current && !refreshing) {
+      if (stale && !autoRefreshScheduled.current && !refreshing) {
         autoRefreshScheduled.current = true;
         void handleRefresh();
       }
-    }, 1000);
+    }, 30_000);
 
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generatedAt, refreshing]);
-
-  const expired = remaining === 0 && !refreshing;
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6">
@@ -114,10 +103,14 @@ export default function RollcallCodeWidget({ initialCode, initialGeneratedAt }: 
         <p className="text-gray-400 text-sm">No code generated yet.</p>
       )}
 
-      {/* Countdown — only shown when a code exists and we have a timestamp */}
+      {/* Validity note — only shown when a code exists and we have a timestamp */}
       {code && generatedAt && (
-        <p className={`text-xs mt-1 tabular-nums ${remaining < 5 * 60 * 1000 ? "text-amber-500 font-semibold" : "text-gray-400"}`}>
-          {refreshing ? "Refreshing…" : expired ? "Expired — refreshing…" : `Expires in ${formatCountdown(remaining)}`}
+        <p className="text-xs mt-1 text-gray-400">
+          {refreshing
+            ? "Refreshing…"
+            : expired
+              ? "Expired — refreshing…"
+              : "Valid all day — expires at midnight (ET)"}
         </p>
       )}
 
