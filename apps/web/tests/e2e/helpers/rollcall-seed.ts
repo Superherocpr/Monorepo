@@ -38,10 +38,12 @@ export interface SeededRollcall {
 
 /**
  * Reads a single key from process.env, falling back to apps/web/.env.local.
- * Throws with a clear message when the key is missing from both.
+ * Throws with a clear message when the key is missing from both. Exported so
+ * specs needing a browser-facing (anon-key) client can resolve the same env
+ * vars without duplicating the fallback logic.
  * @param key - env var name to resolve
  */
-function requireEnv(key: string): string {
+export function requireEnv(key: string): string {
   if (process.env[key]) return process.env[key]!;
 
   const envPath = path.join(__dirname, "../../../.env.local");

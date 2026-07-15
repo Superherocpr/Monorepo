@@ -1,0 +1,89 @@
+- generic [active] [ref=f8e1]:
+  - generic [ref=f8e2]:
+    - banner [ref=f8e3]:
+      - generic [ref=f8e5]:
+        - link "SuperHeroCPR home" [ref=f8e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f8e7]: SuperHeroCPR
+        - navigation "Main navigation" [ref=f8e8]:
+          - link "Home" [ref=f8e9] [cursor=pointer]:
+            - /url: /
+          - link "Classes" [ref=f8e10] [cursor=pointer]:
+            - /url: /classes
+          - link "Schedule" [ref=f8e11] [cursor=pointer]:
+            - /url: /book
+          - link "Merch" [ref=f8e12] [cursor=pointer]:
+            - /url: /merch
+          - link "About" [ref=f8e13] [cursor=pointer]:
+            - /url: /about
+          - link "Contact" [ref=f8e14] [cursor=pointer]:
+            - /url: /contact
+        - link "Sign In" [ref=f8e16] [cursor=pointer]:
+          - /url: /signin
+    - main [ref=f8e17]:
+      - generic [ref=f8e19]:
+        - heading "Sign In" [level=1] [ref=f8e20]
+        - paragraph [ref=f8e21]: Welcome back. Sign in to access your dashboard.
+        - generic [ref=f8e22]:
+          - generic [ref=f8e23]:
+            - generic [ref=f8e24]: Email
+            - textbox "Email" [ref=f8e25]:
+              - /placeholder: you@example.com
+          - generic [ref=f8e26]:
+            - generic [ref=f8e27]:
+              - generic [ref=f8e28]: Password
+              - link "Forgot password?" [ref=f8e29] [cursor=pointer]:
+                - /url: /book/forgot-password
+            - textbox "Password" [ref=f8e30]:
+              - /placeholder: ••••••••
+          - button "Sign In" [ref=f8e31]
+        - paragraph [ref=f8e32]:
+          - text: Don't have an account?
+          - link "Book a class to get started" [ref=f8e33] [cursor=pointer]:
+            - /url: /book
+    - contentinfo [ref=f8e34]:
+      - generic [ref=f8e35]:
+        - generic [ref=f8e36]:
+          - generic [ref=f8e37]:
+            - paragraph [ref=f8e38]: SuperHeroCPR
+            - paragraph [ref=f8e39]: AHA-certified CPR, BLS, and First Aid training in the Bay Area, Florida. On-location classes for individuals, businesses, and healthcare providers.
+          - generic [ref=f8e40]:
+            - paragraph [ref=f8e41]: Quick Links
+            - generic [ref=f8e42]:
+              - list [ref=f8e43]:
+                - listitem [ref=f8e44]:
+                  - link "Home" [ref=f8e45] [cursor=pointer]:
+                    - /url: /
+                - listitem [ref=f8e46]:
+                  - link "Classes" [ref=f8e47] [cursor=pointer]:
+                    - /url: /classes
+                - listitem [ref=f8e48]:
+                  - link "Schedule" [ref=f8e49] [cursor=pointer]:
+                    - /url: /book
+              - list [ref=f8e50]:
+                - listitem [ref=f8e51]:
+                  - link "Merch" [ref=f8e52] [cursor=pointer]:
+                    - /url: /merch
+                - listitem [ref=f8e53]:
+                  - link "About" [ref=f8e54] [cursor=pointer]:
+                    - /url: /about
+                - listitem [ref=f8e55]:
+                  - link "Contact" [ref=f8e56] [cursor=pointer]:
+                    - /url: /contact
+          - generic [ref=f8e57]:
+            - paragraph [ref=f8e58]: Contact
+            - list [ref=f8e59]:
+              - listitem [ref=f8e60]: Hillsborough, Manatee & Sarasota Counties, FL
+              - listitem [ref=f8e61]:
+                - link "contact@superherocpr.com" [ref=f8e62] [cursor=pointer]:
+                  - /url: mailto:contact@superherocpr.com
+            - link "View SuperHeroCPR membership with Manatee Chamber of Commerce" [ref=f8e64] [cursor=pointer]:
+              - /url: https://manateechamber.com/
+              - generic [ref=f8e65]: Proud Member of
+              - img "Manatee Chamber of Commerce" [ref=f8e66]
+              - generic [ref=f8e67]: Super Hero CPR
+        - generic [ref=f8e68]:
+          - paragraph [ref=f8e69]: © 2026 SuperHeroCPR. All rights reserved.
+          - paragraph [ref=f8e70]: American Heart Association Authorized Training Site
+  - button "Open Next.js Dev Tools" [ref=f8e76] [cursor=pointer]
+  - alert [ref=f8e80]
