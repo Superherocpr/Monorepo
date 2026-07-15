@@ -10,7 +10,7 @@
  * force enumeration of the 6-digit code space (1M combinations).
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 
 interface SessionRow {
   id: string;
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const supabase = await createClient();
+  const supabase = await createAdminClient();
 
   const body = await request.json();
   const { code } = body as { code: string };
