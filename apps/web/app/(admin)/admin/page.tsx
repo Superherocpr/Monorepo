@@ -10,6 +10,8 @@
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
+import { assignFreshAccessCode } from "@/lib/access-code";
+import { isSameBusinessDay } from "@/lib/business-time";
 import InstructorDashboard from "../_components/dashboard/InstructorDashboard";
 import type {
   TodaySession,
@@ -135,26 +137,23 @@ export default async function AdminDashboardPage() {
 
   if (!profile) redirect("/");
 
-  // Auto-generate a fresh code if none exists or the current one is > 1 hour old.
-  // Ensures the instructor always has a valid code when they open the dashboard.
-  const ONE_HOUR_MS = 60 * 60 * 1000;
+  // Auto-generate a fresh code if none exists or the current one is from a
+  // previous business day. Codes are valid for the whole Eastern calendar day
+  // (matches verify-code), so the instructor always has a working code when
+  // they open the dashboard.
   const codeIsStale =
     !profile.access_code_generated_at ||
-    Date.now() - new Date(profile.access_code_generated_at).getTime() > ONE_HOUR_MS;
+    !isSameBusinessDay(new Date(profile.access_code_generated_at), new Date());
 
   let accessCode = profile.daily_access_code ?? null;
   let accessCodeGeneratedAt = profile.access_code_generated_at ?? null;
 
   if (codeIsStale) {
-    const freshCode = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
-    const now = new Date().toISOString();
-    const { error: codeError } = await admin
-      .from("profiles")
-      .update({ daily_access_code: freshCode, access_code_generated_at: now, updated_at: now })
-      .eq("id", user.id);
-    if (!codeError) {
-      accessCode = freshCode;
-      accessCodeGeneratedAt = now;
+    // Shared helper: crypto-random code, retries on unique-index collision
+    const { data: fresh } = await assignFreshAccessCode(admin, user.id);
+    if (fresh) {
+      accessCode = fresh.code;
+      accessCodeGeneratedAt = fresh.generatedAt;
     }
   }
 

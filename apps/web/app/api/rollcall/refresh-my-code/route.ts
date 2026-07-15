@@ -9,6 +9,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
+import { assignFreshAccessCode } from "@/lib/access-code";
 
 /**
  * Regenerates the calling instructor's daily_access_code and returns the new value.
@@ -27,19 +28,14 @@ export async function POST(_request: Request) {
   const supabase = await createClient();
 
   // ── Generate and persist the new code ────────────────────────────────────
-  const newCode = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
-  const now = new Date().toISOString();
+  // Shared helper: crypto-random code, retries on unique-index collision.
+  // Updates own profile row using the authenticated session (RLS: own row).
+  const { data, error } = await assignFreshAccessCode(supabase, user.id);
 
-  // Update own profile row using the authenticated session (RLS: user can update own row)
-  const { error } = await supabase
-    .from("profiles")
-    .update({ daily_access_code: newCode, access_code_generated_at: now, updated_at: now })
-    .eq("id", user.id);
-
-  if (error) {
+  if (data === null) {
     console.error("[refresh-my-code] Update failed:", error);
     return Response.json({ error: "Failed to refresh code." }, { status: 500 });
   }
 
-  return Response.json({ code: newCode });
+  return Response.json({ code: data.code });
 }
