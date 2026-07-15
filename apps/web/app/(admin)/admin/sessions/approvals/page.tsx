@@ -38,7 +38,7 @@ export default async function ApprovalsPage() {
     .select(`
       id, starts_at, ends_at, rejection_reason, created_at,
       class_types ( name ),
-      profiles ( first_name, last_name ),
+      profiles!instructor_id ( first_name, last_name ),
       locations ( name, city, state )
     `)
     .eq("approval_status", "pending_approval")

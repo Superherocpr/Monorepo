@@ -116,6 +116,12 @@ export default function CreateSessionClient({
   const [locationList, setLocationList] = useState<LocationOption[]>(locations);
   /** Controls whether the Add Location slide-out panel is visible. */
   const [showAddLocationPanel, setShowAddLocationPanel] = useState(false);
+  /**
+   * Whether the discount field represents a percentage or a fixed dollar amount.
+   * The raw value in form.discount_percent is interpreted accordingly.
+   * On submit, fixed amounts are converted to a percentage before sending to the API.
+   */
+  const [discountType, setDiscountType] = useState<"percent" | "fixed">("percent");
 
   /**
    * Updates a single form field by name.
@@ -143,6 +149,34 @@ export default function CreateSessionClient({
     }));
     // Show the auto-filled hint below the duration and capacity fields.
     if (type) setAutoFilled(true);
+  }
+
+  /**
+   * Switches between percent and fixed-dollar discount modes, converting the
+   * current field value to the equivalent in the new mode when a class type
+   * with a known price is selected. Clears the value when conversion is not
+   * possible (no class selected or price is zero).
+   */
+  function handleDiscountTypeToggle(): void {
+    const newType = discountType === "percent" ? "fixed" : "percent";
+    const currentPrice = classTypes.find((t) => t.id === form.class_type_id)?.price ?? null;
+    const rawValue = parseFloat(form.discount_percent);
+
+    if (!isNaN(rawValue) && form.discount_percent !== "" && currentPrice !== null && currentPrice > 0) {
+      if (newType === "fixed") {
+        // percent → dollar: e.g. 25 on a $100 class → 25.00
+        const fixed = (rawValue / 100) * currentPrice;
+        setField("discount_percent", fixed % 1 === 0 ? String(fixed) : fixed.toFixed(2));
+      } else {
+        // dollar → percent: e.g. 25.00 on a $100 class → 25
+        const pct = (rawValue / currentPrice) * 100;
+        setField("discount_percent", pct % 1 === 0 ? String(pct) : parseFloat(pct.toFixed(2)).toString());
+      }
+    } else {
+      setField("discount_percent", "");
+    }
+
+    setDiscountType(newType);
   }
 
   /**
@@ -183,9 +217,41 @@ export default function CreateSessionClient({
       return;
     }
 
-    const parsedDiscount = form.discount_percent === "" ? null : parseFloat(form.discount_percent);
-    if (parsedDiscount !== null && (isNaN(parsedDiscount) || parsedDiscount < 0 || parsedDiscount > 50)) {
-      setError("Discount must be between 0% and 50%.");
+    // Resolve the class price for discount validation.
+    const classPrice = classTypes.find((t) => t.id === form.class_type_id)?.price ?? null;
+
+    let resolvedDiscountPercent: number | null = null;
+
+    if (form.discount_percent !== "") {
+      const rawDiscount = parseFloat(form.discount_percent);
+      if (isNaN(rawDiscount) || rawDiscount < 0) {
+        setError(discountType === "percent" ? "Discount must be 0% or greater." : "Discount amount must be 0 or greater.");
+        return;
+      }
+
+      if (discountType === "percent") {
+        if (rawDiscount > 50) {
+          setError("Discount cannot exceed 50% — the final price must be at least 50% of the class price.");
+          return;
+        }
+        resolvedDiscountPercent = rawDiscount;
+      } else {
+        // Fixed dollar mode: cap at 50% of the class price.
+        if (classPrice !== null && rawDiscount > classPrice * 0.5) {
+          const maxFixed = (classPrice * 0.5).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          setError(`Fixed discount cannot exceed $${maxFixed} — the final price must be at least 50% of the class price.`);
+          return;
+        }
+        // Convert to percent for the API; skip if the class has no price.
+        if (classPrice !== null && classPrice > 0) {
+          resolvedDiscountPercent = (rawDiscount / classPrice) * 100;
+        }
+      }
+    }
+
+    // Final guard: ensure the discounted price is never below 50% of the class price.
+    if (resolvedDiscountPercent !== null && resolvedDiscountPercent > 50) {
+      setError("The discount cannot bring the final price below 50% of the class price.");
       return;
     }
 
@@ -203,7 +269,7 @@ export default function CreateSessionClient({
       starts_at,
       ends_at,
       max_capacity: capacity,
-      discount_percent: parsedDiscount,
+      discount_percent: resolvedDiscountPercent,
       ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
     };
 
@@ -267,11 +333,26 @@ export default function CreateSessionClient({
   /** Base price of the currently selected class type. Null when no class type is selected. */
   const selectedClassTypePrice = classTypes.find((t) => t.id === form.class_type_id)?.price ?? null;
 
-  /** Parsed discount percentage, or null when the field is empty or invalid. */
+  /**
+   * Parsed discount percentage for preview (percent mode only).
+   * Null when the field is empty, invalid, or mode is fixed.
+   */
   const parsedDiscountPreview = (() => {
-    if (!form.discount_percent) return null;
+    if (discountType !== "percent" || !form.discount_percent) return null;
     const n = parseFloat(form.discount_percent);
     return isNaN(n) || n <= 0 || n > 50 ? null : n;
+  })();
+
+  /**
+   * Parsed fixed dollar discount for preview (fixed mode only).
+   * Null when the field is empty, invalid, exceeds 50% of class price, or mode is percent.
+   */
+  const parsedFixedPreview = (() => {
+    if (discountType !== "fixed" || !form.discount_percent) return null;
+    const n = parseFloat(form.discount_percent);
+    if (isNaN(n) || n <= 0) return null;
+    if (selectedClassTypePrice !== null && n > selectedClassTypePrice * 0.5) return null;
+    return n;
   })();
 
   /**
@@ -505,58 +586,154 @@ export default function CreateSessionClient({
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-gray-700">
-              Discount <span className="text-gray-400 font-normal">(optional, max 50%)</span>
+              Discount{" "}
+              <span className="text-gray-400 font-normal">
+                {discountType === "percent"
+                  ? "(optional, max 50%)"
+                  : selectedClassTypePrice !== null
+                    ? `(optional, max $${(selectedClassTypePrice * 0.5).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
+                    : "(optional — select a class type first)"}
+              </span>
             </label>
             {parsedDiscountPreview !== null && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
                 {parsedDiscountPreview}% OFF
               </span>
             )}
+            {parsedFixedPreview !== null && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                ${parsedFixedPreview.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} OFF
+              </span>
+            )}
           </div>
 
-          {/* Quick-pick shortcut buttons */}
+          {/* Quick-pick shortcut buttons + % / $ mode toggle */}
           <div className="flex gap-2">
-            {([10, 20, 25, 50] as const).map((pct) => (
+            {([10, 20, 25, 50] as const).map((pct) => {
+              // In fixed mode show the dollar equivalent when a class type is selected.
+              const fixedEquiv =
+                discountType === "fixed" && selectedClassTypePrice !== null
+                  ? (pct / 100) * selectedClassTypePrice
+                  : null;
+              const label =
+                fixedEquiv !== null
+                  ? `$${fixedEquiv % 1 === 0 ? fixedEquiv : fixedEquiv.toFixed(2)}`
+                  : `${pct}%`;
+              const setValue =
+                fixedEquiv !== null
+                  ? (fixedEquiv % 1 === 0 ? String(fixedEquiv) : fixedEquiv.toFixed(2))
+                  : String(pct);
+              const isSelected =
+                discountType === "fixed" && fixedEquiv !== null
+                  ? parseFloat(form.discount_percent) === fixedEquiv
+                  : form.discount_percent === String(pct);
+              const isDisabled = discountType === "fixed" && selectedClassTypePrice === null;
+
+              return (
+                <button
+                  key={pct}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => setField("discount_percent", setValue)}
+                  className={[
+                    "flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
+                    isDisabled
+                      ? "opacity-40 cursor-not-allowed bg-white text-gray-400 border-gray-200"
+                      : isSelected
+                        ? "bg-red-600 text-white border-red-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              );
+            })}
+
+            {/* % / $ pill toggle — switches discount input between percent and fixed dollar */}
+            <div className="flex rounded-lg border border-gray-300 overflow-hidden shrink-0">
               <button
-                key={pct}
                 type="button"
-                onClick={() => setField("discount_percent", String(pct))}
+                onClick={() => discountType !== "percent" && handleDiscountTypeToggle()}
                 className={[
-                  "flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
-                  form.discount_percent === String(pct)
-                    ? "bg-red-600 text-white border-red-600"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600",
+                  "px-3 py-2 text-sm font-semibold transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
+                  discountType === "percent"
+                    ? "bg-gray-800 text-white"
+                    : "bg-white text-gray-500 hover:bg-gray-50",
                 ].join(" ")}
+                title="Percentage discount"
               >
-                {pct}%
+                %
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => discountType !== "fixed" && handleDiscountTypeToggle()}
+                className={[
+                  "px-3 py-2 text-sm font-semibold transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
+                  discountType === "fixed"
+                    ? "bg-gray-800 text-white"
+                    : "bg-white text-gray-500 hover:bg-gray-50",
+                ].join(" ")}
+                title="Fixed dollar discount"
+              >
+                $
+              </button>
+            </div>
           </div>
 
-          {/* Custom percentage input */}
+          {/* Custom discount input — adapts label and constraints to the active mode */}
           <div className="flex items-center gap-2">
+            {discountType === "fixed" && (
+              <span className="text-sm text-gray-500 select-none">$</span>
+            )}
             <input
               id="cs-discount"
               type="number"
               min={0}
-              max={50}
-              step={1}
+              max={
+                discountType === "percent"
+                  ? 50
+                  : selectedClassTypePrice !== null
+                    ? selectedClassTypePrice * 0.5
+                    : undefined
+              }
+              step={discountType === "percent" ? 1 : 0.01}
               value={form.discount_percent}
               onChange={(e) => {
                 const raw = e.target.value;
-                // Allow clearing; clamp to 50 on blur, not on keystroke, so typing feels natural
-                if (raw === "" || parseFloat(raw) <= 50) {
-                  setField("discount_percent", raw);
+                if (discountType === "percent") {
+                  // Allow clearing; clamp to 50 on blur, not on keystroke, so typing feels natural.
+                  if (raw === "" || parseFloat(raw) <= 50) {
+                    setField("discount_percent", raw);
+                  }
+                } else {
+                  // Fixed mode: allow any non-negative value; enforce max on blur.
+                  if (raw === "" || parseFloat(raw) >= 0) {
+                    setField("discount_percent", raw);
+                  }
                 }
               }}
               onBlur={() => {
                 const n = parseFloat(form.discount_percent);
-                if (!isNaN(n) && n > 50) setField("discount_percent", "50");
+                if (isNaN(n)) return;
+                if (discountType === "percent" && n > 50) {
+                  setField("discount_percent", "50");
+                } else if (discountType === "fixed" && selectedClassTypePrice !== null && n > selectedClassTypePrice * 0.5) {
+                  setField("discount_percent", (selectedClassTypePrice * 0.5).toFixed(2));
+                }
               }}
-              placeholder="Custom % (0 – 50)"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder={
+                discountType === "percent"
+                  ? "Custom % (0 – 50)"
+                  : selectedClassTypePrice !== null
+                    ? `Max $${(selectedClassTypePrice * 0.5).toFixed(2)}`
+                    : "Select a class type first"
+              }
+              disabled={discountType === "fixed" && selectedClassTypePrice === null}
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:opacity-40 disabled:cursor-not-allowed"
             />
-            <span className="text-sm text-gray-500 select-none">%</span>
+            {discountType === "percent" && (
+              <span className="text-sm text-gray-500 select-none">%</span>
+            )}
             {form.discount_percent && (
               <button
                 type="button"
@@ -568,7 +745,7 @@ export default function CreateSessionClient({
             )}
           </div>
 
-          {/* Live price preview — only shown when a class type with a price is selected */}
+          {/* Live price preview — shown when a class type with a price is selected and a valid discount is entered */}
           {selectedClassTypePrice !== null && parsedDiscountPreview !== null && (
             <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
               Price per person:{" "}
@@ -581,6 +758,17 @@ export default function CreateSessionClient({
                 {selectedClassTypePrice === 0
                   ? "Free"
                   : `$${(selectedClassTypePrice * (1 - parsedDiscountPreview / 100)).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
+              </span>
+            </p>
+          )}
+          {selectedClassTypePrice !== null && parsedFixedPreview !== null && (
+            <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+              Price per person:{" "}
+              <span className="line-through text-gray-400 mr-1">
+                ${selectedClassTypePrice.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+              </span>
+              <span className="font-semibold">
+                ${(selectedClassTypePrice - parsedFixedPreview).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
               </span>
             </p>
           )}

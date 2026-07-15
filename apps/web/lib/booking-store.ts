@@ -21,6 +21,8 @@ export interface BookingStore {
   sessionDetails: {
     className: string;
     instructorName: string;
+    instructorEmail: string | null;
+    instructorPhone: string | null;
     startsAt: string;
     endsAt: string;
     locationName: string;

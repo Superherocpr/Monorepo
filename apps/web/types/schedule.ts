@@ -116,6 +116,8 @@ export interface ScheduleSession {
   profiles: {
     first_name: string;
     last_name: string;
+    email: string | null;
+    phone: string | null;
   };
   locations: {
     name: string;

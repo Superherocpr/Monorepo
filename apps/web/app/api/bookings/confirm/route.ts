@@ -22,6 +22,7 @@ import { bookingConfirmationEmail } from "@/lib/emails";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
 import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
+import { maybeSendAssistantReminder } from "@/lib/assistant-reminder";
 
 /** Acceptable rounding tolerance when comparing client/server prices. */
 const PRICE_TOLERANCE = 0.01;
@@ -245,6 +246,13 @@ export async function POST(request: Request) {
     );
   }
 
+  // Best-effort: notify the instructor if this booking pushed a BLS/ACLS
+  // class to the assistant-required threshold (9 paid students).
+  const assistantBaseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
+  await maybeSendAssistantReminder(supabase, sessionId, assistantBaseUrl).catch((err: unknown) => {
+    console.error("[bookings/confirm] Assistant reminder check failed (non-fatal):", err);
+  });
+
   // ── Step 4: Create payment + instructor earning records ─────────────────
   // All online booking funds now land in the SuperHeroCPR business PayPal
   // account. The instructor receives their share through the payout system.
@@ -310,6 +318,13 @@ export async function POST(request: Request) {
   ) {
     const resend = new Resend(process.env.RESEND_API_KEY);
 
+    // Fetch instructor contact details server-side — never trust client-supplied values.
+    const { data: instructorProfile } = await supabase
+      .from("profiles")
+      .select("first_name, last_name, email, phone")
+      .eq("id", instructorId)
+      .maybeSingle();
+
     const { subject, html } = bookingConfirmationEmail({
       firstName: typeof customerFirstName === "string" ? customerFirstName : null,
       className: typeof className === "string" ? className : "CPR Class",
@@ -322,7 +337,11 @@ export async function POST(request: Request) {
       amount: expectedPrice,
       paymentProcessor,
       transactionId: paypalTransactionId,
-      instructorName: null,
+      instructorName: instructorProfile
+        ? `${instructorProfile.first_name} ${instructorProfile.last_name}`
+        : null,
+      instructorEmail: instructorProfile?.email ?? null,
+      instructorPhone: instructorProfile?.phone ?? null,
     });
 
     await resend.emails

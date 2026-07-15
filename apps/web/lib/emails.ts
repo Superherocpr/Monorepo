@@ -955,10 +955,12 @@ export function invoiceResendEmail({
 
 /**
  * Sent to a customer immediately after their online booking payment is captured.
- * Includes class details, location, amount paid, and transaction ID.
- * Triggered by: POST /api/bookings/confirm
+ * Includes class details, instructor contact, location, amount paid, and transaction ID.
+ * Triggered by: POST /api/bookings/confirm and /api/bookings/confirm-free
  * @param firstName         - Customer's first name (falls back to "there" if null).
  * @param instructorName    - Instructor's full name.
+ * @param instructorEmail   - Instructor's email address (null if unavailable).
+ * @param instructorPhone   - Instructor's phone number (null if unavailable).
  * @param className         - Name of the booked class.
  * @param startsAt          - ISO date-time string for the class start.
  * @param locationName      - Venue name.
@@ -983,6 +985,8 @@ export function bookingConfirmationEmail({
   paymentProcessor,
   transactionId,
   instructorName,
+  instructorEmail,
+  instructorPhone,
 }: {
   firstName: string | null;
   className: string;
@@ -996,6 +1000,8 @@ export function bookingConfirmationEmail({
   paymentProcessor: string;
   transactionId: string | null;
   instructorName?: string | null;
+  instructorEmail?: string | null;
+  instructorPhone?: string | null;
 }): EmailContent {
   const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
     weekday: "long",
@@ -1011,8 +1017,19 @@ export function bookingConfirmationEmail({
   });
 
   const safeInstructorName = instructorName ? escapeHtml(instructorName.trim()) : null;
-  const instructorRow = safeInstructorName
-    ? `<tr><td><strong>Instructor:</strong></td><td>${safeInstructorName}</td></tr>`
+  const safeInstructorEmail = instructorEmail ? escapeHtml(instructorEmail.trim()) : null;
+  const safeInstructorPhone = instructorPhone ? escapeHtml(instructorPhone.trim()) : null;
+
+  const instructorRows = safeInstructorName
+    ? [
+        `<tr><td><strong>Instructor:</strong></td><td>${safeInstructorName}</td></tr>`,
+        safeInstructorEmail
+          ? `<tr><td><strong>Instructor email:</strong></td><td><a href="mailto:${safeInstructorEmail}" style="color:#c0392b">${safeInstructorEmail}</a></td></tr>`
+          : "",
+        safeInstructorPhone
+          ? `<tr><td><strong>Instructor phone:</strong></td><td>${safeInstructorPhone}</td></tr>`
+          : "",
+      ].join("")
     : "";
 
   return {
@@ -1029,7 +1046,7 @@ export function bookingConfirmationEmail({
           <td style="vertical-align:top"><strong>Location:</strong></td>
           <td>${locationName}<br>${locationAddress}<br>${locationCity}, ${locationState} ${locationZip}</td>
         </tr>
-        ${instructorRow}
+        ${instructorRows}
         <tr><td><strong>Amount paid:</strong></td><td>$${amount.toFixed(2)}</td></tr>
         <tr><td><strong>Payment processed by:</strong></td><td>${paymentProcessor}</td></tr>
         <tr><td><strong>Transaction ID:</strong></td><td>${transactionId ?? "N/A"}</td></tr>
@@ -2339,6 +2356,81 @@ export function unclaimedOpportunityEscalationEmail({
       <p style="font-size:13px;color:#6b7280;">
         Nothing happens automatically here. Review each session and decide whether to keep waiting,
         cancel it outright, or manually assign someone.
+      </p>
+    `),
+  };
+}
+
+// ── 28. Class Assistant — Enrollment threshold reached, notify instructor ──────
+
+/**
+ * Sent once to the assigned instructor when a BLS/ACLS class reaches 9 paid
+ * students and no assistant has been assigned yet. One-time send — the
+ * caller stamps class_sessions.assistant_reminder_sent_at to guarantee this
+ * never fires twice for the same session.
+ * Triggered by: lib/assistant-reminder.ts, called from
+ * POST /api/bookings/confirm and POST /api/bookings/confirm-free after the
+ * booking that crosses the threshold is created.
+ * @param instructorName - Full name of the assigned instructor.
+ * @param className      - Name of the class type (e.g. "BLS Provider").
+ * @param sessionDate    - ISO datetime string of the session start.
+ * @param studentCount   - Current paid enrollment count.
+ * @param sessionId      - UUID of the class_sessions row, for the admin link.
+ * @param baseUrl        - App base URL for constructing the session link.
+ */
+export function assistantNeededEmail({
+  instructorName,
+  className,
+  sessionDate,
+  studentCount,
+  sessionId,
+  baseUrl,
+}: {
+  instructorName: string;
+  className: string;
+  sessionDate: string;
+  studentCount: number;
+  sessionId: string;
+  baseUrl: string;
+}): EmailContent {
+  const safeInstructor = escapeHtml(instructorName.trim());
+  const safeClass = escapeHtml(className.trim());
+
+  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+  });
+
+  const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
+
+  return {
+    subject: `Assistant needed — ${safeClass} on ${formattedDate}`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">You Need an Assistant for This Class</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Hi ${safeInstructor},</p>
+
+      <p style="font-size:14px;color:#374151;margin-bottom:16px;">
+        Your <strong>${safeClass}</strong> class on <strong>${formattedDate}</strong> now has
+        <strong>${studentCount} paid students</strong>. Classes of this size require an in-room
+        assistant — please arrange one before class day.
+      </p>
+
+      <p style="margin:24px 0;">
+        <a href="${sessionLink}"
+           style="display:inline-block;background:#dc2626;color:white;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:700;">
+          Add an Assistant →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        You can assign another instructor from the dropdown, or enter the name of someone
+        outside the platform. The assistant is for documentation only and does not affect payout.
       </p>
     `),
   };

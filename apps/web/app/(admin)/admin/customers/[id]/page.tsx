@@ -61,7 +61,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           id, starts_at, ends_at, status,
           class_types ( name ),
           locations ( name, city, state ),
-          profiles ( first_name, last_name )
+          profiles!instructor_id ( first_name, last_name )
         ),
         payments ( id, amount, status, payment_type, created_at )
       `

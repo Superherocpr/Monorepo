@@ -16,6 +16,7 @@ import {
   approveSession,
   rejectSession,
   updateSession,
+  setSessionAssistant,
   type SessionEditFields,
 } from "@/app/(admin)/admin/sessions/[id]/actions";
 
@@ -95,8 +96,19 @@ export interface SessionDetailData {
   /** Null until an instructor accepts a customer-requested session. */
   instructor_id: string | null;
   location_id: string;
-  class_types: { id: string; name: string; price: number; duration_minutes: number } | null;
+  /** Platform instructor assigned as assistant. Mutually exclusive with assistant_name. */
+  assistant_instructor_id: string | null;
+  /** Free-text assistant name, for someone outside the platform. Mutually exclusive with assistant_instructor_id. */
+  assistant_name: string | null;
+  class_types: {
+    id: string;
+    name: string;
+    price: number;
+    duration_minutes: number;
+    requires_assistant_at_capacity: boolean;
+  } | null;
   instructor: { id: string; first_name: string; last_name: string } | null;
+  assistant_instructor: { id: string; first_name: string; last_name: string } | null;
   locations: {
     id: string;
     name: string;
@@ -201,21 +213,6 @@ function approvalStatusLabel(status: SessionApprovalStatus): string {
     rejected: "Rejected",
   };
   return map[status] ?? status;
-}
-
-/**
- * Returns Tailwind classes for a booking source badge.
- * @param source - The booking_source value (online, invoice, rollcall, roster, manual).
- */
-function sourceBadgeClass(source: string): string {
-  const map: Record<string, string> = {
-    online: "bg-blue-100 text-blue-700",
-    invoice: "bg-purple-100 text-purple-700",
-    rollcall: "bg-amber-100 text-amber-700",
-    roster: "bg-green-100 text-green-700",
-    manual: "bg-gray-100 text-gray-700",
-  };
-  return map[source] ?? "bg-gray-100 text-gray-700";
 }
 
 /**
@@ -349,6 +346,18 @@ export default function SessionDetailClient({
     session.discount_percent != null ? String(session.discount_percent) : ""
   );
 
+  // ── Assistant assignment state (documentation only, no pay impact) ────────
+
+  const [assistantMode, setAssistantMode] = useState<"instructor" | "name">(
+    session.assistant_name ? "name" : "instructor"
+  );
+  const [assistantInstructorId, setAssistantInstructorId] = useState(
+    session.assistant_instructor_id ?? ""
+  );
+  const [assistantNameInput, setAssistantNameInput] = useState(session.assistant_name ?? "");
+  const [isSavingAssistant, setIsSavingAssistant] = useState(false);
+  const [assistantError, setAssistantError] = useState<string | null>(null);
+
   // ── Derived values ────────────────────────────────────────────────────────
 
   /** Non-cancelled bookings count */
@@ -407,6 +416,20 @@ export default function SessionDetailClient({
       }
     }
     return map;
+  }, [session.roster_records]);
+
+  /**
+   * Set of lowercase emails whose roster_record has confirmed=true.
+   * confirmed is only set when the student actively taps "This is correct"
+   * (or saves edits) on the rollcall info screen — not from roster imports
+   * or the password sign-in path.
+   */
+  const verifiedEmailSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of session.roster_records) {
+      if (r.confirmed && r.email) set.add(r.email.toLowerCase());
+    }
+    return set;
   }, [session.roster_records]);
 
   /** Students who have been graded */
@@ -597,6 +620,66 @@ export default function SessionDetailClient({
     (isInstructor &&
       isOwnSession &&
       session.approval_status !== "approved");
+
+  // ── Assistant assignment (documentation only, no pay impact) ───────────────
+
+  /** Assistant may be managed regardless of approval status — it's not part of the reviewed edit fields. */
+  const canManageAssistant = isManager || (isInstructor && isOwnSession);
+  const hasAssistant = session.assistant_instructor_id !== null || session.assistant_name !== null;
+  const ASSISTANT_THRESHOLD = 9;
+  const needsAssistant =
+    session.class_types?.requires_assistant_at_capacity === true &&
+    activeBookings >= ASSISTANT_THRESHOLD &&
+    !hasAssistant;
+  /** Instructors selectable as assistant — excludes whoever is already teaching the session. */
+  const assistantInstructorOptions = instructors.filter((inst) => inst.id !== session.instructor_id);
+
+  /**
+   * Saves the assistant assignment (platform instructor or free-text name).
+   * Side effect: setSessionAssistant server action, page refresh on success.
+   */
+  async function handleSaveAssistant() {
+    setIsSavingAssistant(true);
+    setAssistantError(null);
+    try {
+      const result = await setSessionAssistant(session.id, {
+        instructorId: assistantMode === "instructor" ? assistantInstructorId || null : null,
+        name: assistantMode === "name" ? assistantNameInput || null : null,
+      });
+      if (result) {
+        setAssistantError(result);
+        return;
+      }
+      router.refresh();
+    } catch {
+      setAssistantError("Network error. Please try again.");
+    } finally {
+      setIsSavingAssistant(false);
+    }
+  }
+
+  /**
+   * Clears the current assistant assignment.
+   * Side effect: setSessionAssistant server action, page refresh on success.
+   */
+  async function handleClearAssistant() {
+    setIsSavingAssistant(true);
+    setAssistantError(null);
+    try {
+      const result = await setSessionAssistant(session.id, { instructorId: null, name: null });
+      if (result) {
+        setAssistantError(result);
+        return;
+      }
+      setAssistantInstructorId("");
+      setAssistantNameInput("");
+      router.refresh();
+    } catch {
+      setAssistantError("Network error. Please try again.");
+    } finally {
+      setIsSavingAssistant(false);
+    }
+  }
 
   // ── Accept to Teach (customer-requested sessions with no instructor yet) ───
 
@@ -822,6 +905,24 @@ export default function SessionDetailClient({
         </div>
       )}
 
+      {/* ── Assistant needed banner (identical copy for all roles, stays until an assistant is added) ── */}
+      {needsAssistant && (
+        <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-5 flex items-start gap-3">
+          <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+          </svg>
+          <div>
+            <h2 className="text-base font-bold text-amber-900 mb-1">
+              This Class Needs an Assistant
+            </h2>
+            <p className="text-sm text-amber-800">
+              This class has {activeBookings} paid students. Classes of this size require an
+              in-room assistant — add one below before class day.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Already assigned to me banner ── */}
       {isCustomerRequested && isAssignedToMe && (
         <div className="bg-green-50 border border-green-300 rounded-xl p-4 flex items-center gap-3">
@@ -954,7 +1055,108 @@ export default function SessionDetailClient({
               </Link>
             </div>
           )}
+          {session.class_types?.requires_assistant_at_capacity && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Assistant
+              </p>
+              <p className="text-gray-800 mt-0.5">
+                {session.assistant_instructor
+                  ? `${session.assistant_instructor.first_name} ${session.assistant_instructor.last_name}`
+                  : session.assistant_name
+                    ? session.assistant_name
+                    : "Not assigned"}
+              </p>
+            </div>
+          )}
         </div>
+
+        {/* ── Assistant assignment (documentation only, no pay impact) ── */}
+        {canManageAssistant && session.class_types?.requires_assistant_at_capacity && (
+          <div className="border border-gray-200 rounded-md p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-800">Class Assistant</p>
+            <p className="text-xs text-gray-500">
+              For documentation only — does not affect instructor pay. Assign a platform
+              instructor or enter the name of someone outside the platform.
+            </p>
+
+            {hasAssistant ? (
+              <div className="flex items-center justify-between gap-3 bg-gray-50 rounded-md px-3 py-2">
+                <p className="text-sm text-gray-800">
+                  {session.assistant_instructor
+                    ? `${session.assistant_instructor.first_name} ${session.assistant_instructor.last_name}`
+                    : session.assistant_name}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleClearAssistant}
+                  disabled={isSavingAssistant}
+                  className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex gap-4 text-xs">
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      checked={assistantMode === "instructor"}
+                      onChange={() => setAssistantMode("instructor")}
+                    />
+                    Platform instructor
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      checked={assistantMode === "name"}
+                      onChange={() => setAssistantMode("name")}
+                    />
+                    Name only
+                  </label>
+                </div>
+
+                {assistantMode === "instructor" ? (
+                  <select
+                    value={assistantInstructorId}
+                    onChange={(e) => setAssistantInstructorId(e.target.value)}
+                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  >
+                    <option value="">Select an instructor…</option>
+                    {assistantInstructorOptions.map((inst) => (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.first_name} {inst.last_name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={assistantNameInput}
+                    onChange={(e) => setAssistantNameInput(e.target.value)}
+                    placeholder="Assistant's name"
+                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                )}
+
+                {assistantError && <p className="text-xs text-red-700 font-medium">{assistantError}</p>}
+
+                <button
+                  type="button"
+                  onClick={handleSaveAssistant}
+                  disabled={
+                    isSavingAssistant ||
+                    (assistantMode === "instructor" ? !assistantInstructorId : !assistantNameInput.trim())
+                  }
+                  className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingAssistant ? "Saving…" : "Add Assistant"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Rejection reason — shown when session is rejected */}
         {session.approval_status === "rejected" && session.rejection_reason && (
@@ -1412,10 +1614,7 @@ export default function SessionDetailClient({
                         Email
                       </th>
                       <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Source
-                      </th>
-                      <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Payment
+                        Verified
                       </th>
                       <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Grade
@@ -1437,14 +1636,17 @@ export default function SessionDetailClient({
                             {b.profiles?.email ?? "-"}
                           </td>
                           <td className="px-4 py-2.5">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${sourceBadgeClass(b.booking_source)}`}
-                            >
-                              {b.booking_source}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-gray-600">
-                            {b.payments[0]?.status ?? "-"}
+                            {verifiedEmailSet.has(
+                              b.profiles?.email?.toLowerCase() ?? ""
+                            ) ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">
+                                YES
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">
+                                NO
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-2.5 text-gray-600">
                             {/* Prefer grade from the roster_record (where the
@@ -1467,11 +1669,16 @@ export default function SessionDetailClient({
                           {r.email ?? "-"}
                         </td>
                         <td className="px-4 py-2.5">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-                            roster
-                          </span>
+                          {r.confirmed ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">
+                              YES
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">
+                              NO
+                            </span>
+                          )}
                         </td>
-                        <td className="px-4 py-2.5 text-gray-400">-</td>
                         <td className="px-4 py-2.5 text-gray-600">
                           {r.grade ?? "-"}
                         </td>

@@ -19,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import { bookingConfirmationEmail } from "@/lib/emails";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
+import { maybeSendAssistantReminder } from "@/lib/assistant-reminder";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -145,6 +146,13 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ success: false, error: "Failed to create booking." }, { status: 500 });
   }
 
+  // Best-effort: notify the instructor if this booking pushed a BLS/ACLS
+  // class to the assistant-required threshold (9 paid students).
+  const assistantBaseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
+  await maybeSendAssistantReminder(supabase, sessionId, assistantBaseUrl).catch((err: unknown) => {
+    console.error("[bookings/confirm-free] Assistant reminder check failed (non-fatal):", err);
+  });
+
   // ── Step 3: Create $0 payment record ─────────────────────────────────────
   const routingNote = `Free booking via promo code ${promoResult.code} (${dbPrice.toFixed(2)} discount)`;
 
@@ -175,6 +183,13 @@ export async function POST(request: Request): Promise<Response> {
   ) {
     const resend = new Resend(process.env.RESEND_API_KEY);
 
+    // Fetch instructor contact details server-side — never trust client-supplied values.
+    const { data: instructorProfile } = await supabase
+      .from("profiles")
+      .select("first_name, last_name, email, phone")
+      .eq("id", instructorId)
+      .maybeSingle();
+
     const { subject, html } = bookingConfirmationEmail({
       firstName: typeof customerFirstName === "string" ? customerFirstName : null,
       className: typeof className === "string" ? className : "CPR Class",
@@ -188,7 +203,11 @@ export async function POST(request: Request): Promise<Response> {
       // "SuperHeroCPR via promo code XYZ" lets the customer see how they paid $0
       paymentProcessor: `Promo code ${promoResult.code}`,
       transactionId: null,
-      instructorName: null,
+      instructorName: instructorProfile
+        ? `${instructorProfile.first_name} ${instructorProfile.last_name}`
+        : null,
+      instructorEmail: instructorProfile?.email ?? null,
+      instructorPhone: instructorProfile?.phone ?? null,
     });
 
     await resend.emails
