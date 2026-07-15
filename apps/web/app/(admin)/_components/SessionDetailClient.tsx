@@ -216,21 +216,6 @@ function approvalStatusLabel(status: SessionApprovalStatus): string {
 }
 
 /**
- * Returns Tailwind classes for a booking source badge.
- * @param source - The booking_source value (online, invoice, rollcall, roster, manual).
- */
-function sourceBadgeClass(source: string): string {
-  const map: Record<string, string> = {
-    online: "bg-blue-100 text-blue-700",
-    invoice: "bg-purple-100 text-purple-700",
-    rollcall: "bg-amber-100 text-amber-700",
-    roster: "bg-green-100 text-green-700",
-    manual: "bg-gray-100 text-gray-700",
-  };
-  return map[source] ?? "bg-gray-100 text-gray-700";
-}
-
-/**
  * Returns Tailwind classes for an invoice status badge.
  * @param status - The invoice status value (sent, paid, cancelled).
  */
@@ -431,6 +416,20 @@ export default function SessionDetailClient({
       }
     }
     return map;
+  }, [session.roster_records]);
+
+  /**
+   * Set of lowercase emails whose roster_record has confirmed=true.
+   * confirmed is only set when the student actively taps "This is correct"
+   * (or saves edits) on the rollcall info screen — not from roster imports
+   * or the password sign-in path.
+   */
+  const verifiedEmailSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of session.roster_records) {
+      if (r.confirmed && r.email) set.add(r.email.toLowerCase());
+    }
+    return set;
   }, [session.roster_records]);
 
   /** Students who have been graded */
@@ -1615,10 +1614,7 @@ export default function SessionDetailClient({
                         Email
                       </th>
                       <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Source
-                      </th>
-                      <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Payment
+                        Verified
                       </th>
                       <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Grade
@@ -1640,14 +1636,17 @@ export default function SessionDetailClient({
                             {b.profiles?.email ?? "-"}
                           </td>
                           <td className="px-4 py-2.5">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${sourceBadgeClass(b.booking_source)}`}
-                            >
-                              {b.booking_source}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-gray-600">
-                            {b.payments[0]?.status ?? "-"}
+                            {verifiedEmailSet.has(
+                              b.profiles?.email?.toLowerCase() ?? ""
+                            ) ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">
+                                YES
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">
+                                NO
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-2.5 text-gray-600">
                             {/* Prefer grade from the roster_record (where the
@@ -1670,11 +1669,16 @@ export default function SessionDetailClient({
                           {r.email ?? "-"}
                         </td>
                         <td className="px-4 py-2.5">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-                            roster
-                          </span>
+                          {r.confirmed ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">
+                              YES
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">
+                              NO
+                            </span>
+                          )}
                         </td>
-                        <td className="px-4 py-2.5 text-gray-400">-</td>
                         <td className="px-4 py-2.5 text-gray-600">
                           {r.grade ?? "-"}
                         </td>
