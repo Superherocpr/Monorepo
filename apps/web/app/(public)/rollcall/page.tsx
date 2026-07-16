@@ -218,18 +218,32 @@ export default function RollcallPage() {
     codeRef.current?.focus();
   }, []);
 
-  // If the URL contains ?code=XXXXXX (e.g. from a QR scan), auto-submit it
-  // so the student skips typing and goes straight to verification.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlCode = params.get("code");
-    if (urlCode && /^\d{6}$/.test(urlCode)) {
-      void handleCodeChange(urlCode);
+  /**
+   * Fetches the enrolled student list for a given session and stores it in
+   * state so step 3 can render the roster picker.
+   * @param session - the session to load students for
+   */
+  async function loadStudents(session: RollcallSession) {
+    setStudentsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/rollcall/session-students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: session.id }),
+      });
+      if (!res.ok) {
+        setError("Could not load the class roster. Please try again.");
+        return;
+      }
+      const result = (await res.json()) as { students: StudentSummary[] };
+      setStudents(result.students);
+    } catch {
+      setError("Something went wrong loading the class roster.");
+    } finally {
+      setStudentsLoading(false);
     }
-  // handleCodeChange is defined below — intentionally not in the dep array;
-  // this must only fire once on mount, not on every re-render.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }
 
   // ── Step 1: Verify access code ────────────────────────────────────────────
 
@@ -281,7 +295,19 @@ export default function RollcallPage() {
       setInstructorName(result.instructorName);
       setSessions(result.sessions);
 
-      if (result.sessions.length === 1) {
+      // A QR scan lands here with ?session=<id> — if it matches one of
+      // today's sessions, select it directly so the student skips the
+      // session picker entirely.
+      const urlSessionId = new URLSearchParams(window.location.search).get("session");
+      const qrSession = urlSessionId
+        ? result.sessions.find((s) => s.id === urlSessionId)
+        : undefined;
+
+      if (qrSession) {
+        setSelectedSession(qrSession);
+        await loadStudents(qrSession);
+        setStep(3);
+      } else if (result.sessions.length === 1) {
         // Only one session today — load the roster and skip session selection
         const session = result.sessions[0];
         setSelectedSession(session);
@@ -298,6 +324,20 @@ export default function RollcallPage() {
     }
   }
 
+  // If the URL contains ?code=XXXXXX (e.g. from a QR scan), auto-submit it
+  // so the student skips typing and goes straight to verification.
+  // Intentionally mount-only: re-running on later renders would clobber a
+  // student's in-progress flow with the URL code. Deferred a tick so the
+  // submit doesn't set state synchronously inside the effect.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlCode = params.get("code");
+    if (!urlCode || !/^\d{6}$/.test(urlCode)) return;
+    const timer = setTimeout(() => void handleCodeChange(urlCode), 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Step 2: Select session ────────────────────────────────────────────────
 
   /**
@@ -308,33 +348,6 @@ export default function RollcallPage() {
     setSelectedSession(session);
     await loadStudents(session);
     setStep(3);
-  }
-
-  /**
-   * Fetches the enrolled student list for a given session and stores it in
-   * state so step 3 can render the roster picker.
-   * @param session - the session to load students for
-   */
-  async function loadStudents(session: RollcallSession) {
-    setStudentsLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/rollcall/session-students", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id }),
-      });
-      if (!res.ok) {
-        setError("Could not load the class roster. Please try again.");
-        return;
-      }
-      const result = (await res.json()) as { students: StudentSummary[] };
-      setStudents(result.students);
-    } catch {
-      setError("Something went wrong loading the class roster.");
-    } finally {
-      setStudentsLoading(false);
-    }
   }
 
   // ── Step 3: Pick your name ────────────────────────────────────────────────

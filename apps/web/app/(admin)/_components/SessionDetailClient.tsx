@@ -24,7 +24,6 @@ import {
   setSessionAssistant,
   type SessionEditFields,
 } from "@/app/(admin)/admin/sessions/[id]/actions";
-import RollcallDisplayModal from "@/app/(admin)/_components/RollcallDisplayModal";
 
 // ─── Exported types (imported by the server component) ────────────────────────
 
@@ -340,7 +339,6 @@ export default function SessionDetailClient({
 
   // ── UI state ──────────────────────────────────────────────────────────────
 
-  const [showQrModal, setShowQrModal] = useState(false);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showApproveEditWarning, setShowApproveEditWarning] = useState(false);
@@ -1481,6 +1479,20 @@ export default function SessionDetailClient({
               </button>
             )}
 
+            {/* Show QR Page — classroom rollcall display. Own sessions only:
+                the display's refresh action regenerates the viewer's own code. */}
+            {isOwnSession &&
+              session.approval_status === "approved" &&
+              (session.status === "scheduled" ||
+                session.status === "in_progress") && (
+                <Link
+                  href={`/admin/sessions/${session.id}/checkin`}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 transition-colors"
+                >
+                  Show QR Page
+                </Link>
+              )}
+
             {/* Edit button */}
             {canEdit && (
               <button
@@ -1629,26 +1641,11 @@ export default function SessionDetailClient({
               </div>
             )}
 
-            {/* Rollcall info note + QR button */}
-            <div className="px-6 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-4">
-              <p className="text-xs text-gray-500">
-                Students register via rollcall at superherocpr.com/rollcall using
-                the instructor&apos;s daily class code.
-              </p>
-              {isOwnSession && (
-                <button
-                  type="button"
-                  onClick={() => setShowQrModal(true)}
-                  className="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700 underline transition-colors"
-                >
-                  Show QR
-                </button>
-              )}
+            {/* Rollcall info note */}
+            <div className="px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
+              Students register via rollcall at superherocpr.com/rollcall using
+              the instructor&apos;s daily class code.
             </div>
-
-            {showQrModal && (
-              <RollcallDisplayModal onClose={() => setShowQrModal(false)} />
-            )}
 
             {/* Students table */}
             {totalStudents === 0 ? (
