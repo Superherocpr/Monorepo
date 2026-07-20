@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import type { ClassType, CertTypeOption } from "../page";
+import type { ClassType, CertTypeOption, Addon } from "../page";
 
 interface ClassTypePanelProps {
   open: boolean;
@@ -18,6 +18,8 @@ interface ClassTypePanelProps {
   classType: ClassType | null;
   /** All active cert types — used to populate the linked cert type dropdown. */
   certTypeOptions: CertTypeOption[];
+  /** All add-ons in the catalog — used to populate the eligibility checklist. */
+  addonOptions: Addon[];
   onClose: () => void;
   /** Called with a success message after a successful save. */
   onSaved: (message: string) => void;
@@ -44,6 +46,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
   open,
   classType,
   certTypeOptions,
+  addonOptions,
   onClose,
   onSaved,
   onError,
@@ -58,6 +61,8 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
   const [active, setActive] = useState(true);
   // UUID of the linked cert type, or empty string for none
   const [certTypeId, setCertTypeId] = useState("");
+  // IDs of add-ons eligible for this class type
+  const [addonIds, setAddonIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const firstInputRef = useRef<HTMLInputElement>(null);
@@ -74,6 +79,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
         setPrice(String(classType.price));
         setActive(classType.active);
         setCertTypeId(classType.cert_type_id ?? "");
+        setAddonIds(classType.addon_ids);
       } else {
         setName("");
         setDescription("");
@@ -82,6 +88,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
         setPrice("");
         setActive(true);
         setCertTypeId("");
+        setAddonIds([]);
       }
       setTimeout(() => firstInputRef.current?.focus(), 50);
     }
@@ -159,6 +166,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
       active,
       // Send null when no cert type selected so the DB column is explicitly cleared
       cert_type_id: certTypeId || null,
+      addon_ids: addonIds,
     };
 
     setSubmitting(true);
@@ -189,6 +197,13 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  /** Adds or removes an addon ID from the selected set. */
+  function toggleAddon(id: string) {
+    setAddonIds((prev) =>
+      prev.includes(id) ? prev.filter((existing) => existing !== id) : [...prev, id]
+    );
   }
 
   if (!open) return null;
@@ -377,6 +392,43 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
                 <p className="mt-1 text-xs text-gray-400">
                   The AHA eCard that students earn when they complete this class.
                 </p>
+              </div>
+            )}
+
+            {/* Add-on eligibility */}
+            {addonOptions.length > 0 && (
+              <div>
+                <p className="block text-sm font-semibold text-gray-700 mb-1">
+                  Add-ons{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
+                </p>
+                <p className="text-xs text-gray-400 mb-2">
+                  Which add-ons instructors may offer on sessions of this class type.
+                </p>
+                <div className="space-y-2 border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto">
+                  {addonOptions
+                    .filter((a) => a.active || addonIds.includes(a.id))
+                    .map((a) => (
+                      <label
+                        key={a.id}
+                        className="flex items-center gap-2 text-sm text-gray-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={addonIds.includes(a.id)}
+                          onChange={() => toggleAddon(a.id)}
+                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                        <span>
+                          {a.name}{" "}
+                          <span className="text-gray-400">
+                            (${a.price.toFixed(2)})
+                            {!a.active && " — inactive"}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                </div>
               </div>
             )}
           </div>

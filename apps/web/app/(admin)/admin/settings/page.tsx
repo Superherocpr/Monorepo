@@ -37,12 +37,23 @@ export interface ClassType {
   active: boolean;
   /** FK to cert_types.id — nullable for non-certifying sessions. */
   cert_type_id: string | null;
+  /** IDs of addons currently assigned to this class type via addon_class_types. */
+  addon_ids: string[];
 }
 
 /** A minimal cert type row used to populate the cert type dropdown in class type editing. */
 export interface CertTypeOption {
   id: string;
   name: string;
+}
+
+/** An add-on row from the addons table. */
+export interface Addon {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  active: boolean;
 }
 
 /** A preset grade row from the preset_grades table. */
@@ -161,33 +172,68 @@ export default async function SettingsPage({
 
   // ── Super admin view: full settings panel ────────────────────────────────
 
-  // Fetch class types, preset grades, bookmarklet status,
-  // and locations in parallel
-  const [{ data: classTypes }, { data: certTypeRows }, { data: presetGrades }, { data: locationRaw }] = await Promise.all([
-    admin
-      .from("class_types")
-      .select("id, name, description, duration_minutes, max_capacity, price, active, cert_type_id")
-      .order("name"),
-    // Cert types used to populate the linked cert dropdown in the class type add/edit panel.
-    // Fetched separately from the certifications page so settings page is self-contained.
-    admin
-      .from("cert_types")
-      .select("id, name")
-      .eq("active", true)
-      .order("name"),
-    admin
-      .from("preset_grades")
-      .select("id, value, label")
-      .order("value"),
-    admin
-      .from("locations")
-      .select(
-        `id, name, address, city, state, zip, notes, is_home_base, created_at,
+  // Fetch class types, preset grades, bookmarklet status, and locations in parallel.
+  // class_types is fetched without the addon_class_types join here — kept in its own
+  // defensive fetch below, so the Class Types list can't be broken by migration 0035
+  // not being applied yet (same reasoning as the payout settings fallback below).
+  const [{ data: classTypeRows }, { data: certTypeRows }, { data: presetGrades }, { data: locationRaw }] =
+    await Promise.all([
+      admin
+        .from("class_types")
+        .select("id, name, description, duration_minutes, max_capacity, price, active, cert_type_id")
+        .order("name"),
+      // Cert types used to populate the linked cert dropdown in the class type add/edit panel.
+      // Fetched separately from the certifications page so settings page is self-contained.
+      admin
+        .from("cert_types")
+        .select("id, name")
+        .eq("active", true)
+        .order("name"),
+      admin
+        .from("preset_grades")
+        .select("id, value, label")
+        .order("value"),
+      admin
+        .from("locations")
+        .select(
+          `id, name, address, city, state, zip, notes, is_home_base, created_at,
          class_sessions ( starts_at )`
-      )
-      .order("is_home_base", { ascending: false })
-      .order("name", { ascending: true }),
-  ]);
+        )
+        .order("is_home_base", { ascending: false })
+        .order("name", { ascending: true }),
+    ]);
+
+  // Add-on catalog + per-class-type eligibility (migration 0035). Fetched separately and
+  // defensively — if the migration hasn't been applied yet, fall back to empty so the rest
+  // of the settings page still renders.
+  let addons: Addon[] = [];
+  let addonIdsByClassType = new Map<string, string[]>();
+  try {
+    const [{ data: addonRows }, { data: junctionRows }] = await Promise.all([
+      admin.from("addons").select("id, name, description, price, active").order("name"),
+      admin.from("addon_class_types").select("addon_id, class_type_id"),
+    ]);
+    addons = (addonRows ?? []) as Addon[];
+    const byClassType = new Map<string, string[]>();
+    for (const j of (junctionRows ?? []) as { addon_id: string; class_type_id: string }[]) {
+      byClassType.set(j.class_type_id, [...(byClassType.get(j.class_type_id) ?? []), j.addon_id]);
+    }
+    addonIdsByClassType = byClassType;
+  } catch {
+    // Suppress — defaults above are safe
+  }
+
+  const classTypes: ClassType[] = (classTypeRows ?? []).map((ct) => ({
+    id: ct.id,
+    name: ct.name,
+    description: ct.description,
+    duration_minutes: ct.duration_minutes,
+    max_capacity: ct.max_capacity,
+    price: ct.price,
+    active: ct.active,
+    cert_type_id: ct.cert_type_id,
+    addon_ids: addonIdsByClassType.get(ct.id) ?? [],
+  }));
 
   // Map raw locations rows into the shape LocationsClient expects
   const locations: LocationWithCount[] = (locationRaw ?? []).map((loc) => {
@@ -262,8 +308,9 @@ export default async function SettingsPage({
 
   return (
     <SettingsClient
-      classTypes={(classTypes ?? []) as ClassType[]}
+      classTypes={classTypes}
       certTypeOptions={(certTypeRows ?? []) as CertTypeOption[]}
+      addons={addons}
       presetGrades={(presetGrades ?? []) as PresetGrade[]}
       zohoConnected={Boolean(zohoAccountId && zohoRefreshToken)}
       zohoEmail={zohoEmail}

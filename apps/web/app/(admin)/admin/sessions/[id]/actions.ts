@@ -252,3 +252,71 @@ export async function setSessionAssistant(
   revalidatePath(`/admin/sessions/${sessionId}`);
   return null;
 }
+
+/**
+ * Syncs the add-ons offered on a session (session_addons, migration 0036).
+ * Replace-all: clears existing rows then inserts the submitted set — simpler
+ * and safer than diffing, and this list is always small.
+ * Not gated on approval status — same reasoning as the assistant assignment
+ * above, it's not part of the reviewed edit fields.
+ * Auth: manager/super_admin for any session; instructors only for their own.
+ * @param sessionId - UUID of the class_sessions record to update.
+ * @param addonIds - IDs of add-ons to offer on this session.
+ * @returns An error message string on failure, or null on success.
+ */
+export async function setSessionAddons(
+  sessionId: string,
+  addonIds: string[]
+): Promise<string | null> {
+  const auth = await requireActionRole(["instructor", "manager", "super_admin"]);
+  if ("error" in auth) return auth.error;
+  const { actor } = auth;
+
+  const admin = await createAdminClient();
+
+  const { data: current } = await admin
+    .from("class_sessions")
+    .select("instructor_id, class_type_id")
+    .eq("id", sessionId)
+    .single();
+
+  if (!current) return "Session not found.";
+
+  if (actor.effectiveRole === "instructor" && current.instructor_id !== actor.user.id) {
+    return "You may only manage add-ons on your own sessions.";
+  }
+
+  const resolvedAddonIds = [...new Set(addonIds)];
+
+  // Verify every submitted id is actually eligible for this session's class type —
+  // trusting the client's checklist alone would let a caller assign an add-on
+  // that was never assigned to this class type by a super admin.
+  if (resolvedAddonIds.length > 0) {
+    const { data: eligible } = await admin
+      .from("addon_class_types")
+      .select("addon_id")
+      .eq("class_type_id", current.class_type_id)
+      .in("addon_id", resolvedAddonIds);
+
+    const eligibleIds = new Set((eligible ?? []).map((e) => e.addon_id));
+    if (resolvedAddonIds.some((id) => !eligibleIds.has(id))) {
+      return "One or more selected add-ons are not eligible for this class type.";
+    }
+  }
+
+  const { error: clearError } = await admin
+    .from("session_addons")
+    .delete()
+    .eq("session_id", sessionId);
+  if (clearError) return clearError.message;
+
+  if (resolvedAddonIds.length > 0) {
+    const { error: insertError } = await admin
+      .from("session_addons")
+      .insert(resolvedAddonIds.map((addon_id) => ({ session_id: sessionId, addon_id })));
+    if (insertError) return insertError.message;
+  }
+
+  revalidatePath(`/admin/sessions/${sessionId}`);
+  return null;
+}

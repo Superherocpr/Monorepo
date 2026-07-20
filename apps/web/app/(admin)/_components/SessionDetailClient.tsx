@@ -22,6 +22,7 @@ import {
   rejectSession,
   updateSession,
   setSessionAssistant,
+  setSessionAddons,
   type SessionEditFields,
 } from "@/app/(admin)/admin/sessions/[id]/actions";
 
@@ -105,6 +106,8 @@ export interface SessionDetailData {
   assistant_instructor_id: string | null;
   /** Free-text assistant name, for someone outside the platform. Mutually exclusive with assistant_instructor_id. */
   assistant_name: string | null;
+  /** IDs of add-ons currently offered on this session (session_addons). */
+  addon_ids: string[];
   class_types: {
     id: string;
     name: string;
@@ -153,6 +156,13 @@ export interface InstructorOption {
   last_name: string;
 }
 
+/** An add-on eligible for this session's class type (addon_class_types). */
+export interface AddonOption {
+  id: string;
+  name: string;
+  price: number;
+}
+
 // ─── Component props ──────────────────────────────────────────────────────────
 
 interface Props {
@@ -162,6 +172,8 @@ interface Props {
   classTypes: ClassTypeOption[];
   locations: LocationOption[];
   instructors: InstructorOption[];
+  /** Add-ons eligible for this session's class type — empty if the class type has none. */
+  eligibleAddons: AddonOption[];
 }
 
 // ─── Badge helper functions ───────────────────────────────────────────────────
@@ -292,6 +304,7 @@ export default function SessionDetailClient({
   classTypes,
   locations,
   instructors,
+  eligibleAddons,
 }: Props) {
   const router = useRouter();
 
@@ -393,6 +406,35 @@ export default function SessionDetailClient({
   const [assistantNameInput, setAssistantNameInput] = useState(session.assistant_name ?? "");
   const [isSavingAssistant, setIsSavingAssistant] = useState(false);
   const [assistantError, setAssistantError] = useState<string | null>(null);
+
+  // ── Session add-ons state ──────────────────────────────────────────────────
+
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>(session.addon_ids);
+  const [isSavingAddons, setIsSavingAddons] = useState(false);
+  const [addonsError, setAddonsError] = useState<string | null>(null);
+
+  /** Adds or removes an addon ID from the selected set. */
+  function toggleAddon(id: string) {
+    setSelectedAddonIds((prev) =>
+      prev.includes(id) ? prev.filter((existing) => existing !== id) : [...prev, id]
+    );
+  }
+
+  /**
+   * Saves the session's add-on selection.
+   * Side effect: setSessionAddons server action, page refresh on success.
+   */
+  async function handleSaveAddons() {
+    setIsSavingAddons(true);
+    setAddonsError(null);
+    const result = await setSessionAddons(session.id, selectedAddonIds);
+    setIsSavingAddons(false);
+    if (result) {
+      setAddonsError(result);
+    } else {
+      router.refresh();
+    }
+  }
 
   // ── Derived values ────────────────────────────────────────────────────────
 
@@ -656,6 +698,11 @@ export default function SessionDetailClient({
     (isInstructor &&
       isOwnSession &&
       session.approval_status !== "approved");
+
+  // ── Session add-ons ─────────────────────────────────────────────────────────
+
+  /** Add-ons may be managed regardless of approval status — same reasoning as the assistant below. */
+  const canManageAddons = isManager || (isInstructor && isOwnSession);
 
   // ── Assistant assignment (documentation only, no pay impact) ───────────────
 
@@ -1191,6 +1238,43 @@ export default function SessionDetailClient({
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── Session add-ons ── */}
+        {canManageAddons && eligibleAddons.length > 0 && (
+          <div className="border border-gray-200 rounded-md p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-800">Class Add-ons</p>
+            <p className="text-xs text-gray-500">
+              Which add-ons customers can purchase for this specific session.
+            </p>
+
+            <div className="space-y-2">
+              {eligibleAddons.map((a) => (
+                <label key={a.id} className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={selectedAddonIds.includes(a.id)}
+                    onChange={() => toggleAddon(a.id)}
+                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span>
+                    {a.name} <span className="text-gray-400">(${a.price.toFixed(2)})</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {addonsError && <p className="text-xs text-red-700 font-medium">{addonsError}</p>}
+
+            <button
+              type="button"
+              onClick={handleSaveAddons}
+              disabled={isSavingAddons}
+              className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSavingAddons ? "Saving…" : "Save Add-ons"}
+            </button>
           </div>
         )}
 

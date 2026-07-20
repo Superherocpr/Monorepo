@@ -58,6 +58,7 @@ export async function POST(request: Request): Promise<Response> {
     max_capacity,
     notes,
     discount_percent,
+    addon_ids,
   } = body as Record<string, unknown>;
 
   // ── Validate required fields ───────────────────────────────────────────────
@@ -125,6 +126,37 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  // ── Validate add-on selection against this class type's eligibility ────────
+  // addon_ids is optional. Every submitted id must appear in addon_class_types
+  // for the chosen class_type_id — trusting the client's checklist alone would
+  // let a caller assign an add-on that isn't actually eligible for this class.
+  let resolvedAddonIds: string[] = [];
+  if (addon_ids !== undefined) {
+    if (
+      !Array.isArray(addon_ids) ||
+      !addon_ids.every((id) => typeof id === "string")
+    ) {
+      return NextResponse.json({ error: "addon_ids must be an array of strings." }, { status: 400 });
+    }
+    resolvedAddonIds = [...new Set(addon_ids as string[])];
+
+    if (resolvedAddonIds.length > 0) {
+      const { data: eligible } = await adminClient
+        .from("addon_class_types")
+        .select("addon_id")
+        .eq("class_type_id", class_type_id)
+        .in("addon_id", resolvedAddonIds);
+
+      const eligibleIds = new Set((eligible ?? []).map((e) => e.addon_id));
+      if (resolvedAddonIds.some((id) => !eligibleIds.has(id))) {
+        return NextResponse.json(
+          { error: "One or more selected add-ons are not eligible for this class type." },
+          { status: 400 }
+        );
+      }
+    }
+  }
+
   // ── Verify location exists ─────────────────────────────────────────────────
   const { data: location } = await adminClient
     .from("locations")
@@ -182,6 +214,18 @@ export async function POST(request: Request): Promise<Response> {
       { error: "Failed to create session. Please try again." },
       { status: 500 }
     );
+  }
+
+  // ── Attach the selected add-ons to the new session ──────────────────────────
+  if (resolvedAddonIds.length > 0) {
+    const { error: addonError } = await adminClient
+      .from("session_addons")
+      .insert(resolvedAddonIds.map((addon_id) => ({ session_id: newSession.id, addon_id })));
+
+    if (addonError) {
+      console.error("[POST /api/sessions] session_addons insert error:", addonError);
+      // Session was created successfully — don't fail the whole request over add-ons.
+    }
   }
 
   return NextResponse.json({ id: newSession.id }, { status: 201 });
