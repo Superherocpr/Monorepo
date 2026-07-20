@@ -8,12 +8,18 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
 import {
   seedRollcallScenario,
   cleanupRollcallScenario,
   fetchRosterRecord,
+  requireEnv,
   type SeededRollcall,
 } from "./helpers/rollcall-seed";
+import {
+  ROLLCALL_VERIFIED_EVENT,
+  rollcallChannelTopic,
+} from "../../lib/rollcall-realtime";
 
 test.describe("Roll call page", () => {
   test.beforeEach(async ({ page }) => {
@@ -90,13 +96,16 @@ test.describe("Roll call happy path (seeded)", () => {
     },
   });
 
+  // Fresh seed per test — a shared seed would mean the second test tries to
+  // check in a student the first test already confirmed, hitting the
+  // idempotent "already checked in" path, which never re-broadcasts.
   let seed: SeededRollcall;
 
-  test.beforeAll(async () => {
+  test.beforeEach(async () => {
     seed = await seedRollcallScenario();
   });
 
-  test.afterAll(async () => {
+  test.afterEach(async () => {
     if (seed) await cleanupRollcallScenario(seed);
   });
 
@@ -139,5 +148,58 @@ test.describe("Roll call happy path (seeded)", () => {
     const record = await fetchRosterRecord(seed);
     expect(record).not.toBeNull();
     expect(record!.confirmed).toBe(true);
+  });
+
+  test("check-in broadcasts a live-update event so the instructor's page can react without a reload", async ({
+    page,
+  }) => {
+    // Subscribe to the exact channel/event SessionDetailClient listens on —
+    // this proves the check-in route's broadcast actually reaches a listener,
+    // not just that the DB write happened.
+    const listener = createClient(
+      requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
+      requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+    );
+    const channel = listener.channel(rollcallChannelTopic(seed.sessionId));
+
+    const broadcastReceived = new Promise<{ firstName: string; lastName: string }>(
+      (resolve) => {
+        channel
+          .on("broadcast", { event: ROLLCALL_VERIFIED_EVENT }, (msg) =>
+            resolve(msg.payload)
+          )
+          .subscribe();
+      }
+    );
+
+    await page.goto("/rollcall");
+    await page.getByRole("textbox", { name: /access code/i }).fill(seed.code);
+    await expect(
+      page.getByRole("heading", { name: /who are you/i })
+    ).toBeVisible({ timeout: 15_000 });
+    await page
+      .getByRole("button", {
+        name: new RegExp(`${seed.student.firstName}\\s+${seed.student.lastName}`),
+      })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: /is this your information/i })
+    ).toBeVisible();
+    await page.getByRole("button", { name: /this is correct/i }).click();
+    await expect(
+      page.getByRole("heading", { name: /checked in/i })
+    ).toBeVisible({ timeout: 15_000 });
+
+    const payload = await Promise.race([
+      broadcastReceived,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Broadcast not received within 10s")), 10_000)
+      ),
+    ]);
+
+    expect(payload.firstName).toBe(seed.student.firstName);
+    expect(payload.lastName).toBe(seed.student.lastName);
+
+    await listener.removeChannel(channel);
   });
 });

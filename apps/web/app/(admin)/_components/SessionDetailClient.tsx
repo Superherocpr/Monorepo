@@ -6,12 +6,17 @@
  * Used by: app/(admin)/admin/sessions/[id]/page.tsx
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { UserRole } from "@/types/users";
 import type { SessionStatus, SessionApprovalStatus } from "@/types/schedule";
 import { OWNER_DIRECT_PHONE } from "@/lib/constants";
+import { createClient } from "@/lib/supabase/client";
+import {
+  ROLLCALL_VERIFIED_EVENT,
+  rollcallChannelTopic,
+} from "@/lib/rollcall-realtime";
 import {
   approveSession,
   rejectSession,
@@ -289,6 +294,37 @@ export default function SessionDetailClient({
   instructors,
 }: Props) {
   const router = useRouter();
+
+  // ── Live-updating Verified column ─────────────────────────────────────────
+  // When a student completes rollcall, the API broadcasts on a channel scoped
+  // to this session so the instructor's page can refresh without a manual
+  // reload. Only wired up for sessions where a check-in could still happen —
+  // completed/cancelled sessions get no new roster activity.
+  useEffect(() => {
+    if (session.status !== "scheduled" && session.status !== "in_progress") {
+      return;
+    }
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(rollcallChannelTopic(session.id))
+      .on("broadcast", { event: ROLLCALL_VERIFIED_EVENT }, () => {
+        router.refresh();
+      })
+      .subscribe();
+
+    // Fallback in case the websocket drops silently (laptop sleep, wifi
+    // blip) — keeps the page converging even without a live broadcast.
+    const pollInterval = setInterval(() => {
+      router.refresh();
+    }, 45_000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pollInterval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id, session.status]);
 
   const isInstructor = userRole === "instructor";
   const isManager = userRole === "manager" || userRole === "super_admin";
@@ -1442,6 +1478,20 @@ export default function SessionDetailClient({
                 {isStarting ? "Starting…" : "Start Class"}
               </button>
             )}
+
+            {/* Show QR Page — classroom rollcall display. Own sessions only:
+                the display's refresh action regenerates the viewer's own code. */}
+            {isOwnSession &&
+              session.approval_status === "approved" &&
+              (session.status === "scheduled" ||
+                session.status === "in_progress") && (
+                <Link
+                  href={`/admin/sessions/${session.id}/checkin`}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 transition-colors"
+                >
+                  Show QR Page
+                </Link>
+              )}
 
             {/* Edit button */}
             {canEdit && (
