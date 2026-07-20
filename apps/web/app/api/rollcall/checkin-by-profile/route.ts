@@ -16,6 +16,11 @@ import { createAdminClient } from "@/lib/supabase/server";
 // client is unreliable for credential-only checks inside Route Handlers because
 // its session-management machinery can swallow auth errors.
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  ROLLCALL_VERIFIED_EVENT,
+  rollcallChannelTopic,
+} from "@/lib/rollcall-realtime";
 
 /** Fields the student may update during check-in. */
 interface ProfileUpdates {
@@ -30,6 +35,32 @@ interface ProfileUpdates {
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Notifies the instructor's session detail page that a student just verified
+ * their info, so its Verified column can update without a manual reload.
+ * Best-effort — a failed broadcast must never fail the check-in itself; the
+ * instructor's page still catches up via its polling fallback.
+ * @param supabase - admin client (already connected; reused to send)
+ * @param sessionId - session the student checked into
+ * @param firstName - student's first name (same exposure level as the public
+ *   session-students roster list — no email/phone/address is sent)
+ * @param lastName - student's last name
+ */
+async function broadcastVerified(
+  supabase: SupabaseClient,
+  sessionId: string,
+  firstName: string,
+  lastName: string
+): Promise<void> {
+  try {
+    await supabase
+      .channel(rollcallChannelTopic(sessionId))
+      .httpSend(ROLLCALL_VERIFIED_EVENT, { firstName, lastName });
+  } catch (err) {
+    console.error("[checkin-by-profile] Broadcast failed:", err);
+  }
+}
 
 /**
  * Extracts the JWT role claim from a Supabase API key when it is in JWT format.
@@ -245,6 +276,13 @@ export async function POST(request: Request) {
       );
     }
 
+    await broadcastVerified(
+      supabase,
+      sessionId,
+      updates.firstName.trim(),
+      updates.lastName.trim()
+    );
+
     return Response.json({
       success: true,
       alreadyCheckedIn: false,
@@ -285,6 +323,8 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+
+  await broadcastVerified(supabase, sessionId, profile.first_name, profile.last_name);
 
   return Response.json({
     success: true,
