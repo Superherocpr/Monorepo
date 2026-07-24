@@ -234,6 +234,25 @@ export function getBookmarkletSource(apiBase: string): string {
       maxEl.value = String(session.max_capacity);
     }
 
+    // Assistant — Enrollware renders this as a BsmSelect jQuery widget.
+    // The visible <select> has id="bsmSelectbsmContainer0". Unlike the other
+    // dropdowns, BsmSelect does not respond to a plain .value assignment — a
+    // change event must be fired so the plugin updates its hidden input.
+    var assistantEl = document.getElementById('bsmSelectbsmContainer0');
+    if (assistantEl) {
+      var assistantName = session.assistant_name ||
+        (session.assistant_instructor
+          ? session.assistant_instructor.first_name + ' ' + session.assistant_instructor.last_name
+          : null);
+      if (assistantName) {
+        if (selectByName(assistantEl, assistantName)) {
+          assistantEl.dispatchEvent(new Event('change'));
+        } else {
+          warnings.push('Could not match assistant: "' + assistantName + '"');
+        }
+      }
+    }
+
     return warnings;
   }
 

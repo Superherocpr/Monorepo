@@ -63,6 +63,8 @@ export async function GET(request: NextRequest) {
 
   // Fetch today's sessions for this instructor with all data the bookmarklet needs.
   // roster_records are returned as a nested array via Supabase's foreign key relation.
+  // assistant_profile uses a relation alias so it doesn't conflict with the primary
+  // instructor profiles join that shares the same table.
   const { data: sessions, error } = await admin
     .from("class_sessions")
     .select(
@@ -71,9 +73,11 @@ export async function GET(request: NextRequest) {
        ends_at,
        max_capacity,
        enrollware_submitted,
+       assistant_name,
        class_types ( name, price, duration_minutes ),
        locations ( name ),
        profiles!class_sessions_instructor_id_fkey ( first_name, last_name ),
+       assistant_profile:profiles!class_sessions_assistant_instructor_id_fkey ( first_name, last_name ),
        roster_records ( first_name, last_name, email, phone, address_1, address_2, city, state, zip, grade, bookings ( profiles!bookings_customer_id_fkey ( address, city, state, zip ) ) )`
     )
     .eq("instructor_id", profileId)
@@ -95,6 +99,9 @@ export async function GET(request: NextRequest) {
     const classType = Array.isArray(s.class_types) ? s.class_types[0] : s.class_types;
     const location = Array.isArray(s.locations) ? s.locations[0] : s.locations;
     const instructor = Array.isArray(s.profiles) ? s.profiles[0] : s.profiles;
+    const assistantProfile = Array.isArray(s.assistant_profile)
+      ? s.assistant_profile[0]
+      : s.assistant_profile;
 
     return {
       id: s.id,
@@ -102,6 +109,16 @@ export async function GET(request: NextRequest) {
       ends_at: s.ends_at,
       max_capacity: s.max_capacity,
       enrollware_submitted: s.enrollware_submitted ?? false,
+      // assistant_name is free-text (for non-platform assistants); assistant_instructor
+      // is set when the assistant is a platform profile. The bookmarklet prefers
+      // assistant_name and falls back to the profile's full name.
+      assistant_name: s.assistant_name ?? null,
+      assistant_instructor: assistantProfile
+        ? {
+            first_name: assistantProfile.first_name,
+            last_name: assistantProfile.last_name,
+          }
+        : null,
       class_type: classType
         ? {
             name: classType.name,
