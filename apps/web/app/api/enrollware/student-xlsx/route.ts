@@ -70,7 +70,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       `id,
        roster_records (
          first_name, last_name, email, phone,
-         address_1, address_2, city, state, zip, grade,
+         address_1, address_2, city, state, zip, grade, ccf_compression, confirmed,
          bookings ( profiles!bookings_customer_id_fkey ( address, city, state, zip ) )
        )`
     )
@@ -101,6 +101,8 @@ export async function GET(request: NextRequest): Promise<Response> {
       state: string | null;
       zip: string | null;
       grade: number | null;
+      ccf_compression: number | null;
+      confirmed: boolean;
       bookings: {
         profiles: { address: string | null; city: string | null; state: string | null; zip: string | null }[] | null;
       }[] | null;
@@ -119,11 +121,12 @@ export async function GET(request: NextRequest): Promise<Response> {
         r.city        ?? profileAddr?.city    ?? "",
         r.state       ?? profileAddr?.state   ?? "",
         r.zip         ?? profileAddr?.zip     ?? "",
-        r.grade != null ? r.grade : "",         // Score — numeric (e.g. 100)
-        r.grade != null ? "Complete" : "",      // Status only set when graded
-        "",  // License — managed by Enrollware
-        "",  // Price   — managed by Enrollware
-        "",  // Codes   — managed by Enrollware
+        r.grade != null ? r.grade : "",                           // Score — numeric (e.g. 100)
+        r.confirmed ? "Complete" : "No Show",                     // Status — confirmed via rollcall check-in
+        "",                                                       // License — managed by Enrollware
+        "",                                                       // Price   — managed by Enrollware
+        "",                                                       // Codes   — managed by Enrollware
+        r.ccf_compression != null ? r.ccf_compression : "",      // CCF Compression — supplementary column
       ];
     }
   );
@@ -133,6 +136,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     "Last Name", "First Name", "Email Address", "Phone",
     "Address 1", "Address 2", "City", "State", "Zip",
     "Score", "Status", "License", "Price", "Codes",
+    "CCF Compression",
   ];
 
   const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);

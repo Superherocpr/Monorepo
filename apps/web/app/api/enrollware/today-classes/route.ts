@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
        locations ( name ),
        profiles!class_sessions_instructor_id_fkey ( first_name, last_name ),
        assistant_profile:profiles!class_sessions_assistant_instructor_id_fkey ( first_name, last_name ),
-       roster_records ( first_name, last_name, email, phone, address_1, address_2, city, state, zip, grade, bookings ( profiles!bookings_customer_id_fkey ( address, city, state, zip ) ) )`
+       roster_records ( first_name, last_name, email, phone, address_1, address_2, city, state, zip, grade, ccf_compression, confirmed, bookings ( profiles!bookings_customer_id_fkey ( address, city, state, zip ) ) )`
     )
     .eq("instructor_id", profileId)
     .gte("starts_at", startIso)
@@ -147,6 +147,8 @@ export async function GET(request: NextRequest) {
           state: string | null;
           zip: string | null;
           grade: number | null;
+          ccf_compression: number | null;
+          confirmed: boolean;
           bookings: {
             profiles: { address: string | null; city: string | null; state: string | null; zip: string | null }[] | null;
           }[] | null;
@@ -169,6 +171,8 @@ export async function GET(request: NextRequest) {
             state: r.state ?? profileAddr?.state ?? null,
             zip: r.zip ?? profileAddr?.zip ?? null,
             grade: r.grade,
+            ccf_compression: r.ccf_compression,
+            confirmed: r.confirmed,
           };
         }
       ),
