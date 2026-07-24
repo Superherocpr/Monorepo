@@ -10,7 +10,7 @@ import type { UserRole } from "@/types/users";
 
 /**
  * Updates a class type by ID. All editable fields may be provided.
- * @param request - PATCH body: { name, description?, duration_minutes, max_capacity, price, active, cert_type_id? }
+ * @param request - PATCH body: { name, description?, duration_minutes, max_capacity, price, active, cert_type_id?, addon_ids? }
  * @param params - Route params containing the class type UUID.
  */
 export async function PATCH(
@@ -40,7 +40,7 @@ export async function PATCH(
 
   // ── Parse and validate body ────────────────────────────────────────────────
   const body = await request.json();
-  const { name, description, duration_minutes, max_capacity, price, active, cert_type_id } =
+  const { name, description, duration_minutes, max_capacity, price, active, cert_type_id, addon_ids } =
     body as {
       name: string;
       description: string | null;
@@ -49,6 +49,7 @@ export async function PATCH(
       price: number;
       active: boolean;
       cert_type_id?: string | null;
+      addon_ids?: string[];
     };
 
   if (
@@ -88,6 +89,36 @@ export async function PATCH(
       );
     }
     return Response.json({ success: false, error: "Failed to update class type." }, { status: 500 });
+  }
+
+  // ── Sync eligible add-ons ───────────────────────────────────────────────────
+  // Replace-all: delete existing assignments then insert the submitted set.
+  // Simpler and safer than diffing, and this list is always small.
+  const { error: clearError } = await adminClient
+    .from("addon_class_types")
+    .delete()
+    .eq("class_type_id", id);
+
+  if (clearError) {
+    console.error("[PATCH /api/settings/class-types/[id]] addon clear", clearError);
+    return Response.json(
+      { success: false, error: "Class type updated, but failed to sync add-ons." },
+      { status: 500 }
+    );
+  }
+
+  if (addon_ids && addon_ids.length > 0) {
+    const { error: addonError } = await adminClient
+      .from("addon_class_types")
+      .insert(addon_ids.map((addon_id) => ({ addon_id, class_type_id: id })));
+
+    if (addonError) {
+      console.error("[PATCH /api/settings/class-types/[id]] addon assignment", addonError);
+      return Response.json(
+        { success: false, error: "Class type updated, but failed to sync add-ons." },
+        { status: 500 }
+      );
+    }
   }
 
   return Response.json({ success: true });

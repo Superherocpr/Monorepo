@@ -20,6 +20,15 @@ export interface ClassTypeOption {
   max_capacity: number;
   /** Base price in USD — used for the discount preview. */
   price: number;
+  /** IDs of add-ons eligible for this class type (addon_class_types). */
+  addon_ids: string[];
+}
+
+/** An add-on catalog entry, for the eligible-add-ons checklist. */
+export interface AddonOption {
+  id: string;
+  name: string;
+  price: number;
 }
 
 /** A location option for the dropdown. */
@@ -43,6 +52,8 @@ interface CreateSessionClientProps {
   locations: LocationOption[];
   /** Non-empty only for manager and super admin roles. */
   instructors: InstructorOption[];
+  /** Full add-on catalog — filtered per class type via ClassTypeOption.addon_ids. */
+  addons: AddonOption[];
   /** Whether the viewing user is an instructor (hides instructor selector). */
   isInstructor: boolean;
   /**
@@ -103,6 +114,7 @@ export default function CreateSessionClient({
   classTypes,
   locations,
   instructors,
+  addons,
   isInstructor,
   instructorName,
 }: CreateSessionClientProps) {
@@ -110,6 +122,8 @@ export default function CreateSessionClient({
   const [form, setForm] = useState<SessionForm>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  /** IDs of add-ons selected to offer on this session — narrowed to the selected class type's eligibility. */
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   /** Tracks whether duration and capacity were last populated by the class-type auto-fill. */
   const [autoFilled, setAutoFilled] = useState(false);
   /** Local copy of locations — updated when a new location is added inline so the dropdown refreshes without a page reload. */
@@ -149,6 +163,15 @@ export default function CreateSessionClient({
     }));
     // Show the auto-filled hint below the duration and capacity fields.
     if (type) setAutoFilled(true);
+    // Drop any selected add-ons that aren't eligible for the newly selected class type.
+    setSelectedAddonIds((prev) => prev.filter((addonId) => type?.addon_ids.includes(addonId)));
+  }
+
+  /** Adds or removes an addon ID from the selected set. */
+  function toggleAddon(id: string) {
+    setSelectedAddonIds((prev) =>
+      prev.includes(id) ? prev.filter((existing) => existing !== id) : [...prev, id]
+    );
   }
 
   /**
@@ -271,6 +294,7 @@ export default function CreateSessionClient({
       max_capacity: capacity,
       discount_percent: resolvedDiscountPercent,
       ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
+      addon_ids: selectedAddonIds,
     };
 
     // Instructors omit instructor_id — server resolves it from their own profile.
@@ -773,6 +797,38 @@ export default function CreateSessionClient({
             </p>
           )}
         </div>
+
+        {/* Add-ons (optional) — only shown once a class type with eligible add-ons is selected */}
+        {(() => {
+          const eligibleAddonIds = classTypes.find((t) => t.id === form.class_type_id)?.addon_ids ?? [];
+          const eligibleAddons = addons.filter((a) => eligibleAddonIds.includes(a.id));
+          if (eligibleAddons.length === 0) return null;
+          return (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm font-medium text-gray-700">
+                Add-ons <span className="text-gray-400 font-normal">(optional)</span>
+              </p>
+              <p className="text-xs text-gray-400">
+                Which add-ons customers can purchase for this specific session.
+              </p>
+              <div className="space-y-2 border border-gray-200 rounded-lg p-3">
+                {eligibleAddons.map((a) => (
+                  <label key={a.id} className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={selectedAddonIds.includes(a.id)}
+                      onChange={() => toggleAddon(a.id)}
+                      className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                    />
+                    <span>
+                      {a.name} <span className="text-gray-400">(${a.price.toFixed(2)})</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Notes (optional) */}
         <div className="flex flex-col gap-1.5">

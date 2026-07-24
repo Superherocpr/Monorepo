@@ -14,6 +14,13 @@ export interface AppliedPromoCode {
   finalPrice: number;
 }
 
+/** An add-on selected at checkout — denormalized name/price for display without re-fetching. */
+export interface SelectedAddon {
+  id: string;
+  name: string;
+  price: number;
+}
+
 export interface BookingStore {
   /** UUID of the selected class_sessions record */
   sessionId: string | null;
@@ -50,6 +57,8 @@ export interface BookingStore {
   customerId: string | null;
   /** Validated promo code applied at the payment step — null if none applied */
   appliedPromoCode: AppliedPromoCode | null;
+  /** Add-ons selected at the payment step — empty if none selected */
+  selectedAddons: SelectedAddon[];
 }
 
 const STORE_KEY = "superhero_cpr_booking";
@@ -62,7 +71,9 @@ export function getBookingStore(): BookingStore {
   if (typeof window === "undefined") return emptyStore();
   try {
     const raw = sessionStorage.getItem(STORE_KEY);
-    return raw ? (JSON.parse(raw) as BookingStore) : emptyStore();
+    // Merge over emptyStore() so a store persisted before a field was added
+    // (e.g. selectedAddons) doesn't come back undefined mid-flow.
+    return raw ? { ...emptyStore(), ...(JSON.parse(raw) as Partial<BookingStore>) } : emptyStore();
   } catch {
     return emptyStore();
   }
@@ -97,5 +108,6 @@ function emptyStore(): BookingStore {
     isNewCustomer: false,
     customerId: null,
     appliedPromoCode: null,
+    selectedAddons: [],
   };
 }

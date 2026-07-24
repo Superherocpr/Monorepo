@@ -13,6 +13,7 @@ import SessionDetailClient, {
   type ClassTypeOption,
   type LocationOption,
   type InstructorOption,
+  type AddonOption,
 } from "../../../_components/SessionDetailClient";
 import type { UserRole } from "@/types/users";
 import type { SessionStatus, SessionApprovalStatus } from "@/types/schedule";
@@ -92,6 +93,28 @@ export default async function SessionDetailPage({ params }: PageProps) {
     redirect("/admin/sessions");
   }
 
+  // ── Add-ons eligible for this session's class type + the session's current
+  // selections (migrations 0035/0036). Defensive: if not applied yet, fall back
+  // to empty so the rest of the detail page still renders.
+  let eligibleAddons: AddonOption[] = [];
+  let sessionAddonIds: string[] = [];
+  try {
+    const [{ data: junctionRows }, { data: sessionAddonRows }] = await Promise.all([
+      admin
+        .from("addon_class_types")
+        .select("addons ( id, name, price, active )")
+        .eq("class_type_id", raw.class_type_id),
+      admin.from("session_addons").select("addon_id").eq("session_id", id),
+    ]);
+    eligibleAddons = ((junctionRows ?? []) as unknown as { addons: { id: string; name: string; price: number; active: boolean } | null }[])
+      .map((j) => j.addons)
+      .filter((a): a is { id: string; name: string; price: number; active: boolean } => a !== null && a.active)
+      .map((a) => ({ id: a.id, name: a.name, price: Number(a.price) }));
+    sessionAddonIds = ((sessionAddonRows ?? []) as { addon_id: string }[]).map((r) => r.addon_id);
+  } catch {
+    // Suppress — defaults above are safe
+  }
+
   // Cast the raw Supabase response into the typed shape expected by the client component
   const session: SessionDetailData = {
     id: raw.id,
@@ -113,6 +136,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
     location_id: raw.location_id,
     assistant_instructor_id: raw.assistant_instructor_id ?? null,
     assistant_name: raw.assistant_name ?? null,
+    addon_ids: sessionAddonIds,
     class_types: raw.class_types as unknown as SessionDetailData["class_types"],
     instructor: raw.profiles as unknown as SessionDetailData["instructor"],
     assistant_instructor: raw.assistant_instructor as unknown as SessionDetailData["assistant_instructor"],
@@ -161,6 +185,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
       classTypes={classTypes}
       locations={locations}
       instructors={instructors}
+      eligibleAddons={eligibleAddons}
     />
   );
 }

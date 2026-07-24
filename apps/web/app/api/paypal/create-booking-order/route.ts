@@ -3,9 +3,11 @@
  * Called by: book/payment page (PayPalOneTimePaymentButton createOrder callback)
  * Auth: None required — creates a pending PayPal order that the buyer approves
  *
- * Accepts a session ID and an optional promo code. Re-fetches the class price/name
- * and validates the promo code (if any) server-side. Creates a PayPal order for
- * the final discounted amount against the SuperHeroCPR business PayPal account.
+ * Accepts a session ID, an optional promo code, and optional add-on ids. Re-fetches
+ * the class price/name, validates the promo code (if any), and re-validates the
+ * add-on selection against session_addons (migration 0036) — all server-side.
+ * Creates a PayPal order for the final amount (class price − promo + add-ons)
+ * against the SuperHeroCPR business PayPal account.
  * Returns { orderId, finalAmount } to the client.
  *
  * Actual capture and booking creation happen in /api/bookings/confirm after approval.
@@ -25,6 +27,7 @@ import {
 } from "@/lib/paypal";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
+import { resolveAddonsSelection } from "@/lib/addon-checkout";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -44,10 +47,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { sessionId, promoCode } = body;
+  const { sessionId, promoCode, addonIds } = body;
 
   if (typeof sessionId !== "string") {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  if (addonIds !== undefined && (!Array.isArray(addonIds) || !addonIds.every((id) => typeof id === "string"))) {
+    return NextResponse.json({ error: "addonIds must be an array of strings" }, { status: 400 });
   }
 
   const supabase = await createAdminClient();
@@ -100,6 +107,19 @@ export async function POST(request: Request) {
     promoDescription = ` (promo: ${promoResult.code})`;
   }
 
+  // ── Add selected add-ons (server-side re-validation against session_addons) ──
+  let addonsDescription = "";
+  if (Array.isArray(addonIds) && addonIds.length > 0) {
+    const addonsResult = await resolveAddonsSelection(supabase, sessionId, addonIds as string[]);
+    if (!addonsResult.valid) {
+      return NextResponse.json({ error: addonsResult.error }, { status: 422 });
+    }
+    finalAmount = parseFloat((finalAmount + addonsResult.total).toFixed(2));
+    if (addonsResult.addons.length > 0) {
+      addonsDescription = ` + ${addonsResult.addons.map((a) => a.name).join(", ")}`;
+    }
+  }
+
   // ── Get business PayPal access token (always — required to create the order) ──
   const accessToken = await getPayPalAccessToken();
 
@@ -111,17 +131,18 @@ export async function POST(request: Request) {
           currency_code: "USD",
           value: finalAmount.toFixed(2),
         },
-        description: `SuperHeroCPR — ${className}${promoDescription}`,
+        description: `SuperHeroCPR — ${className}${promoDescription}${addonsDescription}`,
       },
     ],
   };
 
   // ── Build request headers ──────────────────────────────────────────────
-  // Deterministic idempotency key — same session + final amount
-  // collapses retries into a single PayPal order. Random per-request keys
-  // (e.g. Date.now()) defeat the purpose of PayPal-Request-Id.
+  // Deterministic idempotency key — same session + final amount + addon
+  // selection collapses retries into a single PayPal order. Random per-request
+  // keys (e.g. Date.now()) defeat the purpose of PayPal-Request-Id.
+  const sortedAddonIds = Array.isArray(addonIds) ? [...(addonIds as string[])].sort().join(",") : "";
   const idempotencyKey = createHash("sha256")
-    .update(`${sessionId}:${finalAmount.toFixed(2)}:business`)
+    .update(`${sessionId}:${finalAmount.toFixed(2)}:${sortedAddonIds}:business`)
     .digest("hex")
     .slice(0, 32);
 

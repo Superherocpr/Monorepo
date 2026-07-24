@@ -13,12 +13,15 @@ import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import ClassTypePanel from "./ClassTypePanel";
 import ClassTypeImportPanel from "./ClassTypeImportPanel";
-import type { ClassType, CertTypeOption, PresetGrade } from "../page";
+import AddonPanel from "./AddonPanel";
+import type { ClassType, CertTypeOption, PresetGrade, Addon } from "../page";
 
 interface SettingsClientProps {
   classTypes: ClassType[];
   /** All active cert types — used to populate the linked cert dropdown in ClassTypePanel. */
   certTypeOptions: CertTypeOption[];
+  /** The full add-on catalog — used by the Add-ons section and the ClassTypePanel eligibility checklist. */
+  addons: Addon[];
   presetGrades: PresetGrade[];
   zohoConnected: boolean;
   zohoEmail: string | null;
@@ -103,6 +106,7 @@ interface EditingGrade {
 const SettingsClient: React.FC<SettingsClientProps> = ({
   classTypes: initialClassTypes,
   certTypeOptions,
+  addons: initialAddons,
   presetGrades: initialPresetGrades,
   zohoConnected: initialZohoConnected,
   zohoEmail,
@@ -221,6 +225,22 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   const [classTypeImportPanelOpen, setClassTypeImportPanelOpen] = useState(false);
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null);
   const [togglingClassTypeId, setTogglingClassTypeId] = useState<string | null>(null);
+
+  // ── Add-ons ────────────────────────────────────────────────────────────────
+  const [addons, setAddons] = useState<Addon[]>(initialAddons);
+
+  // Sync local state when the server re-sends initialAddons after router.refresh() —
+  // same reasoning as the classTypes sync above.
+  useEffect(() => {
+    setAddons(initialAddons);
+  }, [initialAddons]);
+
+  const [addonPanelOpen, setAddonPanelOpen] = useState(false);
+  const [editingAddon, setEditingAddon] = useState<Addon | null>(null);
+  const [togglingAddonId, setTogglingAddonId] = useState<string | null>(null);
+  const [deletingAddonId, setDeletingAddonId] = useState<string | null>(null);
+  const [deleteAddonLoading, setDeleteAddonLoading] = useState(false);
+  const [deleteAddonError, setDeleteAddonError] = useState<string | null>(null);
 
   // ── Preset grades ──────────────────────────────────────────────────────────
   const [grades, setGrades] = useState<PresetGrade[]>(initialPresetGrades);
@@ -384,6 +404,80 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       setDeleteClassTypeError("Network error. Please try again.");
     } finally {
       setDeleteClassTypeLoading(false);
+    }
+  }
+
+  // ── Add-on actions ─────────────────────────────────────────────────────────
+
+  /**
+   * Toggles the active state of an add-on in one click.
+   * Reuses the generic PATCH route (no dedicated toggle-active endpoint) since
+   * all other fields are already known client-side.
+   * @param addon - The add-on to toggle.
+   */
+  async function handleToggleAddon(addon: Addon) {
+    setTogglingAddonId(addon.id);
+    try {
+      const res = await fetch(`/api/settings/addons/${addon.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: addon.name,
+          description: addon.description,
+          price: addon.price,
+          active: !addon.active,
+        }),
+      });
+      const data: { success: boolean; error?: string } = await res.json();
+      if (!res.ok || !data.success) {
+        showToast("error", data.error ?? "Failed to update add-on.");
+      } else {
+        setAddons((prev) =>
+          prev.map((a) => (a.id === addon.id ? { ...a, active: !a.active } : a))
+        );
+        showToast("success", `"${addon.name}" ${addon.active ? "deactivated" : "activated"}.`);
+      }
+    } catch {
+      showToast("error", "Something went wrong. Please try again.");
+    } finally {
+      setTogglingAddonId(null);
+    }
+  }
+
+  /**
+   * Called by AddonPanel on a successful save (create or update).
+   * Refreshes the list from the server to get the canonical data.
+   * @param message - Success message to display in the toast.
+   */
+  function handleAddonSaved(message: string) {
+    setAddonPanelOpen(false);
+    setEditingAddon(null);
+    showToast("success", message);
+    router.refresh();
+  }
+
+  /**
+   * Deletes an add-on via DELETE /api/settings/addons/[id].
+   * Refused by the server if any class type currently has it assigned.
+   * @param id - UUID of the add-on to delete.
+   */
+  async function handleDeleteAddon(id: string) {
+    setDeleteAddonLoading(true);
+    setDeleteAddonError(null);
+    try {
+      const res = await fetch(`/api/settings/addons/${id}`, { method: "DELETE" });
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (!json.success) {
+        setDeleteAddonError(json.error ?? "Failed to delete add-on.");
+        return;
+      }
+      setAddons((prev) => prev.filter((a) => a.id !== id));
+      setDeletingAddonId(null);
+      showToast("success", "Add-on deleted.");
+    } catch {
+      setDeleteAddonError("Network error. Please try again.");
+    } finally {
+      setDeleteAddonLoading(false);
     }
   }
 
@@ -826,6 +920,147 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
             ))}
           </div>
         )}
+
+        {/* ── Add-ons ─────────────────────────────────────────────────────── */}
+        <div className="mt-8 border-t border-gray-200 pt-6 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                Add-ons
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Purchasable extras. Assign each one to eligible class types above.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setEditingAddon(null);
+                setAddonPanelOpen(true);
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              + Add Add-on
+            </button>
+          </div>
+
+          {addons.length === 0 ? (
+            <div className="text-center py-10 text-sm text-gray-500">
+              No add-ons yet. Add your first one.
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {addons.map((a) => (
+                <div
+                  key={a.id}
+                  className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                >
+                  {deletingAddonId === a.id ? (
+                    // ── Inline delete confirmation ─────────────────────────
+                    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3">
+                      <p className="mb-1 text-sm font-medium text-red-700">
+                        Delete &ldquo;{a.name}&rdquo;?
+                      </p>
+                      {deleteAddonError && (
+                        <p className="mb-2 text-xs text-red-600">{deleteAddonError}</p>
+                      )}
+                      <p className="mb-3 text-xs text-red-600">
+                        This cannot be undone. Add-ons assigned to a class type cannot be deleted.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAddon(a.id)}
+                          disabled={deleteAddonLoading}
+                          className="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {deleteAddonLoading ? "Deleting…" : "Delete"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeletingAddonId(null);
+                            setDeleteAddonError(null);
+                          }}
+                          disabled={deleteAddonLoading}
+                          className="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="mb-1 flex items-start justify-between gap-2">
+                        <span className="font-semibold text-gray-900 dark:text-white">
+                          {a.name}
+                        </span>
+                        {a.active ? (
+                          <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                      {a.description && (
+                        <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
+                          {a.description}
+                        </p>
+                      )}
+                      <p className="mt-2 text-xs text-gray-400">
+                        $
+                        {a.price.toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingAddon(a);
+                            setAddonPanelOpen(true);
+                          }}
+                          className="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAddon(a)}
+                          disabled={togglingAddonId === a.id}
+                          className={`rounded-md border px-3 py-1 text-xs font-semibold disabled:opacity-50 ${
+                            a.active
+                              ? "border-orange-300 text-orange-600 hover:bg-orange-50"
+                              : "border-green-300 text-green-700 hover:bg-green-50"
+                          }`}
+                        >
+                          {togglingAddonId === a.id
+                            ? "Saving…"
+                            : a.active
+                            ? "Deactivate"
+                            : "Activate"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeletingAddonId(a.id);
+                            setDeleteAddonError(null);
+                          }}
+                          className="rounded-md border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* ── Section 3: Preset Grades ───────────────────────────────────────── */}
@@ -1170,6 +1405,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         open={classTypePanelOpen}
         classType={editingClassType}
         certTypeOptions={certTypeOptions}
+        addonOptions={addons}
         onClose={() => {
           setClassTypePanelOpen(false);
           setEditingClassType(null);
@@ -1184,6 +1420,17 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
           onImported={handleClassTypesImported}
         />
       )}
+
+      <AddonPanel
+        open={addonPanelOpen}
+        addon={editingAddon}
+        onClose={() => {
+          setAddonPanelOpen(false);
+          setEditingAddon(null);
+        }}
+        onSaved={handleAddonSaved}
+        onError={(message) => showToast("error", message)}
+      />
 
       {/* ── Toast ─────────────────────────────────────────────────────────── */}
       {toast && (

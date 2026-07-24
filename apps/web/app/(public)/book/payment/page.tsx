@@ -19,7 +19,7 @@ import type { OnApproveDataOneTimePayments } from "@paypal/react-paypal-js/sdk-v
 import { getBookingStore, setBookingStore } from "@/lib/booking-store";
 import BookingProgress from "../_components/BookingProgress";
 import OrderSummary from "../_components/OrderSummary";
-import type { BookingStore, AppliedPromoCode } from "@/lib/booking-store";
+import type { BookingStore, AppliedPromoCode, SelectedAddon } from "@/lib/booking-store";
 import type { PromoValidateResponse } from "@/app/api/promo-codes/validate/route";
 
 /** Renders Step 4 — PayPal payment (or free booking via promo) for the selected session. */
@@ -40,6 +40,12 @@ export default function BookPaymentPage() {
     () => getBookingStore().appliedPromoCode ?? null
   );
 
+  // Add-on selection state
+  const [availableAddons, setAvailableAddons] = useState<SelectedAddon[]>([]);
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>(
+    () => getBookingStore().selectedAddons.map((a) => a.id)
+  );
+
   // Dev bypass state — only used in development builds.
   const [devBypassing, setDevBypassing] = useState(false);
   const [devError, setDevError] = useState<string | null>(null);
@@ -52,6 +58,39 @@ export default function BookPaymentPage() {
       else router.replace("/book/details");
     }
   }, [store, router]);
+
+  // Fetch the add-ons this session's instructor has enabled (if any).
+  useEffect(() => {
+    if (!store?.sessionId) return;
+    let cancelled = false;
+    fetch(`/api/sessions/${store.sessionId}/addons`)
+      .then((res) => res.json())
+      .then((data: { addons?: SelectedAddon[] }) => {
+        if (!cancelled) setAvailableAddons(data.addons ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableAddons([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [store?.sessionId]);
+
+  /** Toggles an add-on selection and persists the denormalized list to the store. */
+  function toggleAddon(addon: SelectedAddon) {
+    setSelectedAddonIds((prev) => {
+      const next = prev.includes(addon.id)
+        ? prev.filter((id) => id !== addon.id)
+        : [...prev, addon.id];
+      setBookingStore({
+        selectedAddons: availableAddons.filter((a) => next.includes(a.id)),
+      });
+      return next;
+    });
+  }
+
+  const selectedAddons = availableAddons.filter((a) => selectedAddonIds.includes(a.id));
+  const addonsTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0);
 
   /** Applies a promo code by calling the validate endpoint and storing the result. */
   async function handleApplyPromo() {
@@ -196,6 +235,7 @@ export default function BookPaymentPage() {
       body: JSON.stringify({
         sessionId: store.sessionId,
         promoCode: appliedPromo?.code ?? null,
+        addonIds: selectedAddonIds,
       }),
     });
 
@@ -213,7 +253,8 @@ export default function BookPaymentPage() {
     setIsFullError(false);
     if (!store) return;
 
-    const finalAmount = appliedPromo ? appliedPromo.finalPrice : store.sessionDetails?.price;
+    const classAmount = appliedPromo ? appliedPromo.finalPrice : store.sessionDetails?.price ?? 0;
+    const finalAmount = classAmount + addonsTotal;
 
     const response = await fetch("/api/bookings/confirm", {
       method: "POST",
@@ -224,6 +265,7 @@ export default function BookPaymentPage() {
         customerId: store.customerId,
         amount: finalAmount,
         promoCode: appliedPromo?.code ?? null,
+        addonIds: selectedAddonIds,
         customerEmail: store.customerDetails?.email,
         customerFirstName: store.customerDetails?.firstName,
         className: store.sessionDetails?.className,
@@ -274,7 +316,10 @@ export default function BookPaymentPage() {
     );
   }
 
-  const isFreeWithPromo = appliedPromo !== null && appliedPromo.finalPrice === 0;
+  // Add-ons always cost money, so a promo covering the class price alone
+  // doesn't make the checkout free if the customer selected any add-ons —
+  // they still need to pay for those through the normal PayPal flow.
+  const isFreeWithPromo = appliedPromo !== null && appliedPromo.finalPrice === 0 && addonsTotal === 0;
 
   return (
     <PayPalProvider
@@ -331,8 +376,38 @@ export default function BookPaymentPage() {
                 <OrderSummary
                   details={store?.sessionDetails ?? null}
                   appliedPromoCode={appliedPromo}
+                  selectedAddons={selectedAddons}
                 />
               </div>
+
+              {/* ── Add-ons — only shown when the instructor enabled at least one ── */}
+              {!isFullError && store?.sessionDetails && availableAddons.length > 0 && (
+                <div className="mb-8">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Add-ons <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <div className="space-y-2 border border-gray-200 rounded-lg p-3">
+                    {availableAddons.map((a) => (
+                      <label key={a.id} className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={selectedAddonIds.includes(a.id)}
+                          onChange={() => toggleAddon(a)}
+                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                        <span>
+                          {a.name}{" "}
+                          <span className="text-gray-400">
+                            (
+                            {a.price.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                            )
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* ── Promo code input ── */}
               {!isFullError && store?.sessionDetails && (

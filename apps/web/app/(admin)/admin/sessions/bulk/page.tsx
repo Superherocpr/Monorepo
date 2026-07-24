@@ -50,12 +50,15 @@ export default async function BulkSessionPage(): Promise<React.ReactElement> {
     .eq("active", true)
     .order("name");
 
+  // Bulk creation doesn't support per-session add-on selection yet — addon_ids
+  // is always empty here so ClassTypeOption stays satisfied.
   const classTypes: ClassTypeOption[] = (rawClassTypes ?? []).map((t) => ({
     id: t.id as string,
     name: t.name as string,
     duration_minutes: t.duration_minutes as number,
     max_capacity: t.max_capacity as number,
     price: Number(t.price ?? 0),
+    addon_ids: [],
   }));
 
   // ── Fetch all locations ────────────────────────────────────────────────────

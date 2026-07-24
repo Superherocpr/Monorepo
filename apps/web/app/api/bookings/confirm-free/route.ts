@@ -5,12 +5,16 @@
  *
  * Used exclusively for bookings where a promo code reduces the price to $0.
  * PayPal is skipped entirely since no money changes hands. The promo code is
- * re-validated server-side before any booking is created.
+ * re-validated server-side before any booking is created. Rejects the request
+ * if any add-ons were selected — those always cost money, so they go through
+ * the normal /api/bookings/confirm PayPal flow instead.
  *
  * 1. Validates required fields.
  * 2. Re-fetches session price from the DB and re-validates the promo code,
  *    confirming it produces a $0 final price (THREAT-013 defense-in-depth).
- * 3. Atomically reserves a spot via book_spot RPC (THREAT-006).
+ * 3. Atomically reserves a spot via book_spot RPC (THREAT-006), which also
+ *    rejects a duplicate booking attempt for the same customer + session
+ *    (THREAT-047).
  * 4. Creates a $0 payment record with payment_type = 'promo'.
  * 5. Sends booking confirmation email noting the promo code (best-effort).
  */
@@ -42,6 +46,7 @@ export async function POST(request: Request): Promise<Response> {
     sessionId,
     customerId,
     promoCode,
+    addonIds,
     customerEmail,
     customerFirstName,
     className,
@@ -60,6 +65,16 @@ export async function POST(request: Request): Promise<Response> {
     !promoCode.trim()
   ) {
     return Response.json({ success: false, error: "Missing required fields" }, { status: 400 });
+  }
+
+  // Add-ons always cost money — this route is only for bookings where the
+  // total is genuinely $0, so any add-on selection must go through the normal
+  // PayPal flow (/api/bookings/confirm) instead, even if the class itself is free.
+  if (Array.isArray(addonIds) && addonIds.length > 0) {
+    return Response.json(
+      { success: false, error: "Add-ons require payment — please use standard checkout." },
+      { status: 422 }
+    );
   }
 
   const supabase = await createAdminClient();
@@ -127,6 +142,12 @@ export async function POST(request: Request): Promise<Response> {
 
   if (rpcError || !bookingId) {
     const msg = rpcError?.message ?? "";
+    if (msg.includes("already_booked")) {
+      return Response.json(
+        { success: false, error: "You're already booked into this class." },
+        { status: 409 }
+      );
+    }
     if (msg.includes("session_full")) {
       return Response.json(
         { success: false, error: "This class just filled up." },

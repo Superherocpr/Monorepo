@@ -17,6 +17,7 @@ import CreateSessionClient, {
   type ClassTypeOption,
   type LocationOption,
   type InstructorOption,
+  type AddonOption,
 } from "./_components/CreateSessionClient";
 
 /** Staff roles allowed to create sessions. */
@@ -52,12 +53,38 @@ export default async function NewSessionPage() {
     .eq("active", true)
     .order("name");
 
+  // ── Fetch the add-on catalog + per-class-type eligibility (migration 0035/0036) ──
+  // Defensive: if these migrations haven't been applied yet, fall back to empty so
+  // the rest of the create-session form still renders (same reasoning as the
+  // settings page's payout-settings fallback).
+  let addons: AddonOption[] = [];
+  let addonIdsByClassType = new Map<string, string[]>();
+  try {
+    const [{ data: addonRows }, { data: junctionRows }] = await Promise.all([
+      admin.from("addons").select("id, name, price").eq("active", true).order("name"),
+      admin.from("addon_class_types").select("addon_id, class_type_id"),
+    ]);
+    addons = (addonRows ?? []).map((a) => ({
+      id: a.id as string,
+      name: a.name as string,
+      price: Number(a.price ?? 0),
+    }));
+    const byClassType = new Map<string, string[]>();
+    for (const j of (junctionRows ?? []) as { addon_id: string; class_type_id: string }[]) {
+      byClassType.set(j.class_type_id, [...(byClassType.get(j.class_type_id) ?? []), j.addon_id]);
+    }
+    addonIdsByClassType = byClassType;
+  } catch {
+    // Suppress — defaults above are safe
+  }
+
   const classTypes: ClassTypeOption[] = (rawClassTypes ?? []).map((t) => ({
     id: t.id as string,
     name: t.name as string,
     duration_minutes: t.duration_minutes as number,
     max_capacity: t.max_capacity as number,
     price: Number(t.price ?? 0),
+    addon_ids: addonIdsByClassType.get(t.id as string) ?? [],
   }));
 
   // ── Fetch all locations ────────────────────────────────────────────────────
@@ -96,6 +123,7 @@ export default async function NewSessionPage() {
       classTypes={classTypes}
       locations={locations}
       instructors={instructors}
+      addons={addons}
       isInstructor={isInstructor}
       instructorName={instructorName}
     />

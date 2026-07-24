@@ -8,13 +8,15 @@
  */
 
 import { MapPin, Clock, User, DollarSign, Tag } from "lucide-react";
-import type { BookingStore, AppliedPromoCode } from "@/lib/booking-store";
+import type { BookingStore, AppliedPromoCode, SelectedAddon } from "@/lib/booking-store";
 
 interface OrderSummaryProps {
   /** Session details from the booking store — null-safe (renders loading skeleton) */
   details: BookingStore["sessionDetails"];
   /** Applied promo code discount breakdown — null if no code applied */
   appliedPromoCode?: AppliedPromoCode | null;
+  /** Add-ons selected at checkout — shown as extra line items above the total */
+  selectedAddons?: SelectedAddon[];
 }
 
 /** Formats an ISO timestamp to a readable date string, e.g. "Tuesday, April 22, 2025". */
@@ -43,7 +45,7 @@ function formatTimeRange(startsAt: string, endsAt: string): string {
  * Displays class name, date, time, instructor, location, and price.
  * When appliedPromoCode is provided, shows original price, discount, and final total.
  */
-export default function OrderSummary({ details, appliedPromoCode }: OrderSummaryProps) {
+export default function OrderSummary({ details, appliedPromoCode, selectedAddons = [] }: OrderSummaryProps) {
   if (!details) {
     // Skeleton while store hydrates on mount
     return (
@@ -62,6 +64,8 @@ export default function OrderSummary({ details, appliedPromoCode }: OrderSummary
     n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 });
 
   const displayPrice = appliedPromoCode ? appliedPromoCode.finalPrice : details.price;
+  const addonsTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0);
+  const grandTotal = displayPrice + addonsTotal;
 
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 flex flex-col gap-4">
@@ -125,6 +129,22 @@ export default function OrderSummary({ details, appliedPromoCode }: OrderSummary
                 {fmt(displayPrice)}{" "}
                 <span className="text-sm font-normal text-gray-500">per person</span>
               </p>
+            </div>
+          )}
+
+          {/* Add-ons — only shown once at least one is selected */}
+          {selectedAddons.length > 0 && (
+            <div className="flex flex-col gap-1.5 mt-2 pt-2 border-t border-gray-100">
+              {selectedAddons.map((a) => (
+                <div key={a.id} className="flex items-center justify-between text-sm text-gray-600">
+                  <span>+ {a.name}</span>
+                  <span>{fmt(a.price)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                <span className="text-sm font-semibold text-gray-700">Total</span>
+                <span className="text-lg font-bold text-gray-900">{fmt(grandTotal)}</span>
+              </div>
             </div>
           )}
         </div>
