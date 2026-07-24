@@ -374,6 +374,16 @@ export default function SessionDetailClient({
   const [acceptError, setAcceptError] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
 
+  // ── Manual verified toggle state ──────────────────────────────────────────
+  // confirmedOverrides: keyed by roster_record id — optimistic updates for
+  // both roster rows and booking rows that have a matching roster_record.
+  const [confirmedOverrides, setConfirmedOverrides] = useState<Record<string, boolean>>({});
+  // bookingVerifiedOverrides: keyed by booking id — for students who booked
+  // online but never went through rollcall (no roster_record exists yet).
+  const [bookingVerifiedOverrides, setBookingVerifiedOverrides] = useState<Record<string, boolean>>({});
+  // Set of keys currently being toggled (mix of roster_record ids and "b-{booking_id}").
+  const [togglingVerifiedIds, setTogglingVerifiedIds] = useState<Set<string>>(new Set());
+
   // ── Edit form state (pre-populated from session data) ─────────────────────
 
   const [editClassTypeId, setEditClassTypeId] = useState(
@@ -510,6 +520,18 @@ export default function SessionDetailClient({
     return set;
   }, [session.roster_records]);
 
+  /**
+   * Map from lowercase email → roster_record.
+   * Used by booking rows to find their matching roster_record for the verified toggle.
+   */
+  const rosterRecordByEmail = useMemo(() => {
+    const map = new Map<string, SessionRosterRecord>();
+    for (const r of session.roster_records) {
+      if (r.email) map.set(r.email.toLowerCase(), r);
+    }
+    return map;
+  }, [session.roster_records]);
+
   /** Students who have been graded */
   const gradedCount = useMemo(() => {
     // For booking rows, prefer the grade from the matching roster_record (set
@@ -531,6 +553,66 @@ export default function SessionDetailClient({
     () => session.roster_uploads.find((u) => !u.imported) ?? null,
     [session.roster_uploads]
   );
+
+  // ── Verified toggle handler ───────────────────────────────────────────────
+
+  /**
+   * Flips the confirmed status on a student's roster_record.
+   * Optimistically updates the UI; reverts if the API call fails.
+   *
+   * @param mode - 'roster' for a direct roster_record id; 'booking' for a
+   *   booking whose roster_record must be found or created by the API.
+   * @param id - The roster_record id (mode='roster') or booking id (mode='booking').
+   * @param currentConfirmed - The current confirmed value before the toggle.
+   */
+  async function handleToggleVerified(
+    mode: "roster" | "booking",
+    id: string,
+    currentConfirmed: boolean
+  ): Promise<void> {
+    const newConfirmed = !currentConfirmed;
+    const stateKey = mode === "booking" ? `b-${id}` : id;
+
+    setTogglingVerifiedIds((prev) => new Set(prev).add(stateKey));
+
+    if (mode === "booking") {
+      setBookingVerifiedOverrides((prev) => ({ ...prev, [id]: newConfirmed }));
+    } else {
+      setConfirmedOverrides((prev) => ({ ...prev, [id]: newConfirmed }));
+    }
+
+    try {
+      const body =
+        mode === "booking"
+          ? { booking_id: id, confirmed: newConfirmed }
+          : { roster_record_id: id, confirmed: newConfirmed };
+
+      const res = await fetch(`/api/sessions/${session.id}/verify-student`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        console.error("[verify-student] Failed:", json.error ?? res.status);
+        throw new Error();
+      }
+    } catch {
+      // Revert optimistic update on failure
+      if (mode === "booking") {
+        setBookingVerifiedOverrides((prev) => ({ ...prev, [id]: currentConfirmed }));
+      } else {
+        setConfirmedOverrides((prev) => ({ ...prev, [id]: currentConfirmed }));
+      }
+    } finally {
+      setTogglingVerifiedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(stateKey);
+        return next;
+      });
+    }
+  }
 
   // ── Action handlers ───────────────────────────────────────────────────────
 
@@ -1770,17 +1852,43 @@ export default function SessionDetailClient({
                             {b.profiles?.email ?? "-"}
                           </td>
                           <td className="px-4 py-2.5">
-                            {verifiedEmailSet.has(
-                              b.profiles?.email?.toLowerCase() ?? ""
-                            ) ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">
-                                YES
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">
-                                NO
-                              </span>
-                            )}
+                            {(() => {
+                              const emailKey = b.profiles?.email?.toLowerCase() ?? "";
+                              const rosterRecord = rosterRecordByEmail.get(emailKey);
+                              // Resolve verified: prefer local override, then live data
+                              const isVerified = rosterRecord
+                                ? (confirmedOverrides[rosterRecord.id] ?? rosterRecord.confirmed)
+                                : (bookingVerifiedOverrides[b.id] ?? false);
+                              const stateKey = rosterRecord ? rosterRecord.id : `b-${b.id}`;
+                              const isToggling = togglingVerifiedIds.has(stateKey);
+                              const toggleId = rosterRecord?.id ?? b.id;
+                              const toggleMode: "roster" | "booking" = rosterRecord ? "roster" : "booking";
+
+                              if (canUseTools) {
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={isToggling}
+                                    onClick={() => void handleToggleVerified(toggleMode, toggleId, isVerified)}
+                                    title={isVerified ? "Click to mark as not verified" : "Click to mark as verified"}
+                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+                                      isVerified
+                                        ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                        : "bg-red-100 text-red-700 hover:bg-red-200"
+                                    }`}
+                                  >
+                                    {isToggling ? "…" : isVerified ? "YES" : "NO"}
+                                  </button>
+                                );
+                              }
+                              return (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                  isVerified ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                                }`}>
+                                  {isVerified ? "YES" : "NO"}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 py-2.5 text-gray-600">
                             {/* Prefer grade from the roster_record (where the
@@ -1803,15 +1911,34 @@ export default function SessionDetailClient({
                           {r.email ?? "-"}
                         </td>
                         <td className="px-4 py-2.5">
-                          {r.confirmed ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">
-                              YES
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">
-                              NO
-                            </span>
-                          )}
+                          {(() => {
+                            const isVerified = confirmedOverrides[r.id] ?? r.confirmed;
+                            const isToggling = togglingVerifiedIds.has(r.id);
+                            if (canUseTools) {
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={isToggling}
+                                  onClick={() => void handleToggleVerified("roster", r.id, isVerified)}
+                                  title={isVerified ? "Click to mark as not verified" : "Click to mark as verified"}
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+                                    isVerified
+                                      ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                      : "bg-red-100 text-red-700 hover:bg-red-200"
+                                  }`}
+                                >
+                                  {isToggling ? "…" : isVerified ? "YES" : "NO"}
+                                </button>
+                              );
+                            }
+                            return (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                isVerified ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                              }`}>
+                                {isVerified ? "YES" : "NO"}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-2.5 text-gray-600">
                           {r.grade ?? "-"}
