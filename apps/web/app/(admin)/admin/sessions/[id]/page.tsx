@@ -48,7 +48,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
       enrollware_submitted, roster_imported,
       correction_window_closes_at,
       class_type_id, instructor_id, location_id,
-      assistant_instructor_id, assistant_name,
+      assistant_instructor_id, assistant_name, additional_hours,
       class_types ( id, name, price, duration_minutes, requires_assistant_at_capacity ),
       profiles!class_sessions_instructor_id_fkey ( id, first_name, last_name ),
       assistant_instructor:profiles!class_sessions_assistant_instructor_id_fkey ( id, first_name, last_name ),
@@ -59,7 +59,8 @@ export default async function SessionDetailPage({ params }: PageProps) {
         payments ( status, payment_type, amount )
       ),
       roster_records (
-        id, first_name, last_name, email, phone, employer, grade, confirmed
+        id, first_name, last_name, email, phone, employer, grade, confirmed,
+        address_1, address_2, city, state, zip
       ),
       invoices (
         id, invoice_number, invoice_type, recipient_name,
@@ -136,6 +137,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
     location_id: raw.location_id,
     assistant_instructor_id: raw.assistant_instructor_id ?? null,
     assistant_name: raw.assistant_name ?? null,
+    additional_hours: raw.additional_hours ?? 0,
     addon_ids: sessionAddonIds,
     class_types: raw.class_types as unknown as SessionDetailData["class_types"],
     instructor: raw.profiles as unknown as SessionDetailData["instructor"],

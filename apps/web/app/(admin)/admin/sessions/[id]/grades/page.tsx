@@ -66,7 +66,7 @@ export default async function GradesPage({ params }: PageProps) {
   // Fetch roster records — grading source is roster_records only, not bookings
   const { data: rawStudents } = await admin
     .from("roster_records")
-    .select("id, first_name, last_name, email, employer, grade")
+    .select("id, first_name, last_name, email, employer, grade, ccf_compression")
     .eq("session_id", id)
     .order("last_name");
 

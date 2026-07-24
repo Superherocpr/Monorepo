@@ -53,7 +53,33 @@ export interface SessionRosterRecord {
   employer: string | null;
   grade: number | null;
   confirmed: boolean;
+  address_1: string | null;
+  address_2: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
 }
+
+/** Editable contact fields for the customer-info modal. */
+interface ContactFormValues {
+  email: string;
+  phone: string;
+  address_1: string;
+  address_2: string;
+  city: string;
+  state: string;
+  zip: string;
+}
+
+const EMPTY_CONTACT_FORM: ContactFormValues = {
+  email: "",
+  phone: "",
+  address_1: "",
+  address_2: "",
+  city: "",
+  state: "",
+  zip: "",
+};
 
 /** An invoice row from the session query. */
 export interface SessionInvoice {
@@ -108,6 +134,8 @@ export interface SessionDetailData {
   assistant_name: string | null;
   /** IDs of add-ons currently offered on this session (session_addons). */
   addon_ids: string[];
+  /** Extra hours added on top of the class type's default duration. 0 = no extra time. */
+  additional_hours: number;
   class_types: {
     id: string;
     name: string;
@@ -374,6 +402,16 @@ export default function SessionDetailClient({
   const [acceptError, setAcceptError] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
 
+  // ── Manual verified toggle state ──────────────────────────────────────────
+  // confirmedOverrides: keyed by roster_record id — optimistic updates for
+  // both roster rows and booking rows that have a matching roster_record.
+  const [confirmedOverrides, setConfirmedOverrides] = useState<Record<string, boolean>>({});
+  // bookingVerifiedOverrides: keyed by booking id — for students who booked
+  // online but never went through rollcall (no roster_record exists yet).
+  const [bookingVerifiedOverrides, setBookingVerifiedOverrides] = useState<Record<string, boolean>>({});
+  // Set of keys currently being toggled (mix of roster_record ids and "b-{booking_id}").
+  const [togglingVerifiedIds, setTogglingVerifiedIds] = useState<Set<string>>(new Set());
+
   // ── Edit form state (pre-populated from session data) ─────────────────────
 
   const [editClassTypeId, setEditClassTypeId] = useState(
@@ -394,6 +432,26 @@ export default function SessionDetailClient({
   const [editDiscountPercent, setEditDiscountPercent] = useState<string>(
     session.discount_percent != null ? String(session.discount_percent) : ""
   );
+
+  // ── Additional hours state ────────────────────────────────────────────────
+  const [additionalHours, setAdditionalHours] = useState<number>(session.additional_hours);
+  const [isSavingAdditionalHours, setIsSavingAdditionalHours] = useState(false);
+  const [additionalHoursError, setAdditionalHoursError] = useState<string | null>(null);
+
+  // ── Edit customer info modal state ────────────────────────────────────────
+  // Scoped to roster_records only — never the customer's account-wide profile.
+  // See /api/sessions/[id]/customer-info for why this is enough for Enrollware.
+  const [editingCustomer, setEditingCustomer] = useState<{
+    key: string; // roster_record id, or `booking-${booking.id}` when no roster_record exists yet
+    mode: "roster" | "booking";
+    id: string; // roster_record_id or booking_id, matching `mode`
+    name: string;
+  } | null>(null);
+  const [contactForm, setContactForm] = useState<ContactFormValues>(EMPTY_CONTACT_FORM);
+  const [isSavingContact, setIsSavingContact] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+  /** Local overrides keyed by the same `key` used in editingCustomer, applied after a successful save. */
+  const [contactOverrides, setContactOverrides] = useState<Record<string, ContactFormValues>>({});
 
   // ── Assistant assignment state (documentation only, no pay impact) ────────
 
@@ -510,6 +568,18 @@ export default function SessionDetailClient({
     return set;
   }, [session.roster_records]);
 
+  /**
+   * Map from lowercase email → roster_record.
+   * Used by booking rows to find their matching roster_record for the verified toggle.
+   */
+  const rosterRecordByEmail = useMemo(() => {
+    const map = new Map<string, SessionRosterRecord>();
+    for (const r of session.roster_records) {
+      if (r.email) map.set(r.email.toLowerCase(), r);
+    }
+    return map;
+  }, [session.roster_records]);
+
   /** Students who have been graded */
   const gradedCount = useMemo(() => {
     // For booking rows, prefer the grade from the matching roster_record (set
@@ -531,6 +601,194 @@ export default function SessionDetailClient({
     () => session.roster_uploads.find((u) => !u.imported) ?? null,
     [session.roster_uploads]
   );
+
+  // ── Additional hours handler ──────────────────────────────────────────────
+
+  /**
+   * Saves a new additional_hours value for this session.
+   * Optimistically updates local state; reverts on failure.
+   * @param hours - One of the preset values: 0, 2, 4, 6, 8, or 10.
+   */
+  async function handleSelectAdditionalHours(hours: number): Promise<void> {
+    const previous = additionalHours;
+    setAdditionalHours(hours);
+    setIsSavingAdditionalHours(true);
+    setAdditionalHoursError(null);
+
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/additional-hours`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ additional_hours: hours }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        console.error("[additional-hours] Save failed:", json.error ?? res.status);
+        setAdditionalHours(previous);
+        setAdditionalHoursError("Failed to save — please try again.");
+      }
+    } catch {
+      setAdditionalHours(previous);
+      setAdditionalHoursError("Failed to save — please try again.");
+    } finally {
+      setIsSavingAdditionalHours(false);
+    }
+  }
+
+  // ── Edit customer info handlers ───────────────────────────────────────────
+
+  /** Opens the customer-info modal for a roster-only student row. */
+  function openEditRoster(r: SessionRosterRecord): void {
+    setEditingCustomer({
+      key: r.id,
+      mode: "roster",
+      id: r.id,
+      name: `${r.first_name} ${r.last_name}`,
+    });
+    setContactForm(
+      contactOverrides[r.id] ?? {
+        email: r.email ?? "",
+        phone: r.phone ?? "",
+        address_1: r.address_1 ?? "",
+        address_2: r.address_2 ?? "",
+        city: r.city ?? "",
+        state: r.state ?? "",
+        zip: r.zip ?? "",
+      }
+    );
+    setContactError(null);
+  }
+
+  /**
+   * Opens the customer-info modal for a booking row.
+   * Prefers the matching roster_record's contact info (source of truth for
+   * Enrollware) over the booking's account profile; falls back to the
+   * profile's email/phone when no roster_record exists yet.
+   */
+  function openEditBooking(b: SessionBooking): void {
+    const emailKey = b.profiles?.email?.toLowerCase() ?? "";
+    const rosterRecord = rosterRecordByEmail.get(emailKey);
+    const key = rosterRecord ? rosterRecord.id : `booking-${b.id}`;
+    const mode: "roster" | "booking" = rosterRecord ? "roster" : "booking";
+    const id = rosterRecord ? rosterRecord.id : b.id;
+
+    setEditingCustomer({
+      key,
+      mode,
+      id,
+      name: b.profiles ? `${b.profiles.first_name} ${b.profiles.last_name}` : "Student",
+    });
+    setContactForm(
+      contactOverrides[key] ?? {
+        email: rosterRecord?.email ?? b.profiles?.email ?? "",
+        phone: rosterRecord?.phone ?? b.profiles?.phone ?? "",
+        address_1: rosterRecord?.address_1 ?? "",
+        address_2: rosterRecord?.address_2 ?? "",
+        city: rosterRecord?.city ?? "",
+        state: rosterRecord?.state ?? "",
+        zip: rosterRecord?.zip ?? "",
+      }
+    );
+    setContactError(null);
+  }
+
+  /**
+   * Saves the customer-info form for the student currently open in the modal.
+   * Updates roster_records only — see /api/sessions/[id]/customer-info.
+   * Side effect: PATCH request, local optimistic override on success.
+   */
+  async function handleSaveContactInfo(): Promise<void> {
+    if (!editingCustomer) return;
+    setIsSavingContact(true);
+    setContactError(null);
+
+    try {
+      const body =
+        editingCustomer.mode === "roster"
+          ? { roster_record_id: editingCustomer.id, ...contactForm }
+          : { booking_id: editingCustomer.id, ...contactForm };
+
+      const res = await fetch(`/api/sessions/${session.id}/customer-info`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setContactError(json.error ?? "Failed to save. Please try again.");
+        return;
+      }
+
+      setContactOverrides((prev) => ({ ...prev, [editingCustomer.key]: contactForm }));
+      setEditingCustomer(null);
+    } catch {
+      setContactError("Failed to save. Please try again.");
+    } finally {
+      setIsSavingContact(false);
+    }
+  }
+
+  // ── Verified toggle handler ───────────────────────────────────────────────
+
+  /**
+   * Flips the confirmed status on a student's roster_record.
+   * Optimistically updates the UI; reverts if the API call fails.
+   *
+   * @param mode - 'roster' for a direct roster_record id; 'booking' for a
+   *   booking whose roster_record must be found or created by the API.
+   * @param id - The roster_record id (mode='roster') or booking id (mode='booking').
+   * @param currentConfirmed - The current confirmed value before the toggle.
+   */
+  async function handleToggleVerified(
+    mode: "roster" | "booking",
+    id: string,
+    currentConfirmed: boolean
+  ): Promise<void> {
+    const newConfirmed = !currentConfirmed;
+    const stateKey = mode === "booking" ? `b-${id}` : id;
+
+    setTogglingVerifiedIds((prev) => new Set(prev).add(stateKey));
+
+    if (mode === "booking") {
+      setBookingVerifiedOverrides((prev) => ({ ...prev, [id]: newConfirmed }));
+    } else {
+      setConfirmedOverrides((prev) => ({ ...prev, [id]: newConfirmed }));
+    }
+
+    try {
+      const body =
+        mode === "booking"
+          ? { booking_id: id, confirmed: newConfirmed }
+          : { roster_record_id: id, confirmed: newConfirmed };
+
+      const res = await fetch(`/api/sessions/${session.id}/verify-student`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        console.error("[verify-student] Failed:", json.error ?? res.status);
+        throw new Error();
+      }
+    } catch {
+      // Revert optimistic update on failure
+      if (mode === "booking") {
+        setBookingVerifiedOverrides((prev) => ({ ...prev, [id]: currentConfirmed }));
+      } else {
+        setConfirmedOverrides((prev) => ({ ...prev, [id]: currentConfirmed }));
+      }
+    } finally {
+      setTogglingVerifiedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(stateKey);
+        return next;
+      });
+    }
+  }
 
   // ── Action handlers ───────────────────────────────────────────────────────
 
@@ -926,6 +1184,111 @@ export default function SessionDetailClient({
         </div>
       )}
 
+      {/* ── Edit customer info modal ── */}
+      {editingCustomer && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Edit Contact Info</h2>
+              <p className="text-sm text-gray-500">{editingCustomer.name}</p>
+            </div>
+            <p className="text-xs text-gray-500">
+              Updates this student&apos;s info for this class only — for Enrollware
+              submission accuracy. Does not change their SuperheroCPR account.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={contactForm.email}
+                  onChange={(e) => setContactForm((prev) => ({ ...prev, email: e.target.value }))}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={contactForm.phone}
+                  onChange={(e) => setContactForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Address Line 1</label>
+                <input
+                  type="text"
+                  value={contactForm.address_1}
+                  onChange={(e) => setContactForm((prev) => ({ ...prev, address_1: e.target.value }))}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Address Line 2</label>
+                <input
+                  type="text"
+                  value={contactForm.address_2}
+                  onChange={(e) => setContactForm((prev) => ({ ...prev, address_2: e.target.value }))}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={contactForm.city}
+                    onChange={(e) => setContactForm((prev) => ({ ...prev, city: e.target.value }))}
+                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
+                  <input
+                    type="text"
+                    value={contactForm.state}
+                    onChange={(e) => setContactForm((prev) => ({ ...prev, state: e.target.value }))}
+                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Zip</label>
+                  <input
+                    type="text"
+                    value={contactForm.zip}
+                    onChange={(e) => setContactForm((prev) => ({ ...prev, zip: e.target.value }))}
+                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {contactError && <p className="text-xs text-red-700 font-medium">{contactError}</p>}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void handleSaveContactInfo()}
+                disabled={isSavingContact}
+                className="flex-1 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isSavingContact ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingCustomer(null)}
+                disabled={isSavingContact}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Claim This Class banner (cancelled session reopened as an open opportunity) ── */}
       {isOpenOpportunity && (
         <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-5 space-y-3">
@@ -1237,6 +1600,61 @@ export default function SessionDetailClient({
                   {isSavingAssistant ? "Saving…" : "Add Assistant"}
                 </button>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Additional hours ── */}
+        {canManageAssistant && (
+          <div className="border border-gray-200 rounded-md p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-800">Additional Hours</p>
+            <p className="text-xs text-gray-500">
+              Hours added on top of the class type&apos;s default duration. Use this when a
+              session runs longer than usual for Enrollware reporting.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {([0, 2, 4, 6, 8, 10] as const).map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  disabled={isSavingAdditionalHours}
+                  aria-pressed={additionalHours === h}
+                  onClick={() => void handleSelectAdditionalHours(h)}
+                  className={`min-w-[52px] px-3 py-1.5 rounded-md text-sm font-medium border transition-colors disabled:opacity-50 ${
+                    additionalHours === h
+                      ? "bg-red-600 text-white border-red-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
+                  }`}
+                >
+                  +{h}h
+                </button>
+              ))}
+              <input
+                type="number"
+                min={0}
+                step={1}
+                disabled={isSavingAdditionalHours}
+                placeholder="Custom"
+                aria-label="Custom additional hours"
+                defaultValue=""
+                onBlur={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (!isNaN(val) && val >= 0) {
+                    void handleSelectAdditionalHours(val);
+                    e.target.value = "";
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+                className="w-24 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+              />
+            </div>
+            {additionalHoursError && (
+              <p className="text-xs text-red-600 font-medium">{additionalHoursError}</p>
+            )}
+            {isSavingAdditionalHours && (
+              <p className="text-xs text-gray-400">Saving…</p>
             )}
           </div>
         )}
@@ -1762,25 +2180,72 @@ export default function SessionDetailClient({
                       .map((b) => (
                         <tr key={`booking-${b.id}`} className="hover:bg-gray-50">
                           <td className="px-6 py-2.5 font-medium text-gray-800">
-                            {b.profiles
-                              ? `${b.profiles.first_name} ${b.profiles.last_name}`
-                              : "-"}
+                            {b.profiles ? (
+                              canUseTools ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openEditBooking(b)}
+                                  title="Click to edit contact info"
+                                  className="text-left hover:text-red-600 hover:underline transition-colors"
+                                >
+                                  {b.profiles.first_name} {b.profiles.last_name}
+                                </button>
+                              ) : (
+                                `${b.profiles.first_name} ${b.profiles.last_name}`
+                              )
+                            ) : (
+                              "-"
+                            )}
                           </td>
                           <td className="px-4 py-2.5 text-gray-600">
-                            {b.profiles?.email ?? "-"}
+                            {(() => {
+                              const emailKeyForContact = b.profiles?.email?.toLowerCase() ?? "";
+                              const rosterRecordForContact = rosterRecordByEmail.get(emailKeyForContact);
+                              const contactKey = rosterRecordForContact
+                                ? rosterRecordForContact.id
+                                : `booking-${b.id}`;
+                              const override = contactOverrides[contactKey];
+                              return override?.email || rosterRecordForContact?.email || b.profiles?.email || "-";
+                            })()}
                           </td>
                           <td className="px-4 py-2.5">
-                            {verifiedEmailSet.has(
-                              b.profiles?.email?.toLowerCase() ?? ""
-                            ) ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">
-                                YES
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">
-                                NO
-                              </span>
-                            )}
+                            {(() => {
+                              const emailKey = b.profiles?.email?.toLowerCase() ?? "";
+                              const rosterRecord = rosterRecordByEmail.get(emailKey);
+                              // Resolve verified: prefer local override, then live data
+                              const isVerified = rosterRecord
+                                ? (confirmedOverrides[rosterRecord.id] ?? rosterRecord.confirmed)
+                                : (bookingVerifiedOverrides[b.id] ?? false);
+                              const stateKey = rosterRecord ? rosterRecord.id : `b-${b.id}`;
+                              const isToggling = togglingVerifiedIds.has(stateKey);
+                              const toggleId = rosterRecord?.id ?? b.id;
+                              const toggleMode: "roster" | "booking" = rosterRecord ? "roster" : "booking";
+
+                              if (canUseTools) {
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={isToggling}
+                                    onClick={() => void handleToggleVerified(toggleMode, toggleId, isVerified)}
+                                    title={isVerified ? "Click to mark as not verified" : "Click to mark as verified"}
+                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+                                      isVerified
+                                        ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                        : "bg-red-100 text-red-700 hover:bg-red-200"
+                                    }`}
+                                  >
+                                    {isToggling ? "…" : isVerified ? "YES" : "NO"}
+                                  </button>
+                                );
+                              }
+                              return (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                  isVerified ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                                }`}>
+                                  {isVerified ? "YES" : "NO"}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 py-2.5 text-gray-600">
                             {/* Prefer grade from the roster_record (where the
@@ -1797,21 +2262,51 @@ export default function SessionDetailClient({
                     {uniqueRosterRecords.map((r) => (
                       <tr key={`roster-${r.id}`} className="hover:bg-gray-50">
                         <td className="px-6 py-2.5 font-medium text-gray-800">
-                          {r.first_name} {r.last_name}
+                          {canUseTools ? (
+                            <button
+                              type="button"
+                              onClick={() => openEditRoster(r)}
+                              title="Click to edit contact info"
+                              className="text-left hover:text-red-600 hover:underline transition-colors"
+                            >
+                              {r.first_name} {r.last_name}
+                            </button>
+                          ) : (
+                            `${r.first_name} ${r.last_name}`
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-gray-600">
-                          {r.email ?? "-"}
+                          {contactOverrides[r.id]?.email || r.email || "-"}
                         </td>
                         <td className="px-4 py-2.5">
-                          {r.confirmed ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">
-                              YES
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">
-                              NO
-                            </span>
-                          )}
+                          {(() => {
+                            const isVerified = confirmedOverrides[r.id] ?? r.confirmed;
+                            const isToggling = togglingVerifiedIds.has(r.id);
+                            if (canUseTools) {
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={isToggling}
+                                  onClick={() => void handleToggleVerified("roster", r.id, isVerified)}
+                                  title={isVerified ? "Click to mark as not verified" : "Click to mark as verified"}
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+                                    isVerified
+                                      ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                      : "bg-red-100 text-red-700 hover:bg-red-200"
+                                  }`}
+                                >
+                                  {isToggling ? "…" : isVerified ? "YES" : "NO"}
+                                </button>
+                              );
+                            }
+                            return (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                isVerified ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                              }`}>
+                                {isVerified ? "YES" : "NO"}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-2.5 text-gray-600">
                           {r.grade ?? "-"}
