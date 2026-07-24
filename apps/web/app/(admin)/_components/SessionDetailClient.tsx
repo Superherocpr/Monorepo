@@ -108,6 +108,8 @@ export interface SessionDetailData {
   assistant_name: string | null;
   /** IDs of add-ons currently offered on this session (session_addons). */
   addon_ids: string[];
+  /** Extra hours added on top of the class type's default duration. 0 = no extra time. */
+  additional_hours: number;
   class_types: {
     id: string;
     name: string;
@@ -405,6 +407,11 @@ export default function SessionDetailClient({
     session.discount_percent != null ? String(session.discount_percent) : ""
   );
 
+  // ── Additional hours state ────────────────────────────────────────────────
+  const [additionalHours, setAdditionalHours] = useState<number>(session.additional_hours);
+  const [isSavingAdditionalHours, setIsSavingAdditionalHours] = useState(false);
+  const [additionalHoursError, setAdditionalHoursError] = useState<string | null>(null);
+
   // ── Assistant assignment state (documentation only, no pay impact) ────────
 
   const [assistantMode, setAssistantMode] = useState<"instructor" | "name">(
@@ -553,6 +560,40 @@ export default function SessionDetailClient({
     () => session.roster_uploads.find((u) => !u.imported) ?? null,
     [session.roster_uploads]
   );
+
+  // ── Additional hours handler ──────────────────────────────────────────────
+
+  /**
+   * Saves a new additional_hours value for this session.
+   * Optimistically updates local state; reverts on failure.
+   * @param hours - One of the preset values: 0, 2, 4, 6, 8, or 10.
+   */
+  async function handleSelectAdditionalHours(hours: number): Promise<void> {
+    const previous = additionalHours;
+    setAdditionalHours(hours);
+    setIsSavingAdditionalHours(true);
+    setAdditionalHoursError(null);
+
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/additional-hours`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ additional_hours: hours }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        console.error("[additional-hours] Save failed:", json.error ?? res.status);
+        setAdditionalHours(previous);
+        setAdditionalHoursError("Failed to save — please try again.");
+      }
+    } catch {
+      setAdditionalHours(previous);
+      setAdditionalHoursError("Failed to save — please try again.");
+    } finally {
+      setIsSavingAdditionalHours(false);
+    }
+  }
 
   // ── Verified toggle handler ───────────────────────────────────────────────
 
@@ -1319,6 +1360,61 @@ export default function SessionDetailClient({
                   {isSavingAssistant ? "Saving…" : "Add Assistant"}
                 </button>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Additional hours ── */}
+        {canManageAssistant && (
+          <div className="border border-gray-200 rounded-md p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-800">Additional Hours</p>
+            <p className="text-xs text-gray-500">
+              Hours added on top of the class type&apos;s default duration. Use this when a
+              session runs longer than usual for Enrollware reporting.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {([0, 2, 4, 6, 8, 10] as const).map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  disabled={isSavingAdditionalHours}
+                  aria-pressed={additionalHours === h}
+                  onClick={() => void handleSelectAdditionalHours(h)}
+                  className={`min-w-[52px] px-3 py-1.5 rounded-md text-sm font-medium border transition-colors disabled:opacity-50 ${
+                    additionalHours === h
+                      ? "bg-red-600 text-white border-red-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
+                  }`}
+                >
+                  +{h}h
+                </button>
+              ))}
+              <input
+                type="number"
+                min={0}
+                step={1}
+                disabled={isSavingAdditionalHours}
+                placeholder="Custom"
+                aria-label="Custom additional hours"
+                defaultValue=""
+                onBlur={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (!isNaN(val) && val >= 0) {
+                    void handleSelectAdditionalHours(val);
+                    e.target.value = "";
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+                className="w-24 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+              />
+            </div>
+            {additionalHoursError && (
+              <p className="text-xs text-red-600 font-medium">{additionalHoursError}</p>
+            )}
+            {isSavingAdditionalHours && (
+              <p className="text-xs text-gray-400">Saving…</p>
             )}
           </div>
         )}

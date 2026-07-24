@@ -220,10 +220,11 @@ export function getBookmarkletSource(apiBase: string): string {
       priceEl.value = String(session.class_type.price);
     }
 
-    // Total Hours — computed from duration_minutes
+    // Total Hours — class type default plus any per-session additional hours
     var hoursEl = document.getElementById('mainContent_totalHours');
     if (hoursEl && session.class_type && session.class_type.duration_minutes) {
-      var hrs = session.class_type.duration_minutes / 60;
+      var additionalHours = session.additional_hours || 0;
+      var hrs = (session.class_type.duration_minutes / 60) + additionalHours;
       // Show as integer if whole, otherwise one decimal place (e.g. 1.5)
       hoursEl.value = (hrs % 1 === 0) ? String(hrs) : hrs.toFixed(1);
     }

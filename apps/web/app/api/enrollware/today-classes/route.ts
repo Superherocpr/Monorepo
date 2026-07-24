@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
        max_capacity,
        enrollware_submitted,
        assistant_name,
+       additional_hours,
        class_types ( name, price, duration_minutes ),
        locations ( name ),
        profiles!class_sessions_instructor_id_fkey ( first_name, last_name ),
@@ -109,6 +110,7 @@ export async function GET(request: NextRequest) {
       ends_at: s.ends_at,
       max_capacity: s.max_capacity,
       enrollware_submitted: s.enrollware_submitted ?? false,
+      additional_hours: s.additional_hours ?? 0,
       // assistant_name is free-text (for non-platform assistants); assistant_instructor
       // is set when the assistant is a platform profile. The bookmarklet prefers
       // assistant_name and falls back to the profile's full name.
