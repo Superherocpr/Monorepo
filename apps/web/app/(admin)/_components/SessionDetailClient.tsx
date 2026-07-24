@@ -53,7 +53,33 @@ export interface SessionRosterRecord {
   employer: string | null;
   grade: number | null;
   confirmed: boolean;
+  address_1: string | null;
+  address_2: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
 }
+
+/** Editable contact fields for the customer-info modal. */
+interface ContactFormValues {
+  email: string;
+  phone: string;
+  address_1: string;
+  address_2: string;
+  city: string;
+  state: string;
+  zip: string;
+}
+
+const EMPTY_CONTACT_FORM: ContactFormValues = {
+  email: "",
+  phone: "",
+  address_1: "",
+  address_2: "",
+  city: "",
+  state: "",
+  zip: "",
+};
 
 /** An invoice row from the session query. */
 export interface SessionInvoice {
@@ -412,6 +438,21 @@ export default function SessionDetailClient({
   const [isSavingAdditionalHours, setIsSavingAdditionalHours] = useState(false);
   const [additionalHoursError, setAdditionalHoursError] = useState<string | null>(null);
 
+  // ── Edit customer info modal state ────────────────────────────────────────
+  // Scoped to roster_records only — never the customer's account-wide profile.
+  // See /api/sessions/[id]/customer-info for why this is enough for Enrollware.
+  const [editingCustomer, setEditingCustomer] = useState<{
+    key: string; // roster_record id, or `booking-${booking.id}` when no roster_record exists yet
+    mode: "roster" | "booking";
+    id: string; // roster_record_id or booking_id, matching `mode`
+    name: string;
+  } | null>(null);
+  const [contactForm, setContactForm] = useState<ContactFormValues>(EMPTY_CONTACT_FORM);
+  const [isSavingContact, setIsSavingContact] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+  /** Local overrides keyed by the same `key` used in editingCustomer, applied after a successful save. */
+  const [contactOverrides, setContactOverrides] = useState<Record<string, ContactFormValues>>({});
+
   // ── Assistant assignment state (documentation only, no pay impact) ────────
 
   const [assistantMode, setAssistantMode] = useState<"instructor" | "name">(
@@ -592,6 +633,100 @@ export default function SessionDetailClient({
       setAdditionalHoursError("Failed to save — please try again.");
     } finally {
       setIsSavingAdditionalHours(false);
+    }
+  }
+
+  // ── Edit customer info handlers ───────────────────────────────────────────
+
+  /** Opens the customer-info modal for a roster-only student row. */
+  function openEditRoster(r: SessionRosterRecord): void {
+    setEditingCustomer({
+      key: r.id,
+      mode: "roster",
+      id: r.id,
+      name: `${r.first_name} ${r.last_name}`,
+    });
+    setContactForm(
+      contactOverrides[r.id] ?? {
+        email: r.email ?? "",
+        phone: r.phone ?? "",
+        address_1: r.address_1 ?? "",
+        address_2: r.address_2 ?? "",
+        city: r.city ?? "",
+        state: r.state ?? "",
+        zip: r.zip ?? "",
+      }
+    );
+    setContactError(null);
+  }
+
+  /**
+   * Opens the customer-info modal for a booking row.
+   * Prefers the matching roster_record's contact info (source of truth for
+   * Enrollware) over the booking's account profile; falls back to the
+   * profile's email/phone when no roster_record exists yet.
+   */
+  function openEditBooking(b: SessionBooking): void {
+    const emailKey = b.profiles?.email?.toLowerCase() ?? "";
+    const rosterRecord = rosterRecordByEmail.get(emailKey);
+    const key = rosterRecord ? rosterRecord.id : `booking-${b.id}`;
+    const mode: "roster" | "booking" = rosterRecord ? "roster" : "booking";
+    const id = rosterRecord ? rosterRecord.id : b.id;
+
+    setEditingCustomer({
+      key,
+      mode,
+      id,
+      name: b.profiles ? `${b.profiles.first_name} ${b.profiles.last_name}` : "Student",
+    });
+    setContactForm(
+      contactOverrides[key] ?? {
+        email: rosterRecord?.email ?? b.profiles?.email ?? "",
+        phone: rosterRecord?.phone ?? b.profiles?.phone ?? "",
+        address_1: rosterRecord?.address_1 ?? "",
+        address_2: rosterRecord?.address_2 ?? "",
+        city: rosterRecord?.city ?? "",
+        state: rosterRecord?.state ?? "",
+        zip: rosterRecord?.zip ?? "",
+      }
+    );
+    setContactError(null);
+  }
+
+  /**
+   * Saves the customer-info form for the student currently open in the modal.
+   * Updates roster_records only — see /api/sessions/[id]/customer-info.
+   * Side effect: PATCH request, local optimistic override on success.
+   */
+  async function handleSaveContactInfo(): Promise<void> {
+    if (!editingCustomer) return;
+    setIsSavingContact(true);
+    setContactError(null);
+
+    try {
+      const body =
+        editingCustomer.mode === "roster"
+          ? { roster_record_id: editingCustomer.id, ...contactForm }
+          : { booking_id: editingCustomer.id, ...contactForm };
+
+      const res = await fetch(`/api/sessions/${session.id}/customer-info`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setContactError(json.error ?? "Failed to save. Please try again.");
+        return;
+      }
+
+      setContactOverrides((prev) => ({ ...prev, [editingCustomer.key]: contactForm }));
+      setEditingCustomer(null);
+    } catch {
+      setContactError("Failed to save. Please try again.");
+    } finally {
+      setIsSavingContact(false);
     }
   }
 
@@ -1045,6 +1180,111 @@ export default function SessionDetailClient({
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit customer info modal ── */}
+      {editingCustomer && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Edit Contact Info</h2>
+              <p className="text-sm text-gray-500">{editingCustomer.name}</p>
+            </div>
+            <p className="text-xs text-gray-500">
+              Updates this student&apos;s info for this class only — for Enrollware
+              submission accuracy. Does not change their SuperheroCPR account.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={contactForm.email}
+                  onChange={(e) => setContactForm((prev) => ({ ...prev, email: e.target.value }))}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={contactForm.phone}
+                  onChange={(e) => setContactForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Address Line 1</label>
+                <input
+                  type="text"
+                  value={contactForm.address_1}
+                  onChange={(e) => setContactForm((prev) => ({ ...prev, address_1: e.target.value }))}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Address Line 2</label>
+                <input
+                  type="text"
+                  value={contactForm.address_2}
+                  onChange={(e) => setContactForm((prev) => ({ ...prev, address_2: e.target.value }))}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={contactForm.city}
+                    onChange={(e) => setContactForm((prev) => ({ ...prev, city: e.target.value }))}
+                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
+                  <input
+                    type="text"
+                    value={contactForm.state}
+                    onChange={(e) => setContactForm((prev) => ({ ...prev, state: e.target.value }))}
+                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Zip</label>
+                  <input
+                    type="text"
+                    value={contactForm.zip}
+                    onChange={(e) => setContactForm((prev) => ({ ...prev, zip: e.target.value }))}
+                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {contactError && <p className="text-xs text-red-700 font-medium">{contactError}</p>}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void handleSaveContactInfo()}
+                disabled={isSavingContact}
+                className="flex-1 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isSavingContact ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingCustomer(null)}
+                disabled={isSavingContact}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1940,12 +2180,33 @@ export default function SessionDetailClient({
                       .map((b) => (
                         <tr key={`booking-${b.id}`} className="hover:bg-gray-50">
                           <td className="px-6 py-2.5 font-medium text-gray-800">
-                            {b.profiles
-                              ? `${b.profiles.first_name} ${b.profiles.last_name}`
-                              : "-"}
+                            {b.profiles ? (
+                              canUseTools ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openEditBooking(b)}
+                                  title="Click to edit contact info"
+                                  className="text-left hover:text-red-600 hover:underline transition-colors"
+                                >
+                                  {b.profiles.first_name} {b.profiles.last_name}
+                                </button>
+                              ) : (
+                                `${b.profiles.first_name} ${b.profiles.last_name}`
+                              )
+                            ) : (
+                              "-"
+                            )}
                           </td>
                           <td className="px-4 py-2.5 text-gray-600">
-                            {b.profiles?.email ?? "-"}
+                            {(() => {
+                              const emailKeyForContact = b.profiles?.email?.toLowerCase() ?? "";
+                              const rosterRecordForContact = rosterRecordByEmail.get(emailKeyForContact);
+                              const contactKey = rosterRecordForContact
+                                ? rosterRecordForContact.id
+                                : `booking-${b.id}`;
+                              const override = contactOverrides[contactKey];
+                              return override?.email || rosterRecordForContact?.email || b.profiles?.email || "-";
+                            })()}
                           </td>
                           <td className="px-4 py-2.5">
                             {(() => {
@@ -2001,10 +2262,21 @@ export default function SessionDetailClient({
                     {uniqueRosterRecords.map((r) => (
                       <tr key={`roster-${r.id}`} className="hover:bg-gray-50">
                         <td className="px-6 py-2.5 font-medium text-gray-800">
-                          {r.first_name} {r.last_name}
+                          {canUseTools ? (
+                            <button
+                              type="button"
+                              onClick={() => openEditRoster(r)}
+                              title="Click to edit contact info"
+                              className="text-left hover:text-red-600 hover:underline transition-colors"
+                            >
+                              {r.first_name} {r.last_name}
+                            </button>
+                          ) : (
+                            `${r.first_name} ${r.last_name}`
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-gray-600">
-                          {r.email ?? "-"}
+                          {contactOverrides[r.id]?.email || r.email || "-"}
                         </td>
                         <td className="px-4 py-2.5">
                           {(() => {
