@@ -133,6 +133,33 @@ export async function DELETE(
     );
   }
 
+  // ── Verify no purchase history ───────────────────────────────────────────────
+  // booking_addons.addon_id is ON DELETE RESTRICT (migration 0037) — it's a
+  // financial record, so this check gives a friendly error instead of a raw
+  // DB constraint violation.
+  const { count: purchaseCount, error: purchaseCountError } = await adminClient
+    .from("booking_addons")
+    .select("id", { count: "exact", head: true })
+    .eq("addon_id", id);
+
+  if (purchaseCountError) {
+    console.error("[DELETE /api/settings/addons/[id]] purchase count check", purchaseCountError);
+    return Response.json(
+      { success: false, error: "Failed to verify add-on usage." },
+      { status: 500 }
+    );
+  }
+
+  if ((purchaseCount ?? 0) > 0) {
+    return Response.json(
+      {
+        success: false,
+        error: `This add-on has been purchased with ${purchaseCount} booking${purchaseCount !== 1 ? "s" : ""} and cannot be deleted. Deactivate it instead.`,
+      },
+      { status: 409 }
+    );
+  }
+
   // ── Delete ─────────────────────────────────────────────────────────────────
   const { error } = await adminClient.from("addons").delete().eq("id", id);
 

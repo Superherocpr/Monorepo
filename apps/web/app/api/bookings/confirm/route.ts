@@ -4,15 +4,21 @@
  * Auth: None required — PayPal order ID is the verification
  *
  * 1. Validates required fields.
- * 2. Re-fetches the class session price from the DB and re-validates any promo
- *    code server-side, then verifies the client-supplied amount matches (THREAT-013).
+ * 2. Re-fetches the class session price from the DB, re-validates any promo
+ *    code and any selected add-ons (against session_addons, migration 0036)
+ *    server-side, then verifies the client-supplied amount matches (THREAT-013).
  * 3. Captures the PayPal payment server-side.
- * 4. Atomically reserves a spot via book_spot RPC (THREAT-006). If the class
- *    filled up during checkout, the PayPal capture is refunded automatically.
- * 5. Creates the payment record and instructor earning record.
- * 6. Sends booking confirmation email via Resend (best-effort).
+ * 4. Atomically reserves a spot via book_spot RPC (THREAT-006), which also
+ *    rejects a duplicate booking attempt for the same customer + session
+ *    (THREAT-047). If the class filled up or the customer is already booked,
+ *    the PayPal capture is refunded automatically.
+ * 5. Records purchased add-ons (booking_addons, price snapshotted).
+ * 6. Creates the payment record and instructor earning record.
+ * 7. Sends booking confirmation email via Resend (best-effort).
  *
- * Note: free (100% off) bookings use /api/bookings/confirm-free instead.
+ * Note: free (100% off) bookings use /api/bookings/confirm-free instead — that
+ * route rejects any request that includes add-ons, since add-ons always cost
+ * money even when a promo code zeroes out the class price.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
@@ -22,6 +28,7 @@ import { bookingConfirmationEmail } from "@/lib/emails";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
 import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
+import { resolveAddonsSelection, type ResolvedAddon } from "@/lib/addon-checkout";
 import { maybeSendAssistantReminder } from "@/lib/assistant-reminder";
 
 /** Acceptable rounding tolerance when comparing client/server prices. */
@@ -69,6 +76,7 @@ export async function POST(request: Request) {
     customerId,
     amount,
     promoCode,
+    addonIds,
     customerEmail,
     customerFirstName,
     className,
@@ -87,6 +95,10 @@ export async function POST(request: Request) {
     typeof amount !== "number"
   ) {
     return Response.json({ success: false, error: "Missing required fields" }, { status: 400 });
+  }
+
+  if (addonIds !== undefined && (!Array.isArray(addonIds) || !addonIds.every((id) => typeof id === "string"))) {
+    return Response.json({ success: false, error: "addonIds must be an array of strings" }, { status: 400 });
   }
 
   const supabase = await createAdminClient();
@@ -147,6 +159,18 @@ export async function POST(request: Request) {
     discountAmount = promoResult.discountAmount;
   }
 
+  // Re-validate the add-on selection server-side and fold the total into the
+  // authoritative expected price — same THREAT-013 reasoning as the promo code above.
+  let resolvedAddons: ResolvedAddon[] = [];
+  if (Array.isArray(addonIds) && addonIds.length > 0) {
+    const addonsResult = await resolveAddonsSelection(supabase, sessionId, addonIds as string[]);
+    if (!addonsResult.valid) {
+      return Response.json({ success: false, error: addonsResult.error }, { status: 422 });
+    }
+    resolvedAddons = addonsResult.addons;
+    expectedPrice = parseFloat((expectedPrice + addonsResult.total).toFixed(2));
+  }
+
   if (Math.abs(amount - expectedPrice) > PRICE_TOLERANCE) {
     return Response.json(
       { success: false, error: "Pricing has changed. Please refresh and try again." },
@@ -184,11 +208,14 @@ export async function POST(request: Request) {
   const paypalTransactionId = capture?.id ?? null;
 
   // Verify PayPal captured the expected amount (defence in depth).
+  // Compares against expectedPrice (class price − promo + add-ons), not the raw
+  // dbPrice — a prior version compared against dbPrice, which would have wrongly
+  // triggered a refund+reject for any promo-discounted booking above 1 cent.
   if (capture?.amount?.value) {
     const capturedAmount = parseFloat(capture.amount.value);
     if (
       Number.isFinite(capturedAmount) &&
-      Math.abs(capturedAmount - dbPrice) > PRICE_TOLERANCE
+      Math.abs(capturedAmount - expectedPrice) > PRICE_TOLERANCE
     ) {
       if (paypalTransactionId) {
         await refundCapture(paypalTransactionId).catch((err) =>
@@ -219,6 +246,12 @@ export async function POST(request: Request) {
     if (paypalTransactionId) {
       await refundCapture(paypalTransactionId).catch((err) =>
         console.error("[bookings/confirm] Refund after booking failure failed:", err)
+      );
+    }
+    if (msg.includes("already_booked")) {
+      return Response.json(
+        { success: false, error: "You're already booked into this class. Payment refunded." },
+        { status: 409 }
       );
     }
     if (msg.includes("session_full")) {
@@ -253,12 +286,35 @@ export async function POST(request: Request) {
     console.error("[bookings/confirm] Assistant reminder check failed (non-fatal):", err);
   });
 
+  // Record the purchased add-ons, snapshotting price_at_booking — never a live
+  // join to addons.price, so later catalog price changes don't rewrite history.
+  if (resolvedAddons.length > 0) {
+    const { error: addonInsertError } = await supabase.from("booking_addons").insert(
+      resolvedAddons.map((a) => ({
+        booking_id: bookingId,
+        addon_id: a.id,
+        price_at_booking: a.price,
+      }))
+    );
+    if (addonInsertError) {
+      console.error("[bookings/confirm] CRITICAL: booking_addons insert failed", {
+        bookingId,
+        addonIds: resolvedAddons.map((a) => a.id),
+        error: addonInsertError,
+      });
+    }
+  }
+
   // ── Step 4: Create payment + instructor earning records ─────────────────
   // All online booking funds now land in the SuperHeroCPR business PayPal
   // account. The instructor receives their share through the payout system.
+  const addonsNote =
+    resolvedAddons.length > 0
+      ? ` + add-ons: ${resolvedAddons.map((a) => `${a.name} ($${a.price.toFixed(2)})`).join(", ")}`
+      : "";
   const routingNote = appliedPromoCode
-    ? `Collected by SuperHeroCPR business PayPal (promo: ${appliedPromoCode}, discount: $${discountAmount.toFixed(2)}) — instructor payout pending`
-    : "Collected by SuperHeroCPR business PayPal — instructor payout pending";
+    ? `Collected by SuperHeroCPR business PayPal (promo: ${appliedPromoCode}, discount: $${discountAmount.toFixed(2)}) — instructor payout pending${addonsNote}`
+    : `Collected by SuperHeroCPR business PayPal — instructor payout pending${addonsNote}`;
   const paymentProcessor = "SuperHeroCPR via PayPal";
 
   const { data: paymentRow, error: paymentInsertError } = await supabase
@@ -342,6 +398,7 @@ export async function POST(request: Request) {
         : null,
       instructorEmail: instructorProfile?.email ?? null,
       instructorPhone: instructorProfile?.phone ?? null,
+      addons: resolvedAddons.map((a) => ({ name: a.name, price: a.price })),
     });
 
     await resend.emails

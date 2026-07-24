@@ -971,6 +971,7 @@ export function invoiceResendEmail({
  * @param amount            - Amount paid in dollars.
  * @param paymentProcessor  - Human-readable payment processor label (e.g. "SuperHeroCPR via PayPal").
  * @param transactionId     - PayPal capture transaction ID (null if unavailable).
+ * @param addons            - Add-ons purchased with this booking, if any (name + price snapshot).
  */
 export function bookingConfirmationEmail({
   firstName,
@@ -987,6 +988,7 @@ export function bookingConfirmationEmail({
   instructorName,
   instructorEmail,
   instructorPhone,
+  addons,
 }: {
   firstName: string | null;
   className: string;
@@ -1002,6 +1004,7 @@ export function bookingConfirmationEmail({
   instructorName?: string | null;
   instructorEmail?: string | null;
   instructorPhone?: string | null;
+  addons?: { name: string; price: number }[];
 }): EmailContent {
   const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
     weekday: "long",
@@ -1047,6 +1050,13 @@ export function bookingConfirmationEmail({
           <td>${locationName}<br>${locationAddress}<br>${locationCity}, ${locationState} ${locationZip}</td>
         </tr>
         ${instructorRows}
+        ${
+          addons && addons.length > 0
+            ? `<tr><td style="vertical-align:top"><strong>Add-ons:</strong></td><td>${addons
+                .map((a) => `${escapeHtml(a.name)} ($${a.price.toFixed(2)})`)
+                .join("<br>")}</td></tr>`
+            : ""
+        }
         <tr><td><strong>Amount paid:</strong></td><td>$${amount.toFixed(2)}</td></tr>
         <tr><td><strong>Payment processed by:</strong></td><td>${paymentProcessor}</td></tr>
         <tr><td><strong>Transaction ID:</strong></td><td>${transactionId ?? "N/A"}</td></tr>
