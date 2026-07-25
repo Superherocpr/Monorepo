@@ -60,10 +60,15 @@ const NAV_ITEMS: NavItem[] = [
 
   // ── Engagement ─────────────────────────────────────────────────────────────
   {
+    label: "Blog",
+    href: "/admin/blog",
+    roles: ["super_admin"],
+    sectionLabel: "Engagement",
+  },
+  {
     label: "Certifications",
     href: "/admin/certifications",
     roles: ["super_admin"],
-    sectionLabel: "Engagement",
   },
   { label: "Contact", href: "/admin/contact", roles: ["manager", "super_admin"] },
   { label: "Merch", href: "/admin/merch", roles: ["super_admin"] },
