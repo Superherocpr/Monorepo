@@ -12,13 +12,13 @@ import { useState } from "react";
 
 /** Primary nav links rendered in both desktop and mobile menus. */
 const NAV_LINKS = [
-  { label: "Home", href: "/" },
-  { label: "Classes", href: "/classes" },
-  { label: "Schedule", href: "/book" },
-  { label: "Merch", href: "/merch" },
-  { label: "Blog", href: "/blog" },
-  { label: "About", href: "/about" },
-  { label: "Contact", href: "/contact" },
+  { label: "Home",     href: "/",        page: null },
+  { label: "Classes",  href: "/classes",  page: "classes" },
+  { label: "Schedule", href: "/book",     page: "schedule" },
+  { label: "Merch",    href: "/merch",    page: "merch" },
+  { label: "Blog",     href: "/blog",     page: "blog" },
+  { label: "About",    href: "/about",    page: "about" },
+  { label: "Contact",  href: "/contact",  page: "contact" },
 ] as const;
 
 /**
@@ -37,6 +37,12 @@ interface PublicHeaderProps {
   isAuthenticated: boolean;
   /** When true, swaps the nav for legacy in-page anchors and hides the Dashboard link. */
   legacyMode?: boolean;
+  /**
+   * Map of nav page keys to their enabled state. Pages absent from the map or set to
+   * true are shown; false hides the link. "Home" (null page key) is always shown.
+   * Populated server-side in layout.tsx from system_settings.
+   */
+  enabledPages?: Record<string, boolean>;
 }
 
 /**
@@ -46,12 +52,15 @@ interface PublicHeaderProps {
  * @param legacyMode - True when the legacy single-page site is enabled; swaps nav links
  *   to in-page anchors and hides the Dashboard / Sign In actions.
  */
-export function PublicHeader({ isAuthenticated, legacyMode = false }: PublicHeaderProps) {
+export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages }: PublicHeaderProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Use the legacy in-page anchor set when the legacy site is enabled.
-  const navLinks = legacyMode ? LEGACY_NAV_LINKS : NAV_LINKS;
+  // In normal mode, filter out any links whose page key is explicitly disabled.
+  const navLinks = legacyMode
+    ? LEGACY_NAV_LINKS
+    : NAV_LINKS.filter(({ page }) => !page || !enabledPages || enabledPages[page] !== false);
 
   /** Returns true when the given href is an exact match for the current pathname. */
   function isActive(href: string): boolean {

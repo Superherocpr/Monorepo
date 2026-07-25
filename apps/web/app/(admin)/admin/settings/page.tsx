@@ -256,13 +256,31 @@ export default async function SettingsPage({
   });
 
   // Check Zoho connection status using the durable credentials needed to refresh.
-  // Also read the legacy_site_enabled flag — controls which version of / renders.
-  const [zohoAccountId, zohoRefreshToken, zohoEmail, legacySiteFlag] = await Promise.all([
-    getSetting("zoho_account_id"),
-    getSetting("zoho_refresh_token"),
-    getSetting("zoho_connected_email"),
-    getSetting("legacy_site_enabled"),
-  ]);
+  // Also read the legacy_site_enabled flag and all nav visibility flags.
+  const NAV_PAGES = ["classes", "schedule", "merch", "blog", "about", "contact"] as const;
+  type NavPage = (typeof NAV_PAGES)[number];
+  const NAV_SETTING_KEY: Record<NavPage, string> = {
+    classes:  "nav_classes_enabled",
+    schedule: "nav_schedule_enabled",
+    merch:    "nav_merch_enabled",
+    blog:     "nav_blog_enabled",
+    about:    "nav_about_enabled",
+    contact:  "nav_contact_enabled",
+  };
+
+  const [zohoAccountId, zohoRefreshToken, zohoEmail, legacySiteFlag, ...navFlags] =
+    await Promise.all([
+      getSetting("zoho_account_id"),
+      getSetting("zoho_refresh_token"),
+      getSetting("zoho_connected_email"),
+      getSetting("legacy_site_enabled"),
+      ...NAV_PAGES.map((page) => getSetting(NAV_SETTING_KEY[page])),
+    ]);
+
+  // Build nav visibility — absent or non-"false" = enabled (default on)
+  const initialNavVisibility = Object.fromEntries(
+    NAV_PAGES.map((page, i) => [page, navFlags[i] !== "false"])
+  ) as Record<NavPage, boolean>;
 
   // Fetch payout settings (platform_fee_percent, payout_trigger, payout_schedule).
   // Defensive: if migration 0021 hasn't been applied yet, fall back to safe defaults
@@ -316,6 +334,7 @@ export default async function SettingsPage({
       zohoEmail={zohoEmail}
       zohoParam={zohoParam}
       legacySiteEnabled={legacySiteFlag === "true"}
+      initialNavVisibility={initialNavVisibility}
       isSuperAdmin
       payoutsSlot={
         <PayoutSettingsPanel
