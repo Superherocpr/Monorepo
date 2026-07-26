@@ -1,8 +1,9 @@
 /**
  * PATCH /api/contact/[id]
- * Called by: ContactSubmissionsClient — mark replied, toggle called, save notes
+ * Called by: ContactSubmissionsClient — mark replied, toggle called
  * Auth: manager and super_admin only
- * Body: { action: "replied" } | { action: "called"; called: boolean } | { action: "notes"; notes: string }
+ * Body: { action: "replied" } | { action: "called"; called: boolean }
+ * Notes are managed separately via /api/contact/[id]/notes
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
@@ -10,14 +11,12 @@ import { requireApiRole } from "@/lib/auth/effective-role";
 
 type PatchBody =
   | { action: "replied" }
-  | { action: "called"; called: boolean }
-  | { action: "notes"; notes: string };
+  | { action: "called"; called: boolean };
 
 /**
  * Updates a contact submission field.
  * - "replied": marks the submission as replied
  * - "called":  sets the called flag to the given boolean
- * - "notes":   saves free-form staff notes
  * @param request - JSON body with action discriminant.
  * @param params  - Route params containing the submission id.
  */
@@ -49,11 +48,6 @@ export async function PATCH(
       return Response.json({ success: false, error: "Invalid called value." }, { status: 400 });
     }
     update = { called: body.called };
-  } else if (body.action === "notes") {
-    if (typeof (body as { notes?: unknown }).notes !== "string") {
-      return Response.json({ success: false, error: "Invalid notes value." }, { status: 400 });
-    }
-    update = { notes: body.notes };
   } else {
     return Response.json({ success: false, error: "Unknown action." }, { status: 400 });
   }
