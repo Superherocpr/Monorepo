@@ -822,6 +822,34 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </div>
       </section>
 
+      {/* ── Admin Feature Reference link (super_admin only) ─────────────── */}
+      {isSuperAdmin && (
+        <section aria-labelledby="section-reference" className={tabClass("general")}>
+          <h2
+            id="section-reference"
+            className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
+          >
+            Resources
+          </h2>
+          <a
+            href="/admin/reference"
+            className="flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:border-red-300 dark:hover:border-red-700 transition-colors group"
+          >
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                Admin Feature Reference
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                A complete guide to every page in the admin panel — what it does and who can access it.
+              </p>
+            </div>
+            <span className="text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors ml-4 text-lg leading-none">
+              →
+            </span>
+          </a>
+        </section>
+      )}
+
       {/* ── Navigation page visibility (super_admin only) ────────────────── */}
       {isSuperAdmin && (
         <section aria-labelledby="section-nav-visibility" className={tabClass("general")}>
