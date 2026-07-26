@@ -382,6 +382,8 @@ export const GROUPS: GroupDef[] = [
           "Expand any submission to read the full message and reply thread",
           "Reply directly via Zoho Mail from within the admin panel",
           "Mark as replied to move it out of the unanswered queue",
+          "Toggle Called — marks that a phone conversation happened; card shows a blue 'Called' badge and tinted background",
+          "Notes tab (inside expanded card) — add free-form internal staff notes about the conversation; auto-saves on blur",
           "Zoho connection status is checked on load — reply button is disabled if Zoho is not connected",
         ],
       },

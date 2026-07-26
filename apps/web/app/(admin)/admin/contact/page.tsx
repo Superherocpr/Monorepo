@@ -59,7 +59,7 @@ export default async function ContactPage({
     .from("contact_submissions")
     .select(
       `
-      id, name, email, phone, inquiry_type, message, replied, created_at,
+      id, name, email, phone, inquiry_type, message, replied, called, notes, created_at,
       contact_replies ( id, created_at )
     `
     )
