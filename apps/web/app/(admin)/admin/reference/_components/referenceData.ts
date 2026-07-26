@@ -6,6 +6,10 @@
 
 export type RoleKey = "super" | "manager" | "all" | "instructor";
 
+/** A single bullet point — either plain text (visible to anyone who can see the section)
+ *  or a role-gated object (only shown to users who meet that role requirement). */
+export type Bullet = string | { text: string; role: RoleKey };
+
 export const ROLE_LABELS: Record<RoleKey, string> = {
   super: "Super Admin",
   manager: "Manager+",
@@ -25,7 +29,7 @@ export interface SectionDef {
   name: string;
   url: string;
   role: RoleKey;
-  bullets: string[];
+  bullets: Bullet[];
 }
 
 export interface GroupDef {
@@ -46,10 +50,10 @@ export const GROUPS: GroupDef[] = [
         role: "all",
         bullets: [
           "View all scheduled class sessions, grouped and sorted by month",
-          "Filter by date range, class type, approval status, and instructor (manager+ only)",
+          "Filter by date range, class type, and approval status",
+          { text: "Filter by instructor", role: "manager" },
           "Session cards show status badges, spots remaining, instructor, and location at a glance",
           "Jump directly to New Session, Bulk Create, or the Approvals Queue from this page",
-          "Instructors see only their own sessions; managers and super admins see all",
         ],
       },
       {
@@ -60,7 +64,7 @@ export const GROUPS: GroupDef[] = [
         bullets: [
           "Create a single class session — pick class type, location, date/time, and max capacity",
           "Set a discount percent or travel fee for the session",
-          "Assign an instructor (managers and super admins); instructors are locked to themselves",
+          { text: "Assign an instructor to the session", role: "manager" },
           "Attach eligible add-ons from a checklist automatically filtered to the chosen class type",
           "Submission routes the session to the approvals queue for manager review before it goes live",
         ],
@@ -74,7 +78,7 @@ export const GROUPS: GroupDef[] = [
           "Create many sessions at once by selecting multiple dates with a single set of shared settings",
           "Set class type, location, instructor, and capacity once — applies to every date selected",
           "Saves time when scheduling recurring weekly or monthly classes",
-          "Instructors are locked to themselves; manager+ can assign any instructor",
+          { text: "Assign any instructor to all sessions in the batch", role: "manager" },
         ],
       },
       {
@@ -103,7 +107,7 @@ export const GROUPS: GroupDef[] = [
         role: "all",
         bullets: [
           "Edit session fields — class type, location, instructor, assistant instructor, date/time, capacity, discount, travel fee, and notes",
-          "Approve or reject the session with a reason (manager+ only)",
+          { text: "Approve or reject the session with a reason", role: "manager" },
           "Add or remove add-ons and manage per-add-on pricing",
           "Cancel the session — blocked within 48 hours (prompts to call Daniel instead)",
           "Submit to Enrollware — marks the session as submitted to the Enrollware platform",
@@ -224,8 +228,9 @@ export const GROUPS: GroupDef[] = [
         role: "all",
         bullets: [
           "View all invoices with columns for invoice number, recipient, company, session, student count, amount, and status",
-          "Filter by status (sent, paid, cancelled), invoice type (individual or group), date range, class type, and instructor (manager+ only)",
-          "Instructors see only their own invoices",
+          "Filter by status (sent, paid, cancelled), invoice type (individual or group), date range, and class type",
+          { text: "Filter by instructor", role: "manager" },
+          { text: "Instructors see only their own invoices", role: "manager" },
           "Button to create a new invoice at the top of the page",
         ],
       },
@@ -235,7 +240,7 @@ export const GROUPS: GroupDef[] = [
         url: "/admin/invoices/new",
         role: "instructor",
         bullets: [
-          "Multi-step form: super admins first select the instructor, then choose a session from their list",
+          { text: "Super admins first select the instructor, then choose a session from their list", role: "super" },
           "Set invoice type (individual or group), recipient name, company, email, and student count",
           "Optionally override the price per student",
           "Session picker shows remaining spots — capacity accounts for existing bookings and unpaid invoice students",
@@ -250,11 +255,10 @@ export const GROUPS: GroupDef[] = [
         role: "all",
         bullets: [
           "View invoice header: number, status badge, class/session, location, recipient, student count, and total amount",
-          "Mark as paid — super admin only",
-          "Resend the invoice email to the recipient — super admin only",
-          "Cancel the invoice — super admin only",
+          { text: "Mark as paid", role: "super" },
+          { text: "Resend the invoice email to the recipient", role: "super" },
+          { text: "Cancel the invoice", role: "super" },
           "Full activity log timeline — every action on the invoice with actor name and timestamp",
-          "Instructors can view their own invoices; managers can view but not take action",
         ],
       },
       {
@@ -468,14 +472,14 @@ export const GROUPS: GroupDef[] = [
         url: "/admin/settings",
         role: "all",
         bullets: [
-          "General tab (super admin) — toggle public nav pages on/off: Classes, Schedule, Merch, Blog, About, Contact",
-          "Class Types tab (super admin) — create, edit, delete, or deactivate class types; set name, description, duration, price, capacity, linked certification type, and eligible add-ons",
-          "Grades tab (super admin) — configure preset grade values and labels used in the Grading Tool",
-          "Zoho tab (super admin) — connect or disconnect a Zoho Mail account for replying to contact form submissions",
-          "Social tab (super admin) — manually trigger a sync of the Facebook social feed cache",
-          "Locations tab (manager+) — create, edit, or delete training locations; set address, notes, and home-base flag",
-          "Enrollware tab (all staff) — generate or revoke your personal Enrollware bookmarklet API key",
-          "Payouts tab (super admin) — set the platform fee percentage, payout trigger mode, and payout schedule",
+          { text: "General tab — toggle public nav pages on/off: Classes, Schedule, Merch, Blog, About, Contact", role: "super" },
+          { text: "Class Types tab — create, edit, delete, or deactivate class types; set name, description, duration, price, capacity, linked certification type, and eligible add-ons", role: "super" },
+          { text: "Grades tab — configure preset grade values and labels used in the Grading Tool", role: "super" },
+          { text: "Zoho tab — connect or disconnect a Zoho Mail account for replying to contact form submissions", role: "super" },
+          { text: "Social tab — manually trigger a sync of the Facebook social feed cache", role: "super" },
+          { text: "Locations tab — create, edit, or delete training locations; set address, notes, and home-base flag", role: "manager" },
+          "Enrollware tab — generate or revoke your personal Enrollware bookmarklet API key",
+          { text: "Payouts tab — set the platform fee percentage, payout trigger mode, and payout schedule", role: "super" },
         ],
       },
       {

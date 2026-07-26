@@ -1,8 +1,9 @@
 /**
  * Admin Feature Reference
  * Route: /admin/reference
- * Called by: Admin Settings page (General tab), super admin only.
- * Auth gate only — all content and search logic lives in ReferenceContent.
+ * Called by: Admin Settings page (all staff roles), admin nav.
+ * Auth: instructor, manager, and super_admin — content filtered to each role's accessible features.
+ * Inspectors are redirected to /admin.
  */
 
 import { redirect } from "next/navigation";
@@ -11,13 +12,22 @@ import ReferenceContent from "./_components/ReferenceContent";
 
 export const metadata = { title: "Admin Reference" };
 
+const ALLOWED_ROLES = ["instructor", "manager", "super_admin"] as const;
+
 /**
  * Server component entry point for /admin/reference.
- * Enforces super_admin gate (honors view-as) and delegates rendering to ReferenceContent.
+ * Allows instructor, manager, and super_admin roles. Passes the effective role
+ * to ReferenceContent so it can filter sections down to what the user can access.
  */
 export default async function AdminReferencePage(): Promise<React.ReactElement> {
   const actor = await getAdminActor();
-  if (!actor || actor.effectiveRole !== "super_admin") redirect("/admin");
 
-  return <ReferenceContent />;
+  if (
+    !actor ||
+    !(ALLOWED_ROLES as readonly string[]).includes(actor.effectiveRole)
+  ) {
+    redirect("/admin");
+  }
+
+  return <ReferenceContent userRole={actor.effectiveRole} />;
 }

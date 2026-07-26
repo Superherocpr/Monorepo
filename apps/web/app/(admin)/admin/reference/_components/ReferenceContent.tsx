@@ -2,7 +2,7 @@
 
 /**
  * Interactive content shell for the Admin Feature Reference page.
- * Owns search state and renders filtered groups + sections with match highlighting.
+ * Filters sections to the user's role, then layers live search on top.
  * Used by: /admin/reference
  */
 
@@ -12,9 +12,9 @@ import {
   GROUPS,
   ROLE_LABELS,
   ROLE_CLASSES,
-  TOTAL_SECTIONS,
   type GroupDef,
   type RoleKey,
+  type Bullet,
 } from "./referenceData";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -30,44 +30,105 @@ function resolveUrl(url: string): string {
 }
 
 /**
- * Returns whether a section matches the query — checked against name, URL, and bullets.
+ * Returns true if a user with the given role can access a section.
+ * - "all"        → every staff role
+ * - "instructor" → instructors and super admins
+ * - "manager"    → managers and super admins
+ * - "super"      → super admins only
+ * @param sectionRole - The access level defined on the section.
+ * @param userRole    - The authenticated user's effective role.
+ */
+function canAccess(sectionRole: RoleKey, userRole: string): boolean {
+  if (sectionRole === "all") return true;
+  if (sectionRole === "instructor") return userRole === "instructor" || userRole === "super_admin";
+  if (sectionRole === "manager") return userRole === "manager" || userRole === "super_admin";
+  if (sectionRole === "super") return userRole === "super_admin";
+  return false;
+}
+
+/**
+ * Returns the subset of bullets visible to a user with the given role.
+ * Plain strings are always included; role-gated objects are filtered through canAccess.
+ * @param bullets - The full bullet list from the section definition.
+ * @param userRole - The authenticated user's effective role.
+ */
+function getVisibleBullets(bullets: Bullet[], userRole: string): string[] {
+  return bullets
+    .filter((b) => typeof b === "string" || canAccess(b.role, userRole))
+    .map((b) => (typeof b === "string" ? b : b.text));
+}
+
+/**
+ * Returns whether a section matches the query — checked against name, URL, and the
+ * user's visible bullets only (role-filtered so hidden content doesn't surface in search).
  * @param query - Lowercase trimmed search string.
+ * @param userRole - The authenticated user's effective role.
  */
 function sectionMatches(
   section: GroupDef["sections"][number],
-  query: string
+  query: string,
+  userRole: string
 ): boolean {
   return (
     section.name.toLowerCase().includes(query) ||
     section.url.toLowerCase().includes(query) ||
-    section.bullets.some((b) => b.toLowerCase().includes(query))
+    getVisibleBullets(section.bullets, userRole).some((b) => b.toLowerCase().includes(query))
   );
 }
 
 // ── Main component ──────────────────────────────────────────────────────────
 
+interface ReferenceContentProps {
+  /** The authenticated user's effective role — used to filter visible sections. */
+  userRole: string;
+}
+
 /**
- * Renders the full reference page with a live search bar.
- * All filtering and highlighting is done client-side from the static GROUPS data.
+ * Renders the reference page filtered to the user's role, with a live search bar.
+ * @param userRole - Effective role from the server auth check.
  */
-export default function ReferenceContent(): React.ReactElement {
+export default function ReferenceContent({
+  userRole,
+}: ReferenceContentProps): React.ReactElement {
   const [rawQuery, setRawQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const query = rawQuery.trim().toLowerCase();
 
-  const filteredGroups = useMemo(() => {
-    if (!query) return GROUPS;
-    return GROUPS.map((group) => ({
-      ...group,
-      sections: group.sections.filter((s) => sectionMatches(s, query)),
-    })).filter((group) => group.sections.length > 0);
-  }, [query]);
-
-  const matchCount = filteredGroups.reduce(
-    (n, g) => n + g.sections.length,
-    0
+  // Pre-filter to sections this user can actually access — the base list before search.
+  const accessibleGroups = useMemo(
+    () =>
+      GROUPS.map((group) => ({
+        ...group,
+        sections: group.sections.filter((s) => canAccess(s.role, userRole)),
+      })).filter((group) => group.sections.length > 0),
+    [userRole]
   );
+
+  const totalAccessible = useMemo(
+    () => accessibleGroups.reduce((n, g) => n + g.sections.length, 0),
+    [accessibleGroups]
+  );
+
+  // Role key types that actually appear in the accessible sections — for the legend.
+  const visibleRoleKeys = useMemo<RoleKey[]>(() => {
+    const seen = new Set<RoleKey>();
+    accessibleGroups.forEach((g) => g.sections.forEach((s) => seen.add(s.role)));
+    return (Object.keys(ROLE_LABELS) as RoleKey[]).filter((k) => seen.has(k));
+  }, [accessibleGroups]);
+
+  // Apply search on top of the role-filtered list.
+  const filteredGroups = useMemo(() => {
+    if (!query) return accessibleGroups;
+    return accessibleGroups
+      .map((group) => ({
+        ...group,
+        sections: group.sections.filter((s) => sectionMatches(s, query, userRole)),
+      }))
+      .filter((group) => group.sections.length > 0);
+  }, [query, accessibleGroups]);
+
+  const matchCount = filteredGroups.reduce((n, g) => n + g.sections.length, 0);
 
   const clearSearch = useCallback(() => {
     setRawQuery("");
@@ -87,25 +148,27 @@ export default function ReferenceContent(): React.ReactElement {
             Admin Feature Reference
           </h1>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-xl">
-            A page-by-page guide to every section of the admin dashboard — what
-            it does and who can access it.
+            {userRole === "super_admin"
+              ? "A page-by-page guide to every section of the admin dashboard — what it does and who can access it."
+              : "A guide to every admin page available to your role."}
           </p>
-          {/* Role legend */}
-          <div className="mt-4 flex flex-wrap gap-3">
-            {(Object.entries(ROLE_LABELS) as [RoleKey, string][]).map(
-              ([key, label]) => (
+
+          {/* Role legend — only show types present in this user's accessible sections */}
+          {visibleRoleKeys.length > 1 && (
+            <div className="mt-4 flex flex-wrap gap-3">
+              {visibleRoleKeys.map((key) => (
                 <span
                   key={key}
                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${ROLE_CLASSES[key]}`}
                 >
-                  {label}
+                  {ROLE_LABELS[key]}
                 </span>
-              )
-            )}
-            <span className="text-xs text-gray-400 dark:text-gray-500 self-center">
-              — access level required
-            </span>
-          </div>
+              ))}
+              <span className="text-xs text-gray-400 dark:text-gray-500 self-center">
+                — access level required
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ── Search bar ──────────────────────────────────────────────────── */}
@@ -153,7 +216,7 @@ export default function ReferenceContent(): React.ReactElement {
                 <>No results for &ldquo;{rawQuery.trim()}&rdquo;</>
               ) : (
                 <>
-                  {matchCount} of {TOTAL_SECTIONS} section
+                  {matchCount} of {totalAccessible} section
                   {matchCount !== 1 ? "s" : ""} match
                 </>
               )}
@@ -209,19 +272,22 @@ export default function ReferenceContent(): React.ReactElement {
                           <code className="text-[0.67rem] font-mono bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded">
                             {section.url}
                           </code>
-                          <span
-                            className={`ml-auto text-[0.62rem] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${ROLE_CLASSES[section.role]}`}
-                          >
-                            {ROLE_LABELS[section.role]}
-                          </span>
-                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 dark:text-red-400 text-sm font-medium leading-none">
+                          {/* Only show role badge if multiple access levels are visible */}
+                          {visibleRoleKeys.length > 1 && (
+                            <span
+                              className={`ml-auto text-[0.62rem] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${ROLE_CLASSES[section.role]}`}
+                            >
+                              {ROLE_LABELS[section.role]}
+                            </span>
+                          )}
+                          <span className={`text-red-500 dark:text-red-400 text-sm font-medium leading-none opacity-0 group-hover:opacity-100 transition-opacity ${visibleRoleKeys.length <= 1 ? "ml-auto" : ""}`}>
                             →
                           </span>
                         </div>
 
-                        {/* Bullet list */}
+                        {/* Bullet list — filtered to this user's role */}
                         <ul className="px-5 py-3.5 space-y-1.5">
-                          {section.bullets.map((bullet, i) => (
+                          {getVisibleBullets(section.bullets, userRole).map((bullet, i) => (
                             <li
                               key={i}
                               className="flex gap-2.5 text-sm text-gray-600 dark:text-gray-400"
