@@ -44,10 +44,11 @@ export interface EmailContent {
  * @param firstName - The customer's first name.
  */
 export function welcomeEmail({ firstName }: { firstName: string }): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
   return {
     subject: "Welcome to SuperHeroCPR!",
     html: wrapEmail(`
-      <h1>Welcome, ${firstName}!</h1>
+      <h1>Welcome, ${safeFirstName}!</h1>
       <p>Your SuperHeroCPR account has been created successfully.</p>
       <p>You can now book classes, view your certifications, and manage your account at
         <a href="https://superherocpr.com/dashboard">superherocpr.com</a>.

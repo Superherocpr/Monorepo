@@ -16,6 +16,21 @@ import ClassTypeImportPanel from "./ClassTypeImportPanel";
 import AddonPanel from "./AddonPanel";
 import type { ClassType, CertTypeOption, PresetGrade, Addon } from "../page";
 
+/** Nav page keys that correspond to toggleable public routes. */
+type NavPage = "classes" | "schedule" | "merch" | "blog" | "about" | "contact";
+
+/** Human-readable labels for each nav page. */
+const NAV_PAGE_LABELS: Record<NavPage, string> = {
+  classes:  "Classes",
+  schedule: "Schedule",
+  merch:    "Merch",
+  blog:     "Blog",
+  about:    "About",
+  contact:  "Contact",
+};
+
+const NAV_PAGES: NavPage[] = ["classes", "schedule", "merch", "blog", "about", "contact"];
+
 interface SettingsClientProps {
   classTypes: ClassType[];
   /** All active cert types — used to populate the linked cert dropdown in ClassTypePanel. */
@@ -31,6 +46,8 @@ interface SettingsClientProps {
   legacySiteEnabled: boolean;
   /** Whether the current user is a super_admin — gates the Legacy Site section. */
   isSuperAdmin: boolean;
+  /** Initial nav visibility flags — which public nav pages are currently enabled. */
+  initialNavVisibility: Record<NavPage, boolean>;
   /**
    * Optional fully-rendered Enrollware Bookmarklet block. When provided, the
    * settings page exposes an "Enrollware" tab whose content is this node.
@@ -113,6 +130,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   zohoParam,
   legacySiteEnabled: initialLegacySiteEnabled,
   isSuperAdmin,
+  initialNavVisibility,
   enrollwareSlot,
   locationsSlot,
   payoutsSlot,
@@ -207,6 +225,50 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       showToast("error", "Something went wrong. Please try again.");
     } finally {
       setSavingLegacySite(false);
+    }
+  }
+
+  // ── Nav visibility ─────────────────────────────────────────────────────────
+  // Persisted in system_settings as nav_<page>_enabled flags.
+  // Middleware enforces these at the edge; the header also hides disabled links.
+  const [navVisibility, setNavVisibility] = useState<Record<NavPage, boolean>>(initialNavVisibility);
+  const [savingNavPage, setSavingNavPage] = useState<NavPage | null>(null);
+
+  /**
+   * Toggles a single public nav page on or off.
+   * Calls POST /api/settings/nav-visibility and rolls back on error.
+   * @param page - The nav page identifier to toggle.
+   */
+  async function handleToggleNavPage(page: NavPage) {
+    if (savingNavPage) return;
+    const next = !navVisibility[page];
+    setNavVisibility((prev) => ({ ...prev, [page]: next }));
+    setSavingNavPage(page);
+
+    try {
+      const res = await fetch("/api/settings/nav-visibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ page, enabled: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.success) {
+        setNavVisibility((prev) => ({ ...prev, [page]: !next }));
+        showToast("error", data?.error ?? "Failed to update nav visibility.");
+      } else {
+        showToast(
+          "success",
+          next
+            ? `${NAV_PAGE_LABELS[page]} page is now visible on the site.`
+            : `${NAV_PAGE_LABELS[page]} page is now hidden and inaccessible.`
+        );
+      }
+    } catch {
+      setNavVisibility((prev) => ({ ...prev, [page]: !next }));
+      showToast("error", "Something went wrong. Please try again.");
+    } finally {
+      setSavingNavPage(null);
     }
   }
 
@@ -759,6 +821,82 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
           </div>
         </div>
       </section>
+
+      {/* ── Admin Feature Reference link (super_admin only) ─────────────── */}
+      {isSuperAdmin && (
+        <section aria-labelledby="section-reference" className={tabClass("general")}>
+          <h2
+            id="section-reference"
+            className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
+          >
+            Resources
+          </h2>
+          <a
+            href="/admin/reference"
+            className="flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:border-red-300 dark:hover:border-red-700 transition-colors group"
+          >
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                Admin Feature Reference
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                A complete guide to every page in the admin panel — what it does and who can access it.
+              </p>
+            </div>
+            <span className="text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors ml-4 text-lg leading-none">
+              →
+            </span>
+          </a>
+        </section>
+      )}
+
+      {/* ── Navigation page visibility (super_admin only) ────────────────── */}
+      {isSuperAdmin && (
+        <section aria-labelledby="section-nav-visibility" className={tabClass("general")}>
+          <h2
+            id="section-nav-visibility"
+            className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
+          >
+            Navigation Pages
+          </h2>
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-700">
+            {NAV_PAGES.map((page) => (
+              <div key={page} className="flex items-center justify-between px-5 py-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {NAV_PAGE_LABELS[page]}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {navVisibility[page]
+                      ? "Visible in nav and accessible by URL."
+                      : "Hidden from nav and redirects to home if accessed directly."}
+                  </p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={navVisibility[page]}
+                  aria-label={`Toggle ${NAV_PAGE_LABELS[page]} page`}
+                  onClick={() => handleToggleNavPage(page)}
+                  disabled={savingNavPage === page}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 ${
+                    navVisibility[page] ? "bg-red-600" : "bg-gray-200 dark:bg-gray-600"
+                  }`}
+                >
+                  <span className="sr-only">Toggle {NAV_PAGE_LABELS[page]}</span>
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      navVisibility[page] ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+            Toggling a page off hides it from the nav bar and makes it inaccessible to site visitors — even via direct URL. Home is always on.
+          </p>
+        </section>
+      )}
 
       {/* ── Section 2: Class Types ─────────────────────────────────────────── */}
       <section aria-labelledby="section-class-types" className={tabClass("class-types")}>

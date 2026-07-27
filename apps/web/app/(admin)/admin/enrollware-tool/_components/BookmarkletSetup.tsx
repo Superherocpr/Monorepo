@@ -163,6 +163,8 @@ export default function BookmarkletSetup({
               onClick={(e) => (e.target as HTMLTextAreaElement).select()}
               className="mb-3 w-full rounded-md border border-green-300 bg-white p-3 font-mono text-xs text-gray-800 focus:outline-none"
               rows={4}
+              spellCheck={false}
+              autoCorrect="off"
             />
 
             <button

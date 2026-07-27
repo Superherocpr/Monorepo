@@ -72,11 +72,19 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
   return (
     <div className="max-w-3xl space-y-10">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Manage your Enrollware integration and public About page bio.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Manage your Enrollware integration and public About page bio.
+          </p>
+        </div>
+        <a
+          href="/admin/reference"
+          className="shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors mt-1"
+        >
+          Admin feature reference →
+        </a>
       </div>
 
       {/* Tab navigation */}

@@ -17,6 +17,18 @@ import { PublicHeader } from "@/app/(public)/_components/PublicHeader";
 import { PublicFooter } from "@/app/(public)/_components/PublicFooter";
 import { getSetting } from "@/lib/zoho";
 
+/** Nav page keys that can be toggled in admin settings. */
+const NAV_PAGES = ["classes", "schedule", "merch", "blog", "about", "contact"] as const;
+type NavPage = (typeof NAV_PAGES)[number];
+const NAV_SETTING_KEY: Record<NavPage, string> = {
+  classes:  "nav_classes_enabled",
+  schedule: "nav_schedule_enabled",
+  merch:    "nav_merch_enabled",
+  blog:     "nav_blog_enabled",
+  about:    "nav_about_enabled",
+  contact:  "nav_contact_enabled",
+};
+
 /**
  * Renders the shared public site shell: sticky header, page content, footer.
  * Determines authentication state on the server to avoid client-side flash.
@@ -32,14 +44,22 @@ export default async function PublicLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // When the legacy single-page site is enabled, the header swaps to an in-page
-  // anchor menu (Welcome / Why Choose Us / Book Now) and hides the Dashboard link.
-  const legacyFlag = await getSetting("legacy_site_enabled");
+  // Read legacy site flag and all nav visibility flags in parallel.
+  const [legacyFlag, ...navFlags] = await Promise.all([
+    getSetting("legacy_site_enabled"),
+    ...NAV_PAGES.map((page) => getSetting(NAV_SETTING_KEY[page])),
+  ]);
   const legacyMode = legacyFlag === "true";
+
+  // Build the enabled pages record. Absent or non-"false" = enabled.
+  const enabledPages: Record<string, boolean> = {};
+  NAV_PAGES.forEach((page, i) => {
+    enabledPages[page] = navFlags[i] !== "false";
+  });
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-gray-950">
-      <PublicHeader isAuthenticated={!!user} legacyMode={legacyMode} />
+      <PublicHeader isAuthenticated={!!user} legacyMode={legacyMode} enabledPages={enabledPages} />
       <main className="flex-1">{children}</main>
       <PublicFooter />
     </div>
