@@ -367,50 +367,74 @@ export async function POST(request: Request) {
   await maybeTriggerImmediatePayout(supabase);
 
   // ── Step 5: Send booking confirmation email (best-effort) ────────────────
-  if (
-    process.env.RESEND_API_KEY &&
-    typeof customerEmail === "string" &&
-    typeof startsAt === "string"
-  ) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+  if (process.env.RESEND_API_KEY && typeof startsAt === "string") {
+    // Fetch instructor + customer contact details server-side — never trust
+    // client-supplied values. The customer profile fetch is also a fallback:
+    // an existing customer who signed in (rather than creating a new account)
+    // never populates customerEmail/customerFirstName on the client, since
+    // that step is skipped for sign-in — without this fallback the email
+    // silently never sends for that entire customer segment.
+    const [{ data: instructorProfile }, { data: customerProfile }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("first_name, last_name, email, phone")
+        .eq("id", instructorId)
+        .maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("first_name, email")
+        .eq("id", customerId)
+        .maybeSingle(),
+    ]);
 
-    // Fetch instructor contact details server-side — never trust client-supplied values.
-    const { data: instructorProfile } = await supabase
-      .from("profiles")
-      .select("first_name, last_name, email, phone")
-      .eq("id", instructorId)
-      .maybeSingle();
+    const resolvedCustomerEmail =
+      typeof customerEmail === "string" && customerEmail ? customerEmail : customerProfile?.email;
 
-    const { subject, html } = bookingConfirmationEmail({
-      firstName: typeof customerFirstName === "string" ? customerFirstName : null,
-      className: typeof className === "string" ? className : "CPR Class",
-      startsAt,
-      locationName: typeof locationName === "string" ? locationName : "",
-      locationAddress: typeof locationAddress === "string" ? locationAddress : "",
-      locationCity: typeof locationCity === "string" ? locationCity : "",
-      locationState: typeof locationState === "string" ? locationState : "",
-      locationZip: typeof locationZip === "string" ? locationZip : "",
-      amount: expectedPrice,
-      paymentProcessor,
-      transactionId: paypalTransactionId,
-      instructorName: instructorProfile
-        ? `${instructorProfile.first_name} ${instructorProfile.last_name}`
-        : null,
-      instructorEmail: instructorProfile?.email ?? null,
-      instructorPhone: instructorProfile?.phone ?? null,
-      addons: resolvedAddons.map((a) => ({ name: a.name, price: a.price })),
-    });
+    if (!resolvedCustomerEmail) {
+      console.error("[bookings/confirm] CRITICAL: no email on file — confirmation not sent", {
+        bookingId,
+        customerId,
+      });
+    } else {
+      const resend = new Resend(process.env.RESEND_API_KEY);
 
-    await resend.emails
-      .send({
+      const { subject, html } = bookingConfirmationEmail({
+        firstName:
+          typeof customerFirstName === "string" && customerFirstName
+            ? customerFirstName
+            : (customerProfile?.first_name ?? null),
+        className: typeof className === "string" ? className : "CPR Class",
+        startsAt,
+        locationName: typeof locationName === "string" ? locationName : "",
+        locationAddress: typeof locationAddress === "string" ? locationAddress : "",
+        locationCity: typeof locationCity === "string" ? locationCity : "",
+        locationState: typeof locationState === "string" ? locationState : "",
+        locationZip: typeof locationZip === "string" ? locationZip : "",
+        amount: expectedPrice,
+        paymentProcessor,
+        transactionId: paypalTransactionId,
+        instructorName: instructorProfile
+          ? `${instructorProfile.first_name} ${instructorProfile.last_name}`
+          : null,
+        instructorEmail: instructorProfile?.email ?? null,
+        instructorPhone: instructorProfile?.phone ?? null,
+        addons: resolvedAddons.map((a) => ({ name: a.name, price: a.price })),
+      });
+
+      const { error: emailError } = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL!,
-        to: customerEmail,
+        to: resolvedCustomerEmail,
         subject,
         html,
-      })
-      .catch((err: unknown) => {
-        console.error("[bookings/confirm] Confirmation email failed (non-fatal):", err);
       });
+
+      if (emailError) {
+        console.error("[bookings/confirm] Confirmation email failed:", {
+          bookingId,
+          error: emailError,
+        });
+      }
+    }
   }
 
   return Response.json({ success: true, bookingId });
