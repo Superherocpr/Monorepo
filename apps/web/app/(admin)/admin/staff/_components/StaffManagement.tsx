@@ -196,9 +196,16 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
       <InvitePanel
         open={invitePanelOpen}
         onClose={() => setInvitePanelOpen(false)}
-        onSuccess={(email) => {
+        onSuccess={(email, emailSent) => {
           setInvitePanelOpen(false);
-          showToast("success", `Invitation sent to ${email}.`);
+          if (emailSent) {
+            showToast("success", `Invitation sent to ${email}.`);
+          } else {
+            showToast(
+              "error",
+              `Account created for ${email}, but the invite email failed to send. Use "Resend Invite" from the staff list.`
+            );
+          }
           refreshList();
         }}
         onError={(msg) => showToast("error", msg)}

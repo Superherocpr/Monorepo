@@ -607,7 +607,7 @@ export default function SessionDetailClient({
   /**
    * Saves a new additional_hours value for this session.
    * Optimistically updates local state; reverts on failure.
-   * @param hours - One of the preset values: 0, 2, 4, 6, 8, or 10.
+   * @param hours - One of the preset values: 0, 1, 2, or 4.
    */
   async function handleSelectAdditionalHours(hours: number): Promise<void> {
     const previous = additionalHours;
@@ -1613,7 +1613,7 @@ export default function SessionDetailClient({
               session runs longer than usual for Enrollware reporting.
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              {([0, 2, 4, 6, 8, 10] as const).map((h) => (
+              {([0, 1, 2, 4] as const).map((h) => (
                 <button
                   key={h}
                   type="button"
