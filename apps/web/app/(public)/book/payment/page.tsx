@@ -40,6 +40,49 @@ import type { PromoValidateResponse } from "@/app/api/promo-codes/validate/route
 /** Shape returned by handlePayPalCreate — passed to card form and PayPal button. */
 type CreateOrderResult = { orderId: string };
 
+/** Validity of one hosted card field, mirrored from PayPal's validitychange event. */
+type FieldValidity = { isValid: boolean; isEmpty: boolean; isPotentiallyValid: boolean };
+
+/** Validity of all three hosted card fields. */
+type CardFieldsValidity = {
+  number: FieldValidity;
+  expiry: FieldValidity;
+  cvv: FieldValidity;
+};
+
+/** Field starts empty — treated as "not yet valid" but not an error until touched. */
+const PRISTINE_FIELD: FieldValidity = { isValid: false, isEmpty: true, isPotentiallyValid: true };
+
+/** Initial validity before PayPal emits its first validitychange event. */
+const PRISTINE_VALIDITY: CardFieldsValidity = {
+  number: PRISTINE_FIELD,
+  expiry: PRISTINE_FIELD,
+  cvv: PRISTINE_FIELD,
+};
+
+/** Human-readable labels used in inline validation messages, keyed by field. */
+const FIELD_LABELS: Record<keyof CardFieldsValidity, string> = {
+  number: "card number",
+  expiry: "expiry date",
+  cvv: "security code",
+};
+
+/**
+ * Distinguishes a per-submit input validation failure (buyer can fix it and
+ * retry) from a genuine SDK/eligibility failure (card payment is unusable).
+ *
+ * PayPal surfaces BOTH through the same `error` value on
+ * `usePayPalCardFieldsOneTimePaymentSession`, so without this check an empty
+ * card number wrongly renders the permanent "card payment is temporarily
+ * unavailable — use PayPal" message and pushes the buyer off the card form.
+ * Observed validation message: `CardFields form submit failed: "Invalid card
+ * data: card number field is empty or invalid"`.
+ */
+function isRecoverableCardError(err: Error | null): boolean {
+  const message = err?.message ?? "";
+  return /invalid card data|empty or invalid|form submit failed/i.test(message);
+}
+
 /** Props for the inner card form component. */
 type CardPaymentFormProps = {
   /** Creates the PayPal order and returns its ID. Called on every Pay click. */
@@ -52,6 +95,8 @@ type CardPaymentFormProps = {
   amount: number;
   /** Whether the pay button should be disabled (e.g. class just filled). */
   disabled: boolean;
+  /** Live per-field validity reported by PayPal, used to gate submission. */
+  validity: CardFieldsValidity;
 };
 
 // ---------------------------------------------------------------------------
@@ -70,6 +115,7 @@ function CardPaymentForm({
   onError,
   amount,
   disabled,
+  validity,
 }: CardPaymentFormProps): ReactElement {
   const { submit, submitResponse, error }: UsePayPalCardFieldsOneTimePaymentSessionResult =
     usePayPalCardFieldsOneTimePaymentSession();
@@ -77,6 +123,12 @@ function CardPaymentForm({
   const [nameOnCard, setNameOnCard] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
+  // Kept separate from cardError so it can be cleared reactively as the buyer
+  // fixes their input, without also wiping a decline/SDK message that must persist.
+  const [validationError, setValidationError] = useState<string | null>(null);
+  // Set once card payment is genuinely unusable — hides the form entirely so
+  // the buyer is pointed at PayPal instead of retrying something that can't work.
+  const [isCardUnavailable, setIsCardUnavailable] = useState(false);
 
   // Stable ref so the useEffect below can call the latest onApprove without
   // it appearing in the dependency array (avoids stale-closure re-render loops).
@@ -85,12 +137,21 @@ function CardPaymentForm({
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
-  // Handle SDK-level errors (initialization failure, eligibility issues).
+  // Handle errors surfaced by the card-fields session. These arrive on the same
+  // channel whether they are recoverable input-validation failures or fatal
+  // SDK/eligibility failures, so classify before deciding what to tell the buyer.
   useEffect(() => {
     if (!error) return;
     console.error("[CardPaymentForm] card fields error:", error);
-    setCardError("Card payment is temporarily unavailable. Please use PayPal below.");
     setIsSubmitting(false);
+
+    if (isRecoverableCardError(error)) {
+      setCardError("Please check your card details and try again.");
+      return;
+    }
+
+    setIsCardUnavailable(true);
+    setCardError("Card payment is temporarily unavailable. Please use PayPal below.");
   }, [error]);
 
   // Handle submit response states from PayPal after card data is submitted.
@@ -128,9 +189,33 @@ function CardPaymentForm({
     });
   }, [submitResponse]);
 
-  /** Creates a PayPal order then submits the card data against it. */
+  const allFieldsValid = validity.number.isValid && validity.expiry.isValid && validity.cvv.isValid;
+
+  // Drop the "please enter a valid …" prompt as soon as the buyer fixes their
+  // input, rather than leaving it up until the next Pay click.
+  useEffect(() => {
+    if (allFieldsValid) setValidationError(null);
+  }, [allFieldsValid]);
+
+  /**
+   * Creates a PayPal order then submits the card data against it.
+   *
+   * The order is only created once every hosted field reports valid. Creating
+   * it first meant an invalid submit still POSTed to create-booking-order and
+   * left an orphaned PayPal order behind before the SDK rejected the card data.
+   */
   async function handlePay(): Promise<void> {
     setCardError(null);
+    setValidationError(null);
+
+    if (!allFieldsValid) {
+      const missing = (Object.keys(FIELD_LABELS) as Array<keyof CardFieldsValidity>)
+        .filter((field) => !validity[field].isValid)
+        .map((field) => FIELD_LABELS[field]);
+      setValidationError(`Please enter a valid ${missing.join(", ")}.`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const { orderId } = await onCreateOrder();
@@ -180,6 +265,30 @@ function CardPaymentForm({
     currency: "USD",
   });
 
+  /**
+   * Inline message for a single field. Only shown once PayPal reports the input
+   * can no longer become valid, so it doesn't nag while the buyer is mid-typing.
+   */
+  function fieldError(field: keyof CardFieldsValidity): string | null {
+    const state = validity[field];
+    if (state.isEmpty || state.isPotentiallyValid) return null;
+    return `Enter a valid ${FIELD_LABELS[field]}.`;
+  }
+
+  // Card payment is genuinely unusable (SDK init/eligibility failure) — render
+  // only the explanation so the buyer moves to the PayPal button below instead
+  // of retrying a form that cannot succeed.
+  if (isCardUnavailable) {
+    return (
+      <p
+        role="alert"
+        className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
+      >
+        {cardError ?? "Card payment is temporarily unavailable. Please use PayPal below."}
+      </p>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Name on card — regular input; passed to PayPal submit options */}
@@ -212,6 +321,9 @@ function CardPaymentForm({
           style={fieldStyle}
           containerStyles={fieldContainerStyle}
         />
+        {fieldError("number") && (
+          <p role="alert" className="mt-1 text-xs text-red-600">{fieldError("number")}</p>
+        )}
       </div>
 
       {/* Expiry + CVV — side by side */}
@@ -226,6 +338,9 @@ function CardPaymentForm({
             style={fieldStyle}
             containerStyles={fieldContainerStyle}
           />
+          {fieldError("expiry") && (
+            <p role="alert" className="mt-1 text-xs text-red-600">{fieldError("expiry")}</p>
+          )}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -237,13 +352,16 @@ function CardPaymentForm({
             style={fieldStyle}
             containerStyles={fieldContainerStyle}
           />
+          {fieldError("cvv") && (
+            <p role="alert" className="mt-1 text-xs text-red-600">{fieldError("cvv")}</p>
+          )}
         </div>
       </div>
 
-      {/* Card-level error */}
-      {cardError && (
+      {/* Card-level error — validation prompt clears itself once input is fixed */}
+      {(validationError ?? cardError) && (
         <p role="alert" className="text-sm text-red-600">
-          {cardError}
+          {validationError ?? cardError}
         </p>
       )}
 
@@ -297,6 +415,37 @@ function CardPaymentForm({
         Card details are entered directly into PayPal&apos;s secure servers and are never stored by us.
       </p>
     </div>
+  );
+}
+
+/**
+ * Wraps the card form in its PayPal provider and owns hosted-field validity state.
+ *
+ * Exists because `PayPalCardFieldsProvider` accepts the `validitychange` handler
+ * as a prop, while `CardPaymentForm` — its child — is what needs the resulting
+ * state to gate submission. Keeping the state here avoids drilling it through
+ * the page component.
+ * Used by: BookPaymentPage.
+ */
+function CardPaymentSection(props: Omit<CardPaymentFormProps, "validity">): ReactElement {
+  const [validity, setValidity] = useState<CardFieldsValidity>(PRISTINE_VALIDITY);
+
+  // PayPal emits the full three-field state on every change; merge defensively
+  // so a payload missing a field keeps that field's last known state.
+  const handleValidityChange = useCallback((event: { data?: Partial<CardFieldsValidity> }) => {
+    const data = event?.data;
+    if (!data) return;
+    setValidity((prev) => ({
+      number: data.number ?? prev.number,
+      expiry: data.expiry ?? prev.expiry,
+      cvv: data.cvv ?? prev.cvv,
+    }));
+  }, []);
+
+  return (
+    <PayPalCardFieldsProvider validitychange={handleValidityChange}>
+      <CardPaymentForm {...props} validity={validity} />
+    </PayPalCardFieldsProvider>
   );
 }
 
@@ -750,15 +899,13 @@ export default function BookPaymentPage(): ReactElement {
                     /* ── Primary: card form + secondary: PayPal button ── */
                     <div className="space-y-6">
                       {/* Card form */}
-                      <PayPalCardFieldsProvider>
-                        <CardPaymentForm
-                          onCreateOrder={handlePayPalCreate}
-                          onApprove={handlePayPalApprove}
-                          onError={(msg) => setPaymentError(msg)}
-                          amount={totalAmount}
-                          disabled={false}
-                        />
-                      </PayPalCardFieldsProvider>
+                      <CardPaymentSection
+                        onCreateOrder={handlePayPalCreate}
+                        onApprove={handlePayPalApprove}
+                        onError={(msg) => setPaymentError(msg)}
+                        amount={totalAmount}
+                        disabled={false}
+                      />
 
                       {/* Divider */}
                       <div className="flex items-center gap-3">
