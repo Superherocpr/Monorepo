@@ -682,6 +682,42 @@ export async function getPayoutHistory(
 }
 
 /**
+ * Derives lifetime summary totals from a set of an instructor's own earning rows.
+ * Pure — no DB access. Exported for unit testing.
+ *
+ * Status buckets:
+ *   pending       → waiting to be included in a payout batch
+ *   payout_pending → reserved in a batch sent to PayPal, not yet confirmed
+ *   paid          → confirmed delivered
+ *
+ * @param earnings - Earning rows already mapped to InstructorOwnEarning.
+ * @returns Rounded totals per status bucket plus an all-time total.
+ */
+export function buildInstructorEarningsSummary(
+  earnings: Pick<InstructorOwnEarning, "status" | "instructorAmount">[]
+): InstructorEarningsSummary {
+  let totalEarned = 0;
+  let pendingAmount = 0;
+  let inFlightAmount = 0;
+  let paidAmount = 0;
+
+  for (const e of earnings) {
+    totalEarned += e.instructorAmount;
+    if (e.status === "pending") pendingAmount += e.instructorAmount;
+    else if (e.status === "payout_pending") inFlightAmount += e.instructorAmount;
+    else if (e.status === "paid") paidAmount += e.instructorAmount;
+  }
+
+  return {
+    totalEarned: roundCurrency(totalEarned),
+    pendingAmount: roundCurrency(pendingAmount),
+    inFlightAmount: roundCurrency(inFlightAmount),
+    paidAmount: roundCurrency(paidAmount),
+    earningCount: earnings.length,
+  };
+}
+
+/**
  * Loads an instructor's own earnings and payout history for the profile payment page.
  * Returns individual earning rows with class/invoice context, lifetime summary totals,
  * and the payout batch items they were included in.
@@ -724,19 +760,7 @@ export async function getInstructorEarningsData(
     loadInvoiceContexts(adminClient, invoiceIds),
   ]);
 
-  let pendingAmount = 0;
-  let inFlightAmount = 0;
-  let paidAmount = 0;
-  let totalEarned = 0;
-
   const earnings: InstructorOwnEarning[] = rows.map((row) => {
-    const instructorAmount = money(row.instructor_amount);
-    totalEarned += instructorAmount;
-
-    if (row.status === "pending") pendingAmount += instructorAmount;
-    else if (row.status === "payout_pending") inFlightAmount += instructorAmount;
-    else if (row.status === "paid") paidAmount += instructorAmount;
-
     let label = "Adjustment";
     let detail: string | null = null;
     let sessionDate: string | null = null;
@@ -757,7 +781,7 @@ export async function getInstructorEarningsData(
       sourceType: row.source_type as "booking" | "invoice",
       grossAmount: money(row.gross_amount),
       platformFeeAmount: money(row.platform_fee_amount),
-      instructorAmount,
+      instructorAmount: money(row.instructor_amount),
       createdAt: row.created_at,
       label,
       detail,
@@ -765,13 +789,7 @@ export async function getInstructorEarningsData(
     };
   });
 
-  const summary: InstructorEarningsSummary = {
-    totalEarned: roundCurrency(totalEarned),
-    pendingAmount: roundCurrency(pendingAmount),
-    inFlightAmount: roundCurrency(inFlightAmount),
-    paidAmount: roundCurrency(paidAmount),
-    earningCount: rows.length,
-  };
+  const summary = buildInstructorEarningsSummary(earnings);
 
   // Fetch payout items this instructor was included in, with their batch metadata.
   const { data: itemRows, error: itemsError } = await adminClient
