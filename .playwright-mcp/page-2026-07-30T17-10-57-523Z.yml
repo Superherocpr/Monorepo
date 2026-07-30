@@ -1,0 +1,14 @@
+- generic [active] [ref=f5e1]:
+  - generic [ref=f5e2]:
+    - generic [ref=f5e3]: Card number
+    - generic [ref=f5e4]:
+      - img "Visa" [ref=f5e5]:
+        - generic [ref=f5e7]: VISA
+      - img "Mastercard" [ref=f5e8]
+      - img "American Express" [ref=f5e13]:
+        - generic [ref=f5e15]: AMEX
+      - img "Discover" [ref=f5e16]:
+        - generic [ref=f5e18]: DISCOVER
+  - generic [ref=f5e20]:
+    - generic [ref=f5e21]: ðŸ”’ SSL encrypted
+    - generic [ref=f5e22]: ðŸ›¡ PCI DSS compliant

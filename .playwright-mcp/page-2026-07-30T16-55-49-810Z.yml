@@ -1,0 +1,87 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]:
+        - link "SuperHeroCPR home" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e7]: SuperHeroCPR
+        - navigation "Main navigation" [ref=e8]:
+          - link "Home" [ref=e9] [cursor=pointer]:
+            - /url: /
+          - link "Schedule" [ref=e10] [cursor=pointer]:
+            - /url: /book
+          - link "About" [ref=e11] [cursor=pointer]:
+            - /url: /about
+          - link "Contact" [ref=e12] [cursor=pointer]:
+            - /url: /contact
+        - link "Sign In" [ref=e14] [cursor=pointer]:
+          - /url: /signin
+    - main [ref=e15]:
+      - generic [ref=e16]:
+        - navigation "Booking progress" [ref=e17]:
+          - list [ref=e18]:
+            - listitem [ref=e19]:
+              - generic [ref=e20]: Select
+            - listitem [ref=e26]:
+              - generic [ref=e27]: Details
+            - listitem [ref=e33]:
+              - generic [ref=e34]: Account
+            - listitem [ref=e40]:
+              - generic [ref=e41]:
+                - generic [ref=e42]: "4"
+                - generic [ref=e44]: Payment
+            - listitem [ref=e46]:
+              - generic [ref=e47]:
+                - generic [ref=e48]: "5"
+                - generic [ref=e50]: Done
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - heading "Payment" [level=1] [ref=e54]
+            - paragraph [ref=e55]: Pay securely with your debit or credit card, or use PayPal.
+          - heading "Your Booking" [level=2] [ref=e58]
+    - contentinfo [ref=e65]:
+      - generic [ref=e66]:
+        - generic [ref=e67]:
+          - generic [ref=e68]:
+            - paragraph [ref=e69]: SuperHeroCPR
+            - paragraph [ref=e70]: AHA-certified CPR, BLS, and First Aid training in the Bay Area, Florida. On-location classes for individuals, businesses, and healthcare providers.
+          - generic [ref=e71]:
+            - paragraph [ref=e72]: Quick Links
+            - generic [ref=e73]:
+              - list [ref=e74]:
+                - listitem [ref=e75]:
+                  - link "Home" [ref=e76] [cursor=pointer]:
+                    - /url: /
+                - listitem [ref=e77]:
+                  - link "Classes" [ref=e78] [cursor=pointer]:
+                    - /url: /classes
+                - listitem [ref=e79]:
+                  - link "Schedule" [ref=e80] [cursor=pointer]:
+                    - /url: /book
+              - list [ref=e81]:
+                - listitem [ref=e82]:
+                  - link "Merch" [ref=e83] [cursor=pointer]:
+                    - /url: /merch
+                - listitem [ref=e84]:
+                  - link "About" [ref=e85] [cursor=pointer]:
+                    - /url: /about
+                - listitem [ref=e86]:
+                  - link "Contact" [ref=e87] [cursor=pointer]:
+                    - /url: /contact
+          - generic [ref=e88]:
+            - paragraph [ref=e89]: Contact
+            - list [ref=e90]:
+              - listitem [ref=e91]: Hillsborough, Manatee & Sarasota Counties, FL
+              - listitem [ref=e92]:
+                - link "contact@superherocpr.com" [ref=e93] [cursor=pointer]:
+                  - /url: mailto:contact@superherocpr.com
+            - link "View SuperHeroCPR membership with Manatee Chamber of Commerce" [ref=e95] [cursor=pointer]:
+              - /url: https://manateechamber.com/
+              - generic [ref=e96]: Proud Member of
+              - img "Manatee Chamber of Commerce" [ref=e97]
+              - generic [ref=e98]: Super Hero CPR
+        - generic [ref=e99]:
+          - paragraph [ref=e100]: © 2026 SuperHeroCPR. All rights reserved.
+          - paragraph [ref=e101]: American Heart Association Authorized Training Site
+  - button "Open Next.js Dev Tools" [ref=e107] [cursor=pointer]
+  - alert [ref=e111]

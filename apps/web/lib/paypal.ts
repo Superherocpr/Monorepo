@@ -149,6 +149,94 @@ export function parseCaptureFees(breakdown: unknown): PayPalCaptureFees {
 }
 
 // ---------------------------------------------------------------------------
+// Capture outcome evaluation
+// ---------------------------------------------------------------------------
+
+/**
+ * The only PayPal capture status that means money actually moved.
+ * Every other documented value (DECLINED, PENDING, FAILED, REFUNDED,
+ * PARTIALLY_REFUNDED) means funds are NOT settled in the business account.
+ */
+const CAPTURE_STATUS_COMPLETED = "COMPLETED";
+
+/** Result of inspecting a PayPal capture response. */
+export type CaptureOutcome =
+  | {
+      settled: true;
+      captureId: string | null;
+      capturedAmount: number | null;
+      fees: PayPalCaptureFees;
+    }
+  | {
+      settled: false;
+      /** PayPal's reported capture status, or null when no capture was returned. */
+      status: string | null;
+      captureId: string | null;
+      /** Processor decline code, when PayPal supplies one. */
+      processorResponseCode: string | null;
+    };
+
+/**
+ * Determines whether a PayPal capture response represents money that actually
+ * settled into the business account.
+ *
+ * **This exists because a declined card still returns HTTP 201/200.** PayPal
+ * signals the decline only via `purchase_units[].payments.captures[].status`,
+ * and — critically — a DECLINED capture still includes a full
+ * `seller_receivable_breakdown` with plausible gross/fee/net amounts and an
+ * `amount.value` matching the order total. Checking `response.ok` and the
+ * captured amount alone therefore passes for a declined payment, which is how
+ * a declined card previously produced a confirmed booking, a `completed`
+ * payment row, phantom revenue, and an instructor payout liability
+ * (THREAT-054). Callers MUST branch on `settled` before recording anything.
+ *
+ * @param captureData - Parsed JSON body of a `/v2/checkout/orders/{id}/capture` call.
+ * @returns Settled outcome with amounts/fees, or an unsettled outcome with the status.
+ */
+export function evaluateCaptureOutcome(captureData: unknown): CaptureOutcome {
+  const root = (captureData ?? {}) as {
+    purchase_units?: Array<{
+      payments?: {
+        captures?: Array<{
+          id?: string;
+          status?: string;
+          amount?: { value?: string };
+          seller_receivable_breakdown?: unknown;
+          processor_response?: { response_code?: string };
+        }>;
+      };
+    }>;
+  };
+
+  const capture = root.purchase_units?.[0]?.payments?.captures?.[0];
+  const captureId = typeof capture?.id === "string" ? capture.id : null;
+  const status = typeof capture?.status === "string" ? capture.status : null;
+
+  // No capture object at all — treat as unsettled rather than assuming success.
+  if (!capture || status !== CAPTURE_STATUS_COMPLETED) {
+    return {
+      settled: false,
+      status,
+      captureId,
+      processorResponseCode:
+        typeof capture?.processor_response?.response_code === "string"
+          ? capture.processor_response.response_code
+          : null,
+    };
+  }
+
+  const rawAmount = capture.amount?.value;
+  const parsedAmount = typeof rawAmount === "string" ? Number.parseFloat(rawAmount) : NaN;
+
+  return {
+    settled: true,
+    captureId,
+    capturedAmount: Number.isFinite(parsedAmount) ? parsedAmount : null,
+    fees: parseCaptureFees(capture.seller_receivable_breakdown),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Webhook signature verification
 // ---------------------------------------------------------------------------
 
@@ -221,6 +309,47 @@ export async function verifyPayPalWebhookSignature(
 
   const data = (await response.json()) as { verification_status?: string };
   return data.verification_status === "SUCCESS";
+}
+
+/**
+ * Generates a short-lived PayPal client token (a JWT) for initializing the
+ * JS SDK v6 with the `clientToken` prop on `PayPalProvider`. Required for
+ * card fields (Advanced Credit and Debit Cards) to initialize their hosted
+ * iframes. Token expires in ~1 hour.
+ *
+ * This calls the same `/v1/oauth2/token` client-credentials endpoint as
+ * {@link getPayPalAccessToken}, but with `response_type=client_token` added —
+ * that flag is what makes PayPal return a browser-safe JWT in `access_token`
+ * instead of a server-only bearer token. The unrelated `/v1/identity/generate-token`
+ * endpoint returns a legacy base64-encoded Braintree token blob (not a JWT),
+ * which the v6 SDK's `createInstance` rejects with "clientToken must be a
+ * valid JSON Web Token" — do not switch back to it.
+ * @returns Client token JWT for use in the browser-facing PayPal SDK.
+ * @throws Error if NEXT_PUBLIC_PAYPAL_CLIENT_ID or PAYPAL_SECRET are missing,
+ *         or the auth call fails.
+ */
+export async function getPayPalClientToken(): Promise<string> {
+  const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "";
+  const clientSecret = process.env.PAYPAL_SECRET ?? "";
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+
+  const response = await fetch(`${getPayPalApiBase()}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials&response_type=client_token",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const err = await response.text().catch(() => "");
+    throw new Error(`PayPal client token failed (${response.status}): ${err}`);
+  }
+
+  const data = (await response.json()) as { access_token: string };
+  return data.access_token;
 }
 
 /**

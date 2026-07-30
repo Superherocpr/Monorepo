@@ -1,0 +1,301 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - banner [ref=f1e3]:
+      - generic [ref=f1e5]:
+        - link "SuperHeroCPR home" [ref=f1e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f1e7]: SuperHeroCPR
+        - navigation "Main navigation" [ref=f1e8]:
+          - link "Home" [ref=f1e9] [cursor=pointer]:
+            - /url: /
+          - link "Schedule" [ref=f1e10] [cursor=pointer]:
+            - /url: /book
+          - link "About" [ref=f1e11] [cursor=pointer]:
+            - /url: /about
+          - link "Contact" [ref=f1e12] [cursor=pointer]:
+            - /url: /contact
+        - link "Sign In" [ref=f1e14] [cursor=pointer]:
+          - /url: /signin
+    - main [ref=f1e15]:
+      - generic [ref=f1e16]:
+        - navigation "Booking progress" [ref=f1e18]:
+          - list [ref=f1e19]:
+            - listitem [ref=f1e20]:
+              - generic [ref=f1e21]:
+                - generic [ref=f1e22]: "1"
+                - generic [ref=f1e24]: Select
+            - listitem [ref=f1e26]:
+              - generic [ref=f1e27]:
+                - generic [ref=f1e28]: "2"
+                - generic [ref=f1e30]: Details
+            - listitem [ref=f1e32]:
+              - generic [ref=f1e33]:
+                - generic [ref=f1e34]: "3"
+                - generic [ref=f1e36]: Account
+            - listitem [ref=f1e38]:
+              - generic [ref=f1e39]:
+                - generic [ref=f1e40]: "4"
+                - generic [ref=f1e42]: Payment
+            - listitem [ref=f1e44]:
+              - generic [ref=f1e45]:
+                - generic [ref=f1e46]: "5"
+                - generic [ref=f1e48]: Done
+        - generic [ref=f1e50]:
+          - generic [ref=f1e51]:
+            - heading "Choose Your Class" [level=1] [ref=f1e52]
+            - paragraph [ref=f1e53]: Select an upcoming session to reserve your spot.
+          - generic [ref=f1e54]:
+            - generic [ref=f1e55]:
+              - generic [ref=f1e57]:
+                - textbox "Enter your zip code" [ref=f1e58]:
+                  - /placeholder: Zip Code
+                - button "Search classes by zip code" [disabled] [ref=f1e59]: Search
+              - generic [ref=f1e62]:
+                - generic [ref=f1e63]:
+                  - generic [ref=f1e64]: From
+                  - textbox "From" [ref=f1e65]
+                - generic [ref=f1e66]:
+                  - generic [ref=f1e67]: To
+                  - textbox "To" [ref=f1e68]
+            - button "Certification Type" [ref=f1e70]
+          - generic [ref=f1e74]:
+            - article [ref=f1e75]:
+              - heading "Blood Borne Pathogens" [level=3] [ref=f1e77]
+              - paragraph [ref=f1e78]:
+                - text: "Instructor:"
+                - generic [ref=f1e79]: Darnell Washington
+              - paragraph [ref=f1e80]: Jul 31, 2026 • 1:00 PM – 3:00 PM
+              - generic [ref=f1e81]: Hillsborough County Fire Station 1808 E Zack StTampa, FL 33602
+              - generic [ref=f1e82]:
+                - generic [ref=f1e83]: Free / person
+                - generic [ref=f1e85]: 18 spots available
+              - button "Select Blood Borne Pathogens on Jul 31, 2026" [ref=f1e86]: Select
+            - article [ref=f1e87]:
+              - heading "Heartsaver® CPR AED" [level=3] [ref=f1e89]
+              - paragraph [ref=f1e90]:
+                - text: "Instructor:"
+                - generic [ref=f1e91]: Kevin Okafor
+              - paragraph [ref=f1e92]: Aug 1, 2026 • 9:00 AM – 12:00 PM
+              - generic [ref=f1e93]: St. Joseph's Hospital3001 W Dr Martin Luther King Jr BlvdTampa, FL 33607
+              - generic [ref=f1e94]:
+                - generic [ref=f1e95]: $55 / person
+                - generic [ref=f1e97]: 12 spots available
+              - button "Select Heartsaver® CPR AED on Aug 1, 2026" [ref=f1e98]: Select
+            - article [ref=f1e99]:
+              - heading "Heartsaver® First Aid CPR AED" [level=3] [ref=f1e101]
+              - paragraph [ref=f1e102]:
+                - text: "Instructor:"
+                - generic [ref=f1e103]: Brittany Hall
+              - paragraph [ref=f1e104]: Aug 2, 2026 • 1:00 PM – 5:00 PM
+              - generic [ref=f1e105]: Raymond James Stadium4201 N Dale Mabry HwyTampa, FL 33607
+              - generic [ref=f1e106]:
+                - generic [ref=f1e107]: $50 / person
+                - generic [ref=f1e109]: 10 spots available
+              - button "Select Heartsaver® First Aid CPR AED on Aug 2, 2026" [ref=f1e110]: Select
+            - article [ref=f1e111]:
+              - heading "Heartsaver® Pediatric First Aid CPR AED" [level=3] [ref=f1e113]
+              - paragraph [ref=f1e114]:
+                - text: "Instructor:"
+                - generic [ref=f1e115]: Mei-Ling Torres
+              - paragraph [ref=f1e116]: Aug 4, 2026 • 9:00 AM – 1:00 PM
+              - generic [ref=f1e117]: City of Bradenton Station 1,
+              - generic [ref=f1e118]:
+                - generic [ref=f1e119]: $55 / person
+                - generic [ref=f1e121]: 8 spots available
+              - button "Select Heartsaver® Pediatric First Aid CPR AED on Aug 4, 2026" [ref=f1e122]: Select
+            - article [ref=f1e123]:
+              - heading "BLS Provider" [level=3] [ref=f1e125]
+              - paragraph [ref=f1e126]:
+                - text: "Instructor:"
+                - generic [ref=f1e127]: Jordan Price
+              - paragraph [ref=f1e128]: Aug 5, 2026 • 1:00 PM – 5:00 PM
+              - generic [ref=f1e129]: City of Bradenton Station 2,
+              - generic [ref=f1e130]:
+                - generic [ref=f1e131]: $65 / person
+                - generic [ref=f1e133]: 16 spots available
+              - button "Select BLS Provider on Aug 5, 2026" [ref=f1e134]: Select
+            - article [ref=f1e135]:
+              - heading "Basic Life Support (BLS)" [level=3] [ref=f1e137]
+              - paragraph [ref=f1e138]:
+                - text: "Instructor:"
+                - generic [ref=f1e139]: Brandon Ellis
+              - paragraph [ref=f1e140]: Aug 6, 2026 • 9:00 AM – 1:00 PM
+              - generic [ref=f1e141]: SCF Lakewood Ranch,
+              - generic [ref=f1e142]:
+                - generic [ref=f1e143]: $75 / person
+                - generic [ref=f1e145]: 6 spots available
+              - button "Select Basic Life Support (BLS) on Aug 6, 2026" [ref=f1e146]: Select
+            - article [ref=f1e147]:
+              - heading "Family & Friends® CPR" [level=3] [ref=f1e149]
+              - paragraph [ref=f1e150]:
+                - text: "Instructor:"
+                - generic [ref=f1e151]: Cynthia Park
+              - paragraph [ref=f1e152]: Aug 7, 2026 • 1:00 PM – 3:00 PM
+              - generic [ref=f1e153]: Lakewood Ranch Dental,
+              - generic [ref=f1e154]:
+                - generic [ref=f1e155]: Free / person
+                - generic [ref=f1e157]: 20 spots available
+              - button "Select Family & Friends® CPR on Aug 7, 2026" [ref=f1e158]: Select
+            - article [ref=f1e159]:
+              - heading "Advanced Cardiac Life Support (ACLS)" [level=3] [ref=f1e161]
+              - paragraph [ref=f1e162]:
+                - text: "Instructor:"
+                - generic [ref=f1e163]: Derek Simmons
+              - paragraph [ref=f1e164]: Aug 8, 2026 • 9:00 AM – 3:00 PM
+              - generic [ref=f1e165]: Bright Futures Daycare & Preschool,
+              - generic [ref=f1e166]:
+                - generic [ref=f1e167]: Free / person
+                - generic [ref=f1e169]: 12 spots available
+              - button "Select Advanced Cardiac Life Support (ACLS) on Aug 8, 2026" [ref=f1e170]: Select
+            - article [ref=f1e171]:
+              - heading "Heartsaver® First Aid" [level=3] [ref=f1e173]
+              - paragraph [ref=f1e174]:
+                - text: "Instructor:"
+                - generic [ref=f1e175]: Renee Foster
+              - paragraph [ref=f1e176]: Aug 10, 2026 • 1:00 PM – 4:00 PM
+              - generic [ref=f1e177]: Braveminds Academy,
+              - generic [ref=f1e178]:
+                - generic [ref=f1e179]: Free / person
+                - generic [ref=f1e181]: 8 spots available
+              - button "Select Heartsaver® First Aid on Aug 10, 2026" [ref=f1e182]: Select
+            - article [ref=f1e183]:
+              - heading "Pediatric Advanced Life Support (PALS)" [level=3] [ref=f1e185]
+              - paragraph [ref=f1e186]:
+                - text: "Instructor:"
+                - generic [ref=f1e187]: James Ford
+              - paragraph [ref=f1e188]: Aug 11, 2026 • 9:00 AM – 3:00 PM
+              - generic [ref=f1e189]: Puppy Patch Daycare,
+              - generic [ref=f1e190]:
+                - generic [ref=f1e191]: Free / person
+                - generic [ref=f1e193]: 10 spots available
+              - button "Select Pediatric Advanced Life Support (PALS) on Aug 11, 2026" [ref=f1e194]: Select
+            - article [ref=f1e195]:
+              - heading "Blood Borne Pathogens" [level=3] [ref=f1e197]
+              - paragraph [ref=f1e198]:
+                - text: "Instructor:"
+                - generic [ref=f1e199]: Sarah Martinez
+              - paragraph [ref=f1e200]: Aug 12, 2026 • 1:00 PM – 3:00 PM
+              - generic [ref=f1e201]: Freedom Village Bradenton,
+              - generic [ref=f1e202]:
+                - generic [ref=f1e203]: Free / person
+                - generic [ref=f1e205]: 14 spots available
+              - button "Select Blood Borne Pathogens on Aug 12, 2026" [ref=f1e206]: Select
+            - article [ref=f1e207]:
+              - heading "Heartsaver® CPR AED" [level=3] [ref=f1e209]
+              - paragraph [ref=f1e210]:
+                - text: "Instructor:"
+                - generic [ref=f1e211]: Nathan Instructor Hedgeman
+              - paragraph [ref=f1e212]: Aug 13, 2026 • 9:00 AM – 12:00 PM
+              - generic [ref=f1e213]: Casa Mora Rehab,
+              - generic [ref=f1e214]:
+                - generic [ref=f1e215]: $55 / person
+                - generic [ref=f1e217]: 6 spots available
+              - button "Select Heartsaver® CPR AED on Aug 13, 2026" [ref=f1e218]: Select
+            - article [ref=f1e219]:
+              - heading "Heartsaver® First Aid CPR AED" [level=3] [ref=f1e221]
+              - paragraph [ref=f1e222]:
+                - text: "Instructor:"
+                - generic [ref=f1e223]: Omar Castillo
+              - paragraph [ref=f1e224]: Aug 14, 2026 • 1:00 PM – 5:00 PM
+              - generic [ref=f1e225]: Abbott Headquarters,
+              - generic [ref=f1e226]:
+                - generic [ref=f1e227]: $50 / person
+                - generic [ref=f1e229]: 20 spots available
+              - button "Select Heartsaver® First Aid CPR AED on Aug 14, 2026" [ref=f1e230]: Select
+            - article [ref=f1e231]:
+              - heading "Heartsaver® Pediatric First Aid CPR AED" [level=3] [ref=f1e233]
+              - paragraph [ref=f1e234]:
+                - text: "Instructor:"
+                - generic [ref=f1e235]: Vanessa Burke
+              - paragraph [ref=f1e236]: Aug 15, 2026 • 9:00 AM – 1:00 PM
+              - generic [ref=f1e237]: Artisan Lakes Explanade,
+              - generic [ref=f1e238]:
+                - generic [ref=f1e239]: $55 / person
+                - generic [ref=f1e241]: 8 spots available
+              - button "Select Heartsaver® Pediatric First Aid CPR AED on Aug 15, 2026" [ref=f1e242]: Select
+            - article [ref=f1e243]:
+              - heading "BLS Provider" [level=3] [ref=f1e245]
+              - paragraph [ref=f1e246]:
+                - text: "Instructor:"
+                - generic [ref=f1e247]: Tasha Nguyen
+              - paragraph [ref=f1e248]: Aug 17, 2026 • 1:00 PM – 5:00 PM
+              - generic [ref=f1e249]: Price Headquarters,
+              - generic [ref=f1e250]:
+                - generic [ref=f1e251]: $65 / person
+                - generic [ref=f1e253]: 12 spots available
+              - button "Select BLS Provider on Aug 17, 2026" [ref=f1e254]: Select
+            - article [ref=f1e255]:
+              - heading "Basic Life Support (BLS)" [level=3] [ref=f1e257]
+              - paragraph [ref=f1e258]:
+                - text: "Instructor:"
+                - generic [ref=f1e259]: Darnell Washington
+              - paragraph [ref=f1e260]: Aug 18, 2026 • 9:00 AM – 1:00 PM
+              - generic [ref=f1e261]: The Center for Urgent Care,
+              - generic [ref=f1e262]:
+                - generic [ref=f1e263]: $75 / person
+                - generic [ref=f1e265]: 16 spots available
+              - button "Select Basic Life Support (BLS) on Aug 18, 2026" [ref=f1e266]: Select
+            - article [ref=f1e267]:
+              - heading "Family & Friends® CPR" [level=3] [ref=f1e269]
+              - paragraph [ref=f1e270]:
+                - text: "Instructor:"
+                - generic [ref=f1e271]: Kevin Okafor
+              - paragraph [ref=f1e272]: Aug 19, 2026 • 1:00 PM – 3:00 PM
+              - generic [ref=f1e273]: The Ranch Dental Care,
+              - generic [ref=f1e274]:
+                - generic [ref=f1e275]: Free / person
+                - generic [ref=f1e277]: 10 spots available
+              - button "Select Family & Friends® CPR on Aug 19, 2026" [ref=f1e278]: Select
+          - generic [ref=f1e281]:
+            - heading "Can't Find a Time That Works?" [level=2] [ref=f1e282]
+            - paragraph [ref=f1e283]: We offer private group sessions at your home, office, or facility. Request a class at your location and we'll work with you to make it happen.
+            - generic [ref=f1e284]:
+              - link "Request a Class" [ref=f1e285] [cursor=pointer]:
+                - /url: /request-class
+              - link "Contact Us Instead" [ref=f1e286] [cursor=pointer]:
+                - /url: /contact
+    - contentinfo [ref=f1e287]:
+      - generic [ref=f1e288]:
+        - generic [ref=f1e289]:
+          - generic [ref=f1e290]:
+            - paragraph [ref=f1e291]: SuperHeroCPR
+            - paragraph [ref=f1e292]: AHA-certified CPR, BLS, and First Aid training in the Bay Area, Florida. On-location classes for individuals, businesses, and healthcare providers.
+          - generic [ref=f1e293]:
+            - paragraph [ref=f1e294]: Quick Links
+            - generic [ref=f1e295]:
+              - list [ref=f1e296]:
+                - listitem [ref=f1e297]:
+                  - link "Home" [ref=f1e298] [cursor=pointer]:
+                    - /url: /
+                - listitem [ref=f1e299]:
+                  - link "Classes" [ref=f1e300] [cursor=pointer]:
+                    - /url: /classes
+                - listitem [ref=f1e301]:
+                  - link "Schedule" [ref=f1e302] [cursor=pointer]:
+                    - /url: /book
+              - list [ref=f1e303]:
+                - listitem [ref=f1e304]:
+                  - link "Merch" [ref=f1e305] [cursor=pointer]:
+                    - /url: /merch
+                - listitem [ref=f1e306]:
+                  - link "About" [ref=f1e307] [cursor=pointer]:
+                    - /url: /about
+                - listitem [ref=f1e308]:
+                  - link "Contact" [ref=f1e309] [cursor=pointer]:
+                    - /url: /contact
+          - generic [ref=f1e310]:
+            - paragraph [ref=f1e311]: Contact
+            - list [ref=f1e312]:
+              - listitem [ref=f1e313]: Hillsborough, Manatee & Sarasota Counties, FL
+              - listitem [ref=f1e314]:
+                - link "contact@superherocpr.com" [ref=f1e315] [cursor=pointer]:
+                  - /url: mailto:contact@superherocpr.com
+            - link "View SuperHeroCPR membership with Manatee Chamber of Commerce" [ref=f1e317] [cursor=pointer]:
+              - /url: https://manateechamber.com/
+              - generic [ref=f1e318]: Proud Member of
+              - img "Manatee Chamber of Commerce" [ref=f1e319]
+              - generic [ref=f1e320]: Super Hero CPR
+        - generic [ref=f1e321]:
+          - paragraph [ref=f1e322]: © 2026 SuperHeroCPR. All rights reserved.
+          - paragraph [ref=f1e323]: American Heart Association Authorized Training Site
+  - button "Open Next.js Dev Tools" [ref=f1e329] [cursor=pointer]
