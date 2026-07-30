@@ -19,7 +19,7 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { getMerchPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
+import { getMerchPayPalAccessToken, getPayPalApiBase, evaluateCaptureOutcome } from "@/lib/paypal";
 import type { CartItem } from "@/lib/cart-store";
 
 /** Flat shipping rate — mirrors NEXT_PUBLIC_SHIPPING_RATE used client-side. */
@@ -240,24 +240,43 @@ export async function POST(request: Request) {
       );
     }
 
-    const captureData = (await captureResponse.json()) as {
-      purchase_units?: Array<{
-        payments?: { captures?: Array<{ id: string; amount?: { value: string } }> };
-      }>;
-    };
+    const captureData = await captureResponse.json();
 
-    const capture =
-      captureData.purchase_units?.[0]?.payments?.captures?.[0];
-    paypalTransactionId = capture?.id ?? paypalOrderId;
+    // Reject any capture that did not actually settle (THREAT-054). A declined
+    // card still returns HTTP 201 with an amount matching the order, so checking
+    // `captureResponse.ok` and the amount alone would fulfil an unpaid order.
+    // capture.status === "COMPLETED" is the only reliable signal money moved.
+    const outcome = evaluateCaptureOutcome(captureData);
+
+    if (!outcome.settled) {
+      console.error("[orders/confirm] Capture did not settle — no order created", {
+        paypalOrderId,
+        captureStatus: outcome.status,
+        captureId: outcome.captureId,
+        processorResponseCode: outcome.processorResponseCode,
+      });
+      const isPending = outcome.status === "PENDING";
+      return NextResponse.json(
+        {
+          success: false,
+          declined: !isPending,
+          error: isPending
+            ? "Your payment is still being reviewed by PayPal and hasn't completed. " +
+              "Your order was not placed — please contact us before retrying."
+            : "Your card was declined and no payment was taken. " +
+              "Please try a different card or payment method.",
+        },
+        { status: 402 }
+      );
+    }
+
+    paypalTransactionId = outcome.captureId ?? paypalOrderId;
 
     // Defence in depth: verify PayPal captured the expected amount.
     // PayPal could in theory return a different value if order was modified.
-    if (capture?.amount?.value) {
-      const capturedAmount = parseFloat(capture.amount.value);
-      if (
-        Number.isFinite(capturedAmount) &&
-        Math.abs(capturedAmount - serverTotal) > PRICE_TOLERANCE
-      ) {
+    if (outcome.capturedAmount !== null) {
+      const capturedAmount = outcome.capturedAmount;
+      if (Math.abs(capturedAmount - serverTotal) > PRICE_TOLERANCE) {
         console.error(
           "[orders/confirm] PayPal captured amount mismatch:",
           capturedAmount,

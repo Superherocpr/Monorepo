@@ -28,18 +28,19 @@ vi.mock("@/lib/supabase/server", () => ({
   createAdminClient: vi.fn(),
 }));
 
-vi.mock("@/lib/paypal", () => ({
-  getPayPalAccessToken: vi.fn().mockResolvedValue("fake-token"),
-  getPayPalApiBase: vi.fn().mockReturnValue("https://paypal.test"),
-  // The route reads PayPal's real processing fee off the capture response. These
-  // fixtures have no seller_receivable_breakdown, so the untracked (null) result
-  // is the correct shape to return here.
-  parseCaptureFees: vi.fn().mockReturnValue({
-    grossAmount: null,
-    paypalFee: null,
-    netAmount: null,
-  }),
-}));
+// Only the network-touching helpers are stubbed. evaluateCaptureOutcome keeps
+// its real implementation on purpose — it is the guard that decides whether a
+// capture actually settled (THREAT-054), so mocking it would make the decline
+// tests below assert nothing. Fixtures without a seller_receivable_breakdown
+// flow through the real parseCaptureFees and yield null (untracked) fees.
+vi.mock("@/lib/paypal", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/paypal")>();
+  return {
+    ...actual,
+    getPayPalAccessToken: vi.fn().mockResolvedValue("fake-token"),
+    getPayPalApiBase: vi.fn().mockReturnValue("https://paypal.test"),
+  };
+});
 
 vi.mock("@/lib/instructor-earnings", () => ({
   recordBookingEarning: vi.fn().mockResolvedValue(undefined),
@@ -150,7 +151,7 @@ describe("POST /api/bookings/confirm", () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, amount: { value: "100.00" } }] } }],
+        purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, status: "COMPLETED", amount: { value: "100.00" } }] } }],
       }),
     });
 
@@ -183,7 +184,7 @@ describe("POST /api/bookings/confirm", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, amount: { value: "100.00" } }] } }],
+          purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, status: "COMPLETED", amount: { value: "100.00" } }] } }],
         }),
       })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) }); // refund call
@@ -203,7 +204,7 @@ describe("POST /api/bookings/confirm", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, amount: { value: "100.00" } }] } }],
+          purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, status: "COMPLETED", amount: { value: "100.00" } }] } }],
         }),
       })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) }); // refund call
@@ -223,7 +224,7 @@ describe("POST /api/bookings/confirm", () => {
         ok: true,
         // PayPal reports it captured $1 despite the order being created for $100 — must never happen, but defend anyway.
         json: async () => ({
-          purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, amount: { value: "1.00" } }] } }],
+          purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, status: "COMPLETED", amount: { value: "1.00" } }] } }],
         }),
       })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) }); // refund call
@@ -235,12 +236,78 @@ describe("POST /api/bookings/confirm", () => {
     expect(fetchMock.mock.calls[1][0]).toContain(`/v2/payments/captures/${CAPTURE_ID}/refund`);
   });
 
+  test("returns 402 and creates nothing when PayPal reports the capture DECLINED (THREAT-054)", async () => {
+    const { rpc } = mockAdminClient({});
+    // A declined card returns HTTP 201 with a populated fee breakdown and an
+    // amount matching the order — only capture.status reveals the decline.
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        purchase_units: [
+          {
+            payments: {
+              captures: [
+                {
+                  id: CAPTURE_ID,
+                  status: "DECLINED",
+                  amount: { value: "100.00" },
+                  seller_receivable_breakdown: {
+                    gross_amount: { value: "100.00" },
+                    paypal_fee: { value: "3.20" },
+                    net_amount: { value: "96.80" },
+                  },
+                  processor_response: { response_code: "9100" },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+
+    const res = await POST(makeRequest(baseBody));
+
+    expect(res.status).toBe(402);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.declined).toBe(true);
+    expect(json.error).toMatch(/declined/i);
+
+    // The critical assertions: no seat reserved, no instructor earning accrued.
+    expect(rpc).not.toHaveBeenCalled();
+    expect(recordBookingEarning).not.toHaveBeenCalled();
+    // No refund attempted — a declined capture never took the funds.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns 402 and creates nothing when the capture is PENDING (not yet settled)", async () => {
+    const { rpc } = mockAdminClient({});
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        purchase_units: [
+          { payments: { captures: [{ id: CAPTURE_ID, status: "PENDING", amount: { value: "100.00" } }] } },
+        ],
+      }),
+    });
+
+    const res = await POST(makeRequest(baseBody));
+
+    expect(res.status).toBe(402);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    // Pending is not a decline — the buyer must not be told to retry with another card.
+    expect(json.declined).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(recordBookingEarning).not.toHaveBeenCalled();
+  });
+
   test("does not fail the request when the payment record insert fails (booking already succeeded)", async () => {
     mockAdminClient({ paymentInsertResult: { data: null, error: { message: "db down" } } });
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, amount: { value: "100.00" } }] } }],
+        purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, status: "COMPLETED", amount: { value: "100.00" } }] } }],
       }),
     });
 

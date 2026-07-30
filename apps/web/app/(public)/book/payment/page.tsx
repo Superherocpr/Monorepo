@@ -595,6 +595,7 @@ export default function BookPaymentPage(): ReactElement {
       const result = (await response.json().catch(() => ({ success: false }))) as {
         success?: boolean;
         error?: string;
+        declined?: boolean;
       };
 
       if (result.success) {
@@ -603,6 +604,17 @@ export default function BookPaymentPage(): ReactElement {
       }
 
       const serverError = typeof result.error === "string" ? result.error : "";
+
+      // 402 = the capture never settled (declined / pending). No booking was
+      // created and no money was taken, so tell the buyer to try another card
+      // rather than the generic "refresh and try again".
+      if (response.status === 402) {
+        setPaymentError(
+          serverError ||
+            "Your card was declined and no payment was taken. Please try a different card."
+        );
+        return;
+      }
 
       if (response.status === 409 && serverError.toLowerCase().includes("class filled")) {
         setIsFullError(true);

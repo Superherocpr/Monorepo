@@ -22,7 +22,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { getPayPalAccessToken, getPayPalApiBase, parseCaptureFees } from "@/lib/paypal";
+import { getPayPalAccessToken, getPayPalApiBase, evaluateCaptureOutcome } from "@/lib/paypal";
 import { Resend } from "resend";
 import { bookingConfirmationEmail } from "@/lib/emails";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
@@ -197,37 +197,61 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Payment capture failed" }, { status: 502 });
   }
 
-  const captureData = (await captureResponse.json()) as {
-    purchase_units?: Array<{
-      payments?: {
-        captures?: Array<{
-          id?: string;
-          amount?: { value: string };
-          seller_receivable_breakdown?: unknown;
-        }>;
-      };
-    }>;
-  };
+  const captureData = await captureResponse.json();
 
-  const purchaseUnit = captureData.purchase_units?.[0];
-  const capture = purchaseUnit?.payments?.captures?.[0];
-  const paypalTransactionId = capture?.id ?? null;
+  // ── Step 2a: Reject any capture that did not actually settle (THREAT-054) ──
+  // A declined card still returns HTTP 201 with a full seller_receivable_breakdown
+  // and an amount matching the order, so `captureResponse.ok` plus an amount check
+  // is NOT sufficient — the only reliable signal is capture.status === "COMPLETED".
+  // Everything below this point (booking, payment row, instructor earning, payout,
+  // confirmation email) must be unreachable unless money genuinely moved.
+  const outcome = evaluateCaptureOutcome(captureData);
+
+  if (!outcome.settled) {
+    console.error("[bookings/confirm] Capture did not settle — no booking created", {
+      paypalOrderId,
+      sessionId,
+      customerId,
+      captureStatus: outcome.status,
+      captureId: outcome.captureId,
+      processorResponseCode: outcome.processorResponseCode,
+    });
+
+    // Nothing to refund — a declined/failed capture never took the funds.
+    // PENDING is also rejected: the money is not settled, so confirming the
+    // booking would recreate the same phantom-revenue problem.
+    // TODO: subscribe to PAYMENT.CAPTURE.COMPLETED to auto-confirm a booking if
+    // a PENDING capture later settles, instead of asking the buyer to retry.
+    const isPending = outcome.status === "PENDING";
+    return Response.json(
+      {
+        success: false,
+        declined: !isPending,
+        error: isPending
+          ? "Your payment is still being reviewed by PayPal and hasn't completed. " +
+            "Your spot is not yet reserved — please contact us at (813) 966-3969 before rebooking."
+          : "Your card was declined and no payment was taken. " +
+            "Please try a different card or payment method.",
+      },
+      { status: 402 }
+    );
+  }
+
+  const paypalTransactionId = outcome.captureId;
 
   // PayPal reports its exact processing fee on the capture itself. Recording it
   // here is the only way the payout dashboard can show real margin rather than
   // the gross platform-fee percentage, which overstates profit by roughly 20%.
-  const captureFees = parseCaptureFees(capture?.seller_receivable_breakdown);
+  // Only read from a settled capture — PayPal populates this block on declined
+  // captures too, which is what previously produced phantom revenue.
+  const captureFees = outcome.fees;
 
   // Verify PayPal captured the expected amount (defence in depth).
   // Compares against expectedPrice (class price − promo + add-ons), not the raw
   // dbPrice — a prior version compared against dbPrice, which would have wrongly
   // triggered a refund+reject for any promo-discounted booking above 1 cent.
-  if (capture?.amount?.value) {
-    const capturedAmount = parseFloat(capture.amount.value);
-    if (
-      Number.isFinite(capturedAmount) &&
-      Math.abs(capturedAmount - expectedPrice) > PRICE_TOLERANCE
-    ) {
+  if (outcome.capturedAmount !== null) {
+    if (Math.abs(outcome.capturedAmount - expectedPrice) > PRICE_TOLERANCE) {
       if (paypalTransactionId) {
         await refundCapture(paypalTransactionId).catch((err) =>
           console.error("[bookings/confirm] Refund after amount mismatch failed:", err)
