@@ -25,9 +25,11 @@ import type {
   OnApproveDataOneTimePayments,
   UsePayPalCardFieldsOneTimePaymentSessionResult,
 } from "@paypal/react-paypal-js/sdk-v6";
+import { Lock, ShieldCheck } from "lucide-react";
 import { getBookingStore, setBookingStore } from "@/lib/booking-store";
 import BookingProgress from "../_components/BookingProgress";
 import OrderSummary from "../_components/OrderSummary";
+import CardBrandIcons from "../_components/CardBrandIcons";
 import type { BookingStore, AppliedPromoCode, SelectedAddon } from "@/lib/booking-store";
 import type { PromoValidateResponse } from "@/app/api/promo-codes/validate/route";
 
@@ -183,9 +185,12 @@ function CardPaymentForm({
 
       {/* Card number — PayPal hosted iframe */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Card number
-        </label>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="block text-sm font-medium text-gray-700">
+            Card number
+          </label>
+          <CardBrandIcons />
+        </div>
         <PayPalCardNumberField
           placeholder="1234 5678 9012 3456"
           ariaLabel="Card number"
@@ -266,10 +271,17 @@ function CardPaymentForm({
       </button>
 
       {/* Security note */}
-      <p className="text-xs text-gray-400 flex items-center gap-1.5">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
-          <path fillRule="evenodd" d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7V4.5A3.5 3.5 0 0 0 8 1Zm2 6V4.5a2 2 0 1 0-4 0V7h4Z" clipRule="evenodd" />
-        </svg>
+      <div className="flex items-center gap-4 pt-1">
+        <span className="flex items-center gap-1.5 text-xs text-gray-500">
+          <Lock size={13} className="text-gray-400 shrink-0" aria-hidden="true" />
+          SSL encrypted
+        </span>
+        <span className="flex items-center gap-1.5 text-xs text-gray-500">
+          <ShieldCheck size={13} className="text-gray-400 shrink-0" aria-hidden="true" />
+          PCI DSS compliant
+        </span>
+      </div>
+      <p className="text-xs text-gray-400">
         Card details are entered directly into PayPal&apos;s secure servers and are never stored by us.
       </p>
     </div>
@@ -625,11 +637,12 @@ export default function BookPaymentPage(): ReactElement {
       <div className="min-h-screen bg-white">
         <BookingProgress currentStep={4} />
 
-        <div className="max-w-5xl mx-auto px-4 pb-16">
-          <div className="flex flex-col lg:flex-row gap-10">
+        <div className="max-w-4xl mx-auto px-4 pb-16">
+          <div className="flex flex-col lg:flex-row gap-8">
 
-            {/* ── Left: payment section ── */}
-            <div className="flex-1">
+            {/* ── Left: payment section — capped width so it sits close to the sidebar
+                 instead of stretching across the remaining flex space ── */}
+            <div className="order-2 lg:order-1 w-full lg:max-w-md">
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment</h1>
               <p className="text-gray-500 text-sm mb-8">
                 {isFreeWithPromo
@@ -669,129 +682,9 @@ export default function BookPaymentPage(): ReactElement {
                 </div>
               )}
 
-              {/* Order summary */}
-              <div className="mb-6">
-                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Your Booking
-                </h2>
-                <OrderSummary
-                  details={store?.sessionDetails ?? null}
-                  appliedPromoCode={appliedPromo}
-                  selectedAddons={selectedAddons}
-                />
-              </div>
-
-              {/* ── Add-ons — only shown when the instructor enabled at least one ── */}
-              {!isFullError && store?.sessionDetails && availableAddons.length > 0 && (
-                <div className="mb-8">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Add-ons <span className="text-gray-400 font-normal">(optional)</span>
-                  </label>
-                  <div className="space-y-2 border border-gray-200 rounded-lg p-3">
-                    {availableAddons.map((a) => (
-                      <label
-                        key={a.id}
-                        className="flex items-center gap-2 text-sm text-gray-700"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedAddonIds.includes(a.id)}
-                          onChange={() => toggleAddon(a)}
-                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                        />
-                        <span>
-                          {a.name}{" "}
-                          <span className="text-gray-400">
-                            (
-                            {a.price.toLocaleString("en-US", {
-                              style: "currency",
-                              currency: "USD",
-                            })}
-                            )
-                          </span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Promo code input ── */}
-              {!isFullError && store?.sessionDetails && (
-                <div className="mb-8">
-                  {appliedPromo ? (
-                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-                      <div className="flex items-center gap-2 text-sm text-green-800">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          className="w-4 h-4 shrink-0"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        <span>
-                          Promo <span className="font-semibold">{appliedPromo.code}</span>{" "}
-                          applied (−
-                          {appliedPromo.discountAmount.toLocaleString("en-US", {
-                            style: "currency",
-                            currency: "USD",
-                          })}
-                          )
-                        </span>
-                      </div>
-                      <button
-                        onClick={handleRemovePromo}
-                        className="text-xs text-green-700 underline hover:text-green-900 ml-4 shrink-0"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Promo code
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={promoInput}
-                          onChange={(e) => {
-                            setPromoInput(e.target.value.toUpperCase());
-                            setPromoError(null);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleApplyPromo();
-                          }}
-                          placeholder="Enter code"
-                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent uppercase placeholder:normal-case"
-                          disabled={promoLoading}
-                        />
-                        <button
-                          onClick={handleApplyPromo}
-                          disabled={promoLoading || !promoInput.trim()}
-                          className="px-4 py-2 bg-gray-900 hover:bg-gray-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                          {promoLoading ? "Checking…" : "Apply"}
-                        </button>
-                      </div>
-                      {promoError && (
-                        <p role="alert" className="mt-2 text-sm text-red-600">
-                          {promoError}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Payment action */}
               {!isFullError && store?.sessionDetails && (
-                <div className="max-w-sm">
+                <div>
                   {isFreeWithPromo ? (
                     /* ── Free booking (100% promo) ── */
                     <button
@@ -871,14 +764,14 @@ export default function BookPaymentPage(): ReactElement {
 
               {/* Loading state while booking store hydrates */}
               {!store && (
-                <div className="h-14 w-full max-w-sm bg-gray-100 animate-pulse rounded-lg" />
+                <div className="h-14 w-full bg-gray-100 animate-pulse rounded-lg" />
               )}
 
               {/* ── DEV ONLY: skip payment button ── */}
               {process.env.NODE_ENV === "development" &&
                 !isFullError &&
                 store?.sessionDetails && (
-                  <div className="mt-6 max-w-sm border border-dashed border-yellow-400 rounded-lg p-4 bg-yellow-50">
+                  <div className="mt-6 border border-dashed border-yellow-400 rounded-lg p-4 bg-yellow-50">
                     <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">
                       Dev only — skip payment
                     </p>
@@ -898,6 +791,127 @@ export default function BookPaymentPage(): ReactElement {
                     </button>
                   </div>
                 )}
+            </div>
+
+            {/* ── Right: booking info + promo code — appears first on mobile,
+                 to the right of payment on desktop ── */}
+            <div className="order-1 lg:order-2 w-full lg:w-80 shrink-0">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                Your Booking
+              </h2>
+              <OrderSummary
+                details={store?.sessionDetails ?? null}
+                appliedPromoCode={appliedPromo}
+                selectedAddons={selectedAddons}
+              />
+
+              {/* ── Add-ons — only shown when the instructor enabled at least one ── */}
+              {!isFullError && store?.sessionDetails && availableAddons.length > 0 && (
+                <div className="mt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Add-ons <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <div className="space-y-2 border border-gray-200 rounded-lg p-3">
+                    {availableAddons.map((a) => (
+                      <label
+                        key={a.id}
+                        className="flex items-center gap-2 text-sm text-gray-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedAddonIds.includes(a.id)}
+                          onChange={() => toggleAddon(a)}
+                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                        <span>
+                          {a.name}{" "}
+                          <span className="text-gray-400">
+                            (
+                            {a.price.toLocaleString("en-US", {
+                              style: "currency",
+                              currency: "USD",
+                            })}
+                            )
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Promo code input ── */}
+              {!isFullError && store?.sessionDetails && (
+                <div className="mt-6">
+                  {appliedPromo ? (
+                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                      <div className="flex items-center gap-2 text-sm text-green-800">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          className="w-4 h-4 shrink-0"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <span>
+                          Promo <span className="font-semibold">{appliedPromo.code}</span>{" "}
+                          applied (−
+                          {appliedPromo.discountAmount.toLocaleString("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                          })}
+                          )
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleRemovePromo}
+                        className="text-xs text-green-700 underline hover:text-green-900 ml-4 shrink-0"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Promo code
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={promoInput}
+                          onChange={(e) => {
+                            setPromoInput(e.target.value.toUpperCase());
+                            setPromoError(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleApplyPromo();
+                          }}
+                          placeholder="Enter code"
+                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent uppercase placeholder:normal-case"
+                          disabled={promoLoading}
+                        />
+                        <button
+                          onClick={handleApplyPromo}
+                          disabled={promoLoading || !promoInput.trim()}
+                          className="px-4 py-2 bg-gray-900 hover:bg-gray-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          {promoLoading ? "Checking…" : "Apply"}
+                        </button>
+                      </div>
+                      {promoError && (
+                        <p role="alert" className="mt-2 text-sm text-red-600">
+                          {promoError}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
           </div>
