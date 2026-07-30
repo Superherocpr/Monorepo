@@ -1,13 +1,25 @@
 /**
  * POST /api/payouts/release
- * Called by: Admin Payouts page — failed batch recovery action
+ * Called by: Admin payout history panel — stuck batch recovery action
  * Auth: super_admin only
- * Releases a failed payout reservation with no confirmed PayPal batch id after
- * the admin has verified in PayPal that no payout was created.
+ * Releases a payout reservation with no confirmed PayPal batch id after the admin
+ * has verified in PayPal that no payout was created.
+ *
+ * Accepts both `failed` (PayPal rejected the request outright) and `needs_review`
+ * (the request may have reached PayPal but the response never did). The second is
+ * the case this route exists for: those earnings are deliberately left locked in
+ * `payout_pending` by holdUncertainReservation() so they cannot be double-paid,
+ * and releasing them requires a human to confirm with PayPal first.
+ *
+ * A batch that has a PayPal batch id is never releasable here — its outcome must
+ * come from reconciliation or the deny route instead.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
+
+/** Batch statuses that can be released back to pending earnings. */
+const RELEASABLE_STATUSES = new Set(["failed", "needs_review"]);
 
 /** Body accepted by the release route. */
 interface ReleaseRequestBody {
@@ -106,11 +118,12 @@ export async function POST(request: Request) {
   }
 
   const payoutBatch = batch as ReleaseBatchRow;
-  if (payoutBatch.status !== "failed" || payoutBatch.paypal_payout_batch_id) {
+  if (!RELEASABLE_STATUSES.has(payoutBatch.status) || payoutBatch.paypal_payout_batch_id) {
     return Response.json(
       {
         success: false,
-        error: "Only failed batches with no PayPal batch id can be released.",
+        error:
+          "Only failed or needs-review batches with no PayPal batch id can be released.",
       },
       { status: 400 }
     );

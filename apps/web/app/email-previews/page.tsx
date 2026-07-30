@@ -27,6 +27,8 @@ import {
   sessionClaimedStudentEmail,
   sessionClaimedAdminEmail,
   unclaimedOpportunityEscalationEmail,
+  payoutDeniedAdminEmail,
+  instructorPayoutSentEmail,
 } from "@/lib/emails";
 
 // Dev-only preview page for all transactional emails.
@@ -299,6 +301,24 @@ export default async function Page() {
     baseUrl: "http://localhost:3000",
   });
   previews.push({ id: "oo-escalation", name: "Unclaimed Opportunities — Super Admin Escalation", subject: ooEscalation.subject, src: b64(ooEscalation.html) });
+
+  const payoutDenied = payoutDeniedAdminEmail({
+    senderBatchId: "shcpr-4f2c9a1b8e7d4c3a9f1e2d3c4b5a6978",
+    paypalBatchId: "9XJ4K2LMNP8QR",
+    totalAmount: 640,
+    itemCount: 3,
+    paypalStatus: "DENIED",
+    baseUrl: "http://localhost:3000",
+  });
+  previews.push({ id: "payout-denied", name: "Payout Denied — Super Admin Alert", subject: payoutDenied.subject, src: b64(payoutDenied.html) });
+
+  const payoutSent = instructorPayoutSentEmail({
+    firstName: "Sarah",
+    amount: 320,
+    payoutEmail: "sarah.instructor@example.com",
+    baseUrl: "http://localhost:3000",
+  });
+  previews.push({ id: "payout-sent", name: "Instructor Payout Sent", subject: payoutSent.subject, src: b64(payoutSent.html) });
 
   return (
     <main className="p-8">

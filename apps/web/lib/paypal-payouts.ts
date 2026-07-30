@@ -38,12 +38,18 @@ export interface PayPalPayoutItemStatus {
   transactionStatus: string;
   /** Optional failure/error message returned by PayPal. */
   errorMessage: string | null;
+  /** Fee PayPal charged to send this item, or null when not reported. */
+  feeAmount: number | null;
+  /** ISO timestamp PayPal processed the item, or null when not reported. */
+  timeProcessed: string | null;
 }
 
 /** Response from fetching a PayPal payout batch. */
 export interface PayPalPayoutBatchStatus {
   /** Current PayPal batch status. */
   batchStatus: string;
+  /** Total fee PayPal charged for the batch, or null when not reported. */
+  feeTotal: number | null;
   /** Current status for each item PayPal returned. */
   items: PayPalPayoutItemStatus[];
 }
@@ -87,10 +93,13 @@ interface PayPalCreatePayoutResponse {
 interface PayPalGetPayoutResponse {
   batch_header?: {
     batch_status?: string;
+    fees?: { value?: string };
   };
   items?: Array<{
     payout_item_id?: string;
     transaction_status?: string;
+    time_processed?: string;
+    payout_item_fee?: { value?: string };
     errors?: {
       name?: string;
       message?: string;
@@ -99,6 +108,13 @@ interface PayPalGetPayoutResponse {
       sender_item_id?: string;
     };
   }>;
+}
+
+/** Reads a PayPal `{ value: "1.00" }` money object into a number, or null. */
+function parsePayoutMoney(money: { value?: string } | undefined): number | null {
+  if (!money || typeof money.value !== "string") return null;
+  const parsed = Number.parseFloat(money.value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**
@@ -194,12 +210,15 @@ export async function getPayPalPayoutBatchStatus(
   const data = (await response.json()) as PayPalGetPayoutResponse;
   return {
     batchStatus: data.batch_header?.batch_status ?? "UNKNOWN",
+    feeTotal: parsePayoutMoney(data.batch_header?.fees),
     items: (data.items ?? [])
       .map((item) => ({
         senderItemId: item.payout_item?.sender_item_id ?? "",
         payoutItemId: item.payout_item_id ?? null,
         transactionStatus: item.transaction_status ?? "UNKNOWN",
         errorMessage: item.errors?.message ?? item.errors?.name ?? null,
+        feeAmount: parsePayoutMoney(item.payout_item_fee),
+        timeProcessed: item.time_processed ?? null,
       }))
       .filter((item) => item.senderItemId.length > 0),
   };

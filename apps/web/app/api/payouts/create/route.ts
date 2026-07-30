@@ -11,40 +11,17 @@
  *   - X-Payout-Source: "scheduled" — checks payout_trigger = "scheduled" and whether
  *     today matches payout_schedule (daily/weekly/monthly) before proceeding
  *
- * Atomically reserves pending instructor earnings, sends a PayPal Payouts batch,
- * and stores PayPal batch/item identifiers for reconciliation.
+ * Atomically reserves pending instructor earnings, then hands the reservation to
+ * submitReservedPayout() — shared with POST /api/payouts/retry — which sends the
+ * PayPal batch and records the result. A successful send leaves the batch
+ * `assumed_complete`, not `completed`: PayPal accepting a batch is not proof it
+ * delivered the money.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import {
-  createPayPalPayoutBatch,
-  PayPalPayoutRequestError,
-} from "@/lib/paypal-payouts";
-
-/** A payout item returned by reserve_instructor_payout_batch(). */
-interface ReservedPayoutItem {
-  id: string;
-  instructor_id: string;
-  recipient_email: string;
-  amount: number | string;
-}
-
-/** A payout batch returned by reserve_instructor_payout_batch(). */
-interface ReservedPayoutBatch {
-  id: string;
-  sender_batch_id: string;
-  total_amount: number | string;
-  item_count: number;
-}
-
-/** The JSON result returned by reserve_instructor_payout_batch(). */
-interface ReservedPayoutResult {
-  success: boolean;
-  reason?: string;
-  batch?: ReservedPayoutBatch;
-  items?: ReservedPayoutItem[];
-}
+import { submitReservedPayout } from "@/lib/payout-submit";
+import type { ReservedPayoutResult } from "@/types/payouts";
 
 /**
  * Returns the current super admin's profile id or a Response when unauthorized.
@@ -56,65 +33,6 @@ async function requireSuperAdmin(): Promise<string | Response> {
   const { actor } = authResult;
 
   return actor.user.id;
-}
-
-/** Converts unknown errors to a bounded message safe for admin display. */
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 1000) : "Unknown payout error";
-}
-
-/**
- * Releases a reserved payout batch after PayPal rejects the batch creation.
- * Side effects: marks the batch/items failed and returns earnings to pending.
- * @param batchId - Internal payout batch id to release.
- * @param message - Failure reason stored for reconciliation.
- */
-async function releaseFailedReservation(batchId: string, message: string): Promise<void> {
-  const adminClient = await createAdminClient();
-  const now = new Date().toISOString();
-
-  await adminClient
-    .from("instructor_earnings")
-    .update({
-      status: "pending",
-      payout_batch_id: null,
-      payout_item_id: null,
-      updated_at: now,
-    })
-    .eq("payout_batch_id", batchId)
-    .eq("status", "payout_pending");
-
-  await adminClient
-    .from("instructor_payout_items")
-    .update({ status: "failed", error_message: message, updated_at: now })
-    .eq("payout_batch_id", batchId);
-
-  await adminClient
-    .from("instructor_payout_batches")
-    .update({ status: "failed", error_message: message })
-    .eq("id", batchId);
-}
-
-/**
- * Marks a payout reservation as needing human review after an uncertain PayPal failure.
- * Side effects: stores the error while keeping earnings out of the payable pool.
- * @param batchId - Internal payout batch id whose PayPal result is unknown.
- * @param message - Failure details for the admin dashboard.
- */
-async function holdUncertainReservation(batchId: string, message: string): Promise<void> {
-  const adminClient = await createAdminClient();
-  const now = new Date().toISOString();
-  const reviewMessage = `PayPal result uncertain. Check PayPal for this sender batch before retrying. ${message}`;
-
-  await adminClient
-    .from("instructor_payout_batches")
-    .update({ status: "failed", error_message: reviewMessage })
-    .eq("id", batchId);
-
-  await adminClient
-    .from("instructor_payout_items")
-    .update({ status: "failed", error_message: reviewMessage, updated_at: now })
-    .eq("payout_batch_id", batchId);
 }
 
 /**
@@ -256,70 +174,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const recipients = reservation.items.map((item) => ({
-    id: item.id,
-    recipientEmail: item.recipient_email,
-    amount: Number(item.amount),
-    note: "SuperHeroCPR instructor payout",
-  }));
+  const result = await submitReservedPayout(adminClient, reservation);
 
-  try {
-    const paypalResult = await createPayPalPayoutBatch(
-      reservation.batch.sender_batch_id,
-      recipients
-    );
-    const now = new Date().toISOString();
-
-    await adminClient
-      .from("instructor_payout_batches")
-      .update({
-        status: "submitted",
-        paypal_payout_batch_id: paypalResult.payoutBatchId,
-        submitted_at: now,
-        error_message: null,
-      })
-      .eq("id", reservation.batch.id);
-
-    await Promise.all(
-      reservation.items.map((item) =>
-        adminClient
-          .from("instructor_payout_items")
-          .update({
-            status: "submitted",
-            paypal_payout_item_id: paypalResult.itemIdsBySenderItemId[item.id] ?? null,
-            error_message: null,
-            updated_at: now,
-          })
-          .eq("id", item.id)
-      )
-    );
-
-    return Response.json({
-      success: true,
-      batchId: reservation.batch.id,
-      paypalBatchId: paypalResult.payoutBatchId,
-      totalAmount: Number(reservation.batch.total_amount),
-      itemCount: reservation.batch.item_count,
-    });
-  } catch (error) {
-    const message = errorMessage(error);
-    console.error("[payouts/create] PayPal payout failed:", message);
-    if (
-      error instanceof PayPalPayoutRequestError &&
-      error.safeToReleaseReservation
-    ) {
-      await releaseFailedReservation(reservation.batch.id, message);
-      return Response.json({ success: false, error: message }, { status: 502 });
-    }
-
-    await holdUncertainReservation(reservation.batch.id, message);
+  if (!result.success) {
     return Response.json(
-      {
-        success: false,
-        error:
-          "PayPal payout result is uncertain. Check the recent payout batch before retrying.",
-      },
-      { status: 502 }
+      { success: false, error: result.error },
+      { status: result.httpStatus }
     );
   }
+
+  return Response.json({
+    success: true,
+    batchId: result.batchId,
+    paypalBatchId: result.paypalBatchId,
+    totalAmount: result.totalAmount,
+    itemCount: result.itemCount,
+  });
 }

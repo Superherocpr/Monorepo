@@ -22,7 +22,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
+import { getPayPalAccessToken, getPayPalApiBase, parseCaptureFees } from "@/lib/paypal";
 import { Resend } from "resend";
 import { bookingConfirmationEmail } from "@/lib/emails";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
@@ -199,13 +199,24 @@ export async function POST(request: Request) {
 
   const captureData = (await captureResponse.json()) as {
     purchase_units?: Array<{
-      payments?: { captures?: Array<{ id?: string; amount?: { value: string } }> };
+      payments?: {
+        captures?: Array<{
+          id?: string;
+          amount?: { value: string };
+          seller_receivable_breakdown?: unknown;
+        }>;
+      };
     }>;
   };
 
   const purchaseUnit = captureData.purchase_units?.[0];
   const capture = purchaseUnit?.payments?.captures?.[0];
   const paypalTransactionId = capture?.id ?? null;
+
+  // PayPal reports its exact processing fee on the capture itself. Recording it
+  // here is the only way the payout dashboard can show real margin rather than
+  // the gross platform-fee percentage, which overstates profit by roughly 20%.
+  const captureFees = parseCaptureFees(capture?.seller_receivable_breakdown);
 
   // Verify PayPal captured the expected amount (defence in depth).
   // Compares against expectedPrice (class price − promo + add-ons), not the raw
@@ -328,6 +339,9 @@ export async function POST(request: Request) {
       payment_type: "online",
       paypal_transaction_id: paypalTransactionId,
       routing_note: routingNote,
+      // Null when PayPal omitted the breakdown — null means "not tracked", not zero.
+      paypal_fee_amount: captureFees.paypalFee,
+      net_amount: captureFees.netAmount,
     })
     .select("id")
     .single();

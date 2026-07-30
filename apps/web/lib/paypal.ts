@@ -97,6 +97,58 @@ export async function getPayPalAccessToken(): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Capture fee breakdown
+// ---------------------------------------------------------------------------
+
+/** Real amounts PayPal reports for a completed capture, in USD. */
+export interface PayPalCaptureFees {
+  /** Gross amount captured from the customer. */
+  grossAmount: number | null;
+  /** PayPal's processing fee deducted from the capture. */
+  paypalFee: number | null;
+  /** Amount actually credited to the business account after the fee. */
+  netAmount: number | null;
+}
+
+/** Reads a `{ value: "12.34" }` money object into a finite number, or null. */
+function parseMoneyValue(money: unknown): number | null {
+  if (typeof money !== "object" || money === null) return null;
+  const raw = (money as { value?: unknown }).value;
+  if (typeof raw !== "string") return null;
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Extracts PayPal's own fee figures from a capture's `seller_receivable_breakdown`.
+ *
+ * PayPal returns this on the capture response at no extra API cost, which makes
+ * it the only exact source for what a payment actually cost. Every field is null
+ * when PayPal omits the breakdown — a null fee means "not tracked", never zero,
+ * so revenue totals can tell measured amounts apart from unknown ones.
+ *
+ * @param breakdown - The `seller_receivable_breakdown` object from a capture, if present.
+ * @returns Gross, fee, and net amounts, each null when unavailable.
+ */
+export function parseCaptureFees(breakdown: unknown): PayPalCaptureFees {
+  if (typeof breakdown !== "object" || breakdown === null) {
+    return { grossAmount: null, paypalFee: null, netAmount: null };
+  }
+
+  const record = breakdown as {
+    gross_amount?: unknown;
+    paypal_fee?: unknown;
+    net_amount?: unknown;
+  };
+
+  return {
+    grossAmount: parseMoneyValue(record.gross_amount),
+    paypalFee: parseMoneyValue(record.paypal_fee),
+    netAmount: parseMoneyValue(record.net_amount),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Webhook signature verification
 // ---------------------------------------------------------------------------
 
@@ -112,26 +164,30 @@ export interface PayPalWebhookHeaders {
 /**
  * Verifies a PayPal webhook event's signature via PayPal's
  * `/v1/notifications/verify-webhook-signature` endpoint, using the business
- * account's OAuth token and the `PAYPAL_INVOICE_WEBHOOK_ID` configured for
- * the INVOICING.INVOICE.PAID webhook subscription (set in the PayPal
- * business dashboard). Distinct from any other webhook ID this account may
- * have registered for other event types — each PayPal webhook subscription
- * gets its own unique ID, scoped to its own target URL.
+ * account's OAuth token and the caller-supplied webhook ID.
+ *
+ * Each PayPal webhook subscription gets its own unique ID scoped to its own
+ * target URL, so the ID must be passed in by the route being called rather than
+ * read from a single env var here: invoices use `PAYPAL_INVOICE_WEBHOOK_ID`,
+ * payouts use `PAYPAL_PAYOUTS_WEBHOOK_ID`.
+ *
  * This is the sole authentication mechanism for inbound PayPal webhooks —
  * there is no shared-secret header, so a valid signature is required before
  * acting on any webhook payload.
+ *
  * @param headers - The five `paypal-*` transmission headers from the request.
  * @param webhookEvent - The parsed JSON body of the webhook request.
+ * @param webhookId - The PayPal webhook subscription ID this event was sent to.
  * @returns True only if PayPal confirms the signature is valid for this webhook ID.
  */
 export async function verifyPayPalWebhookSignature(
   headers: PayPalWebhookHeaders,
-  webhookEvent: unknown
+  webhookEvent: unknown,
+  webhookId: string | undefined
 ): Promise<boolean> {
-  const webhookId = process.env.PAYPAL_INVOICE_WEBHOOK_ID;
   if (!webhookId) {
     console.error(
-      "[paypal] PAYPAL_INVOICE_WEBHOOK_ID is not set — cannot verify webhook signatures."
+      "[paypal] No webhook ID configured for this subscription — cannot verify webhook signatures."
     );
     return false;
   }

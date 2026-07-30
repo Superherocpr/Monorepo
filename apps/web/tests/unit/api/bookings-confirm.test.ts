@@ -31,6 +31,14 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/paypal", () => ({
   getPayPalAccessToken: vi.fn().mockResolvedValue("fake-token"),
   getPayPalApiBase: vi.fn().mockReturnValue("https://paypal.test"),
+  // The route reads PayPal's real processing fee off the capture response. These
+  // fixtures have no seller_receivable_breakdown, so the untracked (null) result
+  // is the correct shape to return here.
+  parseCaptureFees: vi.fn().mockReturnValue({
+    grossAmount: null,
+    paypalFee: null,
+    netAmount: null,
+  }),
 }));
 
 vi.mock("@/lib/instructor-earnings", () => ({
