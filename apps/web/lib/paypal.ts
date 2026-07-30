@@ -224,6 +224,35 @@ export async function verifyPayPalWebhookSignature(
 }
 
 /**
+ * Generates a short-lived PayPal client token for initializing the JS SDK
+ * with the `clientToken` prop on `PayPalProvider`. Required for card fields
+ * (Advanced Credit and Debit Cards) to initialize their hosted iframes.
+ * Token expires in ~1 hour.
+ * @returns Client token string for use in the browser-facing PayPal SDK.
+ * @throws Error if the business access token cannot be obtained or PayPal rejects the call.
+ */
+export async function getPayPalClientToken(): Promise<string> {
+  const accessToken = await getPayPalAccessToken();
+  const response = await fetch(`${getPayPalApiBase()}/v1/identity/generate-token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "Accept-Language": "en_US",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const err = await response.text().catch(() => "");
+    throw new Error(`PayPal client token failed (${response.status}): ${err}`);
+  }
+
+  const data = (await response.json()) as { client_token: string };
+  return data.client_token;
+}
+
+/**
  * Requests a PayPal access token for the **merch store** REST API app.
  * Uses the separate merch merchant account (`NEXT_PUBLIC_PAYPAL_MERCH_CLIENT_ID`
  * + `PAYPAL_MERCH_SECRET`). Only used by merch checkout, capture, and refund routes.
