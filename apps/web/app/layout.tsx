@@ -37,10 +37,19 @@ export default function RootLayout({
         {/*
          * Dark mode flash prevention: reads localStorage before first paint and
          * adds the 'dark' class to <html> if the user's preference is dark.
-         * Must live in the root layout <head> as a dangerouslySetInnerHTML script —
-         * this renders as raw HTML in the server stream before React hydrates, so it
-         * runs synchronously before any paint. next/script beforeInteractive is not
-         * supported in nested layouts, which is why it lives here.
+         *
+         * This MUST stay a raw <script> with dangerouslySetInnerHTML. It renders
+         * into the server HTML stream and executes synchronously before first
+         * paint, which is the only way to avoid a light-mode flash.
+         *
+         * Do NOT convert this to next/script beforeInteractive: in the App Router
+         * that strategy wraps the code in a `self.__next_s` queue executed later by
+         * Next's runtime, which reintroduces the flash it exists to prevent.
+         *
+         * React 19 logs a dev-only console warning here ("Encountered a script tag
+         * while rendering React component") whenever it re-creates this node on the
+         * client. The warning is expected, fires once per session, and does not
+         * appear in production builds — the script itself works correctly.
          */}
         <script
           dangerouslySetInnerHTML={{

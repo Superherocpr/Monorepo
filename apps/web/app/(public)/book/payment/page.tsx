@@ -1,29 +1,287 @@
 "use client";
 
 /**
- * /book/payment — Step 4 of the booking wizard: PayPal checkout.
- * Uses PayPal v9 API (PayPalProvider + PayPalOneTimePaymentButton from sdk-v6).
- * Calls /api/paypal/create-booking-order to create the order server-side,
- * then /api/bookings/confirm to capture payment and create the booking record.
+ * /book/payment — Step 4 of the booking wizard: card or PayPal checkout.
+ * Uses PayPal v9 SDK (PayPalProvider + card fields as primary, PayPalOneTimePaymentButton
+ * as secondary). Calls /api/paypal/client-token on mount to initialize the SDK, then
+ * /api/paypal/create-booking-order to create the order, and /api/bookings/confirm to
+ * capture payment and create the booking record.
  * For 100% promo codes, calls /api/bookings/confirm-free instead (no PayPal).
  * Used by: booking flow after account creation (step 3) or sign-in (step 2a).
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactElement } from "react";
 import { useRouter } from "next/navigation";
 import {
   PayPalProvider,
   PayPalOneTimePaymentButton,
+  PayPalCardFieldsProvider,
+  PayPalCardNumberField,
+  PayPalCardExpiryField,
+  PayPalCardCvvField,
+  usePayPalCardFieldsOneTimePaymentSession,
 } from "@paypal/react-paypal-js/sdk-v6";
-import type { OnApproveDataOneTimePayments } from "@paypal/react-paypal-js/sdk-v6";
+import type {
+  OnApproveDataOneTimePayments,
+  UsePayPalCardFieldsOneTimePaymentSessionResult,
+} from "@paypal/react-paypal-js/sdk-v6";
 import { getBookingStore, setBookingStore } from "@/lib/booking-store";
 import BookingProgress from "../_components/BookingProgress";
 import OrderSummary from "../_components/OrderSummary";
 import type { BookingStore, AppliedPromoCode, SelectedAddon } from "@/lib/booking-store";
 import type { PromoValidateResponse } from "@/app/api/promo-codes/validate/route";
 
-/** Renders Step 4 — PayPal payment (or free booking via promo) for the selected session. */
-export default function BookPaymentPage() {
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Shape returned by handlePayPalCreate — passed to card form and PayPal button. */
+type CreateOrderResult = { orderId: string };
+
+/** Props for the inner card form component. */
+type CardPaymentFormProps = {
+  /** Creates the PayPal order and returns its ID. Called on every Pay click. */
+  onCreateOrder: () => Promise<CreateOrderResult>;
+  /** Called when PayPal has authorized the payment (before capture). */
+  onApprove: (data: { orderId: string }) => Promise<void>;
+  /** Called when a card-level error should surface to the page. */
+  onError: (message: string) => void;
+  /** Total amount in USD to display on the pay button. */
+  amount: number;
+  /** Whether the pay button should be disabled (e.g. class just filled). */
+  disabled: boolean;
+};
+
+// ---------------------------------------------------------------------------
+// CardPaymentForm — inner component; must live inside PayPalCardFieldsProvider
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders the hosted card fields (number, expiry, CVV) and submit button.
+ * Must be rendered inside `PayPalCardFieldsProvider`. Uses
+ * `usePayPalCardFieldsOneTimePaymentSession` to submit card data to PayPal.
+ * Used by: BookPaymentPage.
+ */
+function CardPaymentForm({
+  onCreateOrder,
+  onApprove,
+  onError,
+  amount,
+  disabled,
+}: CardPaymentFormProps): ReactElement {
+  const { submit, submitResponse, error }: UsePayPalCardFieldsOneTimePaymentSessionResult =
+    usePayPalCardFieldsOneTimePaymentSession();
+
+  const [nameOnCard, setNameOnCard] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
+
+  // Stable ref so the useEffect below can call the latest onApprove without
+  // it appearing in the dependency array (avoids stale-closure re-render loops).
+  const onApproveRef = useRef(onApprove);
+  onApproveRef.current = onApprove;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
+  // Handle SDK-level errors (initialization failure, eligibility issues).
+  useEffect(() => {
+    if (!error) return;
+    console.error("[CardPaymentForm] card fields error:", error);
+    setCardError("Card payment is temporarily unavailable. Please use PayPal below.");
+    setIsSubmitting(false);
+  }, [error]);
+
+  // Handle submit response states from PayPal after card data is submitted.
+  useEffect(() => {
+    if (!submitResponse) return;
+
+    const handleResponse = async (): Promise<void> => {
+      switch (submitResponse.state) {
+        case "succeeded":
+          // PayPal authorized the card — now capture server-side via /api/bookings/confirm.
+          await onApproveRef.current({ orderId: submitResponse.data.orderId });
+          // If we reach here, confirm returned an error (no redirect happened).
+          setIsSubmitting(false);
+          break;
+
+        case "canceled":
+          // Buyer dismissed 3DS challenge — allow retry without recreating the session.
+          setCardError("Authentication was canceled. Please try again.");
+          setIsSubmitting(false);
+          break;
+
+        case "failed":
+          setCardError(
+            submitResponse.data.message ??
+              "Payment failed. Please check your card details and try again."
+          );
+          setIsSubmitting(false);
+          break;
+      }
+    };
+
+    handleResponse().catch((err: unknown) => {
+      console.error("[CardPaymentForm] handleResponse error:", err);
+      setIsSubmitting(false);
+    });
+  }, [submitResponse]);
+
+  /** Creates a PayPal order then submits the card data against it. */
+  async function handlePay(): Promise<void> {
+    setCardError(null);
+    setIsSubmitting(true);
+    try {
+      const { orderId } = await onCreateOrder();
+      await submit(orderId, { name: nameOnCard.trim() || undefined });
+      // Response arrives via the submitResponse useEffect above.
+    } catch (err) {
+      console.error("[CardPaymentForm] submit error:", err);
+      setCardError("Something went wrong. Please try again.");
+      setIsSubmitting(false);
+    }
+  }
+
+  /** Style injected into the PayPal-hosted card field iframes. */
+  const fieldStyle = {
+    input: {
+      fontSize: "14px",
+      color: "#111827",
+      "font-family": "inherit",
+    },
+    "input::placeholder": {
+      color: "#9ca3af",
+    },
+  };
+
+  /** Shared container styles so each hosted iframe looks like a Tailwind input. */
+  const fieldContainerClass =
+    "border border-gray-300 rounded-lg bg-white overflow-hidden focus-within:ring-2 focus-within:ring-red-500 focus-within:border-transparent";
+  const fieldContainerStyle = { height: "42px" };
+
+  const formattedAmount = amount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Name on card — regular input; passed to PayPal submit options */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Name on card
+        </label>
+        <input
+          type="text"
+          value={nameOnCard}
+          onChange={(e) => setNameOnCard(e.target.value)}
+          placeholder="Jane Smith"
+          autoComplete="cc-name"
+          disabled={isSubmitting || disabled}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:opacity-50"
+        />
+      </div>
+
+      {/* Card number — PayPal hosted iframe */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Card number
+        </label>
+        <PayPalCardNumberField
+          placeholder="1234 5678 9012 3456"
+          ariaLabel="Card number"
+          style={fieldStyle}
+          containerClassName={fieldContainerClass}
+          containerStyles={{ ...fieldContainerStyle, paddingLeft: "12px" }}
+        />
+      </div>
+
+      {/* Expiry + CVV — side by side */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Expiry
+          </label>
+          <PayPalCardExpiryField
+            placeholder="MM / YY"
+            ariaLabel="Card expiry date"
+            style={fieldStyle}
+            containerClassName={fieldContainerClass}
+            containerStyles={{ ...fieldContainerStyle, paddingLeft: "12px" }}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            CVV
+          </label>
+          <PayPalCardCvvField
+            placeholder="123"
+            ariaLabel="Card security code"
+            style={fieldStyle}
+            containerClassName={fieldContainerClass}
+            containerStyles={{ ...fieldContainerStyle, paddingLeft: "12px" }}
+          />
+        </div>
+      </div>
+
+      {/* Card-level error */}
+      {cardError && (
+        <p role="alert" className="text-sm text-red-600">
+          {cardError}
+        </p>
+      )}
+
+      {/* Pay button */}
+      <button
+        onClick={handlePay}
+        disabled={isSubmitting || disabled}
+        className="w-full py-3 px-6 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+      >
+        {isSubmitting ? (
+          <>
+            <svg
+              className="animate-spin h-4 w-4 text-white"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
+            </svg>
+            Processing…
+          </>
+        ) : (
+          `Pay ${formattedAmount}`
+        )}
+      </button>
+
+      {/* Security note */}
+      <p className="text-xs text-gray-400 flex items-center gap-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
+          <path fillRule="evenodd" d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7V4.5A3.5 3.5 0 0 0 8 1Zm2 6V4.5a2 2 0 1 0-4 0V7h4Z" clipRule="evenodd" />
+        </svg>
+        Card details are entered directly into PayPal&apos;s secure servers and are never stored by us.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BookPaymentPage — main page component
+// ---------------------------------------------------------------------------
+
+/** Renders Step 4 — card payment (primary) or PayPal (secondary) for the selected session. */
+export default function BookPaymentPage(): ReactElement {
   const router = useRouter();
   const [store] = useState<BookingStore | null>(() => {
     const s = getBookingStore();
@@ -31,6 +289,10 @@ export default function BookPaymentPage() {
   });
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isFullError, setIsFullError] = useState(false);
+
+  // PayPal SDK requires a clientToken (not clientId) when card-fields are enabled.
+  const [clientToken, setClientToken] = useState<string | undefined>(undefined);
+  const [clientTokenError, setClientTokenError] = useState(false);
 
   // Promo code state
   const [promoInput, setPromoInput] = useState("");
@@ -59,6 +321,31 @@ export default function BookPaymentPage() {
     }
   }, [store, router]);
 
+  // Fetch the PayPal client token needed to initialize the SDK with card fields.
+  // A non-OK response or a missing token must flip clientTokenError — otherwise
+  // clientToken stays undefined, PayPalProvider never initializes, and the page
+  // renders its loading skeleton forever with no indication anything is wrong.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/paypal/client-token")
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Client token request failed (${res.status})`);
+        const data = (await res.json()) as { clientToken?: string };
+        if (!data.clientToken) throw new Error("Client token missing from response");
+        return data.clientToken;
+      })
+      .then((token) => {
+        if (!cancelled) setClientToken(token);
+      })
+      .catch((err: unknown) => {
+        console.error("[book/payment] PayPal client token fetch failed:", err);
+        if (!cancelled) setClientTokenError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Fetch the add-ons this session's instructor has enabled (if any).
   useEffect(() => {
     if (!store?.sessionId) return;
@@ -77,7 +364,7 @@ export default function BookPaymentPage() {
   }, [store?.sessionId]);
 
   /** Toggles an add-on selection and persists the denormalized list to the store. */
-  function toggleAddon(addon: SelectedAddon) {
+  function toggleAddon(addon: SelectedAddon): void {
     setSelectedAddonIds((prev) => {
       const next = prev.includes(addon.id)
         ? prev.filter((id) => id !== addon.id)
@@ -93,7 +380,7 @@ export default function BookPaymentPage() {
   const addonsTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0);
 
   /** Applies a promo code by calling the validate endpoint and storing the result. */
-  async function handleApplyPromo() {
+  async function handleApplyPromo(): Promise<void> {
     if (!store?.sessionId || !promoInput.trim()) return;
     setPromoError(null);
     setPromoLoading(true);
@@ -131,7 +418,7 @@ export default function BookPaymentPage() {
   }
 
   /** Removes the currently applied promo code. */
-  function handleRemovePromo() {
+  function handleRemovePromo(): void {
     setAppliedPromo(null);
     setBookingStore({ appliedPromoCode: null });
     setPromoError(null);
@@ -141,7 +428,7 @@ export default function BookPaymentPage() {
    * DEV ONLY — books the selected session without any payment.
    * Calls /api/dev/book-free which is a hard 404 outside development.
    */
-  async function handleDevBypass() {
+  async function handleDevBypass(): Promise<void> {
     if (!store) return;
     setDevError(null);
     setDevBypassing(true);
@@ -180,7 +467,7 @@ export default function BookPaymentPage() {
    * Handles 100% off promo bookings — skips PayPal, calls confirm-free directly.
    * Only reachable when appliedPromo.finalPrice === 0.
    */
-  async function handleFreeBooking() {
+  async function handleFreeBooking(): Promise<void> {
     if (!store || !appliedPromo) return;
     setPaymentError(null);
     setIsFullError(false);
@@ -223,10 +510,11 @@ export default function BookPaymentPage() {
   }
 
   /**
-   * Called by PayPalOneTimePaymentButton createOrder callback.
+   * Called before card submission and by the PayPalOneTimePaymentButton createOrder callback.
    * Passes the applied promo code so the server creates the order at the discounted price.
+   * @returns An object containing the new PayPal order ID.
    */
-  async function handlePayPalCreate() {
+  const handlePayPalCreate = useCallback(async (): Promise<CreateOrderResult> => {
     if (!store?.sessionDetails || !store.sessionId) throw new Error("No session selected");
 
     const response = await fetch("/api/paypal/create-booking-order", {
@@ -242,92 +530,98 @@ export default function BookPaymentPage() {
     const data = await response.json().catch(() => ({ orderId: null }));
     if (!data.orderId) throw new Error("Failed to create PayPal order");
     return { orderId: data.orderId as string };
-  }
+  }, [store, appliedPromo, selectedAddonIds]);
 
   /**
-   * Called by PayPalOneTimePaymentButton onApprove callback.
-   * Passes the applied promo code so the server re-validates and captures the correct amount.
+   * Called after PayPal authorizes the payment (card fields OR PayPal button onApprove).
+   * Captures the payment server-side and creates the booking record.
+   * @param orderId - The PayPal order ID to capture.
    */
-  async function handlePayPalApprove({ orderId }: OnApproveDataOneTimePayments) {
-    setPaymentError(null);
-    setIsFullError(false);
-    if (!store) return;
+  const handlePayPalApprove = useCallback(
+    async ({ orderId }: { orderId: string } | OnApproveDataOneTimePayments): Promise<void> => {
+      setPaymentError(null);
+      setIsFullError(false);
+      if (!store) return;
 
-    const classAmount = appliedPromo ? appliedPromo.finalPrice : store.sessionDetails?.price ?? 0;
-    const finalAmount = classAmount + addonsTotal;
+      const classAmount = appliedPromo ? appliedPromo.finalPrice : store.sessionDetails?.price ?? 0;
+      const finalAmount = classAmount + addonsTotal;
 
-    const response = await fetch("/api/bookings/confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        paypalOrderId: orderId,
-        sessionId: store.sessionId,
-        customerId: store.customerId,
-        amount: finalAmount,
-        promoCode: appliedPromo?.code ?? null,
-        addonIds: selectedAddonIds,
-        customerEmail: store.customerDetails?.email,
-        customerFirstName: store.customerDetails?.firstName,
-        className: store.sessionDetails?.className,
-        startsAt: store.sessionDetails?.startsAt,
-        locationName: store.sessionDetails?.locationName,
-        locationAddress: store.sessionDetails?.locationAddress,
-        locationCity: store.sessionDetails?.locationCity,
-        locationState: store.sessionDetails?.locationState,
-        locationZip: store.sessionDetails?.locationZip,
-      }),
-    });
+      const response = await fetch("/api/bookings/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paypalOrderId: orderId,
+          sessionId: store.sessionId,
+          customerId: store.customerId,
+          amount: finalAmount,
+          promoCode: appliedPromo?.code ?? null,
+          addonIds: selectedAddonIds,
+          customerEmail: store.customerDetails?.email,
+          customerFirstName: store.customerDetails?.firstName,
+          className: store.sessionDetails?.className,
+          startsAt: store.sessionDetails?.startsAt,
+          locationName: store.sessionDetails?.locationName,
+          locationAddress: store.sessionDetails?.locationAddress,
+          locationCity: store.sessionDetails?.locationCity,
+          locationState: store.sessionDetails?.locationState,
+          locationZip: store.sessionDetails?.locationZip,
+        }),
+      });
 
-    const result = (await response.json().catch(() => ({ success: false }))) as {
-      success?: boolean;
-      error?: string;
-    };
+      const result = (await response.json().catch(() => ({ success: false }))) as {
+        success?: boolean;
+        error?: string;
+      };
 
-    if (result.success) {
-      router.push("/book/confirmation");
-      return;
-    }
+      if (result.success) {
+        router.push("/book/confirmation");
+        return;
+      }
 
-    const serverError = typeof result.error === "string" ? result.error : "";
+      const serverError = typeof result.error === "string" ? result.error : "";
 
-    if (response.status === 409 && serverError.toLowerCase().includes("class filled")) {
-      setIsFullError(true);
-      return;
-    }
+      if (response.status === 409 && serverError.toLowerCase().includes("class filled")) {
+        setIsFullError(true);
+        return;
+      }
 
-    if (/refunded|reversed/i.test(serverError)) {
-      const cleanError = serverError.replace(/\s*Payment refunded\.?$/i, "").trim();
+      if (/refunded|reversed/i.test(serverError)) {
+        const cleanError = serverError.replace(/\s*Payment refunded\.?$/i, "").trim();
+        setPaymentError(
+          `${cleanError || "We couldn't finish your booking."} ` +
+            "Any payment captured for this attempt has been refunded automatically. " +
+            "Please select another session or contact us at (813) 966-3969 if you need help."
+        );
+        return;
+      }
+
+      if (serverError) {
+        setPaymentError(`${serverError} Please refresh and try again.`);
+        return;
+      }
+
       setPaymentError(
-        `${cleanError || "We couldn't finish your booking."} ` +
-        "Any payment captured for this attempt has been refunded automatically. " +
-        "Please select another session or contact us at (813) 966-3969 if you need help."
+        "Your payment was received but we couldn't confirm your booking. " +
+          "Please contact us at (813) 966-3969 with your PayPal transaction details."
       );
-      return;
-    }
-
-    if (serverError) {
-      setPaymentError(`${serverError} Please refresh and try again.`);
-      return;
-    }
-
-    setPaymentError(
-      "Your payment was received but we couldn't confirm your booking. " +
-      "Please contact us at (813) 966-3969 with your PayPal transaction details."
-    );
-  }
+    },
+    [store, appliedPromo, addonsTotal, selectedAddonIds, router]
+  );
 
   // Add-ons always cost money, so a promo covering the class price alone
-  // doesn't make the checkout free if the customer selected any add-ons —
-  // they still need to pay for those through the normal PayPal flow.
-  const isFreeWithPromo = appliedPromo !== null && appliedPromo.finalPrice === 0 && addonsTotal === 0;
+  // doesn't make the checkout free if the customer selected any add-ons.
+  const isFreeWithPromo =
+    appliedPromo !== null && appliedPromo.finalPrice === 0 && addonsTotal === 0;
 
-  return (
-    <PayPalProvider
-      clientId={process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? ""}
-      environment={process.env.NEXT_PUBLIC_PAYPAL_ENV === "production" ? "production" : "sandbox"}
-      components={["paypal-payments"]}
-      pageType="checkout"
-    >
+  const classAmount = appliedPromo
+    ? appliedPromo.finalPrice
+    : store?.sessionDetails?.price ?? 0;
+  const totalAmount = classAmount + addonsTotal;
+
+  const paypalEnvironment =
+    process.env.NEXT_PUBLIC_PAYPAL_ENV === "production" ? "production" : "sandbox";
+
+  const pageContent = (
       <div className="min-h-screen bg-white">
         <BookingProgress currentStep={4} />
 
@@ -340,16 +634,20 @@ export default function BookPaymentPage() {
               <p className="text-gray-500 text-sm mb-8">
                 {isFreeWithPromo
                   ? "Your promo code covers the full cost. Complete your booking below."
-                  : "Review your order below and complete payment with PayPal."}
+                  : "Pay securely with your debit or credit card, or use PayPal."}
               </p>
 
               {/* Class full error */}
               {isFullError && (
-                <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-4 text-sm mb-6">
+                <div
+                  role="alert"
+                  className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-4 text-sm mb-6"
+                >
                   <p className="font-semibold mb-1">This class just filled up.</p>
                   <p>
                     We&apos;re sorry — this class filled up while you were checking out.
-                    {!isFreeWithPromo && " Any payment captured for this attempt has been refunded automatically."}
+                    {!isFreeWithPromo &&
+                      " Any payment captured for this attempt has been refunded automatically."}
                     {" "}Please select another session.
                   </p>
                   <button
@@ -363,7 +661,10 @@ export default function BookPaymentPage() {
 
               {/* Generic payment error */}
               {paymentError && (
-                <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-6">
+                <div
+                  role="alert"
+                  className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-6"
+                >
                   {paymentError}
                 </div>
               )}
@@ -388,7 +689,10 @@ export default function BookPaymentPage() {
                   </label>
                   <div className="space-y-2 border border-gray-200 rounded-lg p-3">
                     {availableAddons.map((a) => (
-                      <label key={a.id} className="flex items-center gap-2 text-sm text-gray-700">
+                      <label
+                        key={a.id}
+                        className="flex items-center gap-2 text-sm text-gray-700"
+                      >
                         <input
                           type="checkbox"
                           checked={selectedAddonIds.includes(a.id)}
@@ -399,7 +703,10 @@ export default function BookPaymentPage() {
                           {a.name}{" "}
                           <span className="text-gray-400">
                             (
-                            {a.price.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                            {a.price.toLocaleString("en-US", {
+                              style: "currency",
+                              currency: "USD",
+                            })}
                             )
                           </span>
                         </span>
@@ -415,12 +722,26 @@ export default function BookPaymentPage() {
                   {appliedPromo ? (
                     <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
                       <div className="flex items-center gap-2 text-sm text-green-800">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
-                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          className="w-4 h-4 shrink-0"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                            clipRule="evenodd"
+                          />
                         </svg>
                         <span>
-                          Promo <span className="font-semibold">{appliedPromo.code}</span> applied
-                          {" "}(−{appliedPromo.discountAmount.toLocaleString("en-US", { style: "currency", currency: "USD" })})
+                          Promo <span className="font-semibold">{appliedPromo.code}</span>{" "}
+                          applied (−
+                          {appliedPromo.discountAmount.toLocaleString("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                          })}
+                          )
                         </span>
                       </div>
                       <button
@@ -443,7 +764,9 @@ export default function BookPaymentPage() {
                             setPromoInput(e.target.value.toUpperCase());
                             setPromoError(null);
                           }}
-                          onKeyDown={(e) => { if (e.key === "Enter") handleApplyPromo(); }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleApplyPromo();
+                          }}
                           placeholder="Enter code"
                           className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent uppercase placeholder:normal-case"
                           disabled={promoLoading}
@@ -457,68 +780,157 @@ export default function BookPaymentPage() {
                         </button>
                       </div>
                       {promoError && (
-                        <p role="alert" className="mt-2 text-sm text-red-600">{promoError}</p>
+                        <p role="alert" className="mt-2 text-sm text-red-600">
+                          {promoError}
+                        </p>
                       )}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Payment action — either PayPal or free booking button */}
+              {/* Payment action */}
               {!isFullError && store?.sessionDetails && (
                 <div className="max-w-sm">
                   {isFreeWithPromo ? (
+                    /* ── Free booking (100% promo) ── */
                     <button
                       onClick={handleFreeBooking}
                       className="w-full py-3 px-6 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg text-sm transition-colors"
                     >
                       Complete Booking (Free)
                     </button>
+                  ) : clientTokenError ? (
+                    /* ── Client token fetch failed — PayPal button only fallback ── */
+                    <div className="space-y-4">
+                      <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        Card payment couldn&apos;t load. You can still pay with PayPal below.
+                      </p>
+                      <PayPalOneTimePaymentButton
+                        presentationMode="auto"
+                        createOrder={handlePayPalCreate}
+                        onApprove={handlePayPalApprove}
+                        onError={(err) => {
+                          console.error("PayPal error:", err);
+                          setPaymentError(
+                            "PayPal encountered an error. Please try again or contact us at (813) 966-3969."
+                          );
+                        }}
+                      />
+                    </div>
+                  ) : !clientToken ? (
+                    /* ── Loading: client token not yet fetched ── */
+                    <div className="space-y-3 animate-pulse">
+                      <div className="h-10 bg-gray-100 rounded-lg" />
+                      <div className="h-10 bg-gray-100 rounded-lg" />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="h-10 bg-gray-100 rounded-lg" />
+                        <div className="h-10 bg-gray-100 rounded-lg" />
+                      </div>
+                      <div className="h-12 bg-gray-100 rounded-lg" />
+                    </div>
                   ) : (
-                    <PayPalOneTimePaymentButton
-                      presentationMode="auto"
-                      createOrder={handlePayPalCreate}
-                      onApprove={handlePayPalApprove}
-                      onError={(err) => {
-                        console.error("PayPal error:", err);
-                        setPaymentError("PayPal encountered an error. Please try again or use a different payment method.");
-                      }}
-                    />
+                    /* ── Primary: card form + secondary: PayPal button ── */
+                    <div className="space-y-6">
+                      {/* Card form */}
+                      <PayPalCardFieldsProvider>
+                        <CardPaymentForm
+                          onCreateOrder={handlePayPalCreate}
+                          onApprove={handlePayPalApprove}
+                          onError={(msg) => setPaymentError(msg)}
+                          amount={totalAmount}
+                          disabled={false}
+                        />
+                      </PayPalCardFieldsProvider>
+
+                      {/* Divider */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-px bg-gray-200" />
+                        <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">
+                          or pay with
+                        </span>
+                        <div className="flex-1 h-px bg-gray-200" />
+                      </div>
+
+                      {/* PayPal button — secondary option */}
+                      <PayPalOneTimePaymentButton
+                        presentationMode="auto"
+                        createOrder={handlePayPalCreate}
+                        onApprove={handlePayPalApprove}
+                        onError={(err) => {
+                          console.error("PayPal error:", err);
+                          setPaymentError(
+                            "PayPal encountered an error. Please try again or contact us at (813) 966-3969."
+                          );
+                        }}
+                      />
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* Loading state while store hydrates */}
+              {/* Loading state while booking store hydrates */}
               {!store && (
                 <div className="h-14 w-full max-w-sm bg-gray-100 animate-pulse rounded-lg" />
               )}
 
-              {/* ── DEV ONLY: skip payment button ─────────────────────────── */}
-              {process.env.NODE_ENV === "development" && !isFullError && store?.sessionDetails && (
-                <div className="mt-6 max-w-sm border border-dashed border-yellow-400 rounded-lg p-4 bg-yellow-50">
-                  <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">
-                    Dev only — skip payment
-                  </p>
-                  <p className="text-xs text-yellow-600 mb-3">
-                    Books the spot with $0 recorded as cash. Use this to test the full rollcall → grading → Enrollware flow without a real PayPal transaction.
-                  </p>
-                  {devError && (
-                    <p className="text-xs text-red-600 mb-2">{devError}</p>
-                  )}
-                  <button
-                    onClick={handleDevBypass}
-                    disabled={devBypassing}
-                    className="w-full py-2 px-4 bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50 text-yellow-900 font-semibold rounded-lg text-sm transition-colors"
-                  >
-                    {devBypassing ? "Booking…" : "Book without paying (dev)"}
-                  </button>
-                </div>
-              )}
+              {/* ── DEV ONLY: skip payment button ── */}
+              {process.env.NODE_ENV === "development" &&
+                !isFullError &&
+                store?.sessionDetails && (
+                  <div className="mt-6 max-w-sm border border-dashed border-yellow-400 rounded-lg p-4 bg-yellow-50">
+                    <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">
+                      Dev only — skip payment
+                    </p>
+                    <p className="text-xs text-yellow-600 mb-3">
+                      Books the spot with $0 recorded as cash. Use this to test the full
+                      rollcall → grading → Enrollware flow without a real PayPal transaction.
+                    </p>
+                    {devError && (
+                      <p className="text-xs text-red-600 mb-2">{devError}</p>
+                    )}
+                    <button
+                      onClick={handleDevBypass}
+                      disabled={devBypassing}
+                      className="w-full py-2 px-4 bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50 text-yellow-900 font-semibold rounded-lg text-sm transition-colors"
+                    >
+                      {devBypassing ? "Booking…" : "Book without paying (dev)"}
+                    </button>
+                  </div>
+                )}
             </div>
 
           </div>
         </div>
       </div>
+  );
+
+  // Card fields require a clientToken. When that fetch fails (missing/invalid
+  // PayPal credentials, or the account not being approved for Advanced Cards),
+  // fall back to a clientId-only provider so the PayPal button still works —
+  // passing an undefined clientToken would leave the SDK uninitialized and
+  // break every payment method on the page, not just the card form.
+  if (clientTokenError) {
+    return (
+      <PayPalProvider
+        clientId={process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? ""}
+        environment={paypalEnvironment}
+        components={["paypal-payments"]}
+        pageType="checkout"
+      >
+        {pageContent}
+      </PayPalProvider>
+    );
+  }
+
+  return (
+    <PayPalProvider
+      clientToken={clientToken}
+      environment={paypalEnvironment}
+      components={["card-fields", "paypal-payments"]}
+      pageType="checkout"
+    >
+      {pageContent}
     </PayPalProvider>
   );
 }
