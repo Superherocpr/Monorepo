@@ -18,7 +18,7 @@
 
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { getMerchPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import type { CartItem } from "@/lib/cart-store";
 
@@ -145,7 +145,11 @@ export async function POST(request: Request) {
     }
   }
 
-  const supabase = await createClient();
+  // Admin client for all DB/RPC operations — decrement_stock_if_available and
+  // restore_stock are SECURITY DEFINER functions that must not be callable by
+  // anon/authenticated via PostgREST. Security comes from PayPal capture
+  // verification and server-side price recalculation, not RLS.
+  const supabase = await createAdminClient();
 
   const variantIds = items.map((i) => i.variantId);
   const { data: variants } = await supabase
@@ -312,9 +316,12 @@ export async function POST(request: Request) {
   }
 
   // ── Step 5: Resolve customer_id if logged in (optional) ──────────────────
+  // Admin client doesn't carry the user session — use a separate user client
+  // just for the optional customer linkage. Guest checkout leaves this null.
+  const userClient = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await userClient.auth.getUser();
   const customerId = user?.id ?? null;
 
   // ── Step 6: Create the order record using server-computed total ──────────
