@@ -11,6 +11,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { estimatePayoutFee } from "@/lib/payout-fees";
 import type {
+  InstructorEarningsData,
+  InstructorEarningsSummary,
+  InstructorOwnEarning,
+  InstructorOwnPayoutItem,
   PayoutBatchStatus,
   PayoutDenialSource,
   PayoutHistoryBatch,
@@ -675,4 +679,155 @@ export async function getPayoutHistory(
     retryDepth: computeRetryDepth(batch.id, parentByBatchId),
     items: itemsByBatch.get(batch.id) ?? [],
   }));
+}
+
+/**
+ * Loads an instructor's own earnings and payout history for the profile payment page.
+ * Returns individual earning rows with class/invoice context, lifetime summary totals,
+ * and the payout batch items they were included in.
+ *
+ * @param adminClient - Admin Supabase client (service role).
+ * @param instructorId - Profile id of the instructor whose data to load.
+ * @returns Earnings summary, individual rows, and payout history, all scoped to this instructor.
+ */
+export async function getInstructorEarningsData(
+  adminClient: AnySupabaseClient,
+  instructorId: string
+): Promise<InstructorEarningsData> {
+  const { data: earningRows, error: earningsError } = await adminClient
+    .from("instructor_earnings")
+    .select(
+      "id, status, source_type, gross_amount, platform_fee_amount, instructor_amount, booking_id, invoice_id, created_at"
+    )
+    .eq("instructor_id", instructorId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  logQueryError("instructor own earnings", earningsError);
+
+  const rows = (earningRows ?? []) as unknown as Array<{
+    id: string;
+    status: string;
+    source_type: string;
+    gross_amount: number | string;
+    platform_fee_amount: number | string;
+    instructor_amount: number | string;
+    booking_id: string | null;
+    invoice_id: string | null;
+    created_at: string;
+  }>;
+
+  const bookingIds = rows.map((r) => r.booking_id).filter((id): id is string => Boolean(id));
+  const invoiceIds = rows.map((r) => r.invoice_id).filter((id): id is string => Boolean(id));
+
+  const [bookingContexts, invoiceContexts] = await Promise.all([
+    loadBookingContexts(adminClient, bookingIds),
+    loadInvoiceContexts(adminClient, invoiceIds),
+  ]);
+
+  let pendingAmount = 0;
+  let inFlightAmount = 0;
+  let paidAmount = 0;
+  let totalEarned = 0;
+
+  const earnings: InstructorOwnEarning[] = rows.map((row) => {
+    const instructorAmount = money(row.instructor_amount);
+    totalEarned += instructorAmount;
+
+    if (row.status === "pending") pendingAmount += instructorAmount;
+    else if (row.status === "payout_pending") inFlightAmount += instructorAmount;
+    else if (row.status === "paid") paidAmount += instructorAmount;
+
+    let label = "Adjustment";
+    let detail: string | null = null;
+    let sessionDate: string | null = null;
+
+    if (row.booking_id) {
+      const ctx = bookingContexts.get(row.booking_id);
+      label = ctx?.className ?? "Class";
+      sessionDate = ctx?.startsAt ?? null;
+    } else if (row.invoice_id) {
+      const ctx = invoiceContexts.get(row.invoice_id);
+      label = ctx ? `Invoice ${ctx.invoiceNumber}` : "Invoice";
+      detail = ctx?.recipientName ?? null;
+    }
+
+    return {
+      id: row.id,
+      status: row.status,
+      sourceType: row.source_type as "booking" | "invoice",
+      grossAmount: money(row.gross_amount),
+      platformFeeAmount: money(row.platform_fee_amount),
+      instructorAmount,
+      createdAt: row.created_at,
+      label,
+      detail,
+      sessionDate,
+    };
+  });
+
+  const summary: InstructorEarningsSummary = {
+    totalEarned: roundCurrency(totalEarned),
+    pendingAmount: roundCurrency(pendingAmount),
+    inFlightAmount: roundCurrency(inFlightAmount),
+    paidAmount: roundCurrency(paidAmount),
+    earningCount: rows.length,
+  };
+
+  // Fetch payout items this instructor was included in, with their batch metadata.
+  const { data: itemRows, error: itemsError } = await adminClient
+    .from("instructor_payout_items")
+    .select(
+      `
+      id, amount, status, paypal_fee_amount, error_message,
+      unclaimed_expires_at, denied_at, denial_reason,
+      instructor_payout_batches!payout_batch_id (
+        sender_batch_id, paypal_payout_batch_id, status,
+        created_at, submitted_at, completed_at
+      )
+      `
+    )
+    .eq("instructor_id", instructorId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  logQueryError("instructor own payout items", itemsError);
+
+  type RawPayoutItemRow = {
+    id: string;
+    amount: number | string;
+    status: string;
+    paypal_fee_amount: number | string | null;
+    error_message: string | null;
+    unclaimed_expires_at: string | null;
+    denied_at: string | null;
+    denial_reason: string | null;
+    instructor_payout_batches: {
+      sender_batch_id: string;
+      paypal_payout_batch_id: string | null;
+      status: string;
+      created_at: string;
+      submitted_at: string | null;
+      completed_at: string | null;
+    } | null;
+  };
+
+  const payoutItems: InstructorOwnPayoutItem[] = (
+    (itemRows ?? []) as unknown as RawPayoutItemRow[]
+  ).map((item) => ({
+    id: item.id,
+    amount: money(item.amount),
+    status: item.status as PayoutItemStatus,
+    paypalFeeAmount: nullableMoney(item.paypal_fee_amount),
+    errorMessage: item.error_message,
+    unclaimedExpiresAt: item.unclaimed_expires_at,
+    deniedAt: item.denied_at,
+    denialReason: item.denial_reason,
+    batchSenderBatchId: item.instructor_payout_batches?.sender_batch_id ?? "",
+    paypalPayoutBatchId: item.instructor_payout_batches?.paypal_payout_batch_id ?? null,
+    batchStatus: (item.instructor_payout_batches?.status ?? "pending") as PayoutBatchStatus,
+    batchCreatedAt: item.instructor_payout_batches?.created_at ?? "",
+    batchSubmittedAt: item.instructor_payout_batches?.submitted_at ?? null,
+    batchCompletedAt: item.instructor_payout_batches?.completed_at ?? null,
+  }));
+
+  return { summary, earnings, payoutItems };
 }

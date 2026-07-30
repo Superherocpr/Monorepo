@@ -213,3 +213,66 @@ export interface PayoutHistoryBatch {
   retryDepth: number;
   items: PayoutHistoryItem[];
 }
+
+// ── Instructor's own earnings view ───────────────────────────────────────────
+// Used by /admin/profile/payment to show an instructor their own earnings
+// and payout history without exposing other instructors' data.
+
+/** One earning row from the instructor's own perspective. */
+export interface InstructorOwnEarning {
+  id: string;
+  /** DB status: pending | payout_pending | paid | cancelled | failed */
+  status: string;
+  sourceType: "booking" | "invoice";
+  grossAmount: number;
+  platformFeeAmount: number;
+  instructorAmount: number;
+  createdAt: string;
+  /** Class type name or invoice number label. */
+  label: string;
+  /** Session date (for bookings) or invoice recipient name. */
+  detail: string | null;
+  /** ISO session start date, when the earning came from a booking. */
+  sessionDate: string | null;
+}
+
+/** Lifetime totals across all of an instructor's earnings. */
+export interface InstructorEarningsSummary {
+  /** Sum of all instructor_amount regardless of status. */
+  totalEarned: number;
+  /** Sum where status = pending (not yet sent to PayPal). */
+  pendingAmount: number;
+  /** Sum where status = payout_pending (in a sent batch, awaiting confirmation). */
+  inFlightAmount: number;
+  /** Sum where status = paid (confirmed delivered). */
+  paidAmount: number;
+  /** Total number of earning rows. */
+  earningCount: number;
+}
+
+/** One payout batch line from the instructor's perspective. */
+export interface InstructorOwnPayoutItem {
+  id: string;
+  amount: number;
+  status: PayoutItemStatus;
+  paypalFeeAmount: number | null;
+  errorMessage: string | null;
+  unclaimedExpiresAt: string | null;
+  deniedAt: string | null;
+  denialReason: string | null;
+  batchSenderBatchId: string;
+  paypalPayoutBatchId: string | null;
+  batchStatus: PayoutBatchStatus;
+  batchCreatedAt: string;
+  batchSubmittedAt: string | null;
+  batchCompletedAt: string | null;
+}
+
+/** Everything the instructor's own earnings panel renders. */
+export interface InstructorEarningsData {
+  summary: InstructorEarningsSummary;
+  /** Individual earning rows, newest first. */
+  earnings: InstructorOwnEarning[];
+  /** Payout batch items this instructor was included in, newest first. */
+  payoutItems: InstructorOwnPayoutItem[];
+}
