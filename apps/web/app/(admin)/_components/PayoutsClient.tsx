@@ -119,7 +119,9 @@ export default function PayoutsClient({ upcoming, history }: PayoutsClientProps)
       ) : null}
 
       <UpcomingPayoutsPanel data={upcoming} />
-      <PayoutHistoryPanel batches={history} />
+      <div className="mt-10">
+        <PayoutHistoryPanel batches={history} />
+      </div>
     </div>
   );
 }
