@@ -224,22 +224,34 @@ export async function verifyPayPalWebhookSignature(
 }
 
 /**
- * Generates a short-lived PayPal client token for initializing the JS SDK
- * with the `clientToken` prop on `PayPalProvider`. Required for card fields
- * (Advanced Credit and Debit Cards) to initialize their hosted iframes.
- * Token expires in ~1 hour.
- * @returns Client token string for use in the browser-facing PayPal SDK.
- * @throws Error if the business access token cannot be obtained or PayPal rejects the call.
+ * Generates a short-lived PayPal client token (a JWT) for initializing the
+ * JS SDK v6 with the `clientToken` prop on `PayPalProvider`. Required for
+ * card fields (Advanced Credit and Debit Cards) to initialize their hosted
+ * iframes. Token expires in ~1 hour.
+ *
+ * This calls the same `/v1/oauth2/token` client-credentials endpoint as
+ * {@link getPayPalAccessToken}, but with `response_type=client_token` added —
+ * that flag is what makes PayPal return a browser-safe JWT in `access_token`
+ * instead of a server-only bearer token. The unrelated `/v1/identity/generate-token`
+ * endpoint returns a legacy base64-encoded Braintree token blob (not a JWT),
+ * which the v6 SDK's `createInstance` rejects with "clientToken must be a
+ * valid JSON Web Token" — do not switch back to it.
+ * @returns Client token JWT for use in the browser-facing PayPal SDK.
+ * @throws Error if NEXT_PUBLIC_PAYPAL_CLIENT_ID or PAYPAL_SECRET are missing,
+ *         or the auth call fails.
  */
 export async function getPayPalClientToken(): Promise<string> {
-  const accessToken = await getPayPalAccessToken();
-  const response = await fetch(`${getPayPalApiBase()}/v1/identity/generate-token`, {
+  const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "";
+  const clientSecret = process.env.PAYPAL_SECRET ?? "";
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+
+  const response = await fetch(`${getPayPalApiBase()}/v1/oauth2/token`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "Accept-Language": "en_US",
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
     },
+    body: "grant_type=client_credentials&response_type=client_token",
     cache: "no-store",
   });
 
@@ -248,8 +260,8 @@ export async function getPayPalClientToken(): Promise<string> {
     throw new Error(`PayPal client token failed (${response.status}): ${err}`);
   }
 
-  const data = (await response.json()) as { client_token: string };
-  return data.client_token;
+  const data = (await response.json()) as { access_token: string };
+  return data.access_token;
 }
 
 /**

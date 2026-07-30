@@ -143,21 +143,36 @@ function CardPaymentForm({
     }
   }
 
-  /** Style injected into the PayPal-hosted card field iframes. */
+  /**
+   * Style injected directly into PayPal's hosted <input> — this is the ONLY
+   * place border/background/radius should be set. Giving the wrapping
+   * container its own bordered/rounded box AND styling PayPal's real input
+   * produced a visible "double box" (our box behind PayPal's own input
+   * chrome). The container below is intentionally unstyled and only sizes
+   * the iframe; every visual property lives here instead.
+   */
   const fieldStyle = {
     input: {
       fontSize: "14px",
       color: "#111827",
-      "font-family": "inherit",
+      fontFamily: "inherit",
+      border: "1px solid #d1d5db",
+      borderRadius: "8px",
+      background: "#ffffff",
+      padding: "0 12px",
+      height: "42px",
     },
     "input::placeholder": {
       color: "#9ca3af",
     },
+    "input.focus": {
+      border: "1px solid transparent",
+      outline: "none",
+      boxShadow: "0 0 0 2px #ef4444",
+    },
   };
 
-  /** Shared container styles so each hosted iframe looks like a Tailwind input. */
-  const fieldContainerClass =
-    "border border-gray-300 rounded-lg bg-white overflow-hidden focus-within:ring-2 focus-within:ring-red-500 focus-within:border-transparent";
+  /** Sizes the iframe only — no visual styling here (see fieldStyle above). */
   const fieldContainerStyle = { height: "42px" };
 
   const formattedAmount = amount.toLocaleString("en-US", {
@@ -195,8 +210,7 @@ function CardPaymentForm({
           placeholder="1234 5678 9012 3456"
           ariaLabel="Card number"
           style={fieldStyle}
-          containerClassName={fieldContainerClass}
-          containerStyles={{ ...fieldContainerStyle, paddingLeft: "12px" }}
+          containerStyles={fieldContainerStyle}
         />
       </div>
 
@@ -210,8 +224,7 @@ function CardPaymentForm({
             placeholder="MM / YY"
             ariaLabel="Card expiry date"
             style={fieldStyle}
-            containerClassName={fieldContainerClass}
-            containerStyles={{ ...fieldContainerStyle, paddingLeft: "12px" }}
+            containerStyles={fieldContainerStyle}
           />
         </div>
         <div>
@@ -222,8 +235,7 @@ function CardPaymentForm({
             placeholder="123"
             ariaLabel="Card security code"
             style={fieldStyle}
-            containerClassName={fieldContainerClass}
-            containerStyles={{ ...fieldContainerStyle, paddingLeft: "12px" }}
+            containerStyles={fieldContainerStyle}
           />
         </div>
       </div>
