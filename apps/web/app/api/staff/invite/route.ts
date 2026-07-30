@@ -142,12 +142,19 @@ export async function POST(request: Request) {
     isInstructor: role === "instructor",
   });
 
-  await resend.emails.send({
+  const { error: emailError } = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL!,
     to: email,
     subject,
     html,
   });
 
-  return Response.json({ success: true });
+  if (emailError) {
+    // Account was created but the email failed — return partial success so the
+    // admin knows to resend via the Staff List "resend invite" action.
+    console.error("[staff/invite] email send failed:", emailError);
+    return Response.json({ success: true, emailSent: false });
+  }
+
+  return Response.json({ success: true, emailSent: true });
 }

@@ -57,18 +57,32 @@ export async function POST(
   }
 
   // ── Send email via Resend ──────────────────────────────────────────────────
-  if (process.env.RESEND_API_KEY) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const { subject, html } = passwordResetEmail({
-      firstName: customer.first_name,
-      actionLink: linkData.properties.action_link,
-    });
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
-      to: customer.email,
-      subject,
-      html,
-    });
+  if (!process.env.RESEND_API_KEY) {
+    console.error(`[customers/${customerId}/send-password-reset] RESEND_API_KEY not configured`);
+    return Response.json(
+      { success: false, error: "Email service is not configured." },
+      { status: 500 }
+    );
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const { subject, html } = passwordResetEmail({
+    firstName: customer.first_name,
+    actionLink: linkData.properties.action_link,
+  });
+  const { error: emailError } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL!,
+    to: customer.email,
+    subject,
+    html,
+  });
+
+  if (emailError) {
+    console.error(`[customers/${customerId}/send-password-reset] email send failed:`, emailError);
+    return Response.json(
+      { success: false, error: "Failed to send reset email. Please try again." },
+      { status: 500 }
+    );
   }
 
   return Response.json({ success: true, email: customer.email });

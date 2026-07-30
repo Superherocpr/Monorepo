@@ -17,7 +17,7 @@ interface InvitePanelProps {
   /** Called when the panel should close (cancel or Escape key). */
   onClose: () => void;
   /** Called with the invited email address on successful invite. */
-  onSuccess: (email: string) => void;
+  onSuccess: (email: string, emailSent: boolean) => void;
   /** Called with an error message if the invite request fails. */
   onError: (message: string) => void;
 }
@@ -111,7 +111,8 @@ const InvitePanel: React.FC<InvitePanelProps> = ({
 
   /**
    * Submits the invite form to POST /api/staff/invite.
-   * On success calls onSuccess with the invited email; on failure calls onError.
+   * On success calls onSuccess with the invited email and whether the
+   * invitation email actually sent; on failure calls onError.
    * @param e - The form submit event.
    */
   async function handleSubmit(e: React.FormEvent) {
@@ -123,12 +124,12 @@ const InvitePanel: React.FC<InvitePanelProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ firstName, lastName, email, role, personalMessage }),
       });
-      const data: { success: boolean; error?: string } = await res.json();
+      const data: { success: boolean; error?: string; emailSent?: boolean } = await res.json();
       if (!res.ok || !data.success) {
         onError(data.error ?? "Failed to send invitation.");
       } else {
         resetForm();
-        onSuccess(email);
+        onSuccess(email, data.emailSent ?? true);
       }
     } catch {
       onError("Something went wrong. Please try again.");

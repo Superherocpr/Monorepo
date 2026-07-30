@@ -10,8 +10,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, AlertCircle, Send, Zap, Clock, HandCoins } from "lucide-react";
+import { CheckCircle, AlertCircle, Send, Zap, Clock, HandCoins, TrendingDown } from "lucide-react";
 import type { PayoutTrigger, PayoutSchedule } from "@/app/api/settings/payouts/route";
+import UpcomingPayoutsPanel from "@/app/(admin)/_components/UpcomingPayoutsPanel";
+import PayoutHistoryPanel from "@/app/(admin)/_components/PayoutHistoryPanel";
+import {
+  breakEvenFeePercent,
+  compareBatchingCost,
+  estimatePlatformMargin,
+} from "@/lib/payout-fees";
+import { formatCurrency } from "@/lib/invoice-utils";
+import type { PayoutHistoryBatch, UpcomingPayoutsData } from "@/types/payouts";
+
+/** Class prices used to illustrate margin at both ends of the catalog. */
+const MARGIN_EXAMPLE_PRICES = [50, 100];
 
 interface PayoutSettingsPanelProps {
   /** Current platform fee percentage (0–100). */
@@ -20,6 +32,10 @@ interface PayoutSettingsPanelProps {
   initialTrigger: PayoutTrigger;
   /** Current payout schedule interval. */
   initialSchedule: PayoutSchedule;
+  /** Upcoming payout data for the tracking panel. */
+  upcoming: UpcomingPayoutsData;
+  /** Recent payout batches for the history panel. */
+  history: PayoutHistoryBatch[];
 }
 
 interface Toast {
@@ -86,6 +102,153 @@ interface PayoutCreateResponse {
 }
 
 /**
+ * Shows what the configured platform fee actually nets after PayPal's fees, and
+ * warns when the fee is set below break-even.
+ *
+ * Both PayPal fees come out of the platform's cut — the instructor gets their
+ * full percentage of gross — so a low fee percentage can lose money on every
+ * booking. Break-even is higher for cheaper classes, because PayPal's fixed
+ * per-transaction charge is a bigger share of a smaller sale.
+ */
+function MarginReadout({ feePercent }: { feePercent: number }) {
+  if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent > 100) return null;
+
+  const instructorShare = 100 - feePercent;
+  const examples = MARGIN_EXAMPLE_PRICES.map((price) => ({
+    price,
+    margin: estimatePlatformMargin(price, feePercent),
+    breakEven: breakEvenFeePercent(price),
+  }));
+  const losingMoney = examples.filter((example) => example.margin.netMargin < 0);
+  const highestBreakEven = examples.reduce<number | null>(
+    (highest, example) =>
+      example.breakEven === null
+        ? highest
+        : highest === null
+          ? example.breakEven
+          : Math.max(highest, example.breakEven),
+    null
+  );
+
+  return (
+    <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        Instructors receive{" "}
+        <span className="font-semibold text-gray-900 dark:text-white">
+          {instructorShare.toFixed(1)}%
+        </span>{" "}
+        of each payment. PayPal&rsquo;s fees come out of your share, not theirs:
+      </p>
+
+      <div className="mt-3 overflow-x-auto">
+        <table className="min-w-full text-xs">
+          <thead className="text-left text-gray-500 dark:text-gray-400">
+            <tr>
+              <th className="py-1.5 pr-4 font-medium">Class price</th>
+              <th className="py-1.5 pr-4 text-right font-medium">Your cut</th>
+              <th className="py-1.5 pr-4 text-right font-medium">PayPal in</th>
+              <th className="py-1.5 pr-4 text-right font-medium">PayPal out</th>
+              <th className="py-1.5 text-right font-medium">You actually keep</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+            {examples.map(({ price, margin }) => (
+              <tr key={price}>
+                <td className="py-1.5 pr-4 text-gray-700 dark:text-gray-300">
+                  {formatCurrency(price)}
+                </td>
+                <td className="py-1.5 pr-4 text-right text-gray-600 dark:text-gray-400">
+                  {formatCurrency(margin.platformCut)}
+                </td>
+                <td className="py-1.5 pr-4 text-right text-red-700 dark:text-red-400">
+                  −{formatCurrency(margin.inboundFee)}
+                </td>
+                <td className="py-1.5 pr-4 text-right text-red-700 dark:text-red-400">
+                  −{formatCurrency(margin.outboundFee)}
+                </td>
+                <td
+                  className={`py-1.5 text-right font-semibold ${
+                    margin.netMargin >= 0
+                      ? "text-green-700 dark:text-green-400"
+                      : "text-red-700 dark:text-red-400"
+                  }`}
+                >
+                  {formatCurrency(margin.netMargin)}
+                  {margin.netMarginPercent !== null ? (
+                    <span className="ml-1 font-normal text-gray-400">
+                      ({margin.netMarginPercent.toFixed(1)}%)
+                    </span>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {losingMoney.length > 0 ? (
+        <p className="mt-3 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            At {feePercent.toFixed(1)}% you lose money on{" "}
+            {losingMoney.map((example) => formatCurrency(example.price)).join(" and ")} classes
+            after PayPal&rsquo;s fees.
+            {highestBreakEven !== null
+              ? ` You need at least ${highestBreakEven.toFixed(1)}% to break even across these prices.`
+              : ""}
+          </span>
+        </p>
+      ) : (
+        <p className="mt-2 text-[11px] text-gray-400 dark:text-gray-500">
+          Estimated using PayPal&rsquo;s standard US rates (2.9% + $0.30 to collect, 2% capped at
+          $1.00 to send). Actual fees are recorded per payment and shown in the tracking panel
+          below.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Compares what the currently queued payouts would cost in immediate mode versus
+ * batched, using PayPal's per-recipient payout fee.
+ *
+ * PayPal caps the payout fee per recipient, so combining an instructor's earnings
+ * into one payout costs the cap once, while immediate mode pays it per booking.
+ * Renders nothing when there is no difference to show.
+ */
+function BatchingCostNote({ upcoming }: { upcoming: UpcomingPayoutsData }) {
+  const amountsByInstructor = upcoming.payableNow.map((group) =>
+    group.sources.flatMap((source) =>
+      // Sources are grouped per class, so split the class total across the
+      // students sold to approximate the individual payments behind it.
+      Array.from({ length: Math.max(1, source.soldCount) }, () =>
+        source.instructorAmount / Math.max(1, source.soldCount)
+      )
+    )
+  );
+
+  const comparison = compareBatchingCost(amountsByInstructor);
+  if (comparison.savings <= 0 || comparison.earningCount === 0) return null;
+
+  return (
+    <div className="mt-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+      <TrendingDown className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <span>
+        <strong>Batching is cheaper.</strong> The {comparison.earningCount} payment
+        {comparison.earningCount === 1 ? "" : "s"} currently queued for{" "}
+        {comparison.instructorCount} instructor
+        {comparison.instructorCount === 1 ? "" : "s"} would cost about{" "}
+        {formatCurrency(comparison.immediateCost)} in PayPal payout fees sent individually in
+        Immediate mode, versus {formatCurrency(comparison.batchedCost)} combined — a difference
+        of {formatCurrency(comparison.savings)}. PayPal caps its payout fee per recipient, so
+        one combined payout per instructor pays that cap once instead of per booking.
+      </span>
+    </div>
+  );
+}
+
+/**
  * Payout settings and manual send panel for super_admins.
  * All state is local; saves to /api/settings/payouts on submit.
  */
@@ -93,6 +256,8 @@ export default function PayoutSettingsPanel({
   initialFeePercent,
   initialTrigger,
   initialSchedule,
+  upcoming,
+  history,
 }: PayoutSettingsPanelProps) {
   const router = useRouter();
 
@@ -221,18 +386,7 @@ export default function PayoutSettingsPanel({
               <span className="absolute right-3 text-sm text-gray-500 pointer-events-none">%</span>
             </div>
           </div>
-          {/* Live preview of instructor share */}
-          {(() => {
-            const fee = parseFloat(feePercent);
-            const instructorShare = Number.isFinite(fee) && fee >= 0 && fee <= 100
-              ? 100 - fee
-              : null;
-            return instructorShare !== null ? (
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Instructors receive <span className="font-semibold text-gray-900 dark:text-white">{instructorShare.toFixed(1)}%</span> of each payment.
-              </p>
-            ) : null;
-          })()}
+          <MarginReadout feePercent={parseFloat(feePercent)} />
         </div>
       </div>
 
@@ -273,6 +427,7 @@ export default function PayoutSettingsPanel({
             );
           })}
         </div>
+        <BatchingCostNote upcoming={upcoming} />
       </div>
 
       {/* ── Schedule interval (only shown when trigger = scheduled) ──────── */}
@@ -350,10 +505,34 @@ export default function PayoutSettingsPanel({
           </button>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
             This creates one PayPal Payouts batch grouping all instructors with pending
-            earnings. View the batch status on the{" "}
-            <a href="/admin/payouts" className="hover:underline">Payouts page</a>.
+            earnings. PayPal accepting the batch is not confirmation that it was delivered —
+            track the outcome in Payout history below.
           </p>
         </div>
+      </div>
+
+      {/* ── Upcoming payouts ─────────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+          Upcoming Payouts
+        </h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          Who is owed what right now, which classes the money came from, and what
+          SuperHeroCPR actually keeps once PayPal has taken its cut on both ends.
+        </p>
+        <UpcomingPayoutsPanel data={upcoming} />
+      </div>
+
+      {/* ── Payout history ───────────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+          Payout History
+        </h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          Every payout batch and what PayPal did with it. If PayPal denies a payout after
+          accepting it, mark it denied here to put the earnings back in the queue, then resend.
+        </p>
+        <PayoutHistoryPanel batches={history} />
       </div>
 
       {/* ── Toast ────────────────────────────────────────────────────────── */}

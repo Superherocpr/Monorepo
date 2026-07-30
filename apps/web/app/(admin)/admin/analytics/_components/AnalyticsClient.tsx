@@ -208,8 +208,9 @@ function exportCSV(data: AnalyticsData, rangeStart: string, rangeEnd: string) {
     ["Pending Instructor Balance", `$${data.payoutStats.totalPending.toFixed(2)}`],
     [],
     ["Payout Batches", String(data.payoutBatchStats.totalBatches)],
-    ["Succeeded", String(data.payoutBatchStats.succeededBatches)],
-    ["Failed", String(data.payoutBatchStats.failedBatches)],
+    ["Confirmed", String(data.payoutBatchStats.succeededBatches)],
+    ["Unconfirmed", String(data.payoutBatchStats.unconfirmedBatches)],
+    ["Failed or Denied", String(data.payoutBatchStats.failedBatches)],
     [],
     ["Earnings by Instructor"],
     ["Instructor", "Gross", "Platform Fee", "Instructor Amount"],
@@ -979,7 +980,12 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Batches</p>
                 <p className="text-2xl font-bold text-gray-900">{data.payoutBatchStats.totalBatches}</p>
                 <p className="text-xs text-gray-400 mt-1">
-                  {data.payoutBatchStats.succeededBatches} succeeded
+                  {data.payoutBatchStats.succeededBatches} confirmed
+                  {data.payoutBatchStats.unconfirmedBatches > 0 && (
+                    <span className="ml-1">
+                      · {data.payoutBatchStats.unconfirmedBatches} unconfirmed
+                    </span>
+                  )}
                   {data.payoutBatchStats.failedBatches > 0 && (
                     <span className="text-red-500 ml-1">· {data.payoutBatchStats.failedBatches} failed</span>
                   )}

@@ -53,12 +53,16 @@ export async function POST() {
   // Send account deletion confirmation email — non-fatal if this fails
   if (profile) {
     const { subject, html } = accountDeletedEmail({ firstName: profile.first_name });
-    await resend.emails.send({
+    const { error: emailError } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
       to: profile.email,
       subject,
       html,
     });
+
+    if (emailError) {
+      console.error("[account/archive] confirmation email failed (non-fatal):", emailError);
+    }
   }
 
   return Response.json({ success: true });

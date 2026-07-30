@@ -23,6 +23,8 @@ import LocationsClient, {
 } from "@/app/(admin)/_components/LocationsClient";
 import type { UserRole } from "@/types/users";
 import type { PayoutTrigger, PayoutSchedule } from "@/app/api/settings/payouts/route";
+import { getPayoutHistory, getUpcomingPayoutsData } from "@/lib/payout-dashboard";
+import type { PayoutHistoryBatch, UpcomingPayoutsData } from "@/types/payouts";
 
 export const metadata = { title: "Settings" };
 
@@ -319,6 +321,37 @@ export default async function SettingsPage({
     // Suppress — defaults above are safe
   }
 
+  // Payout tracking data for the Payouts tab. Wrapped defensively for the same
+  // reason as the settings read above: an unapplied migration 0048 should not
+  // take down the whole settings page.
+  let upcomingPayouts: UpcomingPayoutsData = {
+    payableNow: [],
+    blocked: [],
+    inFlight: [],
+    payableTotals: {
+      grossCollected: 0,
+      platformCut: 0,
+      instructorTotal: 0,
+      inboundPayPalFees: 0,
+      feeTrackedCount: 0,
+      feeUntrackedCount: 0,
+      estimatedPayoutFees: 0,
+      estimatedNet: 0,
+      earningCount: 0,
+    },
+    blockedTotal: 0,
+    inFlightTotal: 0,
+  };
+  let payoutHistory: PayoutHistoryBatch[] = [];
+  try {
+    [upcomingPayouts, payoutHistory] = await Promise.all([
+      getUpcomingPayoutsData(admin),
+      getPayoutHistory(admin),
+    ]);
+  } catch (err) {
+    console.error("[settings] Payout dashboard data failed to load:", err);
+  }
+
   const params = await searchParams;
   const zohoParam = params.zoho ?? null;
 
@@ -351,6 +384,8 @@ export default async function SettingsPage({
           initialFeePercent={payoutFeePercent}
           initialTrigger={payoutTrigger}
           initialSchedule={payoutSchedule}
+          upcoming={upcomingPayouts}
+          history={payoutHistory}
         />
       }
       enrollwareSlot={

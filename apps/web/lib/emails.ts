@@ -2446,3 +2446,144 @@ export function assistantNeededEmail({
     `),
   };
 }
+
+// ── Payout denied — super admin alert ─────────────────────────────────────────
+
+/**
+ * Sent to all super_admins when a PayPal payout batch is denied after PayPal had
+ * already accepted it, so the returned funds are noticed the same day rather
+ * than whenever somebody next opens the payouts page.
+ * Triggered by: POST /api/webhooks/paypal-payouts and POST /api/payouts/sync
+ * via lib/payout-notify.ts.
+ * @param senderBatchId  - Our sender_batch_id for the denied batch.
+ * @param paypalBatchId  - PayPal's payout_batch_id, when known.
+ * @param totalAmount    - Total dollar amount that was returned.
+ * @param itemCount      - Number of instructor payouts affected.
+ * @param paypalStatus   - Raw PayPal batch status that triggered the alert.
+ * @param baseUrl        - App base URL for the admin link.
+ */
+export function payoutDeniedAdminEmail({
+  senderBatchId,
+  paypalBatchId,
+  totalAmount,
+  itemCount,
+  paypalStatus,
+  baseUrl,
+}: {
+  senderBatchId: string;
+  paypalBatchId: string | null;
+  totalAmount: number;
+  itemCount: number;
+  paypalStatus: string;
+  baseUrl: string;
+}): EmailContent {
+  const safeSender = escapeHtml(senderBatchId);
+  const safePaypal = paypalBatchId ? escapeHtml(paypalBatchId) : "not recorded";
+  const safeStatus = escapeHtml(paypalStatus);
+  const amount = totalAmount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
+
+  return {
+    subject: `Action needed: PayPal denied a ${amount} instructor payout`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">PayPal Denied an Instructor Payout</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">The money was returned to the business account. No instructor was paid.</p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fecaca;background:#fef2f2;border-radius:6px;margin-bottom:20px;">
+        <tr><td style="padding:16px;">
+          <p style="margin:0 0 8px 0;font-size:14px;color:#374151;"><strong>Amount returned:</strong> ${amount}</p>
+          <p style="margin:0 0 8px 0;font-size:14px;color:#374151;"><strong>Instructors affected:</strong> ${itemCount}</p>
+          <p style="margin:0 0 8px 0;font-size:14px;color:#374151;"><strong>PayPal status:</strong> ${safeStatus}</p>
+          <p style="margin:0 0 8px 0;font-size:14px;color:#374151;"><strong>Batch id:</strong> ${safeSender}</p>
+          <p style="margin:0;font-size:14px;color:#374151;"><strong>PayPal batch:</strong> ${safePaypal}</p>
+        </td></tr>
+      </table>
+
+      <p style="font-size:14px;color:#374151;margin-bottom:16px;">
+        These earnings are back in the payable queue automatically. Before resending, find out
+        why PayPal refused it — the usual causes are a risk review on the account, insufficient
+        available balance at the moment of processing, or an account limitation. Resending
+        without fixing the cause will normally be denied again.
+      </p>
+
+      <p style="margin:24px 0;">
+        <a href="${baseUrl}/admin/payouts"
+           style="display:inline-block;background:#dc2626;color:white;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:700;">
+          Review Payouts →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        Check the PayPal dashboard and your PayPal notification email for the specific denial
+        reason — it is not returned through the API.
+      </p>
+    `),
+  };
+}
+
+// ── Instructor payout sent ────────────────────────────────────────────────────
+
+/**
+ * Sent to an instructor once PayPal confirms their payout was delivered.
+ * Only sent on confirmed delivery, never on submission, so it never tells an
+ * instructor they were paid when the batch was later denied.
+ * Triggered by: lib/payout-notify.ts during payout reconciliation.
+ * @param firstName    - Instructor's first name.
+ * @param amount       - Dollar amount delivered.
+ * @param payoutEmail  - PayPal address the money was sent to.
+ * @param baseUrl      - App base URL for the earnings link.
+ */
+export function instructorPayoutSentEmail({
+  firstName,
+  amount,
+  payoutEmail,
+  baseUrl,
+}: {
+  firstName: string;
+  amount: number;
+  payoutEmail: string;
+  baseUrl: string;
+}): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
+  const safeEmail = escapeHtml(payoutEmail.trim());
+  const formatted = amount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
+
+  return {
+    subject: `Your SuperHeroCPR payout of ${formatted} has been sent`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Your Payout Has Been Sent</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Hi ${safeFirstName},</p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:6px;margin-bottom:20px;">
+        <tr><td style="padding:20px;text-align:center;">
+          <p style="margin:0 0 4px 0;font-size:13px;color:#6b7280;">Amount sent</p>
+          <p style="margin:0;font-size:28px;font-weight:700;color:#15803d;">${formatted}</p>
+        </td></tr>
+      </table>
+
+      <p style="font-size:14px;color:#374151;margin-bottom:16px;">
+        PayPal has confirmed delivery to <strong>${safeEmail}</strong>. It should appear in that
+        PayPal account right away.
+      </p>
+
+      <p style="margin:24px 0;">
+        <a href="${baseUrl}/admin/profile/payment"
+           style="display:inline-block;background:#dc2626;color:white;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:700;">
+          View Payout Settings →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        If you do not see this payout in your PayPal account, or the address above is wrong,
+        contact SuperHeroCPR and update your payout email in your profile.
+      </p>
+    `),
+  };
+}

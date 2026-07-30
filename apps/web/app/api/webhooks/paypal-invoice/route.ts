@@ -61,7 +61,8 @@ export async function POST(request: Request): Promise<Response> {
   try {
     verified = await verifyPayPalWebhookSignature(
       { transmissionId, transmissionTime, certUrl, authAlgo, transmissionSig },
-      event
+      event,
+      process.env.PAYPAL_INVOICE_WEBHOOK_ID
     );
   } catch (err) {
     console.error("[webhooks/paypal-invoice] Signature verification request failed:", err);

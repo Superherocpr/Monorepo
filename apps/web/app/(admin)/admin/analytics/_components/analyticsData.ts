@@ -118,6 +118,12 @@ export interface PayoutBatchStats {
   totalBatches: number;
   succeededBatches: number;
   failedBatches: number;
+  /**
+   * Batches PayPal accepted but has not confirmed delivery for, plus any awaiting
+   * human review. Counted separately so total = succeeded + failed + unconfirmed
+   * rather than silently losing the difference.
+   */
+  unconfirmedBatches: number;
 }
 
 /** Overview totals and status breakdown for the payouts section. */
@@ -634,10 +640,21 @@ export async function fetchAnalyticsData(
     .sort((a, b) => b.grossAmount - a.grossAmount);
 
   // ── Payout batch stats ────────────────────────────────────────────────────
+  // Batch statuses since migration 0048: pending, assumed_complete, completed,
+  // denied, failed, needs_review. A denial is a failure — counting only "failed"
+  // here would hide every payout PayPal returned after accepting it.
   const payoutBatchStats: PayoutBatchStats = {
     totalBatches: safePayoutBatches.length,
     succeededBatches: safePayoutBatches.filter((b) => b.status === "completed").length,
-    failedBatches: safePayoutBatches.filter((b) => b.status === "failed").length,
+    failedBatches: safePayoutBatches.filter(
+      (b) => b.status === "failed" || b.status === "denied"
+    ).length,
+    unconfirmedBatches: safePayoutBatches.filter(
+      (b) =>
+        b.status === "assumed_complete" ||
+        b.status === "needs_review" ||
+        b.status === "pending"
+    ).length,
   };
 
   // ── Merch products ────────────────────────────────────────────────────────

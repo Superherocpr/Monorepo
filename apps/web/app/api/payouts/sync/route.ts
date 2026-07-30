@@ -1,26 +1,33 @@
 /**
  * POST /api/payouts/sync
- * Called by: Admin Payouts page — "Sync status"
- * Auth: super_admin only
- * Fetches PayPal payout batch status and reconciles payout items + earnings.
+ * Called by:
+ *   - Admin payout history panel — "Sync status" (super_admin session)
+ *   - pg_cron job (migration 0048) — hourly reconciliation (CRON_SECRET bearer)
+ * Auth: super_admin session OR Authorization: Bearer {CRON_SECRET}
+ *
+ * Asks PayPal for the current state of every unresolved payout batch and writes
+ * the answer back through lib/payout-reconcile.ts, which is also used by the
+ * payouts webhook so both paths interpret PayPal identically.
+ *
+ * The hourly cron matters: PayPal denials usually land minutes to hours after it
+ * accepts a batch, and before this job existed the only way to discover one was
+ * for an admin to remember to click Sync.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { getPayPalPayoutBatchStatus } from "@/lib/paypal-payouts";
+import { reconcilePayoutBatch } from "@/lib/payout-reconcile";
+import { notifyInstructorsPaid, notifyPayoutDenied } from "@/lib/payout-notify";
+import type { PayoutDenialSource } from "@/types/payouts";
 
-/** PayPal item statuses that mean the instructor was paid successfully. */
-const SUCCESS_STATUSES = new Set(["SUCCESS"]);
-
-/** PayPal item statuses that should release earnings for another payout attempt. */
-const FAILED_STATUSES = new Set([
-  "FAILED",
-  "RETURNED",
-  "BLOCKED",
-  "REFUNDED",
-  "REVERSED",
-  "DENIED",
-]);
+/**
+ * Batch statuses worth re-checking against PayPal.
+ *
+ * `assumed_complete` is the important one — those are batches PayPal accepted
+ * but never confirmed, which is exactly where an unnoticed denial hides.
+ * `completed` and `denied` are terminal and deliberately excluded.
+ */
+const SYNCABLE_STATUSES = ["assumed_complete", "failed", "needs_review"];
 
 /** Body accepted by the sync route. */
 interface SyncRequestBody {
@@ -33,119 +40,49 @@ interface PayoutBatchRow {
   paypal_payout_batch_id: string | null;
 }
 
-/**
- * Returns the current super admin's profile id or a Response when unauthorized.
- * @returns Profile id for authorized super admins, otherwise an HTTP Response.
- */
-async function requireSuperAdmin(): Promise<string | Response> {
-  const authResult = await requireApiRole(["super_admin"]);
-  if ("error" in authResult) return authResult.error;
-  const { actor } = authResult;
-
-  return actor.user.id;
-}
-
 /** Type guard for sync request bodies. */
 function isSyncBody(value: unknown): value is SyncRequestBody {
   return typeof value === "object" && value !== null;
 }
 
-/** Maps PayPal item status to the local payout item status enum. */
-function localItemStatus(payPalStatus: string): "submitted" | "completed" | "failed" {
-  if (SUCCESS_STATUSES.has(payPalStatus)) return "completed";
-  if (FAILED_STATUSES.has(payPalStatus)) return "failed";
-  return "submitted";
-}
-
 /**
- * Reconciles one internal payout batch against PayPal status.
- * Side effects: updates payout item statuses, earning statuses, and batch status.
- * @param batch - Internal payout batch row with PayPal batch id.
- * @returns Number of payout items reconciled.
+ * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
+ * @param request - Incoming HTTP request.
+ * @returns true when the header is valid, false otherwise.
  */
-async function syncBatch(batch: PayoutBatchRow): Promise<number> {
-  if (!batch.paypal_payout_batch_id) return 0;
-
-  const adminClient = await createAdminClient();
-  const paypalStatus = await getPayPalPayoutBatchStatus(batch.paypal_payout_batch_id);
-  const now = new Date().toISOString();
-  let failedCount = 0;
-
-  for (const item of paypalStatus.items) {
-    const mappedStatus = localItemStatus(item.transactionStatus);
-    if (mappedStatus === "failed") failedCount += 1;
-
-    await adminClient
-      .from("instructor_payout_items")
-      .update({
-        status: mappedStatus,
-        paypal_payout_item_id: item.payoutItemId,
-        error_message: item.errorMessage,
-        updated_at: now,
-      })
-      .eq("id", item.senderItemId)
-      .eq("payout_batch_id", batch.id);
-
-    if (mappedStatus === "completed") {
-      await adminClient
-        .from("instructor_earnings")
-        .update({ status: "paid", updated_at: now })
-        .eq("payout_item_id", item.senderItemId)
-        .eq("status", "payout_pending");
-    }
-
-    if (mappedStatus === "failed") {
-      await adminClient
-        .from("instructor_earnings")
-        .update({
-          status: "pending",
-          payout_batch_id: null,
-          payout_item_id: null,
-          updated_at: now,
-        })
-        .eq("payout_item_id", item.senderItemId)
-        .eq("status", "payout_pending");
-    }
-  }
-
-  const paypalBatchDone = ["SUCCESS", "DENIED", "CANCELED"].includes(
-    paypalStatus.batchStatus
-  );
-  const localBatchStatus =
-    paypalBatchDone && failedCount === 0 ? "completed" : failedCount > 0 ? "failed" : "submitted";
-
-  await adminClient
-    .from("instructor_payout_batches")
-    .update({
-      status: localBatchStatus,
-      error_message: failedCount > 0 ? "One or more payout items failed." : null,
-      completed_at: localBatchStatus === "completed" ? now : null,
-    })
-    .eq("id", batch.id);
-
-  return paypalStatus.items.length;
+function isCronRequest(request: Request): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const auth = request.headers.get("Authorization") ?? "";
+  return auth === `Bearer ${secret}`;
 }
 
 /**
- * Syncs either one requested payout batch or all submitted batches.
- * Side effects: PayPal status fetches and local reconciliation updates.
+ * Syncs either one requested payout batch or every unresolved batch.
+ * Side effects: PayPal status reads plus payout item/earning/attempt/batch writes.
  * @param request - Optional JSON body with { batchId }.
  */
 export async function POST(request: Request) {
-  const actorId = await requireSuperAdmin();
-  if (actorId instanceof Response) return actorId;
+  // Cron runs without a session; an admin click must be a super_admin.
+  const viaCron = isCronRequest(request);
+  let actorId: string | null = null;
+
+  if (!viaCron) {
+    const authResult = await requireApiRole(["super_admin"]);
+    if ("error" in authResult) return authResult.error;
+    actorId = authResult.actor.user.id;
+  }
 
   const body = await request.json().catch(() => null);
-  const requestedBatchId = isSyncBody(body) && typeof body.batchId === "string"
-    ? body.batchId
-    : null;
+  const requestedBatchId =
+    isSyncBody(body) && typeof body.batchId === "string" ? body.batchId : null;
 
   const adminClient = await createAdminClient();
   let query = adminClient
     .from("instructor_payout_batches")
     .select("id, paypal_payout_batch_id")
     .not("paypal_payout_batch_id", "is", null)
-    .in("status", ["submitted", "failed"])
+    .in("status", SYNCABLE_STATUSES)
     .order("created_at", { ascending: false })
     .limit(20);
 
@@ -157,17 +94,59 @@ export async function POST(request: Request) {
 
   if (error) {
     console.error("[payouts/sync] Batch lookup failed:", error);
-    return Response.json({ success: false, error: "Failed to load payout batches." }, { status: 500 });
+    return Response.json(
+      { success: false, error: "Failed to load payout batches." },
+      { status: 500 }
+    );
   }
 
+  // A denial found by reconciliation is attributed to paypal_sync, never to the
+  // admin who happened to click Sync — the determination came from PayPal.
+  const origin = {
+    source: "paypal_sync" as PayoutDenialSource,
+    actorId: null,
+  };
+
   let syncedItems = 0;
+  let deniedBatches = 0;
+  let releasedItems = 0;
+
   for (const batch of (batches ?? []) as PayoutBatchRow[]) {
-    syncedItems += await syncBatch(batch);
+    if (!batch.paypal_payout_batch_id) continue;
+    try {
+      const result = await reconcilePayoutBatch(
+        adminClient,
+        { id: batch.id, paypalPayoutBatchId: batch.paypal_payout_batch_id },
+        origin
+      );
+      syncedItems += result.itemCount;
+      releasedItems += result.releasedCount;
+
+      await notifyInstructorsPaid(adminClient, result.newlyCompletedItemIds);
+
+      if (result.localBatchStatus === "denied") {
+        deniedBatches += 1;
+        await notifyPayoutDenied(adminClient, batch.id, result.paypalBatchStatus);
+      }
+    } catch (err) {
+      // One unreachable batch must not abort the rest of the run, especially on
+      // the cron path where nobody is watching for an error response.
+      console.error("[payouts/sync] Reconciliation failed for batch", batch.id, err);
+    }
+  }
+
+  if (deniedBatches > 0) {
+    console.warn(
+      `[payouts/sync] ${deniedBatches} payout batch(es) were denied by PayPal; ${releasedItems} item(s) re-queued.`
+    );
   }
 
   return Response.json({
     success: true,
     batchCount: batches?.length ?? 0,
     syncedItems,
+    deniedBatches,
+    releasedItems,
+    triggeredBy: viaCron ? "cron" : actorId,
   });
 }
