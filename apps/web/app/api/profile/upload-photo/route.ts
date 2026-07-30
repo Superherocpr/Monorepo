@@ -2,11 +2,13 @@
  * POST /api/profile/upload-photo
  * Called by: BioSettingsSection when an instructor uploads their own headshot.
  * Auth: instructor, manager, or super_admin only.
- * Validates file type and size, uploads to AWS S3 under the staff-photos/ prefix,
- * and returns the public URL. All S3 communication happens server-side — files are
- * never sent from the browser directly to S3.
+ * Validates file type and size, compresses/resizes the image with sharp (max 800px,
+ * JPEG quality 80), uploads to AWS S3 under the staff-photos/ prefix, and returns
+ * the public URL. All S3 communication happens server-side — files are never sent
+ * from the browser directly to S3.
  */
 
+import sharp from "sharp";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getS3BucketName, getS3Region } from "@/lib/s3";
 import { requireApiRole } from "@/lib/auth/effective-role";
@@ -31,6 +33,12 @@ type AllowedType = (typeof ALLOWED_TYPES)[number];
 /** Maximum file size in bytes (5 MB). */
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
+/** Maximum dimension (width or height) in pixels after compression. */
+const MAX_DIMENSION_PX = 800;
+
+/** JPEG quality level used for all compressed outputs (0–100). */
+const JPEG_QUALITY = 80;
+
 /**
  * Sanitises a filename for use as an S3 object key.
  * Replaces characters that are not alphanumeric, dots, or hyphens with underscores.
@@ -39,6 +47,21 @@ const MAX_SIZE_BYTES = 5 * 1024 * 1024;
  */
 function sanitiseFilename(filename: string): string {
   return filename.replace(/[^a-zA-Z0-9.\-]/g, "_");
+}
+
+/**
+ * Compresses and resizes an image buffer to a web-safe JPEG.
+ * Downscales to MAX_DIMENSION_PX on the longest edge (preserving aspect ratio),
+ * strips EXIF metadata, and converts all input formats (including HEIC/HEIF) to JPEG.
+ * @param buffer - Raw image bytes from the uploaded file.
+ * @returns Compressed JPEG buffer.
+ */
+async function compressImage(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer)
+    .rotate() // auto-orient from EXIF before stripping metadata
+    .resize(MAX_DIMENSION_PX, MAX_DIMENSION_PX, { fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
+    .toBuffer();
 }
 
 /**
@@ -83,17 +106,18 @@ export async function POST(request: Request): Promise<Response> {
   let url: string;
   try {
     const s3 = new S3Client({});
-    const safeFilename = sanitiseFilename(file.name);
+    const safeFilename = sanitiseFilename(file.name).replace(/\.[^.]+$/, ".jpg");
     // Timestamp prefix ensures unique S3 keys and prevents stale CDN caching
     const key = `staff-photos/${Date.now()}-${safeFilename}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const rawBuffer = Buffer.from(await file.arrayBuffer());
+    const buffer = await compressImage(rawBuffer);
 
     await s3.send(
       new PutObjectCommand({
         Bucket: bucketName,
         Key: key,
         Body: buffer,
-        ContentType: file.type,
+        ContentType: "image/jpeg",
       })
     );
 

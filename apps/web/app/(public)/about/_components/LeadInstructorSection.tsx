@@ -115,7 +115,6 @@ export default async function LeadInstructorSection() {
                 className="object-cover object-top"
                 sizes="(max-width: 768px) 100vw, 384px"
                 priority
-                unoptimized
               />
             </div>
 
