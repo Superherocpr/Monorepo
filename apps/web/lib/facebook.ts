@@ -8,7 +8,7 @@
  *   FACEBOOK_PAGE_ACCESS_TOKEN  — long-lived Page Access Token (never expiring)
  */
 
-const GRAPH_BASE = "https://graph.facebook.com/v19.0";
+const GRAPH_BASE = "https://graph.facebook.com/v25.0";
 
 /** Shape of a single item returned by the /feed Graph API endpoint. */
 interface GraphFeedPost {
