@@ -24,7 +24,14 @@ export interface InstructorEarningAmounts {
 /** Parameters required to record an online booking earning. */
 interface BookingEarningParams {
   instructorId: string;
-  bookingId: string;
+  /**
+   * The booking this earning is tied to, or null when there is no booking row
+   * to attach it to (e.g. a manual register charge for a session where the
+   * admin never clicked "Add Student"). The earning is still recorded against
+   * the session's instructor either way — it's payment for the class whether
+   * or not a booking exists.
+   */
+  bookingId: string | null;
   paymentId: string | null;
   grossAmount: number;
   note?: string;
@@ -155,7 +162,7 @@ export async function recordBookingEarning(
     supabase,
     "booking",
     {
-      bookingId: params.bookingId,
+      bookingId: params.bookingId ?? undefined,
       paymentId: params.paymentId,
     },
     amounts,

@@ -880,6 +880,7 @@ export default function SessionDetailClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        sessionId: session.id,
         amount: parsedAmount,
         description: chargeDescription || `Manual charge for ${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
       }),
@@ -912,6 +913,7 @@ export default function SessionDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           paypalOrderId: orderId,
+          sessionId: session.id,
           customerId: selectedCustomer.id,
           amount: parsedAmount,
           description:

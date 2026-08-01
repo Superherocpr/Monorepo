@@ -30,6 +30,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A valid positive amount is required." }, { status: 400 });
   }
 
+  // Required so the eventual capture can credit the right session's instructor
+  // and be accounted for in payouts — see capture-manual-charge.
+  const sessionId = body.sessionId;
+  if (typeof sessionId !== "string" || !sessionId.trim()) {
+    return NextResponse.json({ error: "Missing session ID." }, { status: 400 });
+  }
+
   const description =
     typeof body.description === "string" && body.description.trim()
       ? body.description.trim()
@@ -49,7 +56,7 @@ export async function POST(request: Request) {
   };
 
   const idempotencyKey = createHash("sha256")
-    .update(`${amount.toFixed(2)}:${description}`)
+    .update(`${sessionId}:${amount.toFixed(2)}:${description}`)
     .digest("hex")
     .slice(0, 32);
 

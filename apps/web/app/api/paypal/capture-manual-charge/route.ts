@@ -2,12 +2,16 @@
  * POST /api/paypal/capture-manual-charge
  * Called by: admin session manual charge modal after PayPal card approval.
  * Auth: Manager and super_admin only
- * Captures the PayPal order and logs the completed payment without creating a booking.
+ * Captures the PayPal order and logs the completed payment. Always credited to
+ * the session's assigned instructor (via instructor_earnings), regardless of
+ * whether a booking was ever created for the charged customer — this is
+ * payment for that class whether or not the customer ends up attending.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { getPayPalAccessToken, getPayPalApiBase, evaluateCaptureOutcome } from "@/lib/paypal";
+import { recordBookingEarning } from "@/lib/instructor-earnings";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -22,9 +26,12 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Invalid request body." }, { status: 400 });
   }
 
-  const { paypalOrderId, customerId, amount, description, notes } = body;
+  const { paypalOrderId, sessionId, customerId, amount, description, notes } = body;
   if (typeof paypalOrderId !== "string" || !paypalOrderId.trim()) {
     return Response.json({ success: false, error: "Missing PayPal order ID." }, { status: 400 });
+  }
+  if (typeof sessionId !== "string" || !sessionId.trim()) {
+    return Response.json({ success: false, error: "Missing session ID." }, { status: 400 });
   }
   if (typeof customerId !== "string" || !customerId.trim()) {
     return Response.json({ success: false, error: "Missing customer ID." }, { status: 400 });
@@ -40,6 +47,38 @@ export async function POST(request: Request) {
       ? description.trim()
       : "Manual card charge";
   const notesText = typeof notes === "string" && notes.trim() ? notes.trim() : null;
+
+  const adminClient = await createAdminClient();
+
+  // ── Resolve the session's instructor up front — fail before charging the card ──
+  // if we can't attribute this money to anyone, rather than capturing payment
+  // and then silently losing the accounting trail.
+  const { data: sessionRow, error: sessionError } = await adminClient
+    .from("class_sessions")
+    .select("instructor_id, class_types(name)")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (sessionError) {
+    console.error("[capture-manual-charge] Session lookup failed:", sessionError);
+    return Response.json({ success: false, error: "Failed to load session." }, { status: 500 });
+  }
+  if (!sessionRow) {
+    return Response.json({ success: false, error: "Session not found." }, { status: 404 });
+  }
+  if (!sessionRow.instructor_id) {
+    return Response.json(
+      { success: false, error: "This session has no assigned instructor yet — assign one before charging a manual payment." },
+      { status: 422 }
+    );
+  }
+
+  const instructorId = sessionRow.instructor_id;
+  const classTypeJoin = (
+    sessionRow as { class_types: { name: string | null } | { name: string | null }[] | null }
+  ).class_types;
+  const classType = Array.isArray(classTypeJoin) ? classTypeJoin[0] : classTypeJoin;
+  const className = classType?.name?.trim() || "CPR Class";
 
   const accessToken = await getPayPalAccessToken();
   const captureResponse = await fetch(
@@ -85,24 +124,60 @@ export async function POST(request: Request) {
   const paypalTransactionId = outcome.captureId;
   const fees = outcome.fees;
 
-  const adminClient = await createAdminClient();
-  const routingNote = `Manual register charge — ${descriptionText}`;
-  const { error } = await adminClient.from("payments").insert({
-    customer_id: customerId,
-    amount: parsedAmount,
-    status: "completed",
-    payment_type: "online",
-    paypal_transaction_id: paypalTransactionId,
-    routing_note: routingNote,
-    notes: notesText,
-    paypal_fee_amount: fees.paypalFee,
-    net_amount: fees.netAmount,
-  });
+  // ── Best-effort: link to an existing active booking for this customer + ──────
+  // session, if the admin already used "Add Student" separately. Not required —
+  // the earning is recorded against the session's instructor either way.
+  const { data: existingBooking } = await adminClient
+    .from("bookings")
+    .select("id")
+    .eq("session_id", sessionId)
+    .eq("customer_id", customerId)
+    .eq("cancelled", false)
+    .maybeSingle();
+  const linkedBookingId = (existingBooking as { id: string } | null)?.id ?? null;
 
-  if (error) {
-    console.error("[capture-manual-charge] Failed to insert payment record:", error);
+  const routingNote = `Manual register charge — ${descriptionText} (session: ${className})`;
+  const { data: paymentRow, error: paymentInsertError } = await adminClient
+    .from("payments")
+    .insert({
+      customer_id: customerId,
+      booking_id: linkedBookingId,
+      amount: parsedAmount,
+      status: "completed",
+      payment_type: "online",
+      paypal_transaction_id: paypalTransactionId,
+      routing_note: routingNote,
+      notes: notesText,
+      paypal_fee_amount: fees.paypalFee,
+      net_amount: fees.netAmount,
+    })
+    .select("id")
+    .single();
+
+  if (paymentInsertError) {
+    console.error("[capture-manual-charge] Failed to insert payment record:", paymentInsertError);
     return Response.json({ success: false, error: "Failed to record payment." }, { status: 500 });
   }
+
+  // ── Credit the session's instructor and record the platform's cut ──────────
+  // Same accounting path as a normal online booking (recordBookingEarning),
+  // just without a bookingId when "Add Student" was never clicked — see the
+  // comment on BookingEarningParams.bookingId for why that's intentional.
+  await recordBookingEarning(adminClient, {
+    instructorId,
+    bookingId: linkedBookingId,
+    paymentId: (paymentRow as { id?: string } | null)?.id ?? null,
+    grossAmount: parsedAmount,
+    note: routingNote,
+  }).catch((err: unknown) => {
+    console.error("[capture-manual-charge] CRITICAL: instructor earning insert failed", {
+      sessionId,
+      instructorId,
+      paypalTransactionId,
+      amount: parsedAmount,
+      error: err,
+    });
+  });
 
   return Response.json({ success: true });
 }
