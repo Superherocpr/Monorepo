@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
+import { getSessionPricing } from "@/lib/session-pricing";
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -70,44 +71,19 @@ export async function POST(request: Request): Promise<NextResponse> {
   const supabase = await createAdminClient();
 
   // ── Resolve session price (authoritative, never from client) ──────────────
-  const { data: sessionRow, error: sessionError } = await supabase
-    .from("class_sessions")
-    .select("class_types(price)")
-    .eq("id", sessionId)
-    .maybeSingle();
+  // getSessionPricing() applies the instructor's session-level discount_percent
+  // BEFORE the promo code is applied — this must match the price basis used by
+  // create-booking-order/confirm/confirm-free, or a promo code that looks valid
+  // here would get rejected as a price mismatch at checkout.
+  const pricing = await getSessionPricing(supabase, sessionId);
 
-  if (sessionError) {
-    console.error("[promo-codes/validate] Session lookup failed:", sessionError);
-    return NextResponse.json<PromoValidateError>(
-      { valid: false, error: "Failed to load session" },
-      { status: 500 }
-    );
+  if (!pricing.found) {
+    console.error("[promo-codes/validate] Session pricing lookup failed:", pricing.error);
+    const status = pricing.error === "Session not found" ? 404 : 500;
+    return NextResponse.json<PromoValidateError>({ valid: false, error: pricing.error }, { status });
   }
 
-  if (!sessionRow) {
-    return NextResponse.json<PromoValidateError>(
-      { valid: false, error: "Session not found" },
-      { status: 404 }
-    );
-  }
-
-  const classTypeJoin = (
-    sessionRow as { class_types: { price: number | string } | { price: number | string }[] | null }
-  ).class_types;
-  const classType = Array.isArray(classTypeJoin) ? classTypeJoin[0] : classTypeJoin;
-  const originalPrice =
-    classType?.price == null
-      ? null
-      : typeof classType.price === "number"
-        ? classType.price
-        : parseFloat(String(classType.price));
-
-  if (originalPrice == null || !Number.isFinite(originalPrice) || originalPrice < 0) {
-    return NextResponse.json<PromoValidateError>(
-      { valid: false, error: "Session pricing unavailable" },
-      { status: 500 }
-    );
-  }
+  const originalPrice = pricing.basePrice;
 
   // ── Validate and resolve the promo code ───────────────────────────────────
   const result = await resolvePromoDiscount(supabase, code, sessionId, originalPrice);

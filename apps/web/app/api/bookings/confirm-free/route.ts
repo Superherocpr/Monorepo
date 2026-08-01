@@ -24,6 +24,7 @@ import { Resend } from "resend";
 import { bookingConfirmationEmail } from "@/lib/emails";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
 import { maybeSendAssistantReminder } from "@/lib/assistant-reminder";
+import { getSessionPricing } from "@/lib/session-pricing";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -80,39 +81,19 @@ export async function POST(request: Request): Promise<Response> {
   const supabase = await createAdminClient();
 
   // ── Step 1: Server-side price + promo verification (THREAT-013) ──────────
-  const { data: sessionPriceRow, error: sessionFetchError } = await supabase
-    .from("class_sessions")
-    .select("instructor_id, class_types(price)")
-    .eq("id", sessionId)
-    .maybeSingle();
+  // getSessionPricing() is the single source of truth for the instructor-
+  // discounted base price, shared with promo-codes/validate, create-booking-order,
+  // and bookings/confirm.
+  const pricing = await getSessionPricing(supabase, sessionId);
 
-  if (sessionFetchError) {
-    console.error("[bookings/confirm-free] Session fetch failed:", sessionFetchError);
-    return Response.json({ success: false, error: "Failed to load session" }, { status: 500 });
+  if (!pricing.found) {
+    console.error("[bookings/confirm-free] Session pricing lookup failed:", pricing.error);
+    const status = pricing.error === "Session not found" ? 404 : 500;
+    return Response.json({ success: false, error: pricing.error }, { status });
   }
 
-  if (!sessionPriceRow) {
-    return Response.json({ success: false, error: "Session not found" }, { status: 404 });
-  }
-
-  const classTypeJoin = (
-    sessionPriceRow as {
-      instructor_id: string;
-      class_types: { price: number | string } | { price: number | string }[] | null;
-    }
-  ).class_types;
-  const instructorId = (sessionPriceRow as { instructor_id: string }).instructor_id;
-  const classType = Array.isArray(classTypeJoin) ? classTypeJoin[0] : classTypeJoin;
-  const dbPrice =
-    classType?.price == null
-      ? null
-      : typeof classType.price === "number"
-        ? classType.price
-        : parseFloat(String(classType.price));
-
-  if (dbPrice == null || !Number.isFinite(dbPrice)) {
-    return Response.json({ success: false, error: "Session pricing unavailable" }, { status: 500 });
-  }
+  const instructorId = pricing.instructorId;
+  const dbPrice = pricing.basePrice;
 
   const promoResult = await resolvePromoDiscount(supabase, promoCode.trim(), sessionId, dbPrice);
 

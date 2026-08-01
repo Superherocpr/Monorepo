@@ -28,6 +28,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
 import { resolveAddonsSelection } from "@/lib/addon-checkout";
+import { getSessionPricing } from "@/lib/session-pricing";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -60,39 +61,24 @@ export async function POST(request: Request) {
   const supabase = await createAdminClient();
 
   // ── Resolve authoritative session details — never trust client price/copy ──
-  const { data: sessionRow, error: sessionError } = await supabase
-    .from("class_sessions")
-    .select("class_types(name, price)")
-    .eq("id", sessionId)
-    .maybeSingle();
+  // getSessionPricing() is the single source of truth for the instructor-
+  // discounted base price, shared with promo-codes/validate, bookings/confirm,
+  // and bookings/confirm-free — keeping this in one place is what prevents the
+  // four routes from silently drifting apart on what a session "actually costs".
+  const pricing = await getSessionPricing(supabase, sessionId);
 
-  if (sessionError) {
-    console.error("[create-booking-order] Session lookup failed:", sessionError);
-    return NextResponse.json({ error: "Failed to load session" }, { status: 500 });
+  if (!pricing.found) {
+    console.error("[create-booking-order] Session pricing lookup failed:", pricing.error);
+    const status = pricing.error === "Session not found" ? 404 : 500;
+    return NextResponse.json({ error: pricing.error }, { status });
   }
 
-  if (!sessionRow) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 });
-  }
-
-  const classTypeJoin = (
-    sessionRow as {
-      class_types:
-        | { name: string | null; price: number | string | null }
-        | Array<{ name: string | null; price: number | string | null }>
-        | null;
-    }
-  ).class_types;
-  const classType = Array.isArray(classTypeJoin) ? classTypeJoin[0] : classTypeJoin;
-  const baseAmount =
-    typeof classType?.price === "number"
-      ? classType.price
-      : parseFloat(String(classType?.price ?? ""));
-  const className = classType?.name?.trim() || "CPR Class";
-
-  if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
+  if (pricing.basePrice <= 0) {
     return NextResponse.json({ error: "Session pricing unavailable" }, { status: 500 });
   }
+
+  const baseAmount = pricing.basePrice;
+  const className = pricing.className;
 
   // ── Apply promo code discount (server-side re-validation) ─────────────────
   let finalAmount = baseAmount;

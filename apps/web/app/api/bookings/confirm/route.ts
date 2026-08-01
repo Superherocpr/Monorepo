@@ -30,6 +30,7 @@ import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
 import { resolveAddonsSelection, type ResolvedAddon } from "@/lib/addon-checkout";
 import { maybeSendAssistantReminder } from "@/lib/assistant-reminder";
+import { getSessionPricing } from "@/lib/session-pricing";
 
 /** Acceptable rounding tolerance when comparing client/server prices. */
 const PRICE_TOLERANCE = 0.01;
@@ -104,42 +105,21 @@ export async function POST(request: Request) {
   const supabase = await createAdminClient();
 
   // ── Step 1: Server-side price + promo verification (THREAT-013) ──────────
-  // Never trust the client's amount — fetch the canonical price via the
-  // class_types join, re-validate the promo code (if any), then reject if the
-  // client-supplied amount doesn't match the server-computed final price.
-  const { data: sessionPriceRow, error: sessionFetchError } = await supabase
-    .from("class_sessions")
-    .select("instructor_id, class_types(price)")
-    .eq("id", sessionId)
-    .maybeSingle();
+  // Never trust the client's amount. getSessionPricing() is the single source
+  // of truth for the instructor-discounted base price, shared with
+  // promo-codes/validate, create-booking-order, and confirm-free — then we
+  // re-validate the promo code (if any) and reject if the client-supplied
+  // amount doesn't match the server-computed final price.
+  const pricing = await getSessionPricing(supabase, sessionId);
 
-  if (sessionFetchError) {
-    console.error("[bookings/confirm] Session fetch failed:", sessionFetchError);
-    return Response.json({ success: false, error: "Failed to load session" }, { status: 500 });
+  if (!pricing.found) {
+    console.error("[bookings/confirm] Session pricing lookup failed:", pricing.error);
+    const status = pricing.error === "Session not found" ? 404 : 500;
+    return Response.json({ success: false, error: pricing.error }, { status });
   }
 
-  if (!sessionPriceRow) {
-    return Response.json({ success: false, error: "Session not found" }, { status: 404 });
-  }
-
-  const classTypeJoin = (
-    sessionPriceRow as {
-      instructor_id: string;
-      class_types: { price: number | string } | { price: number | string }[] | null;
-    }
-  ).class_types;
-  const instructorId = (sessionPriceRow as { instructor_id: string }).instructor_id;
-  const classType = Array.isArray(classTypeJoin) ? classTypeJoin[0] : classTypeJoin;
-  const dbPrice =
-    classType?.price == null
-      ? null
-      : typeof classType.price === "number"
-        ? classType.price
-        : parseFloat(String(classType.price));
-
-  if (dbPrice == null || !Number.isFinite(dbPrice)) {
-    return Response.json({ success: false, error: "Session pricing unavailable" }, { status: 500 });
-  }
+  const instructorId = pricing.instructorId;
+  const dbPrice = pricing.basePrice;
 
   // Re-validate the promo code server-side and compute the authoritative final price.
   let expectedPrice = dbPrice;
