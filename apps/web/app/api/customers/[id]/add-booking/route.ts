@@ -113,12 +113,13 @@ export async function POST(
     const instructorProfile = Array.isArray(session.profiles)
       ? session.profiles[0]
       : session.profiles;
-    const className =
-      typeof session.class_types === "object" && session.class_types !== null
-        ? Array.isArray(session.class_types)
-          ? session.class_types[0]?.name ?? "CPR Class"
-          : session.class_types.name ?? "CPR Class"
-        : "CPR Class";
+    const className = (() => {
+      const ct = session.class_types as unknown;
+      if (!ct) return "CPR Class";
+      if (Array.isArray(ct)) return (ct[0] as any)?.name ?? "CPR Class";
+      if (typeof ct === "object" && ct !== null) return (ct as any).name ?? "CPR Class";
+      return "CPR Class";
+    })();
     const location = session.locations ?? null;
 
     if (!resolvedEmail) {
