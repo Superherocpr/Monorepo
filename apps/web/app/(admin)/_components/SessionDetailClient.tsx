@@ -71,6 +71,18 @@ interface ContactFormValues {
   zip: string;
 }
 
+interface CustomerSearchResult {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  upcomingBookingsCount: number;
+  totalBookingsCount: number;
+  activeCertsCount: number;
+  hasExpiringSoon: boolean;
+}
+
 const EMPTY_CONTACT_FORM: ContactFormValues = {
   email: "",
   phone: "",
@@ -453,6 +465,14 @@ export default function SessionDetailClient({
   /** Local overrides keyed by the same `key` used in editingCustomer, applied after a successful save. */
   const [contactOverrides, setContactOverrides] = useState<Record<string, ContactFormValues>>({});
 
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+  const [customerSearchResults, setCustomerSearchResults] = useState<CustomerSearchResult[]>([]);
+  const [isLoadingCustomerSearch, setIsLoadingCustomerSearch] = useState(false);
+  const [customerSearchError, setCustomerSearchError] = useState<string | null>(null);
+  const [isAddingStudent, setIsAddingStudent] = useState(false);
+  const [addStudentError, setAddStudentError] = useState<string | null>(null);
+
   // ── Assistant assignment state (documentation only, no pay impact) ────────
 
   const [assistantMode, setAssistantMode] = useState<"instructor" | "name">(
@@ -727,6 +747,74 @@ export default function SessionDetailClient({
       setContactError("Failed to save. Please try again.");
     } finally {
       setIsSavingContact(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!showAddStudentModal) return;
+
+    const controller = new AbortController();
+    const query = customerSearchQuery.trim();
+    const timer = window.setTimeout(async () => {
+      setCustomerSearchError(null);
+      setIsLoadingCustomerSearch(true);
+
+      try {
+        const url = new URL("/api/customers/search", window.location.origin);
+        if (query.length >= 2) {
+          url.searchParams.set("q", query);
+        }
+
+        const res = await fetch(url.toString(), { signal: controller.signal });
+        if (!res.ok) {
+          throw new Error("Customer search failed");
+        }
+
+        const json = await res.json();
+        setCustomerSearchResults(json.customers ?? []);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("[customer-search]", error);
+        setCustomerSearchError("Unable to load customers. Please try again.");
+        setCustomerSearchResults([]);
+      } finally {
+        setIsLoadingCustomerSearch(false);
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [showAddStudentModal, customerSearchQuery]);
+
+  async function handleAddStudent(customerId: string): Promise<void> {
+    setIsAddingStudent(true);
+    setAddStudentError(null);
+
+    try {
+      const res = await fetch(`/api/customers/${customerId}/add-booking`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: session.id,
+          reason: "Added manually from session page.",
+        }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setAddStudentError(json.error ?? "Failed to add student. Please try again.");
+        return;
+      }
+
+      setShowAddStudentModal(false);
+      router.refresh();
+    } catch (error) {
+      console.error("[add-student]", error);
+      setAddStudentError("Failed to add student. Please try again.");
+    } finally {
+      setIsAddingStudent(false);
     }
   }
 
@@ -1285,6 +1373,109 @@ export default function SessionDetailClient({
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showAddStudentModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-3xl w-full space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Add Student to Class</h2>
+                <p className="text-sm text-gray-500">
+                  Search customers by name, email, or phone and add them to this session manually.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddStudentModal(false)}
+                className="text-sm font-medium text-gray-500 hover:text-gray-700"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-gray-600">Search Customers</label>
+              <input
+                type="search"
+                value={customerSearchQuery}
+                onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                placeholder="Search by name, email, or phone"
+                className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+
+            {customerSearchError && (
+              <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                {customerSearchError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>{customerSearchResults.length} customer{customerSearchResults.length === 1 ? "" : "s"} found</span>
+                <span>{isLoadingCustomerSearch ? "Loading…" : "Showing up to 100 results"}</span>
+              </div>
+              <div className="overflow-x-auto border border-gray-200 rounded-md">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <tr>
+                      <th className="px-4 py-3">Action</th>
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Email</th>
+                      <th className="px-4 py-3">Phone</th>
+                      <th className="px-4 py-3">Bookings</th>
+                      <th className="px-4 py-3">Certs</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {customerSearchResults.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
+                          {isLoadingCustomerSearch ? "Searching customers…" : "No customers match that search."}
+                        </td>
+                      </tr>
+                    ) : (
+                      customerSearchResults.map((customer) => (
+                        <tr key={customer.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => void handleAddStudent(customer.id)}
+                              disabled={isAddingStudent}
+                              className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                            >
+                              {isAddingStudent ? "Adding…" : "Add"}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-gray-800">
+                            {customer.first_name} {customer.last_name}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {customer.email ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {customer.phone ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {customer.totalBookingsCount}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {customer.activeCertsCount}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {addStudentError && (
+              <p className="text-sm text-red-700">{addStudentError}</p>
+            )}
           </div>
         </div>
       )}
@@ -2117,14 +2308,29 @@ export default function SessionDetailClient({
                   ({totalStudents})
                 </span>
               </h2>
-              {/* Import Roster button — manager/super admin only */}
+              {/* Student management actions — manager/super admin only */}
               {isManager && (
-                <Link
-                  href={`/admin/sessions/${session.id}/roster`}
-                  className="text-sm font-medium text-red-600 hover:text-red-700"
-                >
-                  Import Roster
-                </Link>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddStudentModal(true);
+                      setCustomerSearchQuery("");
+                      setCustomerSearchResults([]);
+                      setCustomerSearchError(null);
+                      setAddStudentError(null);
+                    }}
+                    className="text-sm font-medium text-red-600 hover:text-red-700"
+                  >
+                    Add Student
+                  </button>
+                  <Link
+                    href={`/admin/sessions/${session.id}/roster`}
+                    className="text-sm font-medium text-red-600 hover:text-red-700"
+                  >
+                    Import Roster
+                  </Link>
+                </div>
               )}
             </div>
 
