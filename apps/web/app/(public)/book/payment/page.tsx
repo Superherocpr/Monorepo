@@ -12,297 +12,18 @@
 
 import { useState, useEffect, useRef, useCallback, type ReactElement } from "react";
 import { useRouter } from "next/navigation";
-import {
-  PayPalProvider,
-  PayPalOneTimePaymentButton,
-  PayPalCardFieldsProvider,
-  PayPalCardNumberField,
-  PayPalCardExpiryField,
-  PayPalCardCvvField,
-  usePayPalCardFieldsOneTimePaymentSession,
-} from "@paypal/react-paypal-js/sdk-v6";
-import type {
-  OnApproveDataOneTimePayments,
-  UsePayPalCardFieldsOneTimePaymentSessionResult,
-} from "@paypal/react-paypal-js/sdk-v6";
+import { PayPalProvider, PayPalOneTimePaymentButton } from "@paypal/react-paypal-js/sdk-v6";
+import type { OnApproveDataOneTimePayments } from "@paypal/react-paypal-js/sdk-v6";
 import { Lock, ShieldCheck } from "lucide-react";
 import { getBookingStore, setBookingStore } from "@/lib/booking-store";
 import BookingProgress from "../_components/BookingProgress";
 import OrderSummary from "../_components/OrderSummary";
-import CardBrandIcons from "../_components/CardBrandIcons";
+import { CardPaymentSection } from "@/app/_components/PayPalCardPaymentSection";
+import type { CreateOrderResult } from "@/app/_components/PayPalCardPaymentSection";
 import type { BookingStore, AppliedPromoCode, SelectedAddon } from "@/lib/booking-store";
 import type { PromoValidateResponse } from "@/app/api/promo-codes/validate/route";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
-/** Shape returned by handlePayPalCreate — passed to card form and PayPal button. */
-type CreateOrderResult = { orderId: string };
-
-/** Props for the inner card form component. */
-type CardPaymentFormProps = {
-  /** Creates the PayPal order and returns its ID. Called on every Pay click. */
-  onCreateOrder: () => Promise<CreateOrderResult>;
-  /** Called when PayPal has authorized the payment (before capture). */
-  onApprove: (data: { orderId: string }) => Promise<void>;
-  /** Called when a card-level error should surface to the page. */
-  onError: (message: string) => void;
-  /** Total amount in USD to display on the pay button. */
-  amount: number;
-  /** Whether the pay button should be disabled (e.g. class just filled). */
-  disabled: boolean;
-};
-
-// ---------------------------------------------------------------------------
-// CardPaymentForm — inner component; must live inside PayPalCardFieldsProvider
-// ---------------------------------------------------------------------------
-
-/**
- * Renders the hosted card fields (number, expiry, CVV) and submit button.
- * Must be rendered inside `PayPalCardFieldsProvider`. Uses
- * `usePayPalCardFieldsOneTimePaymentSession` to submit card data to PayPal.
- * Used by: BookPaymentPage.
- */
-function CardPaymentForm({
-  onCreateOrder,
-  onApprove,
-  onError,
-  amount,
-  disabled,
-}: CardPaymentFormProps): ReactElement {
-  const { submit, submitResponse, error }: UsePayPalCardFieldsOneTimePaymentSessionResult =
-    usePayPalCardFieldsOneTimePaymentSession();
-
-  const [nameOnCard, setNameOnCard] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [cardError, setCardError] = useState<string | null>(null);
-
-  // Stable ref so the useEffect below can call the latest onApprove without
-  // it appearing in the dependency array (avoids stale-closure re-render loops).
-  const onApproveRef = useRef(onApprove);
-  onApproveRef.current = onApprove;
-  const onErrorRef = useRef(onError);
-  onErrorRef.current = onError;
-
-  // Handle SDK-level errors (initialization failure, eligibility issues).
-  useEffect(() => {
-    if (!error) return;
-    console.error("[CardPaymentForm] card fields error:", error);
-    setCardError("Card payment is temporarily unavailable. Please use PayPal below.");
-    setIsSubmitting(false);
-  }, [error]);
-
-  // Handle submit response states from PayPal after card data is submitted.
-  useEffect(() => {
-    if (!submitResponse) return;
-
-    const handleResponse = async (): Promise<void> => {
-      switch (submitResponse.state) {
-        case "succeeded":
-          // PayPal authorized the card — now capture server-side via /api/bookings/confirm.
-          await onApproveRef.current({ orderId: submitResponse.data.orderId });
-          // If we reach here, confirm returned an error (no redirect happened).
-          setIsSubmitting(false);
-          break;
-
-        case "canceled":
-          // Buyer dismissed 3DS challenge — allow retry without recreating the session.
-          setCardError("Authentication was canceled. Please try again.");
-          setIsSubmitting(false);
-          break;
-
-        case "failed":
-          setCardError(
-            submitResponse.data.message ??
-              "Payment failed. Please check your card details and try again."
-          );
-          setIsSubmitting(false);
-          break;
-      }
-    };
-
-    handleResponse().catch((err: unknown) => {
-      console.error("[CardPaymentForm] handleResponse error:", err);
-      setIsSubmitting(false);
-    });
-  }, [submitResponse]);
-
-  /** Creates a PayPal order then submits the card data against it. */
-  async function handlePay(): Promise<void> {
-    setCardError(null);
-    setIsSubmitting(true);
-    try {
-      const { orderId } = await onCreateOrder();
-      await submit(orderId, { name: nameOnCard.trim() || undefined });
-      // Response arrives via the submitResponse useEffect above.
-    } catch (err) {
-      console.error("[CardPaymentForm] submit error:", err);
-      setCardError("Something went wrong. Please try again.");
-      setIsSubmitting(false);
-    }
-  }
-
-  /**
-   * Style injected directly into PayPal's hosted <input> — this is the ONLY
-   * place border/background/radius should be set. Giving the wrapping
-   * container its own bordered/rounded box AND styling PayPal's real input
-   * produced a visible "double box" (our box behind PayPal's own input
-   * chrome). The container below is intentionally unstyled and only sizes
-   * the iframe; every visual property lives here instead.
-   */
-  const fieldStyle = {
-    input: {
-      fontSize: "14px",
-      color: "#111827",
-      fontFamily: "inherit",
-      border: "1px solid #d1d5db",
-      borderRadius: "8px",
-      background: "#ffffff",
-      padding: "0 12px",
-      height: "42px",
-    },
-    "input::placeholder": {
-      color: "#9ca3af",
-    },
-    "input.focus": {
-      border: "1px solid transparent",
-      outline: "none",
-      boxShadow: "0 0 0 2px #ef4444",
-    },
-  };
-
-  /** Sizes the iframe only — no visual styling here (see fieldStyle above). */
-  const fieldContainerStyle = { height: "42px" };
-
-  const formattedAmount = amount.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
-
-  return (
-    <div className="space-y-4">
-      {/* Name on card — regular input; passed to PayPal submit options */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Name on card
-        </label>
-        <input
-          type="text"
-          value={nameOnCard}
-          onChange={(e) => setNameOnCard(e.target.value)}
-          placeholder="Jane Smith"
-          autoComplete="cc-name"
-          disabled={isSubmitting || disabled}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:opacity-50"
-        />
-      </div>
-
-      {/* Card number — PayPal hosted iframe */}
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="block text-sm font-medium text-gray-700">
-            Card number
-          </label>
-          <CardBrandIcons />
-        </div>
-        <PayPalCardNumberField
-          placeholder="1234 5678 9012 3456"
-          ariaLabel="Card number"
-          style={fieldStyle}
-          containerStyles={fieldContainerStyle}
-        />
-      </div>
-
-      {/* Expiry + CVV — side by side */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Expiry
-          </label>
-          <PayPalCardExpiryField
-            placeholder="MM / YY"
-            ariaLabel="Card expiry date"
-            style={fieldStyle}
-            containerStyles={fieldContainerStyle}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            CVV
-          </label>
-          <PayPalCardCvvField
-            placeholder="123"
-            ariaLabel="Card security code"
-            style={fieldStyle}
-            containerStyles={fieldContainerStyle}
-          />
-        </div>
-      </div>
-
-      {/* Card-level error */}
-      {cardError && (
-        <p role="alert" className="text-sm text-red-600">
-          {cardError}
-        </p>
-      )}
-
-      {/* Pay button */}
-      <button
-        onClick={handlePay}
-        disabled={isSubmitting || disabled}
-        className="w-full py-3 px-6 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-      >
-        {isSubmitting ? (
-          <>
-            <svg
-              className="animate-spin h-4 w-4 text-white"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            Processing…
-          </>
-        ) : (
-          `Pay ${formattedAmount}`
-        )}
-      </button>
-
-      {/* Security note */}
-      <div className="flex items-center gap-4 pt-1">
-        <span className="flex items-center gap-1.5 text-xs text-gray-500">
-          <Lock size={13} className="text-gray-400 shrink-0" aria-hidden="true" />
-          SSL encrypted
-        </span>
-        <span className="flex items-center gap-1.5 text-xs text-gray-500">
-          <ShieldCheck size={13} className="text-gray-400 shrink-0" aria-hidden="true" />
-          PCI DSS compliant
-        </span>
-      </div>
-      <p className="text-xs text-gray-400">
-        Card details are entered directly into PayPal&apos;s secure servers and are never stored by us.
-      </p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// BookPaymentPage — main page component
-// ---------------------------------------------------------------------------
 
 /** Renders Step 4 — card payment (primary) or PayPal (secondary) for the selected session. */
 export default function BookPaymentPage(): ReactElement {
@@ -750,15 +471,13 @@ export default function BookPaymentPage(): ReactElement {
                     /* ── Primary: card form + secondary: PayPal button ── */
                     <div className="space-y-6">
                       {/* Card form */}
-                      <PayPalCardFieldsProvider>
-                        <CardPaymentForm
-                          onCreateOrder={handlePayPalCreate}
-                          onApprove={handlePayPalApprove}
-                          onError={(msg) => setPaymentError(msg)}
-                          amount={totalAmount}
-                          disabled={false}
-                        />
-                      </PayPalCardFieldsProvider>
+                      <CardPaymentSection
+                        onCreateOrder={handlePayPalCreate}
+                        onApprove={handlePayPalApprove}
+                        onError={(msg) => setPaymentError(msg)}
+                        amount={totalAmount}
+                        disabled={false}
+                      />
 
                       {/* Divider */}
                       <div className="flex items-center gap-3">
