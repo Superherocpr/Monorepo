@@ -120,7 +120,9 @@ export async function POST(
       if (typeof ct === "object" && ct !== null) return (ct as any).name ?? "CPR Class";
       return "CPR Class";
     })();
-    const location = session.locations ?? null;
+    const location = Array.isArray(session.locations)
+      ? session.locations[0] ?? null
+      : session.locations ?? null;
 
     if (!resolvedEmail) {
       console.error("[customers/[id]/add-booking] Confirmation email not sent: no customer email on file", {
