@@ -6,7 +6,7 @@
  * Used by: app/(admin)/admin/sessions/[id]/page.tsx
  */
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { UserRole } from "@/types/users";
@@ -25,6 +25,8 @@ import {
   setSessionAddons,
   type SessionEditFields,
 } from "@/app/(admin)/admin/sessions/[id]/actions";
+import { PayPalProvider } from "@paypal/react-paypal-js/sdk-v6";
+import { CardPaymentSection } from "@/app/_components/PayPalCardPaymentSection";
 
 // ─── Exported types (imported by the server component) ────────────────────────
 
@@ -472,6 +474,16 @@ export default function SessionDetailClient({
   const [customerSearchError, setCustomerSearchError] = useState<string | null>(null);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [addStudentError, setAddStudentError] = useState<string | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerSearchResult | null>(null);
+  const [paypalClientToken, setPaypalClientToken] = useState<string | undefined>(undefined);
+  const [paypalClientTokenError, setPaypalClientTokenError] = useState(false);
+  const [isLoadingPayPalClientToken, setIsLoadingPayPalClientToken] = useState(false);
+  const [chargeAmount, setChargeAmount] = useState("");
+  const [chargeDescription, setChargeDescription] = useState("");
+  const [chargeNotes, setChargeNotes] = useState("");
+  const [isProcessingCharge, setIsProcessingCharge] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [chargeSuccessMessage, setChargeSuccessMessage] = useState<string | null>(null);
 
   // ── Assistant assignment state (documentation only, no pay impact) ────────
 
@@ -753,6 +765,7 @@ export default function SessionDetailClient({
   useEffect(() => {
     if (!showAddStudentModal) return;
 
+    setSelectedCustomer(null);
     const controller = new AbortController();
     const query = customerSearchQuery.trim();
     const timer = window.setTimeout(async () => {
@@ -818,8 +831,117 @@ export default function SessionDetailClient({
     }
   }
 
-  // ── Verified toggle handler ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!showAddStudentModal || paypalClientToken || paypalClientTokenError) return;
 
+    let cancelled = false;
+    setIsLoadingPayPalClientToken(true);
+
+    fetch("/api/paypal/client-token")
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Client token request failed (${res.status})`);
+        const data = (await res.json()) as { clientToken?: string };
+        if (!data.clientToken) throw new Error("Client token missing from response");
+        return data.clientToken;
+      })
+      .then((token) => {
+        if (!cancelled) {
+          setPaypalClientToken(token);
+          setPaypalClientTokenError(false);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error("[admin/session] PayPal client token fetch failed:", err);
+        if (!cancelled) setPaypalClientTokenError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingPayPalClientToken(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showAddStudentModal, paypalClientToken, paypalClientTokenError]);
+
+  const paypalEnvironment =
+    process.env.NEXT_PUBLIC_PAYPAL_ENV === "production" ? "production" : "sandbox";
+
+  const handleCreateManualChargeOrder = useCallback(async (): Promise<{ orderId: string }> => {
+    if (!selectedCustomer) {
+      throw new Error("Select a customer before charging their card.");
+    }
+
+    const parsedAmount = parseFloat(chargeAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      throw new Error("A valid positive amount is required.");
+    }
+
+    const response = await fetch("/api/paypal/create-manual-charge-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: parsedAmount,
+        description: chargeDescription || `Manual charge for ${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
+      }),
+    });
+
+    const data = await response.json().catch(() => ({ orderId: null, error: "Failed to create PayPal order." }));
+    if (!response.ok || !data.orderId) {
+      throw new Error(data.error ?? "Failed to create PayPal order.");
+    }
+
+    return { orderId: data.orderId };
+  }, [chargeAmount, chargeDescription, selectedCustomer]);
+
+  const handleManualChargeApprove = useCallback(
+    async ({ orderId }: { orderId: string }): Promise<void> => {
+      if (!selectedCustomer) return;
+      setPaymentError(null);
+      setChargeSuccessMessage(null);
+      setIsProcessingCharge(true);
+
+      const parsedAmount = parseFloat(chargeAmount);
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        setPaymentError("A valid positive amount is required.");
+        setIsProcessingCharge(false);
+        return;
+      }
+
+      const response = await fetch("/api/paypal/capture-manual-charge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paypalOrderId: orderId,
+          customerId: selectedCustomer.id,
+          amount: parsedAmount,
+          description:
+            chargeDescription || `Manual charge for ${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
+          notes: chargeNotes || null,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({ success: false, error: "Failed to capture payment." }));
+      if (!result.success) {
+        if (response.status === 402) {
+          setPaymentError(result.error ?? "Your card was declined and no payment was taken.");
+        } else {
+          setPaymentError(result.error ?? "Failed to process payment.");
+        }
+        setIsProcessingCharge(false);
+        return;
+      }
+
+      setChargeSuccessMessage("Charge recorded successfully.");
+      setIsProcessingCharge(false);
+    },
+    [chargeAmount, chargeDescription, chargeNotes, selectedCustomer]
+  );
+
+  const handleChargeError = useCallback((message: string): void => {
+    setPaymentError(message);
+  }, []);
+
+  // ── Verified toggle handler ───────────────────────────────────────────────
   /**
    * Flips the confirmed status on a student's roster_record.
    * Optimistically updates the UI; reverts if the API call fails.
@@ -1379,12 +1501,12 @@ export default function SessionDetailClient({
 
       {showAddStudentModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 max-w-3xl w-full space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl p-6 max-w-6xl w-full space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-base font-bold text-gray-900">Add Student to Class</h2>
                 <p className="text-sm text-gray-500">
-                  Search customers by name, email, or phone and add them to this session manually.
+                  Search customers by name, email, or phone, then charge a card or add the student separately.
                 </p>
               </div>
               <button
@@ -1396,86 +1518,201 @@ export default function SessionDetailClient({
               </button>
             </div>
 
-            <div className="space-y-3">
-              <label className="block text-xs font-medium text-gray-600">Search Customers</label>
-              <input
-                type="search"
-                value={customerSearchQuery}
-                onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                placeholder="Search by name, email, or phone"
-                className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-            </div>
+            <div className="grid gap-6 lg:grid-cols-[1.8fr_1fr]">
+              <div className="space-y-3">
+                <div className="space-y-3">
+                  <label className="block text-xs font-medium text-gray-600">Search Customers</label>
+                  <input
+                    type="search"
+                    value={customerSearchQuery}
+                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                    placeholder="Search by name, email, or phone"
+                    className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
 
-            {customerSearchError && (
-              <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-                {customerSearchError}
-              </div>
-            )}
+                {customerSearchError && (
+                  <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                    {customerSearchError}
+                  </div>
+                )}
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>{customerSearchResults.length} customer{customerSearchResults.length === 1 ? "" : "s"} found</span>
-                <span>{isLoadingCustomerSearch ? "Loading…" : "Showing up to 100 results"}</span>
-              </div>
-              <div className="overflow-x-auto border border-gray-200 rounded-md">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                    <tr>
-                      <th className="px-4 py-3">Action</th>
-                      <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">Email</th>
-                      <th className="px-4 py-3">Phone</th>
-                      <th className="px-4 py-3">Bookings</th>
-                      <th className="px-4 py-3">Certs</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {customerSearchResults.length === 0 ? (
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>{customerSearchResults.length} customer{customerSearchResults.length === 1 ? "" : "s"} found</span>
+                  <span>{isLoadingCustomerSearch ? "Loading…" : "Showing up to 100 results"}</span>
+                </div>
+
+                <div className="overflow-x-auto border border-gray-200 rounded-md">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
                       <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
-                          {isLoadingCustomerSearch ? "Searching customers…" : "No customers match that search."}
-                        </td>
+                        <th className="px-4 py-3">Action</th>
+                        <th className="px-4 py-3">Name</th>
+                        <th className="px-4 py-3">Email</th>
+                        <th className="px-4 py-3">Phone</th>
+                        <th className="px-4 py-3">Bookings</th>
+                        <th className="px-4 py-3">Certs</th>
                       </tr>
-                    ) : (
-                      customerSearchResults.map((customer) => (
-                        <tr key={customer.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3">
-                            <button
-                              type="button"
-                              onClick={() => void handleAddStudent(customer.id)}
-                              disabled={isAddingStudent}
-                              className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
-                            >
-                              {isAddingStudent ? "Adding…" : "Add"}
-                            </button>
-                          </td>
-                          <td className="px-4 py-3 text-gray-800">
-                            {customer.first_name} {customer.last_name}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">
-                            {customer.email ?? "—"}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">
-                            {customer.phone ?? "—"}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">
-                            {customer.totalBookingsCount}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">
-                            {customer.activeCertsCount}
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {customerSearchResults.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
+                            {isLoadingCustomerSearch ? "Searching customers…" : "No customers match that search."}
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        customerSearchResults.map((customer) => (
+                          <tr
+                            key={customer.id}
+                            className={`hover:bg-gray-50 ${selectedCustomer?.id === customer.id ? "bg-gray-100" : ""}`}
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex flex-col gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void handleAddStudent(customer.id)}
+                                  disabled={isAddingStudent}
+                                  className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                                >
+                                  {isAddingStudent ? "Adding…" : "Add"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedCustomer(customer)}
+                                  className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs rounded-md hover:bg-gray-50 transition-colors"
+                                >
+                                  Select
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-gray-800">
+                              {customer.first_name} {customer.last_name}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">
+                              {customer.email ?? "—"}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">
+                              {customer.phone ?? "—"}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">
+                              {customer.totalBookingsCount}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">
+                              {customer.activeCertsCount}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {addStudentError && (
+                  <p className="text-sm text-red-700">{addStudentError}</p>
+                )}
+              </div>
+
+              <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-gray-900">Manual charge register</h3>
+                  <p className="text-sm text-gray-500">
+                    Enter the amount, billing details, and charge the card independently from adding the student.
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
+                  <p className="font-medium text-gray-900">Selected customer</p>
+                  {selectedCustomer ? (
+                    <div className="mt-2 space-y-1 text-sm text-gray-600">
+                      <p>
+                        {selectedCustomer.first_name} {selectedCustomer.last_name}
+                      </p>
+                      <p>{selectedCustomer.email ?? "No email"}</p>
+                      <p>{selectedCustomer.phone ?? "No phone"}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-gray-500">Select a customer from the list to charge their card.</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                  <div className="flex rounded-md border border-gray-300 bg-white shadow-sm">
+                    <span className="inline-flex items-center px-3 text-gray-500 text-sm">$</span>
+                    <input
+                      type="number"
+                      value={chargeAmount}
+                      onChange={(e) => setChargeAmount(e.target.value)}
+                      placeholder="100.00"
+                      step="0.01"
+                      min="0"
+                      className="flex-1 border-0 text-sm text-gray-900 focus:ring-0 focus:outline-none px-3 py-2"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <input
+                    type="text"
+                    value={chargeDescription}
+                    onChange={(e) => setChargeDescription(e.target.value)}
+                    placeholder="Manual register charge"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                  <textarea
+                    value={chargeNotes}
+                    onChange={(e) => setChargeNotes(e.target.value)}
+                    rows={3}
+                    placeholder="Internal note for this manual charge"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+
+                <p className="text-xs text-gray-500">
+                  Booking and payment are independent here. You can charge a card without adding the student, or add the student even if the charge declines.
+                </p>
+
+                <div className="space-y-3">
+                  {paypalClientTokenError ? (
+                    <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                      Card payment could not be initialized right now. You can still add the student without charging their card.
+                    </div>
+                  ) : !paypalClientToken || isLoadingPayPalClientToken ? (
+                    <div className="rounded-md bg-white border border-gray-200 p-4 text-sm text-gray-500">
+                      Loading card fields…
+                    </div>
+                  ) : (
+                    <PayPalProvider
+                      clientToken={paypalClientToken}
+                      environment={paypalEnvironment}
+                      components={["card-fields", "paypal-payments"]}
+                      pageType="checkout"
+                    >
+                      <CardPaymentSection
+                        onCreateOrder={handleCreateManualChargeOrder}
+                        onApprove={handleManualChargeApprove}
+                        onError={handleChargeError}
+                        amount={Number(chargeAmount) || 0}
+                        disabled={!selectedCustomer || isProcessingCharge}
+                      />
+                    </PayPalProvider>
+                  )}
+
+                  {paymentError && (
+                    <p className="text-sm text-red-700">{paymentError}</p>
+                  )}
+                  {chargeSuccessMessage && (
+                    <p className="text-sm text-green-700">{chargeSuccessMessage}</p>
+                  )}
+                </div>
               </div>
             </div>
-
-            {addStudentError && (
-              <p className="text-sm text-red-700">{addStudentError}</p>
-            )}
           </div>
         </div>
       )}
@@ -2319,6 +2556,14 @@ export default function SessionDetailClient({
                       setCustomerSearchResults([]);
                       setCustomerSearchError(null);
                       setAddStudentError(null);
+                      setSelectedCustomer(null);
+                      setChargeAmount("");
+                      setChargeDescription("");
+                      setChargeNotes("");
+                      setPaymentError(null);
+                      setChargeSuccessMessage(null);
+                      setPaypalClientToken(undefined);
+                      setPaypalClientTokenError(false);
                     }}
                     className="text-sm font-medium text-red-600 hover:text-red-700"
                   >
