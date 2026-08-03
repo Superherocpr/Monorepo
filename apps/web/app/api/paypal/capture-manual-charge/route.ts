@@ -124,6 +124,31 @@ export async function POST(request: Request) {
   const paypalTransactionId = outcome.captureId;
   const fees = outcome.fees;
 
+  // The recorded amount must be what PayPal actually captured, never the
+  // client-supplied figure. Without this check a manager could create an order
+  // for $1, capture it, and pass amount=100 — recording $100 phantom revenue
+  // and crediting the instructor a payout on money that never arrived
+  // (THREAT-055). Reject on mismatch rather than silently substituting, so a
+  // buggy client is surfaced instead of papered over.
+  if (
+    outcome.capturedAmount !== null &&
+    Math.abs(outcome.capturedAmount - parsedAmount) > 0.01
+  ) {
+    console.error("[capture-manual-charge] Captured amount mismatch:", {
+      paypalOrderId,
+      capturedAmount: outcome.capturedAmount,
+      claimedAmount: parsedAmount,
+    });
+    return Response.json(
+      {
+        success: false,
+        error: `Amount mismatch: PayPal captured $${outcome.capturedAmount.toFixed(2)} but $${parsedAmount.toFixed(2)} was submitted. The charge was NOT recorded — verify in PayPal before retrying.`,
+      },
+      { status: 409 }
+    );
+  }
+  const recordedAmount = outcome.capturedAmount ?? parsedAmount;
+
   // ── Best-effort: link to an existing active booking for this customer + ──────
   // session, if the admin already used "Add Student" separately. Not required —
   // the earning is recorded against the session's instructor either way.
@@ -142,7 +167,7 @@ export async function POST(request: Request) {
     .insert({
       customer_id: customerId,
       booking_id: linkedBookingId,
-      amount: parsedAmount,
+      amount: recordedAmount,
       status: "completed",
       payment_type: "online",
       paypal_transaction_id: paypalTransactionId,
@@ -167,14 +192,14 @@ export async function POST(request: Request) {
     instructorId,
     bookingId: linkedBookingId,
     paymentId: (paymentRow as { id?: string } | null)?.id ?? null,
-    grossAmount: parsedAmount,
+    grossAmount: recordedAmount,
     note: routingNote,
   }).catch((err: unknown) => {
     console.error("[capture-manual-charge] CRITICAL: instructor earning insert failed", {
       sessionId,
       instructorId,
       paypalTransactionId,
-      amount: parsedAmount,
+      amount: recordedAmount,
       error: err,
     });
   });

@@ -9,7 +9,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createHash } from "crypto";
+import { randomUUID } from "crypto";
 import { getMerchPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import type { CartItem } from "@/lib/cart-store";
 
@@ -79,24 +79,18 @@ export async function POST(request: Request) {
     ],
   };
 
-  // Deterministic idempotency key derived from cart contents — same cart +
-  // same totals collapses retries into a single PayPal order. Using Date.now()
-  // here would create a new order per retry, defeating PayPal-Request-Id.
-  const cartFingerprint = items
-    .map((i) => `${i.variantId}:${i.quantity}:${i.price.toFixed(2)}`)
-    .sort()
-    .join("|");
-  const idempotencyKey = createHash("sha256")
-    .update(`${cartFingerprint}|${totalNum.toFixed(2)}`)
-    .digest("hex")
-    .slice(0, 32);
-
+  // Unique per attempt — NEVER derive this from cart contents. A deterministic
+  // key made a retry after a failed/declined capture reuse the original PayPal
+  // order, which PayPal marks COMPLETED after ANY capture attempt; the retry
+  // then dies with the SDK's unrecoverable ERR_DEV_RECEIVED_CLIENT_ERROR_RESPONSE.
+  // Same fix as create-booking-order / create-manual-charge-order (THREAT-054
+  // follow-on). Abandoned CREATED orders expire harmlessly.
   const response = await fetch(`${getPayPalApiBase()}/v2/checkout/orders`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      "PayPal-Request-Id": `merch-${idempotencyKey}`,
+      "PayPal-Request-Id": `merch-${randomUUID()}`,
     },
     body: JSON.stringify(orderPayload),
   });
