@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createHash } from "crypto";
+import { randomUUID } from "crypto";
 import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import { requireApiRole } from "@/lib/auth/effective-role";
 
@@ -55,18 +55,20 @@ export async function POST(request: Request) {
     ],
   };
 
-  const idempotencyKey = createHash("sha256")
-    .update(`${sessionId}:${amount.toFixed(2)}:${description}`)
-    .digest("hex")
-    .slice(0, 32);
-
+  // Unique per attempt — NEVER derive this from session/amount/description.
+  // A deterministic key made every retry (declined card → try another card)
+  // and every same-priced charge to a second customer return the SAME PayPal
+  // order; once an order has any capture attempt (even DECLINED) PayPal marks
+  // it COMPLETED, and card submits against it fail with the SDK's unrecoverable
+  // ERR_DEV_RECEIVED_CLIENT_ERROR_RESPONSE. Abandoned CREATED orders expire
+  // harmlessly, so per-attempt uniqueness has no downside.
   const accessToken = await getPayPalAccessToken();
   const response = await fetch(`${getPayPalApiBase()}/v2/checkout/orders`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      "PayPal-Request-Id": `manual-charge-${idempotencyKey}`,
+      "PayPal-Request-Id": `manual-charge-${randomUUID()}`,
     },
     body: JSON.stringify(orderPayload),
   });

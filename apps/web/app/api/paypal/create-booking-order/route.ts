@@ -20,7 +20,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createHash } from "crypto";
+import { randomUUID } from "crypto";
 import {
   getPayPalAccessToken,
   getPayPalApiBase,
@@ -123,19 +123,20 @@ export async function POST(request: Request) {
   };
 
   // ── Build request headers ──────────────────────────────────────────────
-  // Deterministic idempotency key — same session + final amount + addon
-  // selection collapses retries into a single PayPal order. Random per-request
-  // keys (e.g. Date.now()) defeat the purpose of PayPal-Request-Id.
-  const sortedAddonIds = Array.isArray(addonIds) ? [...(addonIds as string[])].sort().join(",") : "";
-  const idempotencyKey = createHash("sha256")
-    .update(`${sessionId}:${finalAmount.toFixed(2)}:${sortedAddonIds}:business`)
-    .digest("hex")
-    .slice(0, 32);
-
+  // The PayPal-Request-Id MUST be unique per checkout attempt. A previous
+  // version derived it deterministically from session + amount, intending to
+  // collapse retries into one PayPal order — but PayPal marks an order
+  // COMPLETED after ANY capture attempt, including a DECLINED one, and then
+  // returns that same consumed order for every retry within the request-id
+  // retention window. Submitting card data against a consumed order fails
+  // with a 4xx that the JS SDK surfaces as the opaque, unrecoverable
+  // ERR_DEV_RECEIVED_CLIENT_ERROR_RESPONSE — bricking "card declined, try
+  // another card" retries. Abandoned CREATED orders are harmless and expire
+  // on their own; a stale reused order is not (THREAT-054 follow-on).
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${accessToken}`,
-    "PayPal-Request-Id": `bk-${idempotencyKey}`,
+    "PayPal-Request-Id": `bk-${randomUUID()}`,
   };
 
   const response = await fetch(`${getPayPalApiBase()}/v2/checkout/orders`, {

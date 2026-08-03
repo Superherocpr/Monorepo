@@ -57,7 +57,16 @@ interface CardPaymentFormProps {
   amount: number;
   disabled: boolean;
   validity: CardFieldsValidity;
+  /**
+   * Shown when card payment is genuinely unusable (SDK init/eligibility
+   * failure). Defaults to pointing the buyer at the PayPal button, which only
+   * exists on the public booking page — the admin register must override this.
+   */
+  unavailableMessage?: string;
 }
+
+const DEFAULT_UNAVAILABLE_MESSAGE =
+  "Card payment is temporarily unavailable. Please use PayPal below.";
 
 function CardPaymentForm({
   onCreateOrder,
@@ -66,6 +75,7 @@ function CardPaymentForm({
   amount,
   disabled,
   validity,
+  unavailableMessage = DEFAULT_UNAVAILABLE_MESSAGE,
 }: CardPaymentFormProps): ReactElement {
   const [nameOnCard, setNameOnCard] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -82,18 +92,18 @@ function CardPaymentForm({
 
   useEffect(() => {
     if (!error) return;
-    const message =
-      isRecoverableCardError(error)
-        ? error.message || "Please check your card details and try again."
-        : "Card payment is temporarily unavailable. Please use PayPal below.";
+    const recoverable = isRecoverableCardError(error);
+    const message = recoverable
+      ? error.message || "Please check your card details and try again."
+      : unavailableMessage;
 
     setCardError(message);
     onErrorRef.current(message);
 
-    if (!isRecoverableCardError(error)) {
+    if (!recoverable) {
       setIsCardUnavailable(true);
     }
-  }, [error]);
+  }, [error, unavailableMessage]);
 
   useEffect(() => {
     if (!submitResponse) return;
@@ -204,7 +214,7 @@ function CardPaymentForm({
         role="alert"
         className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
       >
-        {cardError ?? "Card payment is temporarily unavailable. Please use PayPal below."}
+        {cardError ?? unavailableMessage}
       </p>
     );
   }

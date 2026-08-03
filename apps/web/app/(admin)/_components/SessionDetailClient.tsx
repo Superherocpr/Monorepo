@@ -1702,6 +1702,7 @@ export default function SessionDetailClient({
                         onError={handleChargeError}
                         amount={Number(chargeAmount) || 0}
                         disabled={!selectedCustomer || isProcessingCharge}
+                        unavailableMessage="Card payment is temporarily unavailable. Close this dialog and try again, or log the payment manually."
                       />
                     </PayPalProvider>
                   )}
