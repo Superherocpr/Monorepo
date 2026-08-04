@@ -1,0 +1,6 @@
+﻿Last Name,First Name,Email Address,Phone,Address 1,Address 2,City,State,Zip,Score,Status,License,Price,Codes
+Jones,Bob,bob@smith.com,411-111-1111,123 Main,Suite 22,Anytown,CA,22222,100,Complete,A454545,0,REFER
+Smith,Jim,jim@smith.com,,,,,,,,Incomplete,,,REPEAT
+Green,Joseph,joseph@green.com,222-222-2222,,,,,,,No Show,,,
+Morgan,Thomas,tom@enrollware.com,,,,,,,,Cancelled,,,
+Moore,Tim,tim@moore.com,333-333-3333,,,,,,,Pending,,,

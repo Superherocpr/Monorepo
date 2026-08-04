@@ -19,7 +19,12 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { getMerchPayPalAccessToken, getPayPalApiBase, evaluateCaptureOutcome } from "@/lib/paypal";
+import {
+  getMerchPayPalAccessToken,
+  getPayPalApiBase,
+  evaluateCaptureOutcome,
+  classifyCaptureRequestError,
+} from "@/lib/paypal";
 import type { CartItem } from "@/lib/cart-store";
 
 /** Flat shipping rate — mirrors NEXT_PUBLIC_SHIPPING_RATE used client-side. */
@@ -234,6 +239,23 @@ export async function POST(request: Request) {
     if (!captureResponse.ok) {
       const err = await captureResponse.text().catch(() => "");
       console.error("[orders/confirm] PayPal capture failed:", err);
+
+      // See classifyCaptureRequestError in lib/paypal.ts — PayPal rejects a
+      // declined card at the HTTP level too (422 PAYMENT_DENIED), a separate
+      // failure shape from the DECLINED-in-body case evaluateCaptureOutcome
+      // handles below.
+      const { declined } = classifyCaptureRequestError(err);
+      if (declined) {
+        return NextResponse.json(
+          {
+            success: false,
+            declined: true,
+            error: "Your card was declined and no payment was taken. Please try a different card.",
+          },
+          { status: 402 }
+        );
+      }
+
       return NextResponse.json(
         { success: false, error: "PayPal capture failed" },
         { status: 502 }

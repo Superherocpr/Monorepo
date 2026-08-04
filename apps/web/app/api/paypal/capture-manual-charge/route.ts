@@ -10,7 +10,12 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { getPayPalAccessToken, getPayPalApiBase, evaluateCaptureOutcome } from "@/lib/paypal";
+import {
+  getPayPalAccessToken,
+  getPayPalApiBase,
+  evaluateCaptureOutcome,
+  classifyCaptureRequestError,
+} from "@/lib/paypal";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -95,6 +100,23 @@ export async function POST(request: Request) {
   if (!captureResponse.ok) {
     const errorText = await captureResponse.text().catch(() => "Unknown capture error");
     console.error("[capture-manual-charge] PayPal capture failed:", errorText);
+
+    // See classifyCaptureRequestError in lib/paypal.ts — PayPal rejects a
+    // declined card at the HTTP level too (422 PAYMENT_DENIED), a separate
+    // failure shape from the DECLINED-in-body case evaluateCaptureOutcome
+    // handles below.
+    const { declined } = classifyCaptureRequestError(errorText);
+    if (declined) {
+      return Response.json(
+        {
+          success: false,
+          declined: true,
+          error: "The card was declined and no payment was taken. Please try another card.",
+        },
+        { status: 402 }
+      );
+    }
+
     return Response.json({ success: false, error: "Payment capture failed." }, { status: 502 });
   }
 

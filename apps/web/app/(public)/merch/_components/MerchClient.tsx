@@ -77,6 +77,10 @@ export default function MerchClient({ products }: MerchClientProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("cart");
+  // Specific reason the last checkout attempt failed — e.g. "card declined" vs
+  // "pricing changed" — so ErrorState can tell the buyer what actually happened
+  // instead of a single generic message regardless of cause.
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [shippingForm, setShippingForm] = useState<ShippingForm>(EMPTY_SHIPPING);
 
   // Persist cart to localStorage whenever it changes
@@ -190,12 +194,23 @@ export default function MerchClient({ products }: MerchClientProps) {
       }),
     });
 
-    const result = await response.json().catch(() => ({ success: false }));
+    const result = (await response.json().catch(() => ({ success: false }))) as {
+      success?: boolean;
+      error?: string;
+    };
     if (result.success) {
       clearCart();
       setCartItems([]);
       setCheckoutState("success");
     } else {
+      // Server already returns a specific, buyer-facing reason for every
+      // failure mode (declined card, pricing changed, item no longer
+      // available, etc.) — show it instead of a single generic message.
+      setCheckoutError(
+        typeof result.error === "string" && result.error
+          ? result.error
+          : "Something went wrong processing your order."
+      );
       setCheckoutState("error");
     }
   }
@@ -285,7 +300,13 @@ export default function MerchClient({ products }: MerchClientProps) {
               )}
 
               {checkoutState === "error" && (
-                <ErrorState onRetry={() => setCheckoutState("shipping")} />
+                <ErrorState
+                  message={checkoutError}
+                  onRetry={() => {
+                    setCheckoutError(null);
+                    setCheckoutState("shipping");
+                  }}
+                />
               )}
 
               {(checkoutState === "cart" || checkoutState === "shipping") && (
@@ -352,7 +373,13 @@ export default function MerchClient({ products }: MerchClientProps) {
                           <PayPalOneTimePaymentButton
                             createOrder={handlePayPalCreate}
                             onApprove={handlePayPalApprove}
-                            onError={() => setCheckoutState("error")}
+                            onError={() => {
+                              // SDK-level failure (e.g. PayPal itself errored)
+                              // rather than a server response — no specific
+                              // reason is available from PayPal here.
+                              setCheckoutError("PayPal encountered an error. Please try again.");
+                              setCheckoutState("error");
+                            }}
                             presentationMode="auto"
                           />
                         </div>
@@ -795,21 +822,17 @@ function SuccessState({ email, onClose }: SuccessStateProps) {
 }
 
 interface ErrorStateProps {
+  /** Specific failure reason from the server, if one was returned. */
+  message: string | null;
   onRetry: () => void;
 }
 
 /** Rendered in the cart drawer when the order confirm API call fails. */
-function ErrorState({ onRetry }: ErrorStateProps) {
+function ErrorState({ message, onRetry }: ErrorStateProps) {
   return (
     <div className="flex flex-col items-center text-center gap-4 p-8">
       <p className="text-gray-700 text-sm leading-relaxed">
-        Something went wrong. Please try again or contact us at{" "}
-        <a
-          href="mailto:contact@superherocpr.com"
-          className="text-red-600 hover:underline"
-        >
-          contact@superherocpr.com
-        </a>
+        {message ?? "Something went wrong processing your order."}
       </p>
       <button
         onClick={onRetry}
@@ -817,6 +840,15 @@ function ErrorState({ onRetry }: ErrorStateProps) {
       >
         Try Again
       </button>
+      <p className="text-xs text-gray-400">
+        Need help?{" "}
+        <a
+          href="mailto:contact@superherocpr.com"
+          className="text-red-600 hover:underline"
+        >
+          contact@superherocpr.com
+        </a>
+      </p>
     </div>
   );
 }

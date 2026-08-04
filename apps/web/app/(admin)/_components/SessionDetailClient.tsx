@@ -23,6 +23,8 @@ import {
   updateSession,
   setSessionAssistant,
   setSessionAddons,
+  removeBookingFromSession,
+  removeRosterRecordFromSession,
   type SessionEditFields,
 } from "@/app/(admin)/admin/sessions/[id]/actions";
 import { PayPalProvider } from "@paypal/react-paypal-js/sdk-v6";
@@ -503,6 +505,11 @@ export default function SessionDetailClient({
   const [isSavingAddons, setIsSavingAddons] = useState(false);
   const [addonsError, setAddonsError] = useState<string | null>(null);
 
+  // ── Remove student state ──────────────────────────────────────────────────
+  // removingStudentIds: set of booking IDs or roster_record IDs currently being removed.
+  const [removingStudentIds, setRemovingStudentIds] = useState<Set<string>>(new Set());
+  const [removeStudentError, setRemoveStudentError] = useState<string | null>(null);
+
   /** Adds or removes an addon ID from the selected set. */
   function toggleAddon(id: string) {
     setSelectedAddonIds((prev) =>
@@ -521,6 +528,33 @@ export default function SessionDetailClient({
     setIsSavingAddons(false);
     if (result) {
       setAddonsError(result);
+    } else {
+      router.refresh();
+    }
+  }
+
+  /**
+   * Removes a student from the session.
+   * For booking rows: cancels the booking (soft delete).
+   * For roster record rows: deletes the roster_record.
+   * Side effect: triggers page refresh on success.
+   * @param type - 'booking' or 'roster' — determines which action is called.
+   * @param id - The booking ID or roster_record ID to remove.
+   */
+  async function handleRemoveStudent(type: "booking" | "roster", id: string): Promise<void> {
+    setRemovingStudentIds((prev) => new Set(prev).add(id));
+    setRemoveStudentError(null);
+    const result =
+      type === "booking"
+        ? await removeBookingFromSession(id, session.id)
+        : await removeRosterRecordFromSession(id, session.id);
+    setRemovingStudentIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    if (result) {
+      setRemoveStudentError(result);
     } else {
       router.refresh();
     }
@@ -2625,6 +2659,9 @@ export default function SessionDetailClient({
                       <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Grade
                       </th>
+                      {isManager && (
+                        <th className="px-4 py-2" aria-label="Actions" />
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -2710,6 +2747,18 @@ export default function SessionDetailClient({
                               b.grade) ??
                               "-"}
                           </td>
+                          {isManager && (
+                            <td className="px-4 py-2.5 text-right">
+                              <button
+                                type="button"
+                                disabled={removingStudentIds.has(b.id)}
+                                onClick={() => void handleRemoveStudent("booking", b.id)}
+                                className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {removingStudentIds.has(b.id) ? "Removing…" : "Remove"}
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     {/* Rows from roster records — deduplicated against booking emails */}
@@ -2765,10 +2814,27 @@ export default function SessionDetailClient({
                         <td className="px-4 py-2.5 text-gray-600">
                           {r.grade ?? "-"}
                         </td>
+                        {isManager && (
+                          <td className="px-4 py-2.5 text-right">
+                            <button
+                              type="button"
+                              disabled={removingStudentIds.has(r.id)}
+                              onClick={() => void handleRemoveStudent("roster", r.id)}
+                              className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              {removingStudentIds.has(r.id) ? "Removing…" : "Remove"}
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {removeStudentError && (
+              <div className="px-6 py-3 bg-red-50 border-t border-red-200 text-sm text-red-700">
+                {removeStudentError}
               </div>
             )}
           </div>

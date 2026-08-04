@@ -639,8 +639,9 @@ export function passwordResetEmail({
 // ── 10. Certification expiry reminder ─────────────────────────────────────────
 
 /**
- * Sent to a customer whose CPR certification is expiring within 90 days.
- * Triggered by: POST /api/certifications/send-reminders (batch)
+ * Sent to a customer whose CPR certification has reached one of the
+ * 90/60/30/7-day-before-expiry reminder milestones.
+ * Triggered by: POST /api/certifications/send-reminders (cron + manual batch)
  * @param firstName     - Customer's first name.
  * @param certName      - The name of the certification type (e.g. "BLS for Healthcare Providers").
  * @param daysRemaining - Number of days until the certification expires.
@@ -2524,6 +2525,98 @@ export function payoutDeniedAdminEmail({
   };
 }
 
+// ── Payout batches stuck — super admin digest ─────────────────────────────────
+
+/** One payout batch summarized inside the stuck-batch digest email. */
+export interface PayoutStuckDigestBatch {
+  senderBatchId: string;
+  status: string;
+  totalAmount: number;
+  itemCount: number;
+  createdAt: string;
+  denialReason: string | null;
+}
+
+/**
+ * Sent to all super_admins for every payout batch still sitting in
+ * needs_review, denied, or failed that hasn't been actioned. Unlike
+ * payoutDeniedAdminEmail (fired once, at the moment of denial), this is a
+ * recurring sweep — reconciliation only alerts on the transition into denied,
+ * so a batch nobody actions after that first email would otherwise go silent.
+ * Triggered by: POST /api/payouts/alert-stuck (daily cron, migration 0050)
+ * via lib/payout-notify.ts.
+ * @param batches - Unresolved batches to list, newest first.
+ * @param baseUrl - App base URL for the admin link.
+ */
+export function payoutStuckDigestAdminEmail({
+  batches,
+  baseUrl,
+}: {
+  batches: PayoutStuckDigestBatch[];
+  baseUrl: string;
+}): EmailContent {
+  const rows = batches
+    .map((batch) => {
+      const amount = batch.totalAmount.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+      });
+      const ageDays = Math.floor(
+        (Date.now() - new Date(batch.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const safeSender = escapeHtml(batch.senderBatchId);
+      const safeStatus = escapeHtml(batch.status);
+      const safeReason = batch.denialReason ? escapeHtml(batch.denialReason) : "—";
+      return `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${safeSender}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${safeStatus}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${amount}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${batch.itemCount}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${ageDays}d</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${safeReason}</td>
+        </tr>`;
+    })
+    .join("");
+
+  return {
+    subject: `Action needed: ${batches.length} payout batch${batches.length === 1 ? "" : "es"} need review`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Payout Batches Need Review</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">
+        These batches are sitting in needs_review, denied, or failed and haven't been actioned yet.
+        This is a recurring reminder — it will keep sending until each batch is released, resent, or resolved.
+      </p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        <thead>
+          <tr style="background:#fef2f2;">
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Batch</th>
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Status</th>
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Amount</th>
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Instructors</th>
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Age</th>
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Reason</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <p style="margin:24px 0;">
+        <a href="${baseUrl}/admin/payouts"
+           style="display:inline-block;background:#dc2626;color:white;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:700;">
+          Review Payouts →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        Release a batch that never reached PayPal, mark one denied, or resend it as a new batch from the Payouts page.
+      </p>
+    `),
+  };
+}
+
 // ── Instructor payout sent ────────────────────────────────────────────────────
 
 /**
@@ -2584,6 +2677,62 @@ export function instructorPayoutSentEmail({
         If you do not see this payout in your PayPal account, or the address above is wrong,
         contact SuperHeroCPR and update your payout email in your profile.
       </p>
+    `),
+  };
+}
+
+// ── 30. Booking cancelled by admin ────────────────────────────────────────────
+
+/**
+ * Sent to a student when an admin removes them from a class session.
+ * Triggered by: removeBookingFromSession server action (admin session detail page).
+ * @param firstName - Student's first name.
+ * @param className - Name of the class type (e.g. "BLS Provider").
+ * @param startsAt  - ISO datetime string of the session start.
+ */
+export function bookingCancelledEmail({
+  firstName,
+  className,
+  startsAt,
+}: {
+  firstName: string;
+  className: string;
+  startsAt: string;
+}): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
+  const safeClassName = escapeHtml(className.trim());
+
+  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  return {
+    subject: `Your booking for ${safeClassName} has been cancelled`,
+    html: wrapEmail(`
+      <h1>Your Booking Has Been Cancelled</h1>
+      <p>Hi ${safeFirstName},</p>
+      <p>Your booking for the following class has been cancelled by a SuperHeroCPR administrator:</p>
+      <table cellpadding="6" style="margin:12px 0;">
+        <tr><td><strong>Class:</strong></td><td>${safeClassName}</td></tr>
+        <tr><td><strong>Date:</strong></td><td>${formattedDate}</td></tr>
+        <tr><td><strong>Time:</strong></td><td>${formattedTime}</td></tr>
+      </table>
+      <p>If you believe this was a mistake or have questions, please contact us:</p>
+      <ul>
+        <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
+        <li>Email: <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a></li>
+      </ul>
+      <p>We hope to see you in a future class!</p>
+      <p>— The SuperHeroCPR Team</p>
     `),
   };
 }

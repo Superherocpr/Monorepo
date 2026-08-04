@@ -86,7 +86,6 @@ export async function POST(
       typeof notes === "string" && notes.trim().length > 0
         ? notes.trim()
         : null,
-    reminder_sent: false,
   });
 
   if (error) {

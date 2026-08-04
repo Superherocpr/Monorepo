@@ -1,10 +1,13 @@
 /**
  * POST /api/certifications/send-reminders
- * Called by: CertificationsClient — "Send Reminders to All" button in expiring-soon banner
- * Auth: super_admin only
- * Sends expiry reminder emails via Resend to all customers whose cert expires
- * within 90 days and who have not yet been reminded (reminder_sent = false).
- * Already-reminded customers are silently skipped.
+ * Called by:
+ *   - pg_cron job (migration 0051) — daily at 13:00 UTC (CRON_SECRET bearer)
+ *   - CertificationsClient — "Send Reminders to All" button (super_admin session)
+ * Auth: super_admin session OR Authorization: Bearer {CRON_SECRET}
+ * Sends expiry reminder emails via Resend to every customer whose cert has
+ * reached one of the 90/60/30/7-day-before-expiry milestones and hasn't been
+ * emailed for that milestone yet. Stamps last_reminder_sent_days so the same
+ * milestone isn't re-sent on a later run.
  * Blocked when the system_settings key cert_reminders_paused is "true".
  */
 
@@ -13,17 +16,53 @@ import { requireApiRole } from "@/lib/auth/effective-role";
 import { Resend } from "resend";
 import { certReminderEmail } from "@/lib/emails";
 
+/** Reminder milestones, in days-before-expiry, nearest-to-expiry first. */
+const MILESTONES_ASC = [7, 30, 60, 90] as const;
+
 /**
- * Sends batch cert expiry reminders to eligible customers.
- * Returns: { success: boolean, count: number }
- * @param _request - Incoming POST request (no body required)
+ * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
+ * @param request - Incoming HTTP request.
+ * @returns true when the header is valid, false otherwise.
  */
-export async function POST(_request: Request) {
+function isCronRequest(request: Request): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const auth = request.headers.get("Authorization") ?? "";
+  return auth === `Bearer ${secret}`;
+}
+
+/**
+ * Returns the milestone (90/60/30/7) a cert has currently reached — the
+ * smallest configured milestone still >= daysRemaining — or null if it
+ * hasn't reached the 90-day-out mark yet.
+ * @param daysRemaining - Days until the certification expires.
+ */
+function currentMilestone(daysRemaining: number): (typeof MILESTONES_ASC)[number] | null {
+  for (const milestone of MILESTONES_ASC) {
+    if (daysRemaining <= milestone) return milestone;
+  }
+  return null;
+}
+
+/**
+ * Sends batch cert expiry reminders to every customer due for their next
+ * 90/60/30/7-day milestone email.
+ * Side effects: reads certifications, sends one email per due cert via
+ * Resend, writes last_reminder_sent_days on each cert emailed.
+ * @param request - No body required; cron calls carry a CRON_SECRET bearer
+ *   token instead of a session.
+ */
+export async function POST(request: Request) {
 
   // ── Auth & role check ──────────────────────────────────────────────────────
-  const authResult = await requireApiRole(["super_admin"]);
-  if ("error" in authResult) return authResult.error;
-  const { actor } = authResult;
+  const viaCron = isCronRequest(request);
+  let actorId: string | null = null;
+
+  if (!viaCron) {
+    const authResult = await requireApiRole(["super_admin"]);
+    if ("error" in authResult) return authResult.error;
+    actorId = authResult.actor.user.id;
+  }
 
   // ── Check whether reminders are paused ────────────────────────────────────
   // Always verify at the API layer even though the client button is disabled
@@ -42,20 +81,20 @@ export async function POST(_request: Request) {
     );
   }
 
-  // ── Fetch eligible certs ───────────────────────────────────────────────────
+  // ── Fetch certs within the widest milestone window ─────────────────────────
   const now = new Date();
-  const ninetyDaysFromNow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+  const widestMilestone = MILESTONES_ASC[MILESTONES_ASC.length - 1];
+  const windowEnd = new Date(now.getTime() + widestMilestone * 24 * 60 * 60 * 1000);
 
   const { data: certs, error: certsError } = await adminSupabase
     .from("certifications")
     .select(`
-      id, expires_at,
+      id, expires_at, last_reminder_sent_days,
       profiles!customer_id ( first_name, email ),
       cert_types ( name )
     `)
-    .eq("reminder_sent", false)
     .gte("expires_at", now.toISOString().split("T")[0])
-    .lte("expires_at", ninetyDaysFromNow.toISOString().split("T")[0]);
+    .lte("expires_at", windowEnd.toISOString().split("T")[0]);
 
   if (certsError) {
     console.error("[POST /api/certifications/send-reminders] Fetch error", certsError);
@@ -63,7 +102,7 @@ export async function POST(_request: Request) {
   }
 
   if (!certs?.length) {
-    return Response.json({ success: true, count: 0 });
+    return Response.json({ success: true, count: 0, triggeredBy: viaCron ? "cron" : actorId });
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY);
@@ -73,6 +112,13 @@ export async function POST(_request: Request) {
     const daysRemaining = Math.ceil(
       (new Date(cert.expires_at).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
     );
+
+    const milestone = currentMilestone(daysRemaining);
+    if (milestone === null) continue;
+
+    // Already emailed for this milestone or a closer one — skip.
+    const lastSent = cert.last_reminder_sent_days as number | null;
+    if (lastSent !== null && lastSent <= milestone) continue;
 
     // Type narrowing: the joined profiles/cert_types may be arrays or single objects
     // depending on how Supabase returns the join. Guard for both shapes.
@@ -94,10 +140,11 @@ export async function POST(_request: Request) {
         html,
       });
 
-      // Mark the cert as reminded immediately after a successful send
+      // Stamp the milestone reached (not just "reminded") so the next run
+      // can tell whether this cert still owes an email for a closer stage.
       await adminSupabase
         .from("certifications")
-        .update({ reminder_sent: true })
+        .update({ last_reminder_sent_days: milestone })
         .eq("id", cert.id);
 
       sentCount++;
@@ -111,5 +158,5 @@ export async function POST(_request: Request) {
     }
   }
 
-  return Response.json({ success: true, count: sentCount });
+  return Response.json({ success: true, count: sentCount, triggeredBy: viaCron ? "cron" : actorId });
 }

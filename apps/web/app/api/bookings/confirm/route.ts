@@ -22,7 +22,12 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { getPayPalAccessToken, getPayPalApiBase, evaluateCaptureOutcome } from "@/lib/paypal";
+import {
+  getPayPalAccessToken,
+  getPayPalApiBase,
+  evaluateCaptureOutcome,
+  classifyCaptureRequestError,
+} from "@/lib/paypal";
 import { Resend } from "resend";
 import { bookingConfirmationEmail } from "@/lib/emails";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
@@ -174,6 +179,23 @@ export async function POST(request: Request) {
   if (!captureResponse.ok) {
     const errorText = await captureResponse.text().catch(() => "Unknown capture error");
     console.error("[bookings/confirm] PayPal capture failed:", errorText);
+
+    // PayPal rejects a declined card at the HTTP level too (422 PAYMENT_DENIED),
+    // not only as a 2xx capture with status DECLINED (see evaluateCaptureOutcome
+    // below) — confirmed live 2026-08-04. Give the buyer actionable advice
+    // instead of "please refresh and try again", which is wrong for a decline.
+    const { declined } = classifyCaptureRequestError(errorText);
+    if (declined) {
+      return Response.json(
+        {
+          success: false,
+          declined: true,
+          error: "Your card was declined and no payment was taken. Please try a different card.",
+        },
+        { status: 402 }
+      );
+    }
+
     return Response.json({ success: false, error: "Payment capture failed" }, { status: 502 });
   }
 

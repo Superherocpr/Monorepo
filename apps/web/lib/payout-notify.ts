@@ -14,6 +14,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   instructorPayoutSentEmail,
   payoutDeniedAdminEmail,
+  payoutStuckDigestAdminEmail,
+  type PayoutStuckDigestBatch,
 } from "@/lib/emails";
 
 /** Admin Supabase client shape used by notification lookups. */
@@ -100,6 +102,94 @@ export async function notifyPayoutDenied(
     }
   } catch (err) {
     console.error("[payout-notify] Denial alert failed (non-fatal):", err);
+  }
+}
+
+/**
+ * Alerts every active super_admin about payout batches still stuck in
+ * needs_review, denied, or failed.
+ *
+ * Unlike notifyPayoutDenied (fired once, at the moment of denial), this is
+ * meant to be called repeatedly by a daily sweep — reconciliation only alerts
+ * on the transition into denied, so a batch nobody actions after that first
+ * email would otherwise go silent. The caller (POST /api/payouts/alert-stuck)
+ * owns deciding which batches are due for re-alerting and marking them sent.
+ *
+ * Side effects: reads the given batch rows + profiles, sends one digest email.
+ *
+ * @param adminClient - Admin Supabase client.
+ * @param batchIds - Internal payout batch ids to include in the digest.
+ */
+export async function notifyPayoutIssuesDigest(
+  adminClient: AnySupabaseClient,
+  batchIds: string[]
+): Promise<void> {
+  if (batchIds.length === 0) return;
+
+  try {
+    if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+      console.warn("[payout-notify] Resend not configured — skipping stuck-batch digest.");
+      return;
+    }
+
+    const [{ data: batchRows }, { data: admins }] = await Promise.all([
+      adminClient
+        .from("instructor_payout_batches")
+        .select("sender_batch_id, status, total_amount, item_count, created_at, denial_reason")
+        .in("id", batchIds)
+        .order("created_at", { ascending: false }),
+      adminClient
+        .from("profiles")
+        .select("email")
+        .eq("role", "super_admin")
+        .eq("archived", false)
+        .eq("deactivated", false),
+    ]);
+
+    const batches = (batchRows ?? []) as unknown as Array<{
+      sender_batch_id: string;
+      status: string;
+      total_amount: number | string;
+      item_count: number;
+      created_at: string;
+      denial_reason: string | null;
+    }>;
+
+    if (batches.length === 0) return;
+
+    const recipients = ((admins ?? []) as { email: string | null }[])
+      .map((row) => row.email)
+      .filter((email): email is string => Boolean(email));
+
+    if (recipients.length === 0) return;
+
+    const digestBatches: PayoutStuckDigestBatch[] = batches.map((batch) => ({
+      senderBatchId: batch.sender_batch_id,
+      status: batch.status,
+      totalAmount: Number(batch.total_amount) || 0,
+      itemCount: batch.item_count,
+      createdAt: batch.created_at,
+      denialReason: batch.denial_reason,
+    }));
+
+    const email = payoutStuckDigestAdminEmail({
+      batches: digestBatches,
+      baseUrl: getBaseUrl(),
+    });
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const result = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL,
+      to: recipients,
+      subject: email.subject,
+      html: email.html,
+    });
+
+    if (result.error) {
+      console.error("[payout-notify] Stuck-batch digest email failed:", result.error);
+    }
+  } catch (err) {
+    console.error("[payout-notify] Stuck-batch digest failed (non-fatal):", err);
   }
 }
 

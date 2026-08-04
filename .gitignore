@@ -4,10 +4,8 @@ node_modules/
 
 #Files
 TwilioRecovery.rtf
-
-#Folders
-Building/
-.github/
+Building/Keys.md
+Building/superherocpr-app_accessKeys.csv
 
 # Build output
 dist/

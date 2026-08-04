@@ -237,6 +237,58 @@ export function evaluateCaptureOutcome(captureData: unknown): CaptureOutcome {
 }
 
 // ---------------------------------------------------------------------------
+// Capture request-level failures (HTTP non-2xx from the /capture call itself)
+// ---------------------------------------------------------------------------
+
+/**
+ * `details[].issue` values PayPal returns on a 422 UNPROCESSABLE_ENTITY from
+ * `/v2/checkout/orders/{id}/capture` that mean the buyer's card was rejected —
+ * as opposed to a request/integration error on our side (duplicate capture,
+ * intent mismatch, expired order, etc).
+ *
+ * This is a SEPARATE failure shape from {@link evaluateCaptureOutcome}: that
+ * function handles a capture PayPal accepted (HTTP 2xx) but reports as
+ * DECLINED in the body. This handles PayPal refusing the capture request
+ * outright — `captureResponse.ok` is false, so callers never reach
+ * evaluateCaptureOutcome at all. Confirmed live in production logs
+ * (2026-08-04): a declined card returned HTTP 422 with issue PAYMENT_DENIED,
+ * which every capture route was folding into a generic "please refresh and
+ * try again" — actively wrong advice for a declined card.
+ */
+const DECLINED_CAPTURE_ISSUES = new Set([
+  "PAYMENT_DENIED",
+  "INSTRUMENT_DECLINED",
+  "CARD_EXPIRED",
+  "TRANSACTION_REFUSED",
+]);
+
+/** Result of classifying a non-2xx `/capture` response body. */
+export interface CaptureRequestError {
+  /** True when this is a card decline the buyer can act on (try another card). */
+  declined: boolean;
+  /** The first `details[].issue` value PayPal returned, if any. */
+  issue: string | null;
+}
+
+/**
+ * Classifies a non-2xx response body from `/v2/checkout/orders/{id}/capture`
+ * as a card decline (buyer-actionable) or a generic/integration failure.
+ * @param errorText - Raw response body text from the failed capture call.
+ * @returns Classification with the raw PayPal issue code for logging.
+ */
+export function classifyCaptureRequestError(errorText: string): CaptureRequestError {
+  try {
+    const parsed = JSON.parse(errorText) as {
+      details?: Array<{ issue?: string }>;
+    };
+    const issue = parsed.details?.[0]?.issue ?? null;
+    return { declined: issue !== null && DECLINED_CAPTURE_ISSUES.has(issue), issue };
+  } catch {
+    return { declined: false, issue: null };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Webhook signature verification
 // ---------------------------------------------------------------------------
 
