@@ -2587,3 +2587,59 @@ export function instructorPayoutSentEmail({
     `),
   };
 }
+
+// ── 30. Booking cancelled by admin ────────────────────────────────────────────
+
+/**
+ * Sent to a student when an admin removes them from a class session.
+ * Triggered by: removeBookingFromSession server action (admin session detail page).
+ * @param firstName - Student's first name.
+ * @param className - Name of the class type (e.g. "BLS Provider").
+ * @param startsAt  - ISO datetime string of the session start.
+ */
+export function bookingCancelledEmail({
+  firstName,
+  className,
+  startsAt,
+}: {
+  firstName: string;
+  className: string;
+  startsAt: string;
+}): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
+  const safeClassName = escapeHtml(className.trim());
+
+  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  return {
+    subject: `Your booking for ${safeClassName} has been cancelled`,
+    html: wrapEmail(`
+      <h1>Your Booking Has Been Cancelled</h1>
+      <p>Hi ${safeFirstName},</p>
+      <p>Your booking for the following class has been cancelled by a SuperHeroCPR administrator:</p>
+      <table cellpadding="6" style="margin:12px 0;">
+        <tr><td><strong>Class:</strong></td><td>${safeClassName}</td></tr>
+        <tr><td><strong>Date:</strong></td><td>${formattedDate}</td></tr>
+        <tr><td><strong>Time:</strong></td><td>${formattedTime}</td></tr>
+      </table>
+      <p>If you believe this was a mistake or have questions, please contact us:</p>
+      <ul>
+        <li>Phone: <a href="tel:+18139663969">(813) 966-3969</a></li>
+        <li>Email: <a href="mailto:contact@superherocpr.com">contact@superherocpr.com</a></li>
+      </ul>
+      <p>We hope to see you in a future class!</p>
+      <p>— The SuperHeroCPR Team</p>
+    `),
+  };
+}

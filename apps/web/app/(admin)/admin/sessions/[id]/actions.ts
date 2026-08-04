@@ -9,8 +9,10 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor, type AdminActor } from "@/lib/auth/effective-role";
+import { bookingCancelledEmail } from "@/lib/emails";
 import type { UserRole } from "@/types/users";
 
 /**
@@ -248,6 +250,128 @@ export async function setSessionAssistant(
       assistant_name: trimmedName,
     })
     .eq("id", sessionId);
+  if (error) return error.message;
+  revalidatePath(`/admin/sessions/${sessionId}`);
+  return null;
+}
+
+/**
+ * Cancels a single booking by setting cancelled = true.
+ * Verifies the booking belongs to sessionId before mutating to prevent cross-session tampering.
+ * Auth: manager/super_admin only — does not notify the customer.
+ * @param bookingId - UUID of the bookings record to cancel.
+ * @param sessionId - UUID of the owning class_sessions record (ownership check).
+ * @returns An error message string on failure, or null on success.
+ */
+export async function removeBookingFromSession(
+  bookingId: string,
+  sessionId: string
+): Promise<string | null> {
+  const auth = await requireActionRole(["manager", "super_admin"]);
+  if ("error" in auth) return auth.error;
+
+  const admin = await createAdminClient();
+
+  // Fetch booking with customer profile + session class details in one query.
+  // The ownership check (eq session_id) prevents cross-session tampering.
+  const { data: booking } = await admin
+    .from("bookings")
+    .select(`
+      id, session_id, cancelled,
+      profiles!bookings_customer_id_fkey ( first_name, email ),
+      class_sessions!bookings_session_id_fkey (
+        starts_at,
+        class_types ( name )
+      )
+    `)
+    .eq("id", bookingId)
+    .eq("session_id", sessionId)
+    .single();
+
+  if (!booking) return "Booking not found for this session.";
+  if (booking.cancelled) return null; // already cancelled — no-op
+
+  const { error } = await admin
+    .from("bookings")
+    .update({ cancelled: true })
+    .eq("id", bookingId);
+
+  if (error) return error.message;
+  revalidatePath(`/admin/sessions/${sessionId}`);
+
+  // Send cancellation email — best-effort, does not affect the DB result.
+  if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
+    try {
+      const profile = Array.isArray(booking.profiles) ? booking.profiles[0] : booking.profiles;
+      const session = Array.isArray(booking.class_sessions)
+        ? booking.class_sessions[0]
+        : booking.class_sessions;
+      const classType = session
+        ? Array.isArray(session.class_types)
+          ? session.class_types[0]
+          : session.class_types
+        : null;
+
+      const toEmail = profile?.email ?? null;
+      const firstName = profile?.first_name ?? "there";
+      const className = classType?.name ?? "CPR Class";
+      const startsAt = session?.starts_at ?? new Date().toISOString();
+
+      if (toEmail) {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const { subject, html } = bookingCancelledEmail({ firstName, className, startsAt });
+        const { error: emailError } = await resend.emails.send({
+          from: process.env.RESEND_FROM_EMAIL,
+          to: toEmail,
+          subject,
+          html,
+        });
+        if (emailError) {
+          console.error("[removeBookingFromSession] Cancellation email failed:", emailError);
+        }
+      } else {
+        console.warn("[removeBookingFromSession] Cancellation email skipped: no email on profile", { bookingId });
+      }
+    } catch (emailErr) {
+      console.error("[removeBookingFromSession] Cancellation email threw:", emailErr);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Deletes a roster_record row from a session.
+ * Verifies the record belongs to sessionId before deleting to prevent cross-session tampering.
+ * Auth: manager/super_admin only.
+ * @param recordId - UUID of the roster_records row to delete.
+ * @param sessionId - UUID of the owning class_sessions record (ownership check).
+ * @returns An error message string on failure, or null on success.
+ */
+export async function removeRosterRecordFromSession(
+  recordId: string,
+  sessionId: string
+): Promise<string | null> {
+  const auth = await requireActionRole(["manager", "super_admin"]);
+  if ("error" in auth) return auth.error;
+
+  const admin = await createAdminClient();
+
+  // Verify ownership — prevents deleting roster records from another session.
+  const { data: record } = await admin
+    .from("roster_records")
+    .select("id, session_id")
+    .eq("id", recordId)
+    .eq("session_id", sessionId)
+    .single();
+
+  if (!record) return "Roster record not found for this session.";
+
+  const { error } = await admin
+    .from("roster_records")
+    .delete()
+    .eq("id", recordId);
+
   if (error) return error.message;
   revalidatePath(`/admin/sessions/${sessionId}`);
   return null;
