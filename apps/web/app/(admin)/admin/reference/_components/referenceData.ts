@@ -278,6 +278,7 @@ export const GROUPS: GroupDef[] = [
           "Mark denied — records that PayPal returned the money, for a whole batch or one instructor; refuses if PayPal says the payout succeeded, and requires typing the batch id",
           "Resend — sends a denied or failed batch again as a new linked batch",
           "Release a batch that never reached PayPal — including one stuck in \"needs review\" after an uncertain result — once you have confirmed no payout was created",
+          "Daily email digest to all super admins listing any batch still stuck in needs review, denied, or failed — repeats every 18+ hours until the batch is released, resent, or resolved",
           "The same upcoming-payouts and history panels also appear on the Settings → Payouts tab",
         ],
       },

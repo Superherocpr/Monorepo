@@ -2524,6 +2524,98 @@ export function payoutDeniedAdminEmail({
   };
 }
 
+// ── Payout batches stuck — super admin digest ─────────────────────────────────
+
+/** One payout batch summarized inside the stuck-batch digest email. */
+export interface PayoutStuckDigestBatch {
+  senderBatchId: string;
+  status: string;
+  totalAmount: number;
+  itemCount: number;
+  createdAt: string;
+  denialReason: string | null;
+}
+
+/**
+ * Sent to all super_admins for every payout batch still sitting in
+ * needs_review, denied, or failed that hasn't been actioned. Unlike
+ * payoutDeniedAdminEmail (fired once, at the moment of denial), this is a
+ * recurring sweep — reconciliation only alerts on the transition into denied,
+ * so a batch nobody actions after that first email would otherwise go silent.
+ * Triggered by: POST /api/payouts/alert-stuck (daily cron, migration 0050)
+ * via lib/payout-notify.ts.
+ * @param batches - Unresolved batches to list, newest first.
+ * @param baseUrl - App base URL for the admin link.
+ */
+export function payoutStuckDigestAdminEmail({
+  batches,
+  baseUrl,
+}: {
+  batches: PayoutStuckDigestBatch[];
+  baseUrl: string;
+}): EmailContent {
+  const rows = batches
+    .map((batch) => {
+      const amount = batch.totalAmount.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+      });
+      const ageDays = Math.floor(
+        (Date.now() - new Date(batch.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const safeSender = escapeHtml(batch.senderBatchId);
+      const safeStatus = escapeHtml(batch.status);
+      const safeReason = batch.denialReason ? escapeHtml(batch.denialReason) : "—";
+      return `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${safeSender}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${safeStatus}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${amount}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${batch.itemCount}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${ageDays}d</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${safeReason}</td>
+        </tr>`;
+    })
+    .join("");
+
+  return {
+    subject: `Action needed: ${batches.length} payout batch${batches.length === 1 ? "" : "es"} need review`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Payout Batches Need Review</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">
+        These batches are sitting in needs_review, denied, or failed and haven't been actioned yet.
+        This is a recurring reminder — it will keep sending until each batch is released, resent, or resolved.
+      </p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        <thead>
+          <tr style="background:#fef2f2;">
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Batch</th>
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Status</th>
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Amount</th>
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Instructors</th>
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Age</th>
+            <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;">Reason</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <p style="margin:24px 0;">
+        <a href="${baseUrl}/admin/payouts"
+           style="display:inline-block;background:#dc2626;color:white;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:700;">
+          Review Payouts →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        Release a batch that never reached PayPal, mark one denied, or resend it as a new batch from the Payouts page.
+      </p>
+    `),
+  };
+}
+
 // ── Instructor payout sent ────────────────────────────────────────────────────
 
 /**
