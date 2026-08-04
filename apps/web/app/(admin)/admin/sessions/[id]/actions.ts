@@ -256,9 +256,19 @@ export async function setSessionAssistant(
 }
 
 /**
- * Cancels a single booking by setting cancelled = true.
+ * Cancels a single booking by setting cancelled = true, cleans up any
+ * instructor earning that hasn't been paid out yet, and emails the customer.
+ *
+ * Earnings cleanup rules (no PayPal refund is ever issued automatically):
+ *   - status "pending"        → delete the earning (never sent, money stays with company)
+ *   - status "payout_pending" → if the payout batch is still "pending" (not yet sent to
+ *                               PayPal), remove the earning and adjust the batch/item totals
+ *                               so the money stays with the company; otherwise leave it
+ *                               (instructor keeps the payout, company absorbs)
+ *   - status "paid"           → leave untouched (instructor keeps payout, company absorbs)
+ *
  * Verifies the booking belongs to sessionId before mutating to prevent cross-session tampering.
- * Auth: manager/super_admin only — does not notify the customer.
+ * Auth: manager/super_admin only.
  * @param bookingId - UUID of the bookings record to cancel.
  * @param sessionId - UUID of the owning class_sessions record (ownership check).
  * @returns An error message string on failure, or null on success.
@@ -299,7 +309,99 @@ export async function removeBookingFromSession(
   if (error) return error.message;
   revalidatePath(`/admin/sessions/${sessionId}`);
 
-  // Send cancellation email — best-effort, does not affect the DB result.
+  // ── Instructor earnings cleanup ───────────────────────────────────────────
+  // Best-effort: a failure here is logged but does not un-cancel the booking.
+  // The worst outcome is an orphaned pending earning that gets paid out later;
+  // a super admin can find and void it manually via the payouts dashboard.
+  try {
+    const { data: earning } = await admin
+      .from("instructor_earnings")
+      .select("id, status, instructor_amount, payout_batch_id, payout_item_id")
+      .eq("booking_id", bookingId)
+      .maybeSingle();
+
+    if (earning) {
+      if (earning.status === "pending") {
+        // Not in any batch yet — delete the row outright.
+        const { error: delErr } = await admin
+          .from("instructor_earnings")
+          .delete()
+          .eq("id", earning.id);
+        if (delErr) {
+          console.error("[removeBookingFromSession] Failed to delete pending earning:", delErr, { bookingId });
+        }
+
+      } else if (
+        earning.status === "payout_pending" &&
+        earning.payout_batch_id &&
+        earning.payout_item_id
+      ) {
+        // Reserved in a batch. Only remove it if the batch hasn't been sent to
+        // PayPal yet — once submitted, the instructor keeps the payout.
+        const { data: batch } = await admin
+          .from("instructor_payout_batches")
+          .select("id, status, total_amount, item_count")
+          .eq("id", earning.payout_batch_id)
+          .maybeSingle();
+
+        if (batch?.status === "pending") {
+          const earningAmount = Number(earning.instructor_amount);
+
+          // Delete the earning and its attempt record.
+          await admin.from("instructor_earnings").delete().eq("id", earning.id);
+          await admin
+            .from("instructor_payout_attempts")
+            .delete()
+            .eq("earning_id", earning.id)
+            .eq("payout_batch_id", earning.payout_batch_id);
+
+          // Adjust the payout item for this instructor.
+          const { data: item } = await admin
+            .from("instructor_payout_items")
+            .select("id, amount")
+            .eq("id", earning.payout_item_id)
+            .maybeSingle();
+
+          if (item) {
+            const newItemAmount = Math.max(0, Number(item.amount) - earningAmount);
+            const newBatchTotal = Math.max(0, Number(batch.total_amount) - earningAmount);
+
+            if (newItemAmount <= 0) {
+              // This was the instructor's only earning in the batch — remove their item.
+              await admin.from("instructor_payout_items").delete().eq("id", item.id);
+              const newItemCount = Math.max(0, batch.item_count - 1);
+              if (newItemCount <= 0) {
+                // Batch is now empty — delete it entirely.
+                await admin.from("instructor_payout_batches").delete().eq("id", batch.id);
+              } else {
+                await admin
+                  .from("instructor_payout_batches")
+                  .update({ total_amount: newBatchTotal, item_count: newItemCount })
+                  .eq("id", batch.id);
+              }
+            } else {
+              // Instructor has other earnings in this batch — just reduce the amounts.
+              await admin
+                .from("instructor_payout_items")
+                .update({ amount: newItemAmount })
+                .eq("id", item.id);
+              await admin
+                .from("instructor_payout_batches")
+                .update({ total_amount: newBatchTotal })
+                .eq("id", batch.id);
+            }
+          }
+        }
+        // If batch is any other status (already sent to PayPal), leave the earning.
+      }
+      // If status is "paid", leave the earning — instructor keeps the payout.
+    }
+  } catch (earningsErr) {
+    console.error("[removeBookingFromSession] Earnings cleanup error (non-fatal):", earningsErr, { bookingId });
+  }
+
+  // ── Cancellation email ────────────────────────────────────────────────────
+  // Best-effort, does not affect the DB result.
   if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
     try {
       const profile = Array.isArray(booking.profiles) ? booking.profiles[0] : booking.profiles;
