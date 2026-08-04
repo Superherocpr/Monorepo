@@ -60,7 +60,12 @@ export async function PATCH(
   if (body.expiresAt !== undefined) update.expires_at = body.expiresAt;
   if (body.certNumber !== undefined) update.cert_number = body.certNumber;
   if (body.notes !== undefined) update.notes = body.notes;
-  if (body.reminderSent !== undefined) update.reminder_sent = body.reminderSent;
+  // Manual override: checking the box silences all future 90/60/30/7-day
+  // milestone emails (stamped as if the nearest one already went out);
+  // unchecking resets the cert to owe whichever milestone it's due for next.
+  if (body.reminderSent !== undefined) {
+    update.last_reminder_sent_days = body.reminderSent ? 7 : null;
+  }
 
   if (Object.keys(update).length === 0) {
     return Response.json({ error: "No fields to update." }, { status: 400 });
@@ -80,7 +85,7 @@ export async function PATCH(
   const { data: cert, error: fetchError } = await adminClient
     .from("certifications")
     .select(`
-      id, issued_at, expires_at, cert_number, notes, reminder_sent, session_id,
+      id, issued_at, expires_at, cert_number, notes, last_reminder_sent_days, session_id,
       profiles!customer_id ( id, first_name, last_name, email ),
       cert_types ( id, name, issuing_body, validity_months ),
       class_sessions (
@@ -95,7 +100,10 @@ export async function PATCH(
     return Response.json({ error: "Certification updated but could not be retrieved." }, { status: 500 });
   }
 
-  return Response.json({ cert });
+  // The client's reminder_sent badge only cares whether the cert has been
+  // emailed for any 90/60/30/7-day milestone yet, not which one.
+  const { last_reminder_sent_days, ...certFields } = cert;
+  return Response.json({ cert: { ...certFields, reminder_sent: last_reminder_sent_days !== null } });
 }
 
 /**

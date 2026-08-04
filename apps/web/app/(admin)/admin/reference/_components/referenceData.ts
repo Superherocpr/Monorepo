@@ -436,6 +436,8 @@ export const GROUPS: GroupDef[] = [
           "Edit or delete any existing certification",
           "Certifications table shows: customer, cert type, issue/expiry dates, cert number, reminder sent flag, and linked session",
           "Manage cert types — create or edit types with name, description, validity period (months), issuing body, card design, active toggle, and linked class type",
+          "Reminder emails send automatically via a daily cron sweep at 90, 60, 30, and 7 days before a cert expires — no manual trigger needed",
+          "\"Send Reminders to All\" button still available for an on-demand run of the same due-milestone logic",
           "Pause or resume cert expiry reminder emails system-wide",
           "A banner appears when reminders are currently paused",
         ],

@@ -639,8 +639,9 @@ export function passwordResetEmail({
 // ── 10. Certification expiry reminder ─────────────────────────────────────────
 
 /**
- * Sent to a customer whose CPR certification is expiring within 90 days.
- * Triggered by: POST /api/certifications/send-reminders (batch)
+ * Sent to a customer whose CPR certification has reached one of the
+ * 90/60/30/7-day-before-expiry reminder milestones.
+ * Triggered by: POST /api/certifications/send-reminders (cron + manual batch)
  * @param firstName     - Customer's first name.
  * @param certName      - The name of the certification type (e.g. "BLS for Healthcare Providers").
  * @param daysRemaining - Number of days until the certification expires.

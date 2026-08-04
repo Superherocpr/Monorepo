@@ -32,7 +32,8 @@ export interface Certification {
   issued_at: string;
   expires_at: string;
   cert_number: string | null;
-  reminder_sent: boolean;
+  /** Nearest 90/60/30/7-day-before-expiry milestone emailed so far, or null if none yet. */
+  last_reminder_sent_days: number | null;
   notes: string | null;
   created_at: string;
 }
@@ -91,6 +92,7 @@ export interface CertificationAdminRecord {
   expires_at: string;
   cert_number: string | null;
   notes: string | null;
+  /** True once the cert has been emailed for any 90/60/30/7-day milestone; derived from last_reminder_sent_days at the query layer. */
   reminder_sent: boolean;
   /** Nullable — certs issued manually have no session. */
   session_id: string | null;

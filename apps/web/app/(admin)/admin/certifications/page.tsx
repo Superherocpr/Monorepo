@@ -29,7 +29,7 @@ export default async function CertificationsPage() {
     admin
       .from("certifications")
       .select(`
-        id, issued_at, expires_at, cert_number, notes, reminder_sent, session_id,
+        id, issued_at, expires_at, cert_number, notes, last_reminder_sent_days, session_id,
         profiles!customer_id ( id, first_name, last_name, email ),
         cert_types ( id, name, issuing_body, validity_months ),
         class_sessions (
@@ -63,7 +63,18 @@ export default async function CertificationsPage() {
     console.error("[CertificationsPage] Failed to fetch cert types", certTypesResult.error);
   }
 
-  const rawCerts = (certsResult.data ?? []) as unknown as CertificationAdminRecord[];
+  // The client's reminder_sent badge only cares whether the cert has been
+  // emailed for any 90/60/30/7-day milestone yet, not which one.
+  type RawCertRow = Omit<CertificationAdminRecord, "reminder_sent"> & {
+    last_reminder_sent_days: number | null;
+  };
+  const rawRows = (certsResult.data ?? []) as unknown as RawCertRow[];
+  const rawCerts: CertificationAdminRecord[] = rawRows.map(
+    ({ last_reminder_sent_days, ...cert }) => ({
+      ...cert,
+      reminder_sent: last_reminder_sent_days !== null,
+    })
+  );
   const remindersPaused = remindersSetting.data?.value === "true";
 
   // ── Build cert types with issue counts ────────────────────────────────────

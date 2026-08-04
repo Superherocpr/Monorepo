@@ -76,7 +76,6 @@ export async function POST(request: Request) {
       expires_at: expiresAt,
       cert_number: certNumber ?? null,
       notes: notes ?? null,
-      reminder_sent: false,
     })
     .select("id")
     .single();
@@ -90,7 +89,7 @@ export async function POST(request: Request) {
   const { data: cert, error: fetchError } = await adminClient
     .from("certifications")
     .select(`
-      id, issued_at, expires_at, cert_number, notes, reminder_sent, session_id,
+      id, issued_at, expires_at, cert_number, notes, last_reminder_sent_days, session_id,
       profiles!customer_id ( id, first_name, last_name, email ),
       cert_types ( id, name, issuing_body, validity_months ),
       class_sessions (
@@ -106,5 +105,11 @@ export async function POST(request: Request) {
     return Response.json({ error: "Certification created but could not be retrieved." }, { status: 500 });
   }
 
-  return Response.json({ cert }, { status: 201 });
+  // The client's reminder_sent badge only cares whether the cert has been
+  // emailed for any 90/60/30/7-day milestone yet, not which one.
+  const { last_reminder_sent_days, ...certFields } = cert;
+  return Response.json(
+    { cert: { ...certFields, reminder_sent: last_reminder_sent_days !== null } },
+    { status: 201 }
+  );
 }
