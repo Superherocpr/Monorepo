@@ -170,12 +170,40 @@ describe("POST /api/bookings/confirm", () => {
     );
   });
 
-  test("returns 502 and does not book when PayPal capture fails", async () => {
+  test("returns 502 and does not book when PayPal capture fails for a non-decline reason", async () => {
     mockAdminClient({});
     fetchMock.mockResolvedValueOnce({ ok: false, text: async () => "capture declined" });
 
     const res = await POST(makeRequest(baseBody));
     expect(res.status).toBe(502);
+  });
+
+  test("returns 402 and does not book when PayPal rejects the capture as PAYMENT_DENIED (real prod payload)", async () => {
+    // Verified live in production CloudWatch (debug_id b95be1046efcf, 2026-08-04):
+    // PayPal rejects a declined card at the HTTP level too (422), a separate
+    // failure shape from the 2xx-with-status-DECLINED case covered above.
+    const { rpc } = mockAdminClient({});
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      text: async () =>
+        JSON.stringify({
+          name: "UNPROCESSABLE_ENTITY",
+          details: [
+            { issue: "PAYMENT_DENIED", description: "PayPal has declined to process this transaction." },
+          ],
+          debug_id: "b95be1046efcf",
+        }),
+    });
+
+    const res = await POST(makeRequest(baseBody));
+
+    expect(res.status).toBe(402);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.declined).toBe(true);
+    expect(json.error).toMatch(/declined/i);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(recordBookingEarning).not.toHaveBeenCalled();
   });
 
   test("auto-refunds and returns 409 'class filled up' when book_spot reports session_full", async () => {

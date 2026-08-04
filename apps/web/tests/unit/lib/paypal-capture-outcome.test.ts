@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { evaluateCaptureOutcome } from "@/lib/paypal";
+import { evaluateCaptureOutcome, classifyCaptureRequestError } from "@/lib/paypal";
 
 /** Builds a capture response body with the given capture fields. */
 function captureResponse(capture: Record<string, unknown>) {
@@ -107,5 +107,59 @@ describe("evaluateCaptureOutcome", () => {
     expect(outcome.settled).toBe(true);
     if (!outcome.settled) return;
     expect(outcome.capturedAmount).toBeNull();
+  });
+});
+
+describe("classifyCaptureRequestError", () => {
+  // Real payload pulled from CloudWatch for the live production capture
+  // failure debug_id b95be1046efcf (2026-08-04) — a declined card is rejected
+  // by PayPal at the HTTP level (422), not only as a 2xx capture with status
+  // DECLINED. Every capture route previously folded this into a generic
+  // "Payment capture failed. Please refresh and try again." — wrong advice
+  // for a decline.
+  const PAYMENT_DENIED_BODY = JSON.stringify({
+    name: "UNPROCESSABLE_ENTITY",
+    details: [
+      {
+        issue: "PAYMENT_DENIED",
+        description: "PayPal has declined to process this transaction.",
+      },
+    ],
+    message: "The requested action could not be performed, semantically incorrect, or failed business validation.",
+    debug_id: "b95be1046efcf",
+  });
+
+  it("classifies PAYMENT_DENIED as a decline", () => {
+    const result = classifyCaptureRequestError(PAYMENT_DENIED_BODY);
+    expect(result.declined).toBe(true);
+    expect(result.issue).toBe("PAYMENT_DENIED");
+  });
+
+  it.each(["INSTRUMENT_DECLINED", "CARD_EXPIRED", "TRANSACTION_REFUSED"])(
+    "classifies %s as a decline",
+    (issue) => {
+      const body = JSON.stringify({ name: "UNPROCESSABLE_ENTITY", details: [{ issue }] });
+      const result = classifyCaptureRequestError(body);
+      expect(result.declined).toBe(true);
+      expect(result.issue).toBe(issue);
+    }
+  );
+
+  it("does not classify a non-decline integration error as a decline", () => {
+    // ORDER_ALREADY_CAPTURED is our bug, not the buyer's card — must not tell
+    // them to "try a different card".
+    const body = JSON.stringify({
+      name: "UNPROCESSABLE_ENTITY",
+      details: [{ issue: "ORDER_ALREADY_CAPTURED" }],
+    });
+    const result = classifyCaptureRequestError(body);
+    expect(result.declined).toBe(false);
+    expect(result.issue).toBe("ORDER_ALREADY_CAPTURED");
+  });
+
+  it("does not classify unparseable or empty text as a decline", () => {
+    expect(classifyCaptureRequestError("").declined).toBe(false);
+    expect(classifyCaptureRequestError("not json").declined).toBe(false);
+    expect(classifyCaptureRequestError("{}").declined).toBe(false);
   });
 });
