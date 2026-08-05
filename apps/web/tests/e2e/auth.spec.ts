@@ -16,7 +16,7 @@ test.describe("Sign-in page", () => {
   test("renders page heading and form fields", async ({ page }) => {
     await expect(page.getByRole("heading", { name: /sign in/i })).toBeVisible();
     await expect(page.getByLabel("Email")).toBeVisible();
-    await expect(page.getByLabel("Password")).toBeVisible();
+    await expect(page.locator("#signin-password")).toBeVisible();
     await expect(
       page.getByRole("button", { name: /sign in/i })
     ).toBeVisible();
@@ -24,7 +24,7 @@ test.describe("Sign-in page", () => {
 
   test("shows inline error with invalid credentials", async ({ page }) => {
     await page.getByLabel("Email").fill("not-a-real-user@example.invalid");
-    await page.getByLabel("Password").fill("wrongpassword");
+    await page.locator("#signin-password").fill("wrongpassword");
     await page.getByRole("button", { name: /sign in/i }).click();
 
     // Supabase returns an auth error — shown in an alert role element
@@ -42,7 +42,7 @@ test.describe("Sign-in page", () => {
   });
 
   test("password field wired to correct input", async ({ page }) => {
-    await page.getByLabel("Password").click();
+    await page.locator("#signin-password").click();
     const passwordInput = page.locator("#signin-password");
     await expect(passwordInput).toBeFocused();
   });

@@ -484,7 +484,7 @@ export const GROUPS: GroupDef[] = [
         role: "all",
         bullets: [
           { text: "General tab — toggle public nav pages on/off: Classes, Schedule, Merch, Blog, About, Contact", role: "super" },
-          { text: "Class Types tab — create, edit, delete, or deactivate class types; set name, description, duration, price, capacity, linked certification type, and eligible add-ons", role: "super" },
+          { text: "Class Types tab — create, edit, delete, or deactivate class types; set name, description, duration, price, capacity, AHA certified flag (auto-set when a cert type is selected), linked certification type, and eligible add-ons", role: "super" },
           { text: "Grades tab — configure preset grade values and labels used in the Grading Tool", role: "super" },
           { text: "Zoho tab — connect or disconnect a Zoho Mail account for replying to contact form submissions", role: "super" },
           { text: "Social tab — manually trigger a sync of the Facebook social feed cache", role: "super" },

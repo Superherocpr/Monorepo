@@ -16,6 +16,8 @@ export interface ClassType {
   max_capacity: number;
   price: number;
   active: boolean;
+  /** True when this class is an AHA-certified course. Shown as a badge on public pages. */
+  is_aha: boolean;
   created_at: string;
 }
 
@@ -112,6 +114,7 @@ export interface ScheduleSession {
     name: string;
     price: number;
     duration_minutes: number;
+    is_aha: boolean;
   };
   profiles: {
     first_name: string;

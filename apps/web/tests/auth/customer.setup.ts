@@ -23,7 +23,7 @@ setup("authenticate as customer", async ({ page }) => {
 
   // Fill credentials and submit.
   await page.getByLabel("Email").fill(EMAIL);
-  await page.getByLabel("Password").fill(PASSWORD);
+  await page.locator("#signin-password").fill(PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
 
   // Wait for redirect to the dashboard, confirming authentication succeeded.

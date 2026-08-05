@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
   // ── Parse and validate body ────────────────────────────────────────────────
   const body = await request.json();
-  const { name, description, duration_minutes, max_capacity, price, active, cert_type_id, addon_ids } =
+  const { name, description, duration_minutes, max_capacity, price, active, is_aha, cert_type_id, addon_ids } =
     body as {
       name: string;
       description: string | null;
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       max_capacity: number;
       price: number;
       active: boolean;
+      is_aha?: boolean;
       cert_type_id?: string | null;
       addon_ids?: string[];
     };
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
       max_capacity,
       price,
       active: active !== false,
+      is_aha: is_aha === true,
       cert_type_id: cert_type_id || null,
     })
     .select("id")
