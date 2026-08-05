@@ -982,15 +982,22 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                       <span className="font-semibold text-gray-900 dark:text-white">
                         {ct.name}
                       </span>
-                      {ct.active ? (
-                        <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
-                          Inactive
-                        </span>
-                      )}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {ct.is_aha && (
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                            AHA
+                          </span>
+                        )}
+                        {ct.active ? (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {ct.description && (
                       <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">

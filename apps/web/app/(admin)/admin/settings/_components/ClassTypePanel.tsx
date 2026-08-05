@@ -59,6 +59,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
   const [maxCapacity, setMaxCapacity] = useState("");
   const [price, setPrice] = useState("");
   const [active, setActive] = useState(true);
+  const [isAha, setIsAha] = useState(false);
   // UUID of the linked cert type, or empty string for none
   const [certTypeId, setCertTypeId] = useState("");
   // IDs of add-ons eligible for this class type
@@ -78,6 +79,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
         setMaxCapacity(String(classType.max_capacity));
         setPrice(String(classType.price));
         setActive(classType.active);
+        setIsAha(classType.is_aha);
         setCertTypeId(classType.cert_type_id ?? "");
         setAddonIds(classType.addon_ids);
       } else {
@@ -87,6 +89,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
         setMaxCapacity("");
         setPrice("");
         setActive(true);
+        setIsAha(false);
         setCertTypeId("");
         setAddonIds([]);
       }
@@ -164,6 +167,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
       max_capacity: parsedCapacity,
       price: parsedPrice,
       active,
+      is_aha: isAha,
       // Send null when no cert type selected so the DB column is explicitly cleared
       cert_type_id: certTypeId || null,
       addon_ids: addonIds,
@@ -366,6 +370,32 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
               </button>
             </div>
 
+            {/* AHA toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-700">AHA Certified</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Mark this as an American Heart Association course. Auto-set when a cert type is selected.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isAha}
+                onClick={() => setIsAha((v) => !v)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${
+                  isAha ? "bg-red-600" : "bg-gray-200"
+                }`}
+              >
+                <span className="sr-only">Toggle AHA certified</span>
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    isAha ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Linked cert type */}
             {certTypeOptions.length > 0 && (
               <div>
@@ -379,7 +409,13 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
                 <select
                   id="ct-cert-type"
                   value={certTypeId}
-                  onChange={(e) => setCertTypeId(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setCertTypeId(next);
+                    // Auto-enable AHA when a cert type is selected; auto-disable when cleared.
+                    // The toggle below can still be manually overridden after this.
+                    setIsAha(next !== "");
+                  }}
                   className={inputClass}
                 >
                   <option value="">None — no cert issued for this class</option>

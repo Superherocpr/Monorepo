@@ -39,6 +39,8 @@ export interface ClassType {
   active: boolean;
   /** FK to cert_types.id — nullable for non-certifying sessions. */
   cert_type_id: string | null;
+  /** True when this class is an AHA-certified course. */
+  is_aha: boolean;
   /** IDs of addons currently assigned to this class type via addon_class_types. */
   addon_ids: string[];
 }
@@ -191,7 +193,7 @@ export default async function SettingsPage({
     await Promise.all([
       admin
         .from("class_types")
-        .select("id, name, description, duration_minutes, max_capacity, price, active, cert_type_id")
+        .select("id, name, description, duration_minutes, max_capacity, price, active, cert_type_id, is_aha")
         .order("name"),
       // Cert types used to populate the linked cert dropdown in the class type add/edit panel.
       // Fetched separately from the certifications page so settings page is self-contained.
@@ -243,6 +245,7 @@ export default async function SettingsPage({
     price: ct.price,
     active: ct.active,
     cert_type_id: ct.cert_type_id,
+    is_aha: ct.is_aha ?? false,
     addon_ids: addonIdsByClassType.get(ct.id) ?? [],
   }));
 

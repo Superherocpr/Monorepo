@@ -530,12 +530,14 @@ function BookingSessionCard({ session, isSelecting, onSelect }: BookingSessionCa
   return (
     <article className="border border-gray-200 rounded-xl p-5 flex flex-col gap-3 hover:border-gray-300 transition-colors duration-150">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-lg font-bold text-gray-900">{session.class_types.name}</h3>
-        {hasDiscount && (
-          <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
-            {session.discount_percent}% OFF
-          </span>
-        )}
+        <div>
+          <h3 className="text-lg font-bold text-gray-900">{session.class_types.name}</h3>
+          {session.class_types.is_aha && (
+            <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
+              AHA Certified
+            </span>
+          )}
+        </div>
       </div>
 
       <p className="text-sm text-gray-500">

@@ -189,6 +189,7 @@ CREATE TABLE IF NOT EXISTS class_types (
   cert_type_id                 uuid,
   created_at                   timestamptz NOT NULL DEFAULT now(),
   requires_assistant_at_capacity boolean NOT NULL DEFAULT false,
+  is_aha                         boolean NOT NULL DEFAULT false,
   PRIMARY KEY (id),
   CONSTRAINT class_types_name_key UNIQUE (name)
 );

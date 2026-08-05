@@ -35,7 +35,7 @@ export default async function ClassTypeCards() {
 
   const { data: classTypes } = await supabase
     .from("class_types")
-    .select("id, name, description, duration_minutes, max_capacity, price")
+    .select("id, name, description, duration_minutes, max_capacity, price, is_aha")
     .eq("active", true)
     .order("name");
 
@@ -82,6 +82,11 @@ export default async function ClassTypeCards() {
 
               {/* Detail badges */}
               <div className="flex flex-wrap gap-3 mb-6">
+                {classType.is_aha && (
+                  <span className="bg-red-100 text-red-700 text-sm font-semibold px-3 py-1.5 rounded-full">
+                    AHA Certified
+                  </span>
+                )}
                 <span className="bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-full">
                   {formatDuration(classType.duration_minutes)}
                 </span>
