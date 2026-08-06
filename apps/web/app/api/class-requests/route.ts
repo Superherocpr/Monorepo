@@ -66,7 +66,7 @@ export async function GET(): Promise<Response> {
     .from("class_requests")
     .select(`
       id, customer_id, class_type_id, preferred_date,
-      preferred_time_of_day, group_size,
+      preferred_time_of_day, group_size, contact_phone,
       venue_name, venue_address, venue_city, venue_state, venue_zip,
       notes, status, rejection_reason, travel_fee, session_id, created_at,
       class_types ( id, name, duration_minutes, price ),
@@ -120,6 +120,7 @@ export async function POST(request: Request): Promise<Response> {
     preferred_date,
     preferred_time_of_day,
     group_size,
+    contact_phone,
     venue_name,
     venue_address,
     venue_city,
@@ -134,6 +135,7 @@ export async function POST(request: Request): Promise<Response> {
     typeof preferred_time_of_day !== "string" ||
     !VALID_TIMES.has(preferred_time_of_day as PreferredTimeOfDay) ||
     typeof group_size !== "number" || !Number.isInteger(group_size) || group_size < 1 ||
+    typeof contact_phone !== "string" || !contact_phone.trim() ||
     typeof venue_name !== "string" || !venue_name.trim() ||
     typeof venue_address !== "string" || !venue_address.trim() ||
     typeof venue_city !== "string" || !venue_city.trim() ||
@@ -196,6 +198,7 @@ export async function POST(request: Request): Promise<Response> {
       preferred_date: preferred_date.trim(),
       preferred_time_of_day: preferred_time_of_day as PreferredTimeOfDay,
       group_size: group_size,
+      contact_phone: (contact_phone as string).trim(),
       venue_name: venue_name.trim(),
       venue_address: venue_address.trim(),
       venue_city: venue_city.trim(),

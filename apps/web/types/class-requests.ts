@@ -53,6 +53,8 @@ export interface ClassRequest {
   created_at: string;
   /** Joined class type data. */
   class_types: { id: string; name: string; duration_minutes: number; price: number } | null;
+  /** Contact phone number provided with the request (nullable for legacy rows). */
+  contact_phone: string | null;
   /** Joined customer profile data. */
   profiles: { id: string; first_name: string; last_name: string; email: string } | null;
 }
@@ -63,6 +65,7 @@ export interface CreateClassRequestBody {
   preferred_date: string;
   preferred_time_of_day: PreferredTimeOfDay;
   group_size: number;
+  contact_phone: string;
   venue_name: string;
   venue_address: string;
   venue_city: string;

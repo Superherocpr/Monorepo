@@ -131,6 +131,16 @@ export default function ClassRequestDetailClient({ request }: Props) {
                 </a>
               </dd>
             </div>
+            {request.contact_phone && (
+              <div className="flex gap-3">
+                <dt className="text-sm text-gray-500 w-20 shrink-0">Phone</dt>
+                <dd className="text-sm text-gray-900">
+                  <a href={`tel:${request.contact_phone}`} className="text-red-600 hover:underline">
+                    {request.contact_phone}
+                  </a>
+                </dd>
+              </div>
+            )}
           </dl>
         ) : (
           <p className="text-sm text-gray-500">Customer data unavailable.</p>

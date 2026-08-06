@@ -2683,6 +2683,7 @@ export function instructorPayoutSentEmail({
 
 // ── 30. Booking cancelled by admin ────────────────────────────────────────────
 
+
 /**
  * Sent to a student when an admin removes them from a class session.
  * Triggered by: removeBookingFromSession server action (admin session detail page).
@@ -2733,6 +2734,322 @@ export function bookingCancelledEmail({
       </ul>
       <p>We hope to see you in a future class!</p>
       <p>— The SuperHeroCPR Team</p>
+    `),
+  };
+}
+
+// ── 31. Daily operations summary — admin morning digest ────────────────────────
+
+/** One row of revenue broken down by payment type in the daily digest. */
+export interface DailySummaryRevenue {
+  type: string;
+  count: number;
+  total: number;
+}
+
+/** One booking line in the daily digest. */
+export interface DailySummaryBooking {
+  customerName: string;
+  instructorName: string;
+  classType: string;
+  classDate: string;
+  location: string;
+}
+
+/** One class request line in the daily digest. */
+export interface DailySummaryClassRequest {
+  requesterName: string;
+  classType: string;
+  preferredDate: string;
+  timeOfDay: string;
+  groupSize: number;
+  city: string;
+  state: string;
+  status: string;
+}
+
+/** One contact form submission line in the daily digest. */
+export interface DailySummaryContact {
+  name: string;
+  inquiryType: string;
+}
+
+/** One class running today in the daily digest. */
+export interface DailySummaryClass {
+  classType: string;
+  instructorName: string;
+  startsAt: string;
+  location: string;
+  enrolled: number;
+  maxCapacity: number;
+}
+
+/**
+ * Sent to all super_admin and manager users every morning with a summary of
+ * the previous day's activity and today's upcoming class schedule.
+ * Triggered by: POST /api/admin/daily-summary (daily cron, migration 0053).
+ * @param dateLabel                - Human-readable date for yesterday (e.g. "Tuesday, August 5, 2026").
+ * @param adminUrl                 - Full URL to the admin dashboard.
+ * @param totalRevenue             - Total completed payment amount for yesterday in dollars.
+ * @param revenueBreakdown         - Per-type revenue breakdown.
+ * @param bookings                 - Bookings created yesterday (non-cancelled only).
+ * @param classRequests            - Class requests submitted yesterday.
+ * @param contactSubmissions       - Contact form submissions from yesterday.
+ * @param todayClasses             - Classes scheduled for today.
+ * @param newInvoicesCount         - Number of invoices created yesterday.
+ * @param outstandingInvoicesCount - Number of invoices sent but not yet paid.
+ * @param outstandingInvoicesTotal - Combined dollar total of all outstanding invoices.
+ * @param newCustomersCount        - Number of new customer registrations yesterday.
+ */
+export function dailySummaryEmail({
+  dateLabel,
+  adminUrl,
+  totalRevenue,
+  revenueBreakdown,
+  bookings,
+  classRequests,
+  contactSubmissions,
+  todayClasses,
+  newInvoicesCount,
+  outstandingInvoicesCount,
+  outstandingInvoicesTotal,
+  newCustomersCount,
+}: {
+  dateLabel: string;
+  adminUrl: string;
+  totalRevenue: number;
+  revenueBreakdown: DailySummaryRevenue[];
+  bookings: DailySummaryBooking[];
+  classRequests: DailySummaryClassRequest[];
+  contactSubmissions: DailySummaryContact[];
+  todayClasses: DailySummaryClass[];
+  newInvoicesCount: number;
+  outstandingInvoicesCount: number;
+  outstandingInvoicesTotal: number;
+  newCustomersCount: number;
+}): EmailContent {
+  const fmtUsd = (n: number): string =>
+    n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+  const safeAdminUrl = escapeHtml(adminUrl);
+
+  // ── Revenue section ──────────────────────────────────────────────────────────
+  const revenueRows = revenueBreakdown
+    .map((r) => {
+      const label = escapeHtml(
+        r.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      );
+      return `
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;">${label}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;text-align:right;">${r.count}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;text-align:right;font-weight:600;">${fmtUsd(r.total)}</td>
+        </tr>`;
+    })
+    .join("");
+
+  const revenueSection = `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:8px;">
+      <tr>
+        <td style="background:#111827;border-radius:6px;padding:14px 16px;text-align:center;">
+          <div style="font-size:26px;font-weight:700;color:#ffffff;">${fmtUsd(totalRevenue)}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:3px;text-transform:uppercase;letter-spacing:0.5px;">Total Collected Yesterday</div>
+        </td>
+      </tr>
+    </table>
+    ${
+      revenueBreakdown.length > 0
+        ? `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;">
+            <thead>
+              <tr style="background:#f3f4f6;">
+                <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Type</th>
+                <th style="padding:8px 10px;text-align:right;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Count</th>
+                <th style="padding:8px 10px;text-align:right;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>${revenueRows}</tbody>
+          </table>`
+        : `<p style="font-size:13px;color:#6b7280;margin:8px 0 0 0;">No completed payments recorded yesterday.</p>`
+    }`;
+
+  // ── Bookings section ──────────────────────────────────────────────────────────
+  const bookingRows = bookings
+    .map(
+      (b, i) => `
+      <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};">
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;font-weight:600;">${escapeHtml(b.customerName)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;">${escapeHtml(b.instructorName)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;">${escapeHtml(b.classType)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;white-space:nowrap;">${escapeHtml(b.classDate)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;">${escapeHtml(b.location)}</td>
+      </tr>`
+    )
+    .join("");
+
+  const bookingsSection =
+    bookings.length > 0
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:#f3f4f6;">
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Customer</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Instructor</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Class</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Date</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Location</th>
+            </tr>
+          </thead>
+          <tbody>${bookingRows}</tbody>
+        </table>`
+      : `<p style="font-size:13px;color:#6b7280;margin:0;">No bookings recorded yesterday.</p>`;
+
+  // ── Class requests section ────────────────────────────────────────────────────
+  const classRequestRows = classRequests
+    .map((cr, i) => {
+      const statusColor =
+        cr.status === "approved" || cr.status === "instructor_assigned"
+          ? "#16a34a"
+          : cr.status === "rejected"
+          ? "#dc2626"
+          : "#d97706";
+      return `
+        <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};">
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;font-weight:600;">${escapeHtml(cr.requesterName)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;">${escapeHtml(cr.classType)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;white-space:nowrap;">${escapeHtml(cr.preferredDate)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;text-transform:capitalize;">${escapeHtml(cr.timeOfDay)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;text-align:center;">${cr.groupSize}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;">${escapeHtml(cr.city)}, ${escapeHtml(cr.state)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:${statusColor};font-weight:600;text-transform:capitalize;">${escapeHtml(cr.status.replace(/_/g, " "))}</td>
+        </tr>`;
+    })
+    .join("");
+
+  const classRequestsSection =
+    classRequests.length > 0
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:#f3f4f6;">
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Requester</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Class</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Req. Date</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Time</th>
+              <th style="padding:8px 10px;text-align:center;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Group</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Location</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Status</th>
+            </tr>
+          </thead>
+          <tbody>${classRequestRows}</tbody>
+        </table>`
+      : `<p style="font-size:13px;color:#6b7280;margin:0;">No class requests received yesterday.</p>`;
+
+  // ── Contact submissions section ───────────────────────────────────────────────
+  const contactList = contactSubmissions
+    .map(
+      (c) =>
+        `<li style="padding:5px 0;font-size:14px;color:#374151;border-bottom:1px solid #f3f4f6;">
+          <strong>${escapeHtml(c.name)}</strong>
+          <span style="color:#6b7280;font-size:13px;"> &mdash; ${escapeHtml(c.inquiryType)}</span>
+        </li>`
+    )
+    .join("");
+
+  const contactSection =
+    contactSubmissions.length > 0
+      ? `<ul style="list-style:none;margin:0;padding:0;">${contactList}</ul>`
+      : `<p style="font-size:13px;color:#6b7280;margin:0;">No contact form submissions yesterday.</p>`;
+
+  // ── Today's schedule section ──────────────────────────────────────────────────
+  const todayClassRows = todayClasses
+    .map((c, i) => {
+      const fillPct = c.maxCapacity > 0 ? c.enrolled / c.maxCapacity : 0;
+      const fillColor =
+        fillPct >= 1 ? "#dc2626" : fillPct >= 0.8 ? "#d97706" : "#16a34a";
+      return `
+        <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};">
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;white-space:nowrap;">${escapeHtml(c.startsAt)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;font-weight:600;">${escapeHtml(c.classType)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;">${escapeHtml(c.instructorName)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151;">${escapeHtml(c.location)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;color:${fillColor};font-weight:600;text-align:center;">${c.enrolled}&thinsp;/&thinsp;${c.maxCapacity}</td>
+        </tr>`;
+    })
+    .join("");
+
+  const todayScheduleSection =
+    todayClasses.length > 0
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:#f3f4f6;">
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Time (ET)</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Class</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Instructor</th>
+              <th style="padding:8px 10px;text-align:left;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Location</th>
+              <th style="padding:8px 10px;text-align:center;color:#374151;font-weight:600;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Enrolled</th>
+            </tr>
+          </thead>
+          <tbody>${todayClassRows}</tbody>
+        </table>`
+      : `<p style="font-size:13px;color:#6b7280;margin:0;">No classes scheduled for today.</p>`;
+
+  // ── Invoices & new customers ──────────────────────────────────────────────────
+  const outstandingFmt = fmtUsd(outstandingInvoicesTotal);
+  const outstandingColor = outstandingInvoicesCount > 0 ? "#d97706" : "#374151";
+
+  return {
+    subject: `Daily Summary — ${dateLabel}`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Daily Operations Summary</h1>
+      <p style="font-size:14px;color:#6b7280;margin-top:0;margin-bottom:24px;">${escapeHtml(dateLabel)}</p>
+
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+        <tr>
+          <td align="center">
+            <a href="${safeAdminUrl}" style="display:inline-block;background:#dc2626;color:#ffffff;font-weight:700;padding:12px 32px;border-radius:6px;text-decoration:none;font-size:15px;letter-spacing:0.2px;">Go to Admin Dashboard &rarr;</a>
+          </td>
+        </tr>
+      </table>
+
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px 0;" />
+
+      <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 12px 0;">Yesterday&rsquo;s Revenue</h2>
+      ${revenueSection}
+
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+
+      <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 12px 0;">New Bookings <span style="font-weight:400;color:#6b7280;">(${bookings.length})</span></h2>
+      ${bookingsSection}
+
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+
+      <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 12px 0;">Class Requests <span style="font-weight:400;color:#6b7280;">(${classRequests.length})</span></h2>
+      ${classRequestsSection}
+
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+
+      <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 12px 0;">Contact Form Submissions <span style="font-weight:400;color:#6b7280;">(${contactSubmissions.length})</span></h2>
+      ${contactSection}
+
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+
+      <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 12px 0;">Today&rsquo;s Schedule <span style="font-weight:400;color:#6b7280;">(${todayClasses.length}&thinsp;class${todayClasses.length === 1 ? "" : "es"})</span></h2>
+      ${todayScheduleSection}
+
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+
+      <table role="presentation" cellpadding="0" cellspacing="8" style="width:100%;">
+        <tr>
+          <td style="width:50%;padding-right:10px;vertical-align:top;">
+            <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 10px 0;">Invoices</h2>
+            <p style="font-size:13px;color:#374151;margin:0 0 5px 0;">New sent yesterday: <strong>${newInvoicesCount}</strong></p>
+            <p style="font-size:13px;color:#374151;margin:0;">Outstanding unpaid: <strong style="color:${outstandingColor};">${outstandingInvoicesCount}</strong>${outstandingInvoicesCount > 0 ? ` <span style="color:#6b7280;">(${outstandingFmt} total)</span>` : ""}</p>
+          </td>
+          <td style="width:50%;padding-left:10px;vertical-align:top;">
+            <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 10px 0;">New Customers</h2>
+            <p style="font-size:26px;font-weight:700;color:#111827;margin:0;">${newCustomersCount}</p>
+            <p style="font-size:13px;color:#6b7280;margin:2px 0 0 0;">new registrations yesterday</p>
+          </td>
+        </tr>
+      </table>
     `),
   };
 }

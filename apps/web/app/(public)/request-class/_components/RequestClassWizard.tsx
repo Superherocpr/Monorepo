@@ -34,6 +34,7 @@ interface FormState {
   preferred_date: string;
   preferred_time_of_day: PreferredTimeOfDay | "";
   group_size: string;
+  contact_phone: string;
   venue_name: string;
   venue_address: string;
   venue_city: string;
@@ -47,6 +48,7 @@ const EMPTY_FORM: FormState = {
   preferred_date: "",
   preferred_time_of_day: "",
   group_size: "",
+  contact_phone: "",
   venue_name: "",
   venue_address: "",
   venue_city: "",
@@ -140,6 +142,7 @@ export default function RequestClassWizard({ classTypes }: Props) {
     const size = parseInt(form.group_size, 10);
     if (!form.group_size || isNaN(size) || size < 1)
       errors.group_size = "Please enter an estimated group size of at least 1.";
+    if (!form.contact_phone.trim()) errors.contact_phone = "Phone number is required.";
     if (!form.venue_name.trim()) errors.venue_name = "Venue name is required.";
     if (!form.venue_address.trim()) errors.venue_address = "Street address is required.";
     if (!form.venue_city.trim()) errors.venue_city = "City is required.";
@@ -162,6 +165,7 @@ export default function RequestClassWizard({ classTypes }: Props) {
       preferred_date: form.preferred_date,
       preferred_time_of_day: form.preferred_time_of_day as PreferredTimeOfDay,
       group_size: parseInt(form.group_size, 10),
+      contact_phone: form.contact_phone.trim(),
       venue_name: form.venue_name.trim(),
       venue_address: form.venue_address.trim(),
       venue_city: form.venue_city.trim(),
@@ -776,6 +780,34 @@ export default function RequestClassWizard({ classTypes }: Props) {
                 <p className="text-red-500 text-xs mt-1">{formErrors.group_size}</p>
               )}
             </div>
+          </div>
+        </section>
+
+        {/* ── Contact Information ── */}
+        <section>
+          <h2 className="text-base font-semibold text-gray-900 mb-4">Contact Information</h2>
+          <div className="max-w-xs">
+            <label
+              htmlFor="contact_phone"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Phone Number <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="tel"
+              id="contact_phone"
+              name="contact_phone"
+              value={form.contact_phone}
+              onChange={handleFormChange}
+              autoComplete="tel"
+              placeholder="(555) 555-5555"
+              className={`block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                formErrors.contact_phone ? "border-red-400" : "border-gray-300"
+              }`}
+            />
+            {formErrors.contact_phone && (
+              <p className="text-red-500 text-xs mt-1">{formErrors.contact_phone}</p>
+            )}
           </div>
         </section>
 
