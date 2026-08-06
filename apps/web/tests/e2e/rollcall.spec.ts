@@ -33,15 +33,9 @@ test.describe("Roll call page", () => {
   });
 
   test("submitting an invalid access code shows an error", async ({ page }) => {
-    // Fill a plausible but wrong 6-digit code
+    // Fill a plausible but wrong 6-digit code — the form auto-submits at 6 digits
     const codeInput = page.getByRole("textbox").first();
     await codeInput.fill("000000");
-
-    // Find and click the submit/continue button
-    const submitButton = page
-      .getByRole("button", { name: /continue|check in|submit|next/i })
-      .first();
-    await submitButton.click();
 
     // An error message must appear — rendered with role="alert" by ErrorMsg.
     await expect(
@@ -53,12 +47,8 @@ test.describe("Roll call page", () => {
     const codeInput = page.getByRole("textbox").first();
     await codeInput.fill("abc!@#");
 
-    const submitButton = page
-      .getByRole("button", { name: /continue|check in|submit|next/i })
-      .first();
-    await submitButton.click();
-
-    // Either the input was sanitised to empty OR an error was shown
+    // The input only accepts digits — non-numeric chars are sanitised away,
+    // leaving an empty value that never reaches the 6-digit auto-submit threshold.
     const value = await codeInput.inputValue();
     const hasError = await page
       .getByRole("alert")
@@ -88,6 +78,15 @@ test.describe("Roll call page", () => {
 });
 
 test.describe("Roll call happy path (seeded)", () => {
+  // These tests seed data into the staging Supabase instance (via .env.local).
+  // They can only run correctly when the test target is localhost — running
+  // against production would use a staging seed code against production's DB.
+  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+  test.skip(
+    !baseURL.includes("localhost"),
+    "Seeded tests seed staging Supabase — only valid when target is localhost"
+  );
+
   // verify-code rate-limits by IP (10/hour). A unique X-Forwarded-For per run
   // isolates this suite's bucket so repeated local runs never flake on 429s.
   test.use({
