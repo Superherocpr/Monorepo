@@ -144,6 +144,7 @@ export async function POST(request: Request): Promise<Response> {
     newInvoicesResult,
     outstandingInvoicesResult,
     newCustomersResult,
+    pendingClassApprovalsResult,
     recipientsResult,
   ] = await Promise.all([
     // Revenue: completed payments yesterday
@@ -219,6 +220,12 @@ export async function POST(request: Request): Promise<Response> {
       .eq("role", "customer")
       .gte("created_at", yesterdayStart)
       .lt("created_at", yesterdayEnd),
+
+    // Pending class request approvals (all-time, status = 'pending')
+    admin
+      .from("class_requests")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending"),
 
     // Email recipients: all active super_admin and manager profiles
     admin
@@ -438,6 +445,7 @@ export async function POST(request: Request): Promise<Response> {
     0
   );
   const newCustomersCount = newCustomersResult.count ?? 0;
+  const pendingClassApprovalsCount = pendingClassApprovalsResult.count ?? 0;
 
   // ── Recipients ───────────────────────────────────────────────────────────────
   const recipients = (recipientsResult?.data ?? []).filter(
@@ -467,6 +475,7 @@ export async function POST(request: Request): Promise<Response> {
     outstandingInvoicesCount,
     outstandingInvoicesTotal,
     newCustomersCount,
+    pendingClassApprovalsCount,
   });
 
   let sentCount = 0;

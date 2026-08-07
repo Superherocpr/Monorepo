@@ -2814,6 +2814,7 @@ export function dailySummaryEmail({
   outstandingInvoicesCount,
   outstandingInvoicesTotal,
   newCustomersCount,
+  pendingClassApprovalsCount,
 }: {
   dateLabel: string;
   adminUrl: string;
@@ -2827,6 +2828,7 @@ export function dailySummaryEmail({
   outstandingInvoicesCount: number;
   outstandingInvoicesTotal: number;
   newCustomersCount: number;
+  pendingClassApprovalsCount: number;
 }): EmailContent {
   const fmtUsd = (n: number): string =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -3041,7 +3043,8 @@ export function dailySummaryEmail({
           <td style="width:50%;padding-right:10px;vertical-align:top;">
             <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 10px 0;">Invoices</h2>
             <p style="font-size:13px;color:#374151;margin:0 0 5px 0;">New sent yesterday: <strong>${newInvoicesCount}</strong></p>
-            <p style="font-size:13px;color:#374151;margin:0;">Outstanding unpaid: <strong style="color:${outstandingColor};">${outstandingInvoicesCount}</strong>${outstandingInvoicesCount > 0 ? ` <span style="color:#6b7280;">(${outstandingFmt} total)</span>` : ""}</p>
+            <p style="font-size:13px;color:#374151;margin:0 0 5px 0;">Outstanding unpaid: <strong style="color:${outstandingColor};">${outstandingInvoicesCount}</strong>${outstandingInvoicesCount > 0 ? ` <span style="color:#6b7280;">(${outstandingFmt} total)</span>` : ""}</p>
+            <p style="font-size:13px;color:#374151;margin:0;">Pending class approvals: <strong style="color:${pendingClassApprovalsCount > 0 ? "#d97706" : "#374151"};">${pendingClassApprovalsCount}</strong></p>
           </td>
           <td style="width:50%;padding-left:10px;vertical-align:top;">
             <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 10px 0;">New Customers</h2>
