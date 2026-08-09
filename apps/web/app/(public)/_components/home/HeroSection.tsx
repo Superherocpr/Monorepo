@@ -125,18 +125,30 @@ export default async function HeroSection() {
           Counties.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+        {/*
+         * Button group: two primary CTAs side-by-side, then a full-width secondary below.
+         * items-stretch makes the bottom button fill the same horizontal span as the top row.
+         */}
+        <div className="flex flex-col items-stretch gap-3 mt-2 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Link
+              href="/book"
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold px-8 py-3.5 rounded-lg transition-colors duration-150 text-base text-center"
+            >
+              Book a Class
+            </Link>
+            <Link
+              href="/book"
+              className="border-2 border-white text-white font-semibold px-8 py-3.5 rounded-lg hover:bg-white/10 transition-colors duration-150 text-base text-center"
+            >
+              View Schedule
+            </Link>
+          </div>
           <Link
-            href="/book"
-            className="bg-red-600 hover:bg-red-700 text-white font-semibold px-8 py-3.5 rounded-lg transition-colors duration-150 text-base"
+            href="/contact"
+            className="border-2 border-white/60 text-white font-semibold py-3.5 rounded-lg hover:bg-white/10 transition-colors duration-150 text-base text-center"
           >
-            Book a Class
-          </Link>
-          <Link
-            href="/book"
-            className="border-2 border-white text-white font-semibold px-8 py-3.5 rounded-lg hover:bg-white/10 transition-colors duration-150 text-base"
-          >
-            View Schedule
+            Become an Instructor
           </Link>
         </div>
 

@@ -16,6 +16,7 @@ export const CONTACT_INQUIRY_TYPES = [
   "Corporate / Workplace Training",
   "Certification Renewal",
   "Booking Inquiry",
+  "Hiring",
   "Other",
 ] as const;
 
