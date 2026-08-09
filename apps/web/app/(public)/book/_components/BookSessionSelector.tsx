@@ -132,11 +132,24 @@ export default function BookSessionSelector({
   const [zipError, setZipError] = useState<string | null>(null);
   const [zipLoading, setZipLoading] = useState(false);
   const [classTypeOpen, setClassTypeOpen] = useState(false);
+  const [instructorOpen, setInstructorOpen] = useState(false);
+  const [activeInstructor, setActiveInstructor] = useState<string | null>(null);
 
-  const isFiltered = !!activeClassType || !!dateFrom || !!dateTo || !!zipFilter;
+  // Derive the sorted unique instructor list from the sessions passed in
+  const instructors = Array.from(
+    new Map(
+      sessions.map((s) => [
+        `${s.profiles.first_name} ${s.profiles.last_name}`,
+        { id: s.profiles.email ?? `${s.profiles.first_name}-${s.profiles.last_name}`, name: `${s.profiles.first_name} ${s.profiles.last_name}` },
+      ])
+    ).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  const isFiltered = !!activeClassType || !!activeInstructor || !!dateFrom || !!dateTo || !!zipFilter;
 
   function clearFilters() {
     setActiveClassType(null);
+    setActiveInstructor(null);
     setDateFrom("");
     setDateTo("");
     setZipInput("");
@@ -259,6 +272,7 @@ export default function BookSessionSelector({
     const sessionDate = new Date(session.starts_at);
     if (sessionDate < new Date()) return false;
     if (activeClassType && toSlug(session.class_types.name) !== activeClassType) return false;
+    if (activeInstructor && `${session.profiles.first_name} ${session.profiles.last_name}` !== activeInstructor) return false;
     if (dateFrom && sessionDate < new Date(dateFrom)) return false;
     if (dateTo && sessionDate > new Date(dateTo + "T23:59:59")) return false;
 
@@ -458,6 +472,62 @@ export default function BookSessionSelector({
                 </div>
               )}
             </div>
+
+            {/* Row 3: collapsible instructor section — only shown when >1 instructor */}
+            {instructors.length > 1 && (
+              <div className="border-t border-gray-200">
+                <button
+                  onClick={() => setInstructorOpen((o) => !o)}
+                  aria-expanded={instructorOpen}
+                  className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-widest hover:bg-gray-100 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500"
+                >
+                  <span>Instructor{activeInstructor ? ` · ${activeInstructor}` : ""}</span>
+                  <ChevronDown
+                    size={14}
+                    aria-hidden="true"
+                    className={`text-gray-400 transition-transform duration-200 ${instructorOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {instructorOpen && (
+                  <div
+                    className="flex flex-wrap gap-2 px-4 pb-4 pt-1"
+                    role="group"
+                    aria-label="Filter by instructor"
+                  >
+                    <button
+                      onClick={() => setActiveInstructor(null)}
+                      aria-pressed={activeInstructor === null}
+                      className={[
+                        "px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
+                        activeInstructor === null
+                          ? "bg-red-600 text-white"
+                          : "bg-white border border-gray-200 text-gray-700 hover:border-red-300",
+                      ].join(" ")}
+                    >
+                      All
+                    </button>
+                    {instructors.map((instructor) => {
+                      const isActive = activeInstructor === instructor.name;
+                      return (
+                        <button
+                          key={instructor.id}
+                          onClick={() => setActiveInstructor(isActive ? null : instructor.name)}
+                          aria-pressed={isActive}
+                          className={[
+                            "px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
+                            isActive
+                              ? "bg-red-600 text-white"
+                              : "bg-white border border-gray-200 text-gray-700 hover:border-red-300",
+                          ].join(" ")}
+                        >
+                          {instructor.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>{/* end filter bar */}
 

@@ -10,7 +10,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { Resend } from "resend";
-import { bookingConfirmationEmail } from "@/lib/emails";
+import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
 
 /**
  * Adds a manual booking for the specified customer.
@@ -104,7 +104,7 @@ export async function POST(
   if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
     const { data: customerProfile } = await supabase
       .from("profiles")
-      .select("first_name, email")
+      .select("first_name, last_name, email")
       .eq("id", customerId)
       .maybeSingle();
 
@@ -163,6 +163,40 @@ export async function POST(
         }
       } catch (emailErr) {
         console.error("[customers/[id]/add-booking] Confirmation email failed:", emailErr);
+      }
+
+      // Notify the instructor of the new booking (best-effort — non-fatal).
+      if (instructorProfile?.email) {
+        try {
+          const customerFullName = [
+            customerFirstName ?? "",
+            customerProfile?.last_name ?? "",
+          ]
+            .join(" ")
+            .trim() || "Unknown";
+
+          const { subject: iSubject, html: iHtml } = instructorBookingNotificationEmail({
+            instructorFirstName: instructorProfile.first_name,
+            customerName: customerFullName,
+            className,
+            startsAt: session.starts_at,
+            locationName: location?.name ?? "",
+            source: "manual",
+          });
+
+          const { error: iEmailError } = await new Resend(process.env.RESEND_API_KEY).emails.send({
+            from: process.env.RESEND_FROM_EMAIL ?? "",
+            to: instructorProfile.email,
+            subject: iSubject,
+            html: iHtml,
+          });
+
+          if (iEmailError) {
+            console.error("[customers/[id]/add-booking] Instructor notification email failed:", iEmailError);
+          }
+        } catch (iEmailErr) {
+          console.error("[customers/[id]/add-booking] Instructor notification email failed:", iEmailErr);
+        }
       }
     }
   }

@@ -29,7 +29,7 @@ import {
   classifyCaptureRequestError,
 } from "@/lib/paypal";
 import { Resend } from "resend";
-import { bookingConfirmationEmail } from "@/lib/emails";
+import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
 import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
@@ -422,7 +422,7 @@ export async function POST(request: Request) {
         .maybeSingle(),
       supabase
         .from("profiles")
-        .select("first_name, email")
+        .select("first_name, last_name, email")
         .eq("id", customerId)
         .maybeSingle(),
     ]);
@@ -472,6 +472,36 @@ export async function POST(request: Request) {
         console.error("[bookings/confirm] Confirmation email failed:", {
           bookingId,
           error: emailError,
+        });
+      }
+
+      // Notify the instructor of the new booking (best-effort — non-fatal).
+      if (instructorProfile?.email && typeof startsAt === "string") {
+        const customerFullName = [
+          typeof customerFirstName === "string" && customerFirstName
+            ? customerFirstName
+            : (customerProfile?.first_name ?? ""),
+          customerProfile?.last_name ?? "",
+        ]
+          .join(" ")
+          .trim() || "Unknown";
+
+        const { subject: iSubject, html: iHtml } = instructorBookingNotificationEmail({
+          instructorFirstName: instructorProfile.first_name,
+          customerName: customerFullName,
+          className: typeof className === "string" ? className : "CPR Class",
+          startsAt,
+          locationName: typeof locationName === "string" ? locationName : "",
+          source: appliedPromoCode ? "promo" : "online",
+        });
+
+        await resend.emails.send({
+          from: process.env.RESEND_FROM_EMAIL!,
+          to: instructorProfile.email,
+          subject: iSubject,
+          html: iHtml,
+        }).catch((err: unknown) => {
+          console.error("[bookings/confirm] Instructor notification email failed:", { bookingId, error: err });
         });
       }
     }

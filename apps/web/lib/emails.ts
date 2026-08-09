@@ -2738,7 +2738,80 @@ export function bookingCancelledEmail({
   };
 }
 
-// ── 31. Daily operations summary — admin morning digest ────────────────────────
+// ── 31. Instructor new booking notification ────────────────────────────────────
+
+/**
+ * Sent to the class instructor when a student books their session.
+ * Triggered by: POST /api/bookings/confirm, /api/bookings/confirm-free,
+ *   and POST /api/customers/[id]/add-booking.
+ * @param instructorFirstName - Instructor's first name.
+ * @param customerName        - Full name of the student who booked.
+ * @param className           - Name of the class type (e.g. "BLS Provider").
+ * @param startsAt            - ISO datetime string of the session start.
+ * @param locationName        - Venue name.
+ * @param source              - How the booking was created: 'online' | 'promo' | 'manual'.
+ */
+export function instructorBookingNotificationEmail({
+  instructorFirstName,
+  customerName,
+  className,
+  startsAt,
+  locationName,
+  source,
+}: {
+  instructorFirstName: string | null;
+  customerName: string;
+  className: string;
+  startsAt: string;
+  locationName: string;
+  source: "online" | "promo" | "manual";
+}): EmailContent {
+  const safeInstructor = escapeHtml(instructorFirstName?.trim() ?? "Instructor");
+  const safeCustomer  = escapeHtml(customerName.trim());
+  const safeClass     = escapeHtml(className.trim());
+  const safeLoc       = escapeHtml(locationName.trim());
+
+  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
+    weekday: "long",
+    month:   "long",
+    day:     "numeric",
+    year:    "numeric",
+    timeZone: "America/New_York",
+  });
+  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
+    hour:    "numeric",
+    minute:  "2-digit",
+    hour12:  true,
+    timeZone: "America/New_York",
+  });
+
+  const sourceNote =
+    source === "manual"
+      ? `<p style="font-size:13px;color:#6b7280;margin:16px 0 0 0;">This booking was added manually by a SuperHeroCPR staff member.</p>`
+      : source === "promo"
+      ? `<p style="font-size:13px;color:#6b7280;margin:16px 0 0 0;">This student booked using a promotional code.</p>`
+      : "";
+
+  return {
+    subject: `New booking — ${safeClass} on ${formattedDate}`,
+    html: wrapEmail(`
+      <h1>New Student Booked Your Class</h1>
+      <p>Hi ${safeInstructor},</p>
+      <p>A student just booked a spot in one of your upcoming classes.</p>
+      <table cellpadding="6" style="margin:16px 0;">
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Student</td><td><strong>${safeCustomer}</strong></td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Class</td><td>${safeClass}</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Date</td><td>${formattedDate}</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Time</td><td>${formattedTime} ET</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Location</td><td>${safeLoc}</td></tr>
+      </table>
+      ${sourceNote}
+      <p>- The SuperHeroCPR Team</p>
+    `),
+  };
+}
+
+// ── 32. Daily operations summary — admin morning digest ────────────────────────
 
 /** One row of revenue broken down by payment type in the daily digest. */
 export interface DailySummaryRevenue {
