@@ -337,7 +337,7 @@ Acceptable risk at current usage volumes — this is an internal admin-only tool
 **File:** `Building/migrations/0045_revoke_anon_security_definer.sql`, `Building/migrations/0046_revoke_stock_rpc_anon.sql`
 **Discovered:** 2026-07-30
 **Threat Level:** 7/10
-**Status:** Resolved — migration 0049 applied to staging
+**Status:** FIXED — migration 0049 applied to staging and production (2026-08-03). Verified anon/auth cannot execute any SECURITY DEFINER function in the public schema on either env.
 
 **Description:**
 Migrations 0045 and 0046 were written to stop anonymous callers reaching seven
