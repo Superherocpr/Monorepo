@@ -6,8 +6,8 @@
  * Returns an array where each element is a plain object keyed by the
  * normalised (trimmed, lowercased) header name. All values are strings.
  *
- * XLSX parsing uses the `xlsx` (SheetJS) library which is loaded lazily so
- * it does not bloat pages that don't need it.
+ * XLSX parsing uses `read-excel-file` (loaded lazily) to avoid the
+ * prototype-pollution and ReDoS vulnerabilities in the unmaintained xlsx/SheetJS package.
  */
 
 /** A single parsed spreadsheet row — keys are lowercased header names. */
@@ -73,29 +73,24 @@ export function parseCsvText(text: string): SpreadsheetRow[] {
 /**
  * Parses an XLSX file (as an ArrayBuffer) into an array of row objects.
  * Uses the first sheet in the workbook.
- * Lazily imports `xlsx` so the bundle cost is only paid by pages that call this.
+ * Lazily imports `read-excel-file` so the bundle cost is only paid by pages that call this.
  * @param buffer - The file contents as an ArrayBuffer.
  * @returns Array of row objects keyed by lowercased header name.
  */
 export async function parseXlsxBuffer(buffer: ArrayBuffer): Promise<SpreadsheetRow[]> {
-  // Dynamic import — xlsx is a large library, keep it out of the initial bundle
-  const XLSX = await import("xlsx");
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return [];
-
-  const sheet = workbook.Sheets[sheetName];
-  // sheet_to_json with header:1 gives us raw arrays; we handle headers ourselves
-  const rawRows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
+  // Dynamic import — keep the library out of the initial bundle
+  const { default: readXlsxFile } = await import("read-excel-file/browser");
+  const blob = new Blob([buffer]);
+  const rawRows = await readXlsxFile(blob) as unknown as unknown[][];
   if (rawRows.length < 2) return [];
 
-  const headers = (rawRows[0] as string[]).map((h) =>
+  const headers = (rawRows[0] as unknown[]).map((h) =>
     String(h ?? "").trim().toLowerCase()
   );
   const rows: SpreadsheetRow[] = [];
 
   for (let i = 1; i < rawRows.length; i++) {
-    const cells = rawRows[i] as string[];
+    const cells = rawRows[i] as unknown[];
     // Skip entirely blank rows
     if (cells.every((c) => !String(c ?? "").trim())) continue;
     const row: SpreadsheetRow = {};

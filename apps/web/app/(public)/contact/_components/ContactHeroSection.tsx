@@ -43,7 +43,8 @@ export default function ContactHeroSection() {
         </h1>
         <p className="text-gray-300 text-lg leading-relaxed">
           Have a question about our classes? Interested in group or corporate
-          training? Reach out and we&apos;ll get back to you as soon as possible.
+          training? Want to become a CPR Instructor? Reach out and we&apos;ll
+          get back to you as soon as possible.
         </p>
       </div>
     </section>

@@ -4,7 +4,7 @@
  * Auth: Bearer API key (validated against api_keys table via enrollware-api-auth)
  *
  * Fetches the student roster for the given ?sessionId, generates an Excel
- * (.xlsx) workbook in memory using SheetJS, and streams it back as a binary
+ * (.xlsx) workbook in memory using ExcelJS, and streams it back as a binary
  * response. Nothing is written to disk — the workbook exists only for the
  * duration of the request.
  *
@@ -19,7 +19,7 @@
  */
 
 import { NextRequest } from "next/server";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { createAdminClient } from "@/lib/supabase/server";
 import {
   validateEnrollwareKey,
@@ -139,20 +139,16 @@ export async function GET(request: NextRequest): Promise<Response> {
     "CCF Compression",
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Students");
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Students");
+  sheet.addRow(header);
+  for (const row of rows) sheet.addRow(row);
 
-  // Write to a Uint8Array — no temp file, lives only in memory.
-  // XLSX.write returns Uint8Array<ArrayBufferLike>; TypeScript 5.9 requires
-  // Uint8Array<ArrayBuffer> for BlobPart. new Uint8Array(raw) copies the bytes
-  // into a fresh ArrayBuffer-backed view that satisfies the stricter constraint.
-  const raw = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as Uint8Array;
-  const blob = new Blob([new Uint8Array(raw)], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
+  // writeBuffer returns a Buffer (Uint8Array subclass) — pass directly as the
+  // response body. No temp file; the workbook exists only for this request.
+  const buffer = await workbook.xlsx.writeBuffer();
 
-  return new Response(blob, {
+  return new Response(new Uint8Array(buffer as ArrayBuffer), {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
