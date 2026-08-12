@@ -12,9 +12,9 @@
 --   - New customer registrations
 --
 -- SCHEDULE:
---   Fires at 12:00 UTC daily:
---     • Winter (EST, UTC-5): 7:00am ET  ← exact target
---     • Summer (EDT, UTC-4): 8:00am ET
+--   Fires at 11:00 UTC daily:
+--     • Summer (EDT, UTC-4): 7:00am ET  ← exact target
+--     • Winter (EST, UTC-5): 6:00am ET
 --
 -- PREREQUISITES (already in place as of migration 0050):
 --   pg_cron, pg_net, and system_settings rows 'app_url' / 'cron_secret'.
@@ -26,7 +26,7 @@ where exists (
 
 select cron.schedule(
   'daily-ops-summary',
-  '0 12 * * *',
+  '0 11 * * *',
   $$
     select net.http_post(
       url     := (select value from system_settings where key = 'app_url') || '/api/admin/daily-summary',
