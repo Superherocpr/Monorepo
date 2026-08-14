@@ -1021,7 +1021,16 @@ export function bookingConfirmationEmail({
     hour12: true,
   });
 
-  const safeInstructorName = instructorName ? escapeHtml(instructorName.trim()) : null;
+  const safeFirstName      = firstName ? escapeHtml(firstName.trim()) : null;
+  const safeClassName      = escapeHtml(className.trim());
+  const safeLocationName   = escapeHtml(locationName.trim());
+  const safeLocationAddr   = escapeHtml(locationAddress.trim());
+  const safeLocationCity   = escapeHtml(locationCity.trim());
+  const safeLocationState  = escapeHtml(locationState.trim());
+  const safeLocationZip    = escapeHtml(locationZip.trim());
+  const safeProcessor      = escapeHtml(paymentProcessor.trim());
+
+  const safeInstructorName  = instructorName  ? escapeHtml(instructorName.trim())  : null;
   const safeInstructorEmail = instructorEmail ? escapeHtml(instructorEmail.trim()) : null;
   const safeInstructorPhone = instructorPhone ? escapeHtml(instructorPhone.trim()) : null;
 
@@ -1038,18 +1047,18 @@ export function bookingConfirmationEmail({
     : "";
 
   return {
-    subject: `Booking Confirmed - ${className} on ${formattedDate}`,
+    subject: `Booking Confirmed - ${safeClassName} on ${formattedDate}`,
     html: wrapEmail(`
       <h1>You're booked!</h1>
-      <p>Hi ${firstName ?? "there"},</p>
-      <p>Your booking for <strong>${className}</strong> has been confirmed. Here are your details:</p>
+      <p>Hi ${safeFirstName ?? "there"},</p>
+      <p>Your booking for <strong>${safeClassName}</strong> has been confirmed. Here are your details:</p>
       <table cellpadding="6">
-        <tr><td><strong>Class:</strong></td><td>${className}</td></tr>
+        <tr><td><strong>Class:</strong></td><td>${safeClassName}</td></tr>
         <tr><td><strong>Date:</strong></td><td>${formattedDate}</td></tr>
         <tr><td><strong>Time:</strong></td><td>${formattedTime}</td></tr>
         <tr>
           <td style="vertical-align:top"><strong>Location:</strong></td>
-          <td>${locationName}<br>${locationAddress}<br>${locationCity}, ${locationState} ${locationZip}</td>
+          <td>${safeLocationName}<br>${safeLocationAddr}<br>${safeLocationCity}, ${safeLocationState} ${safeLocationZip}</td>
         </tr>
         ${instructorRows}
         ${
@@ -1060,11 +1069,11 @@ export function bookingConfirmationEmail({
             : ""
         }
         <tr><td><strong>Amount paid:</strong></td><td>$${amount.toFixed(2)}</td></tr>
-        <tr><td><strong>Payment processed by:</strong></td><td>${paymentProcessor}</td></tr>
+        <tr><td><strong>Payment processed by:</strong></td><td>${safeProcessor}</td></tr>
         <tr><td><strong>Transaction ID:</strong></td><td>${transactionId ?? "N/A"}</td></tr>
       </table>
       <p>Please arrive a few minutes early. Wear comfortable clothing.</p>
-      <p>Questions? Reply to this email or call us at (813) 966-3969.</p>
+      <p>Need to reschedule? Call us at ${safeInstructorPhone}.</p>
       <p>See you in class!</p>
       <p>— The SuperHeroCPR Team</p>
     `),

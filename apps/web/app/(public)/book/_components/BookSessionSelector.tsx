@@ -41,9 +41,10 @@ function formatTimeRange(startsAt: string, endsAt: string): string {
   return `${fmt(startsAt)} – ${fmt(endsAt)}`;
 }
 
-/** Formats an ISO date to a short label, e.g. "Apr 22, 2025". */
+/** Formats an ISO date to a short label, e.g. "Tuesday, Apr 22, 2025". */
 function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
+    weekday: "long",
     month: "short",
     day: "numeric",
     year: "numeric",

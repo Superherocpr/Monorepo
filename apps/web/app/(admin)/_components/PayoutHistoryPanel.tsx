@@ -110,6 +110,7 @@ interface PayoutActionResponse {
   syncedItems?: number;
   deniedBatches?: number;
   releasedItems?: number;
+  failedBatches?: number;
   confirmedByPayPal?: boolean;
 }
 
@@ -424,13 +425,23 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
       }
 
       const denied = parsed.deniedBatches ?? 0;
-      setMessage({
-        type: denied > 0 ? "error" : "success",
-        text:
-          denied > 0
-            ? `PayPal denied ${denied} batch(es). ${parsed.releasedItems ?? 0} payout(s) went back into the payable queue.`
-            : `Checked ${parsed.syncedItems ?? 0} payout item(s) against PayPal. No denials found.`,
-      });
+      const failed = parsed.failedBatches ?? 0;
+      const synced = parsed.syncedItems ?? 0;
+
+      let text: string;
+      if (denied > 0) {
+        text = `PayPal denied ${denied} batch(es). ${parsed.releasedItems ?? 0} payout(s) went back into the payable queue.`;
+        if (failed > 0) text += ` ${failed} other batch(es) could not be reached and were skipped.`;
+      } else if (failed > 0) {
+        text =
+          synced > 0
+            ? `Checked ${synced} payout item(s). ${failed} batch(es) could not be reached and were skipped — try again shortly.`
+            : `Could not reach PayPal for ${failed} batch(es) — nothing was confirmed. Try again shortly.`;
+      } else {
+        text = `Checked ${synced} payout item(s) against PayPal. No denials found.`;
+      }
+
+      setMessage({ type: denied > 0 || failed > 0 ? "error" : "success", text });
       router.refresh();
     } catch {
       setMessage({ type: "error", text: "Something went wrong syncing payouts." });
