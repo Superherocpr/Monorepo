@@ -12,6 +12,11 @@
  * The hourly cron matters: PayPal denials usually land minutes to hours after it
  * accepts a batch, and before this job existed the only way to discover one was
  * for an admin to remember to click Sync.
+ *
+ * A batch whose PayPal lookup errors (network issue, expired credentials, PayPal
+ * outage) does not abort the run, but it is counted in `failedBatches` rather
+ * than silently dropped — otherwise a total PayPal outage would report the same
+ * `success: true, syncedItems: 0` result as "nothing needed checking."
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
@@ -110,6 +115,7 @@ export async function POST(request: Request) {
   let syncedItems = 0;
   let deniedBatches = 0;
   let releasedItems = 0;
+  let failedBatches = 0;
 
   for (const batch of (batches ?? []) as PayoutBatchRow[]) {
     if (!batch.paypal_payout_batch_id) continue;
@@ -130,7 +136,10 @@ export async function POST(request: Request) {
       }
     } catch (err) {
       // One unreachable batch must not abort the rest of the run, especially on
-      // the cron path where nobody is watching for an error response.
+      // the cron path where nobody is watching for an error response. But the
+      // failure still has to be counted — otherwise a PayPal outage looks
+      // identical to "nothing needed syncing" to whoever reads the result.
+      failedBatches += 1;
       console.error("[payouts/sync] Reconciliation failed for batch", batch.id, err);
     }
   }
@@ -147,6 +156,7 @@ export async function POST(request: Request) {
     syncedItems,
     deniedBatches,
     releasedItems,
+    failedBatches,
     triggeredBy: viaCron ? "cron" : actorId,
   });
 }
