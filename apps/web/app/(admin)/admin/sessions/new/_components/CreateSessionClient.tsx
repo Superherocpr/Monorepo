@@ -178,6 +178,14 @@ export default function CreateSessionClient({
   /** Set once a team booking is created — switches the view to the share link. */
   const [created, setCreated] = useState<TeamBookingCreated | null>(null);
   const [copied, setCopied] = useState(false);
+  /**
+   * Shown after validation passes on a team-booking submit, before it actually
+   * goes out — the share-link email fires immediately, so this is the last
+   * point to remind the creator they still have to forward it themselves.
+   */
+  const [showTeamReminder, setShowTeamReminder] = useState(false);
+  /** The validated request body, held while the reminder is up. */
+  const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
   /** IDs of add-ons selected to offer on this session — narrowed to the selected class type's eligibility. */
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   /** Tracks whether duration and capacity were last populated by the class-type auto-fill. */
@@ -283,8 +291,10 @@ export default function CreateSessionClient({
   }
 
   /**
-   * Validates the form, builds starts_at/ends_at timestamps, and POSTs to
-   * /api/sessions. On success, navigates to the new session's detail page.
+   * Validates the form and builds starts_at/ends_at timestamps and the request
+   * payload. A regular session submits immediately via submitPayload(); a team
+   * booking instead shows the share-link reminder and waits for confirmation
+   * before submitPayload() is called.
    * @param e - Form submit event.
    */
   async function handleSubmit(e: React.FormEvent) {
@@ -394,8 +404,6 @@ export default function CreateSessionClient({
     endsDate.setMinutes(endsDate.getMinutes() + durationMin);
     const ends_at = endsDate.toISOString();
 
-    setLoading(true);
-
     const payload: Record<string, unknown> = {
       class_type_id: form.class_type_id,
       location_id: form.location_id,
@@ -427,6 +435,28 @@ export default function CreateSessionClient({
       }
       if (classRequestId) payload.class_request_id = classRequestId;
     }
+
+    // Team bookings pause here for a confirmation: creating this immediately
+    // emails the creator the share link (not the company contact — the creator
+    // has to forward it themselves), and for a manager/super admin the class
+    // goes live right away. Regular sessions submit straight through as before.
+    if (isTeam) {
+      setPendingPayload(payload);
+      setShowTeamReminder(true);
+      return;
+    }
+
+    await submitPayload(payload);
+  }
+
+  /**
+   * Posts the validated payload to the appropriate endpoint and handles the
+   * response — team bookings show the share link, regular sessions redirect
+   * to the new session's detail page.
+   * @param payload - The request body built and validated by handleSubmit.
+   */
+  async function submitPayload(payload: Record<string, unknown>): Promise<void> {
+    setLoading(true);
 
     try {
       const res = await fetch(isTeam ? "/api/team-bookings" : "/api/sessions", {
@@ -1306,6 +1336,60 @@ export default function CreateSessionClient({
             setField("location_id", location.id);
           }}
         />
+      )}
+
+      {/* Team-booking submit reminder — the share-link email fires immediately
+          on creation, and it goes to the creator, not the company contact, so
+          this is the last chance to remind them they still have to forward it. */}
+      {showTeamReminder && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">
+              Don&apos;t forget to send the link
+            </h2>
+            <p className="text-sm text-gray-600">
+              {isTeam && isInstructor ? (
+                <>
+                  You&apos;ll get an email with this class&apos;s signup link — look for it in
+                  your inbox. We don&apos;t send it to the company contact automatically, so
+                  forward it to them yourself. This class still needs manager approval
+                  before anyone can sign up, so don&apos;t send it out until it&apos;s
+                  approved.
+                </>
+              ) : (
+                <>
+                  You&apos;ll get an email with this class&apos;s signup link — look for it in
+                  your inbox. We don&apos;t send it to the company contact automatically, so
+                  forward it to them yourself. This class goes live as soon as you submit,
+                  so people can start signing up the moment you send it.
+                </>
+              )}
+            </p>
+            <div className="pt-2 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTeamReminder(false);
+                  setPendingPayload(null);
+                }}
+                className="flex-1 border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+              >
+                Go back and check
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTeamReminder(false);
+                  if (pendingPayload) void submitPayload(pendingPayload);
+                  setPendingPayload(null);
+                }}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm"
+              >
+                Yes, create it
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
