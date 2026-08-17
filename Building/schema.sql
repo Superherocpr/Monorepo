@@ -260,6 +260,7 @@ CREATE TABLE IF NOT EXISTS class_sessions (
   assistant_name               text,
   assistant_reminder_sent_at   timestamptz,
   additional_hours             int NOT NULL DEFAULT 0,
+  is_private                   boolean NOT NULL DEFAULT false,
   PRIMARY KEY (id),
   CONSTRAINT class_sessions_discount_percent_check CHECK (((discount_percent >= (0)::numeric) AND (discount_percent <= (50)::numeric))),
   CONSTRAINT class_sessions_session_token_key UNIQUE (session_token)
@@ -293,6 +294,31 @@ CREATE TABLE IF NOT EXISTS invoices (
   CONSTRAINT invoices_invoice_number_key UNIQUE (invoice_number)
 );
 
+CREATE TABLE IF NOT EXISTS team_bookings (
+  id                           uuid NOT NULL DEFAULT gen_random_uuid(),
+  session_id                   uuid NOT NULL,
+  company_name                 text NOT NULL,
+  contact_name                 text NOT NULL,
+  contact_email                text NOT NULL,
+  contact_phone                text,
+  payment_mode                 text NOT NULL,
+  price_per_seat               numeric(10,2),
+  total_price                  numeric(10,2),
+  invoice_id                   uuid,
+  share_token                  text NOT NULL,
+  created_by                   uuid NOT NULL,
+  class_request_id             uuid,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (id),
+  CONSTRAINT team_bookings_share_token_key UNIQUE (share_token),
+  CONSTRAINT team_bookings_payment_mode_check CHECK ((payment_mode = ANY (ARRAY['company'::text, 'per_seat'::text]))),
+  CONSTRAINT team_bookings_price_shape_check CHECK (
+    ((payment_mode = 'per_seat'::text) AND (price_per_seat IS NOT NULL) AND (total_price IS NULL))
+    OR
+    ((payment_mode = 'company'::text) AND (total_price IS NOT NULL) AND (price_per_seat IS NULL))
+  )
+);
+
 CREATE TABLE IF NOT EXISTS invoice_activity_log (
   id                           uuid NOT NULL DEFAULT gen_random_uuid(),
   invoice_id                   uuid NOT NULL,
@@ -313,6 +339,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   customer_id                  uuid NOT NULL,
   invoice_id                   uuid,
   booking_source               booking_source NOT NULL,
+  team_booking_id              uuid,
   created_by                   uuid,
   manual_booking_reason        text,
   cancelled                    boolean NOT NULL DEFAULT false,

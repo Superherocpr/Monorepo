@@ -3138,3 +3138,205 @@ export function dailySummaryEmail({
     `),
   };
 }
+
+// ── 33. Team booking — staff share link + employee signup confirmation ────────
+
+/**
+ * Sent to the staff member who just created a team/corporate booking, carrying
+ * the share link they hand to the company contact.
+ * Triggered by: POST /api/team-bookings.
+ * @param staffFirstName    - First name of the staff member who created it.
+ * @param companyName       - The company the booking is for.
+ * @param contactName       - The company's contact person.
+ * @param className         - Name of the class type.
+ * @param startsAt          - ISO datetime string of the session start.
+ * @param locationName      - Venue name.
+ * @param shareUrl          - Full public /team/<token> URL to forward.
+ * @param paymentMode       - 'company' (invoiced flat) or 'per_seat' (employees pay).
+ * @param priceLabel        - Human-readable price, e.g. "$1,200.00 total" or "$80.00 per seat".
+ * @param invoiceNumber     - Invoice raised in company mode, else null.
+ * @param pendingApproval   - True when the class still needs approval before the link accepts signups.
+ */
+export function teamBookingCreatedEmail({
+  staffFirstName,
+  companyName,
+  contactName,
+  className,
+  startsAt,
+  locationName,
+  shareUrl,
+  paymentMode,
+  priceLabel,
+  invoiceNumber,
+  pendingApproval,
+}: {
+  staffFirstName: string | null;
+  companyName: string;
+  contactName: string;
+  className: string;
+  startsAt: string;
+  locationName: string;
+  shareUrl: string;
+  paymentMode: "company" | "per_seat";
+  priceLabel: string;
+  invoiceNumber: string | null;
+  pendingApproval: boolean;
+}): EmailContent {
+  const safeStaff   = escapeHtml(staffFirstName?.trim() ?? "there");
+  const safeCompany = escapeHtml(companyName.trim());
+  const safeContact = escapeHtml(contactName.trim());
+  const safeClass   = escapeHtml(className.trim());
+  const safeLoc     = escapeHtml(locationName.trim());
+  const safeUrl     = escapeHtml(shareUrl);
+  const safePrice   = escapeHtml(priceLabel);
+
+  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
+    weekday: "long",
+    month:   "long",
+    day:     "numeric",
+    year:    "numeric",
+    timeZone: "America/New_York",
+  });
+  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
+    hour:    "numeric",
+    minute:  "2-digit",
+    hour12:  true,
+    timeZone: "America/New_York",
+  });
+
+  const paymentNote =
+    paymentMode === "company"
+      ? `<p style="font-size:14px;color:#374151;">${safeCompany} is being invoiced for the full amount${
+          invoiceNumber ? ` (invoice <strong>${escapeHtml(invoiceNumber)}</strong>)` : ""
+        }. Employees sign up free through the link — they can do so before the invoice is paid.</p>`
+      : `<p style="font-size:14px;color:#374151;">Each employee pays ${safePrice} when they sign up.</p>`;
+
+  const approvalNote = pendingApproval
+    ? `<p style="font-size:13px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;">This class still needs manager approval before the link will accept signups. Don't send it out until it's approved.</p>`
+    : "";
+
+  return {
+    subject: `Team booking created — ${safeCompany} (${formattedDate})`,
+    html: wrapEmail(`
+      <h1>Team Booking Link Ready</h1>
+      <p>Hi ${safeStaff},</p>
+      <p>The corporate booking for <strong>${safeCompany}</strong> is set up. Send the link below to ${safeContact} — they'll forward it to their own staff.</p>
+      <table cellpadding="6" style="margin:16px 0;">
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Company</td><td><strong>${safeCompany}</strong></td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Contact</td><td>${safeContact}</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Class</td><td>${safeClass}</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Date</td><td>${formattedDate}</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Time</td><td>${formattedTime} ET</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Location</td><td>${safeLoc}</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Pricing</td><td>${safePrice}</td></tr>
+      </table>
+      ${approvalNote}
+      <p style="margin:20px 0;"><a href="${safeUrl}" style="background:#dc2626;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;display:inline-block;">Open the signup page</a></p>
+      <p style="font-size:13px;color:#6b7280;word-break:break-all;">${safeUrl}</p>
+      ${paymentNote}
+      <p style="font-size:13px;color:#6b7280;">Anyone with this link can sign up, so only share it with the company contact. The same page shows them who has signed up so far.</p>
+      <p>- The SuperHeroCPR Team</p>
+    `),
+  };
+}
+
+/**
+ * Sent to an employee who just reserved their spot through a team link.
+ * Triggered by: POST /api/team-bookings/[share_token]/signup.
+ * @param firstName         - Employee's first name.
+ * @param companyName       - The company that arranged the class.
+ * @param className         - Name of the class type.
+ * @param startsAt          - ISO datetime string of the session start.
+ * @param locationName      - Venue name.
+ * @param locationAddress   - Street address.
+ * @param locationCity      - City.
+ * @param locationState     - State.
+ * @param locationZip       - ZIP code.
+ * @param amountPaid        - What this employee paid. 0 when the company covers it.
+ * @param companyPaid       - True when the company is covering the cost.
+ * @param instructorName    - Assigned instructor, when known.
+ * @param cancellationPhone - Number to call to cancel — the instructor's when they created the booking.
+ */
+export function teamSignupConfirmationEmail({
+  firstName,
+  companyName,
+  className,
+  startsAt,
+  locationName,
+  locationAddress,
+  locationCity,
+  locationState,
+  locationZip,
+  amountPaid,
+  companyPaid,
+  instructorName,
+  cancellationPhone,
+}: {
+  firstName: string | null;
+  companyName: string;
+  className: string;
+  startsAt: string;
+  locationName: string;
+  locationAddress: string;
+  locationCity: string;
+  locationState: string;
+  locationZip: string;
+  amountPaid: number;
+  companyPaid: boolean;
+  instructorName: string | null;
+  cancellationPhone: string;
+}): EmailContent {
+  const safeFirst   = escapeHtml(firstName?.trim() ?? "there");
+  const safeCompany = escapeHtml(companyName.trim());
+  const safeClass   = escapeHtml(className.trim());
+  const safeLoc     = escapeHtml(locationName.trim());
+  const safePhone   = escapeHtml(cancellationPhone.trim());
+
+  const addressLine = [locationAddress, locationCity, locationState, locationZip]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(", ");
+  const safeAddress = escapeHtml(addressLine);
+
+  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
+    weekday: "long",
+    month:   "long",
+    day:     "numeric",
+    year:    "numeric",
+    timeZone: "America/New_York",
+  });
+  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
+    hour:    "numeric",
+    minute:  "2-digit",
+    hour12:  true,
+    timeZone: "America/New_York",
+  });
+
+  const paymentRow = companyPaid
+    ? `<tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Cost to you</td><td><strong>Nothing — ${safeCompany} has covered this class.</strong></td></tr>`
+    : `<tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Paid</td><td><strong>$${amountPaid.toFixed(2)}</strong></td></tr>`;
+
+  const instructorRow = instructorName
+    ? `<tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Instructor</td><td>${escapeHtml(instructorName.trim())}</td></tr>`
+    : "";
+
+  return {
+    subject: `You're signed up — ${safeClass} on ${formattedDate}`,
+    html: wrapEmail(`
+      <h1>Your Spot Is Reserved</h1>
+      <p>Hi ${safeFirst},</p>
+      <p>You're signed up for the CPR class arranged by <strong>${safeCompany}</strong>. Here are the details:</p>
+      <table cellpadding="6" style="margin:16px 0;">
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Class</td><td><strong>${safeClass}</strong></td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Date</td><td>${formattedDate}</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Time</td><td>${formattedTime} ET</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Location</td><td>${safeLoc}${safeAddress ? `<br /><span style="color:#6b7280;font-size:13px;">${safeAddress}</span>` : ""}</td></tr>
+        ${instructorRow}
+        ${paymentRow}
+      </table>
+      <p style="font-size:14px;color:#374151;">Please arrive about 10 minutes early so we can check you in and start on time.</p>
+      <p style="font-size:14px;color:#374151;">Need to cancel or change your spot? Give us a call at <a href="tel:${safePhone.replace(/[^0-9+]/g, "")}">${safePhone}</a> — cancellations are handled by phone so we can help you find another date.</p>
+      <p>- The SuperHeroCPR Team</p>
+    `),
+  };
+}

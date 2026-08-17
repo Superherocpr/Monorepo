@@ -207,6 +207,14 @@ export interface CreateAndSendInvoiceParams {
   actorId: string;
   /** Additional PayPal line items beyond the per-student class fee, e.g. a travel fee. */
   extraLineItems?: InvoiceLineItem[];
+  /**
+   * Replaces the default "className × studentCount @ amountPerStudent" PayPal
+   * line item. Used by team/corporate bookings, which are billed as a flat total
+   * with no per-head breakdown and are stored with studentCount = 0 (so they
+   * never consume class capacity in book_spot) — a quantity-0 PayPal line would
+   * otherwise be invalid.
+   */
+  primaryLineItem?: InvoiceLineItem;
 }
 
 export type CreateAndSendInvoiceResult =
@@ -230,7 +238,11 @@ export async function createAndSendInvoice(
   const invoiceNumber = `INV-${String((invoiceCount ?? 0) + 1).padStart(5, "0")}`;
 
   const items: InvoiceLineItem[] = [
-    { name: params.className, quantity: params.studentCount, unitAmount: params.amountPerStudent },
+    params.primaryLineItem ?? {
+      name: params.className,
+      quantity: params.studentCount,
+      unitAmount: params.amountPerStudent,
+    },
     ...(params.extraLineItems ?? []),
   ];
 

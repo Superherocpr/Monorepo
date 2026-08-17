@@ -261,6 +261,28 @@ export default function ClassRequestDetailClient({ request }: Props) {
               {approving ? "Approving…" : "Approve & Create Session"}
             </button>
 
+            {/* Convert to team booking — for corporate/group callers. Pre-fills
+                the team form from this request rather than creating anything
+                here, so staff can confirm the details agreed on the call. */}
+            <Link
+              href={{
+                pathname: "/admin/sessions/new",
+                query: {
+                  team: "1",
+                  request_id: request.id,
+                  // Class requests have no company field; venue_name is what a
+                  // corporate caller fills in (their own facility).
+                  company: request.venue_name ?? "",
+                  contact: customer ? `${customer.first_name} ${customer.last_name}`.trim() : "",
+                  email: customer?.email ?? "",
+                  phone: request.contact_phone ?? "",
+                },
+              }}
+              className="border border-gray-300 text-gray-700 font-semibold px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+            >
+              Convert to Team Booking
+            </Link>
+
             {/* Reject toggle */}
             {!showRejectForm && (
               <button
@@ -272,6 +294,10 @@ export default function ClassRequestDetailClient({ request }: Props) {
               </button>
             )}
           </div>
+          <p className="mt-3 text-xs text-gray-500">
+            Use <strong>Convert to Team Booking</strong> when the caller is a company booking for
+            their staff — it creates a private class plus a signup link to send them.
+          </p>
 
           {/* Inline rejection reason form */}
           {showRejectForm && (

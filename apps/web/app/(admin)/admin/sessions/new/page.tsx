@@ -9,6 +9,7 @@
  * Renders the form via CreateSessionClient.
  */
 
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
@@ -118,14 +119,18 @@ export default async function NewSessionPage() {
     }));
   }
 
+  // Suspense boundary is required: CreateSessionClient reads useSearchParams()
+  // to pre-fill the team form when arriving from "Convert to team booking".
   return (
-    <CreateSessionClient
-      classTypes={classTypes}
-      locations={locations}
-      instructors={instructors}
-      addons={addons}
-      isInstructor={isInstructor}
-      instructorName={instructorName}
-    />
+    <Suspense fallback={<div className="max-w-2xl mx-auto py-8 px-4 text-sm text-gray-500">Loading…</div>}>
+      <CreateSessionClient
+        classTypes={classTypes}
+        locations={locations}
+        instructors={instructors}
+        addons={addons}
+        isInstructor={isInstructor}
+        instructorName={instructorName}
+      />
+    </Suspense>
   );
 }

@@ -548,3 +548,96 @@ a coin flip on a real customer hitting it.
 were applied to production on 2026-08-03. Re-verified via `list_migrations` on
 2026-08-04: both staging and production show identical history through 0049.
 The THREAT-052 RPC exposure closed by 0049 is also resolved in production.
+
+---
+
+## THREAT-057 — Team signup share token is a bearer credential exposing attendee names
+
+**Severity:** 3/10 (low) — accepted by design
+**Files:** `app/(public)/team/[share_token]/page.tsx`, `app/api/team-bookings/[share_token]/route.ts`, `lib/team-bookings.ts`
+**Date:** 2026-08-17
+**Status:** ACCEPTED (mitigated)
+
+**Description:** The team-booking signup link is authorised solely by an
+unguessable `team_bookings.share_token` (UUID v4) in the URL. Anyone holding the
+link can view the class details and the list of people signed up, and can take a
+seat in the class. The company contact forwards this link freely to their own
+staff, so it will inevitably spread beyond a controlled list, and forwarded
+emails/chat logs preserve it indefinitely.
+
+**Why accepted:** This is the same trust model already accepted for
+`/roster/[session_token]` and `/submit-roster?invoice=`, and it is the explicit
+product requirement — the customer distributes the link themselves to whoever
+they want to attend, and they are the ones paying. Requiring per-employee
+invitations would defeat the purpose of the feature.
+
+**Mitigations in place:**
+- The attendee list returns **first and last name only** — never emails, phone
+  numbers, or profile ids. `getTeamBookingByShareToken()` constructs the
+  `TeamAttendee` objects explicitly rather than passing joined rows through, and
+  a unit test asserts no email address appears anywhere in the payload.
+- Seats are still bounded by the session's `max_capacity` via `book_spot`, so a
+  leaked link cannot cost the company more than the class they already booked.
+- An employee must create or sign into a real account to take a seat, so every
+  booking is attributable to a named person.
+- Invalid and non-existent tokens return an identical response, so the endpoint
+  cannot be used to probe for valid links.
+- The page sets `robots: { index: false, follow: false }` so links that leak into
+  crawlable places are not indexed.
+
+---
+
+## THREAT-058 — Team per-seat price must never be sourced from the client
+
+**Severity:** 4/10 (medium) — closed at implementation time
+**Files:** `app/api/team-bookings/[share_token]/signup/route.ts`, `app/api/paypal/create-booking-order/route.ts`, `app/api/promo-codes/validate/route.ts`, `lib/session-pricing.ts`
+**Date:** 2026-08-17
+**Status:** FIXED
+
+**Description:** Team bookings introduce a negotiated per-seat rate that
+overrides the catalog price. If that rate were accepted from the request body,
+a buyer could name their own price — the THREAT-013 class of bug, but with a
+new input path that bypasses `getSessionPricing()`'s usual catalog lookup.
+
+**Fix:** `getSessionPricing()` gained a `teamPricePerSeat` option, and every
+route that uses it resolves the value by calling `getTeamBookingByShareToken()`
+with the URL token and reading `price_per_seat` from the DB. The client sends
+only the opaque token, never a price. The signup route additionally re-derives
+the expected total server-side and rejects (409) when the client-submitted
+`amount` differs by more than $0.01, then verifies PayPal's actual captured
+amount against the same figure before the booking is created — identical
+ordering to `/api/bookings/confirm`.
+
+The order-creation and promo-validation routes take the same token so all three
+price against the same basis; without that, a promo-coded team signup would be
+quoted against the catalog price and then rejected as a mismatch at capture.
+
+---
+
+## THREAT-059 — Team invoices would double-count class headcount
+
+**Severity:** 5/10 (medium) — data integrity, not attacker-driven
+**Files:** `apps/migrations/0055_team_bookings.sql`, `lib/team-bookings.ts`
+**Date:** 2026-08-17
+**Status:** FIXED
+
+**Description:** `mark_invoice_paid` (migration 0016) inserts one anonymous
+`bookings` row per `invoices.student_count` when an invoice is marked paid,
+because the classic group-invoice flow has no real attendee records. A team
+booking is the opposite: named employee bookings are created as people sign up
+through the link, typically **before** the company's invoice clears. Left
+unchanged, marking a team invoice paid would have inserted a second full set of
+placeholder seats — doubling the headcount, potentially pushing the session over
+`max_capacity`, and corrupting the roster the instructor teaches from.
+
+A second instance of the same problem: `book_spot` counts
+`sum(student_count) from invoices where status not in ('cancelled','paid')`
+toward capacity, so an unpaid team invoice carrying a real headcount would have
+blocked the very employees it was raised for.
+
+**Fix:** Migration 0055 redefines `mark_invoice_paid` to skip the
+placeholder-booking insert when a `team_bookings` row references the invoice.
+Team invoices are additionally written with `student_count = 0` so they consume
+no capacity while unpaid; the PayPal line item is supplied separately as a flat
+quantity-1 charge via the new `primaryLineItem` option on `createAndSendInvoice()`.
+The guard is the primary protection and does not depend on that value being 0.

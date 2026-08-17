@@ -231,6 +231,7 @@
 | cancelled_by | uuid | FK | → profiles.id. Who cancelled the session. |
 | cancellation_reason | text | | Free-text reason provided by the canceller. Min 10 chars, enforced at the API layer. |
 | unclaimed_escalation_sent_at | timestamptz | | Set once the 48hr-unclaimed escalation email has fired for this session, so the cron doesn't re-notify. |
+| is_private | boolean | NN | Default: false. True for team/corporate sessions — hidden from `/book`, `/schedule`, and the anon RLS read policy. Reachable only via its team link. |
 | created_at | timestamptz | NN | Default: now() |
 
 ---
@@ -273,6 +274,7 @@
 | customer_id | uuid | FK, NN | → profiles.id |
 | invoice_id | uuid | FK | → invoices.id. Nullable. |
 | booking_source | enum | NN | `online` `rollcall` `invoice` `manual` |
+| team_booking_id | uuid | FK | → team_bookings.id. Nullable. Set when the booking came through a team link. Note these keep `booking_source = 'online'` so the existing duplicate-booking guard and unique index still apply. |
 | created_by | uuid | FK | → profiles.id. Nullable — set when staff manually creates booking. |
 | manual_booking_reason | text | | Required when booking_source = manual. |
 | cancelled | boolean | NN | Default: false. |
@@ -300,6 +302,38 @@
 | routing_note | text | | Audit note for online collections. Current online payments are collected by SuperHeroCPR and paid to instructors through payouts. |
 | notes | text | | |
 | created_at | timestamptz | NN | Default: now() |
+
+---
+
+### `team_bookings`
+> A staff-created corporate/group class plus a shareable signup link.
+> Staff create the class and this row from `/admin/sessions/new`, then hand the
+> `/team/<share_token>` link to the company contact, who distributes it to their
+> own employees. Each employee signs up with a real account so RollCall sees
+> correct names. The same page lists who has signed up (first + last name only).
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| id | uuid | PK, NN | Default: gen_random_uuid() |
+| session_id | uuid | FK, NN | → class_sessions.id. Usually a newly created private session; may point at an existing class. |
+| company_name | text | NN | |
+| contact_name | text | NN | The company's HR/office contact. |
+| contact_email | text | NN | Receives the invoice in company mode. |
+| contact_phone | text | | |
+| payment_mode | text | NN, CHECK | `company` (flat total, invoiced) or `per_seat` (employee pays at signup). |
+| price_per_seat | numeric(10,2) | | Set only in `per_seat` mode. Overrides class_types.price for signups through this link. |
+| total_price | numeric(10,2) | | Set only in `company` mode. Flat amount — no per-head breakdown. |
+| invoice_id | uuid | FK | → invoices.id. Set in `company` mode. Team invoices are written with `student_count = 0` so they never consume capacity in book_spot. |
+| share_token | text | UQ, NN | Unguessable bearer credential in the public URL. |
+| created_by | uuid | FK, NN | → profiles.id. Drives the cancellation phone shown publicly — an instructor-created booking shows that instructor's phone. |
+| class_request_id | uuid | FK | → class_requests.id. Set when created via "Convert to team booking". |
+| created_at | timestamptz | NN | Default: now() |
+
+> **CHECK `team_bookings_price_shape_check`** — each mode must carry its own
+> price and only its own price (`per_seat` → price_per_seat, `company` → total_price).
+>
+> **RLS** enabled with zero policies — all access via `createAdminClient()` in
+> server API routes, matching the `promo_codes` / `addons` convention.
 
 ---
 
