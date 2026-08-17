@@ -109,13 +109,29 @@ describe("generateShareToken", () => {
 // getTeamBookingByShareToken
 // ---------------------------------------------------------------------------
 
-/** Per-table canned responses; each `.from()` chain is thenable and terminal-aware. */
-function mockSupabase(tables: Record<string, unknown>) {
+/** Records the select() string used per table, so query shape can be asserted. */
+const selectsByTable = new Map<string, string[]>();
+
+/**
+ * Per-table canned responses; each `.from()` chain is thenable and terminal-aware.
+ * Pass an `errors` map to simulate a failed query for a given table.
+ */
+function mockSupabase(
+  tables: Record<string, unknown>,
+  errors: Record<string, unknown> = {}
+) {
+  selectsByTable.clear();
   const from = vi.fn((table: string) => {
-    const result = { data: tables[table] ?? null, error: null };
+    const result = { data: tables[table] ?? null, error: errors[table] ?? null };
     const chain: Record<string, unknown> = {};
     const self = () => chain;
-    for (const method of ["select", "eq", "not", "order", "in"]) {
+    chain.select = vi.fn((cols?: string) => {
+      if (typeof cols === "string") {
+        selectsByTable.set(table, [...(selectsByTable.get(table) ?? []), cols]);
+      }
+      return chain;
+    });
+    for (const method of ["eq", "not", "order", "in"]) {
       chain[method] = vi.fn(self);
     }
     chain.maybeSingle = vi.fn(() => Promise.resolve(result));
@@ -300,6 +316,46 @@ describe("getTeamBookingByShareToken", () => {
     const view = await getTeamBookingByShareToken(supabase, TOKEN);
     expect(view?.paymentMode).toBe("company");
     expect(view?.pricePerSeat).toBe(0);
+  });
+
+  test("disambiguates the bookings→profiles embed with an explicit FK hint", async () => {
+    // Regression guard. bookings has THREE foreign keys to profiles
+    // (customer_id, created_by, cancelled_by), so a bare `profiles(...)` embed
+    // is ambiguous and PostgREST rejects the entire query. That shipped once:
+    // the attendee list silently rendered empty and spotsRemaining was
+    // overstated, because the failed query returned null rather than throwing.
+    // A mocked client cannot reproduce PostgREST's parser, so assert the query
+    // shape directly.
+    const supabase = mockSupabase({
+      team_bookings: teamRow(),
+      bookings: [bookingRow("Jane", "Smith", "j@x.example")],
+      invoices: [],
+      profiles: { first_name: "Ada", last_name: "Lovelace", phone: null, role: "manager" },
+    });
+
+    await getTeamBookingByShareToken(supabase, TOKEN);
+
+    const bookingSelects = selectsByTable.get("bookings") ?? [];
+    expect(bookingSelects).toHaveLength(1);
+    expect(bookingSelects[0]).toContain("profiles!bookings_customer_id_fkey");
+    // A bare embed must never creep back in.
+    expect(bookingSelects[0]).not.toMatch(/(^|[\s,(])profiles\s*\(/);
+  });
+
+  test("returns null rather than overstating free seats when the attendee query fails", async () => {
+    // Failing open here would tell a company the class is wide open when it is
+    // actually full, and let book_spot reject people at the last moment.
+    const supabase = mockSupabase(
+      {
+        team_bookings: teamRow(),
+        bookings: null,
+        invoices: [],
+        profiles: { first_name: "Ada", last_name: "Lovelace", phone: null, role: "manager" },
+      },
+      { bookings: { message: "could not embed" } }
+    );
+
+    expect(await getTeamBookingByShareToken(supabase, TOKEN)).toBeNull();
   });
 
   test("parses a string per-seat price into a number", async () => {

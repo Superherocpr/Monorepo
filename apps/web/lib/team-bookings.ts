@@ -523,12 +523,23 @@ export async function getTeamBookingByShareToken(
   // the real room. If staff also added someone manually or by invoice, the
   // company contact should see them — the point of the list is confirming who
   // will actually be there.
-  const { data: bookingRows } = await adminClient
+  // The FK hint is required, not optional: bookings has three foreign keys to
+  // profiles (customer_id, created_by, cancelled_by), so a bare profiles(...)
+  // embed is ambiguous and PostgREST rejects the whole query — which silently
+  // emptied the attendee list and overstated spotsRemaining.
+  const { data: bookingRows, error: bookingsError } = await adminClient
     .from("bookings")
-    .select("customer_id, created_at, profiles ( first_name, last_name )")
+    .select("customer_id, created_at, profiles!bookings_customer_id_fkey ( first_name, last_name )")
     .eq("session_id", session.id)
     .eq("cancelled", false)
     .order("created_at", { ascending: true });
+
+  if (bookingsError) {
+    // Never fail open on the seat maths — an unknown attendee count must not
+    // read as "plenty of room left".
+    console.error("[getTeamBookingByShareToken] Attendee lookup failed:", bookingsError);
+    return null;
+  }
 
   const attendees: TeamAttendee[] = (bookingRows ?? [])
     .map((row: { profiles: unknown }) => {
