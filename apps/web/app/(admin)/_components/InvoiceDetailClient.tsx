@@ -317,7 +317,12 @@ export default function InvoiceDetailClient({
               <div className="flex justify-between">
                 <dt className="text-gray-500">Students</dt>
                 <dd className="text-gray-900">
-                  {invoice.student_count} student{invoice.student_count !== 1 ? "s" : ""}
+                  {/* Team-booking invoices carry student_count = 0 on purpose so
+                      they never reserve seats — employees book themselves through
+                      the signup link. Showing "0 students" would read as a bug. */}
+                  {invoice.student_count === 0
+                    ? "Flat rate — attendees register individually"
+                    : `${invoice.student_count} student${invoice.student_count !== 1 ? "s" : ""}`}
                 </dd>
               </div>
               {!invoice.custom_price && (

@@ -72,6 +72,9 @@ export default async function BookPage({ searchParams }: BookPageProps) {
     `)
     .eq("status", "scheduled")
     .eq("approval_status", "approved")
+    // Team/corporate classes are private to the company that booked them —
+    // they must never be listed here or the public could take their seats.
+    .eq("is_private", false)
     .gte("starts_at", new Date().toISOString())
     .order("starts_at", { ascending: true });
 

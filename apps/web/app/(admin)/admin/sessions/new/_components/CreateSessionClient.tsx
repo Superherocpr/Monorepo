@@ -5,10 +5,16 @@
  * Used by: app/(admin)/admin/sessions/new/page.tsx
  * Managers and super admins can assign any instructor. Instructors always
  * create sessions for themselves and do not see the instructor selector.
+ *
+ * Also creates team/corporate bookings: toggling "This is a team booking"
+ * reveals the company contact and pricing fields, hides add-ons (never offered
+ * on team bookings), and submits to /api/team-bookings instead of /api/sessions.
+ * On success it shows the shareable signup link to hand to the company contact
+ * rather than redirecting to the session detail page.
  */
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AddLocationPanel, { type NewLocationResult } from "@/app/(admin)/_components/AddLocationPanel";
 
@@ -93,6 +99,38 @@ const EMPTY_FORM: SessionForm = {
   notes: "",
 };
 
+/** How a team booking is paid for. */
+type TeamPaymentMode = "company" | "per_seat";
+
+/** Company contact and pricing fields, only used when the team toggle is on. */
+interface TeamForm {
+  company_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string;
+  payment_mode: TeamPaymentMode;
+  /** Flat total in company mode, per-seat price in per_seat mode. */
+  price: string;
+}
+
+const EMPTY_TEAM_FORM: TeamForm = {
+  company_name: "",
+  contact_name: "",
+  contact_email: "",
+  contact_phone: "",
+  payment_mode: "per_seat",
+  price: "",
+};
+
+/** What the API returns after a team booking is created. */
+interface TeamBookingCreated {
+  shareUrl: string;
+  invoiceNumber: string | null;
+  autoApproved: boolean;
+  invoiceError?: string;
+  sessionId: string;
+}
+
 /**
  * Converts a local date string and time string into a UTC ISO timestamp.
  * Relies on the browser's local timezone, which is appropriate since staff
@@ -119,9 +157,27 @@ export default function CreateSessionClient({
   instructorName,
 }: CreateSessionClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [form, setForm] = useState<SessionForm>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  /**
+   * Team/corporate mode. Pre-enabled (with company details filled in) when
+   * arriving from the "Convert to team booking" button on a class request.
+   */
+  const [isTeam, setIsTeam] = useState(searchParams.get("team") === "1");
+  const [teamForm, setTeamForm] = useState<TeamForm>(() => ({
+    ...EMPTY_TEAM_FORM,
+    company_name: searchParams.get("company") ?? "",
+    contact_name: searchParams.get("contact") ?? "",
+    contact_email: searchParams.get("email") ?? "",
+    contact_phone: searchParams.get("phone") ?? "",
+  }));
+  /** The class request this booking came from, carried through to the API. */
+  const classRequestId = searchParams.get("request_id");
+  /** Set once a team booking is created — switches the view to the share link. */
+  const [created, setCreated] = useState<TeamBookingCreated | null>(null);
+  const [copied, setCopied] = useState(false);
   /** IDs of add-ons selected to offer on this session — narrowed to the selected class type's eligibility. */
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   /** Tracks whether duration and capacity were last populated by the class-type auto-fill. */
@@ -146,6 +202,30 @@ export default function CreateSessionClient({
     // If the user manually edits duration or capacity, clear the auto-filled indicator.
     if (field === "duration_minutes" || field === "max_capacity") setAutoFilled(false);
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  /**
+   * Updates a single team-form field by name.
+   * @param field - The TeamForm key to update.
+   * @param value - New value for that field.
+   */
+  function setTeamField(field: keyof TeamForm, value: string) {
+    setTeamForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  /**
+   * Copies the generated share link to the clipboard and flashes confirmation.
+   * Side effects: writes to the system clipboard.
+   */
+  async function copyShareUrl(): Promise<void> {
+    if (!created) return;
+    try {
+      await navigator.clipboard.writeText(created.shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be denied; the URL is visible on screen regardless.
+    }
   }
 
   /**
@@ -278,6 +358,36 @@ export default function CreateSessionClient({
       return;
     }
 
+    // ── Team-mode validation ────────────────────────────────────────────────
+    let teamPrice: number | null = null;
+    if (isTeam) {
+      if (!teamForm.company_name.trim()) {
+        setError("Please enter the company name.");
+        return;
+      }
+      if (!teamForm.contact_name.trim()) {
+        setError("Please enter the contact's name.");
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(teamForm.contact_email.trim())) {
+        setError("Please enter a valid contact email.");
+        return;
+      }
+      teamPrice = parseFloat(teamForm.price);
+      if (teamForm.price === "" || isNaN(teamPrice) || teamPrice < 0) {
+        setError(
+          teamForm.payment_mode === "company"
+            ? "Please enter the total price the company is paying."
+            : "Please enter the price each employee pays."
+        );
+        return;
+      }
+      if (teamForm.payment_mode === "company" && teamPrice <= 0) {
+        setError("The company total must be greater than zero.");
+        return;
+      }
+    }
+
     // Compute starts_at / ends_at as UTC ISO strings
     const starts_at = toISO(form.date, form.start_time);
     const endsDate = new Date(starts_at);
@@ -302,8 +412,24 @@ export default function CreateSessionClient({
       payload.instructor_id = form.instructor_id;
     }
 
+    // Team bookings carry the company details and never offer add-ons.
+    if (isTeam) {
+      delete payload.addon_ids;
+      payload.company_name = teamForm.company_name.trim();
+      payload.contact_name = teamForm.contact_name.trim();
+      payload.contact_email = teamForm.contact_email.trim();
+      payload.contact_phone = teamForm.contact_phone.trim() || null;
+      payload.payment_mode = teamForm.payment_mode;
+      if (teamForm.payment_mode === "company") {
+        payload.total_price = teamPrice;
+      } else {
+        payload.price_per_seat = teamPrice;
+      }
+      if (classRequestId) payload.class_request_id = classRequestId;
+    }
+
     try {
-      const res = await fetch("/api/sessions", {
+      const res = await fetch(isTeam ? "/api/team-bookings" : "/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -317,6 +443,33 @@ export default function CreateSessionClient({
             ? String((data as { error: string }).error)
             : "Failed to create session. Please try again.";
         setError(msg);
+        setLoading(false);
+        return;
+      }
+
+      // ── Team booking: show the share link instead of redirecting ──────────
+      if (isTeam) {
+        const result = data as {
+          shareToken?: string;
+          sessionId?: string;
+          invoiceNumber?: string | null;
+          autoApproved?: boolean;
+          invoiceError?: string;
+        };
+
+        if (!result.shareToken) {
+          setError("Team booking created but no link was returned. Check the sessions list.");
+          setLoading(false);
+          return;
+        }
+
+        setCreated({
+          shareUrl: `${window.location.origin}/team/${result.shareToken}`,
+          invoiceNumber: result.invoiceNumber ?? null,
+          autoApproved: result.autoApproved ?? false,
+          invoiceError: result.invoiceError,
+          sessionId: result.sessionId ?? "",
+        });
         setLoading(false);
         return;
       }
@@ -390,14 +543,116 @@ export default function CreateSessionClient({
     return `= ${mins} min`;
   })();
 
+  // ── Success view: the team share link to hand to the company contact ──────
+  if (created) {
+    return (
+      <div className="max-w-2xl mx-auto py-8 px-4 space-y-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center shrink-0 font-bold">
+              ✓
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Team booking created</h1>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Send this link to {teamForm.contact_name.trim() || "the company contact"} — they
+                share it with their own staff.
+              </p>
+            </div>
+          </div>
+
+          {!created.autoApproved && (
+            <div
+              role="status"
+              className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm"
+            >
+              This class still needs manager approval before the link will accept signups. Hold off
+              on sending it until it&apos;s approved.
+            </div>
+          )}
+
+          {created.invoiceError && (
+            <div
+              role="alert"
+              className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm"
+            >
+              The booking was created, but the invoice could not be sent: {created.invoiceError} You
+              can raise it manually from the Invoices page.
+            </div>
+          )}
+
+          {created.invoiceNumber && (
+            <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm">
+              Invoice <strong>{created.invoiceNumber}</strong> has been emailed to{" "}
+              {teamForm.contact_email.trim()}. Employees can sign up before it&apos;s paid.
+            </div>
+          )}
+
+          {/* Share link + copy */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cs-share-url" className="text-sm font-medium text-gray-700">
+              Signup link
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="cs-share-url"
+                readOnly
+                value={created.shareUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <button
+                type="button"
+                onClick={copyShareUrl}
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-red-600 hover:bg-red-700 text-white transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400">
+              Anyone with this link can sign up, and it also shows them who has signed up so far.
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-col gap-3">
+            {created.sessionId && (
+              <Link
+                href={`/admin/sessions/${created.sessionId}`}
+                className="w-full text-center bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3 rounded-lg transition-colors text-sm"
+              >
+                View the class
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setCreated(null);
+                setForm(EMPTY_FORM);
+                setTeamForm(EMPTY_TEAM_FORM);
+                setSelectedAddonIds([]);
+              }}
+              className="text-center text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              Create another
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto py-8 px-4 space-y-6">
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Create New Class Session</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isTeam ? "Create Team Booking" : "Create New Class Session"}
+          </h1>
           <p className="text-sm text-gray-500 mt-1">
-            New sessions are submitted for approval before appearing on the public schedule.
+            {isTeam
+              ? "Creates a private class plus a signup link to hand to the company contact."
+              : "New sessions are submitted for approval before appearing on the public schedule."}
           </p>
         </div>
         <Link
@@ -408,16 +663,40 @@ export default function CreateSessionClient({
         </Link>
       </div>
 
-      {/* Bulk creation prompt */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600 flex items-center justify-between">
-        <span>Scheduling multiple sessions at once?</span>
-        <Link
-          href="/admin/sessions/bulk"
-          className="font-medium text-red-600 hover:text-red-700 transition-colors whitespace-nowrap ml-4"
-        >
-          Use the bulk creator →
-        </Link>
-      </div>
+      {/* Bulk creation prompt — not relevant while building a single team booking */}
+      {!isTeam && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600 flex items-center justify-between">
+          <span>Scheduling multiple sessions at once?</span>
+          <Link
+            href="/admin/sessions/bulk"
+            className="font-medium text-red-600 hover:text-red-700 transition-colors whitespace-nowrap ml-4"
+          >
+            Use the bulk creator →
+          </Link>
+        </div>
+      )}
+
+      {/* Team/corporate toggle — switches this form between the two modes */}
+      <label className="flex items-start gap-3 bg-white border border-gray-200 rounded-lg px-4 py-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={isTeam}
+          onChange={(e) => {
+            setIsTeam(e.target.checked);
+            setError(null);
+          }}
+          className="mt-0.5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+        />
+        <span>
+          <span className="block text-sm font-medium text-gray-900">
+            This is a team / corporate booking
+          </span>
+          <span className="block text-xs text-gray-500 mt-0.5">
+            Creates a private class (hidden from the public schedule) plus a signup link for the
+            company&apos;s employees.
+          </span>
+        </span>
+      </label>
 
       {/* ── Form ── */}
       <form
@@ -441,6 +720,138 @@ export default function CreateSessionClient({
             className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm"
           >
             This session is scheduled in the past — double-check the date and time before submitting.
+          </div>
+        )}
+
+        {/* ── Company details + pricing (team mode only) ── */}
+        {isTeam && (
+          <div className="space-y-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <p className="text-sm font-semibold text-gray-900">Company details</p>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cs-company" className="text-sm font-medium text-gray-700">
+                Company Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="cs-company"
+                type="text"
+                value={teamForm.company_name}
+                onChange={(e) => setTeamField("company_name", e.target.value)}
+                placeholder="e.g. Acme Hospital"
+                className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="cs-contact-name" className="text-sm font-medium text-gray-700">
+                  Contact Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="cs-contact-name"
+                  type="text"
+                  value={teamForm.contact_name}
+                  onChange={(e) => setTeamField("contact_name", e.target.value)}
+                  placeholder="Who you spoke with"
+                  className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="cs-contact-phone" className="text-sm font-medium text-gray-700">
+                  Contact Phone <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  id="cs-contact-phone"
+                  type="tel"
+                  value={teamForm.contact_phone}
+                  onChange={(e) => setTeamField("contact_phone", e.target.value)}
+                  className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cs-contact-email" className="text-sm font-medium text-gray-700">
+                Contact Email <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="cs-contact-email"
+                type="email"
+                value={teamForm.contact_email}
+                onChange={(e) => setTeamField("contact_email", e.target.value)}
+                placeholder="Where the invoice and link go"
+                className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Payment mode — decides who gets billed and what employees see */}
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-gray-700">Who is paying?</span>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    {
+                      mode: "per_seat" as const,
+                      title: "Each employee",
+                      blurb: "They pay when they sign up",
+                    },
+                    {
+                      mode: "company" as const,
+                      title: "The company",
+                      blurb: "Invoiced a flat total",
+                    },
+                  ]
+                ).map(({ mode, title, blurb }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setTeamField("payment_mode", mode)}
+                    className={[
+                      "text-left px-3 py-2.5 rounded-lg border transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2",
+                      teamForm.payment_mode === mode
+                        ? "bg-red-600 text-white border-red-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-red-400",
+                    ].join(" ")}
+                  >
+                    <span className="block text-sm font-semibold">{title}</span>
+                    <span
+                      className={[
+                        "block text-xs mt-0.5",
+                        teamForm.payment_mode === mode ? "text-red-100" : "text-gray-500",
+                      ].join(" ")}
+                    >
+                      {blurb}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cs-team-price" className="text-sm font-medium text-gray-700">
+                {teamForm.payment_mode === "company" ? "Total Price" : "Price Per Seat"}{" "}
+                <span className="text-red-500">*</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 select-none">$</span>
+                <input
+                  id="cs-team-price"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={teamForm.price}
+                  onChange={(e) => setTeamField("price", e.target.value)}
+                  placeholder={teamForm.payment_mode === "company" ? "e.g. 1200.00" : "e.g. 80.00"}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+              <p className="text-xs text-gray-400">
+                {teamForm.payment_mode === "company"
+                  ? "The company is invoiced this flat amount. Employees sign up free, and can do so before it's paid."
+                  : "What each employee pays at signup. This replaces the standard class price. Promo codes still apply."}
+              </p>
+            </div>
           </div>
         )}
 
@@ -798,8 +1209,10 @@ export default function CreateSessionClient({
           )}
         </div>
 
-        {/* Add-ons (optional) — only shown once a class type with eligible add-ons is selected */}
-        {(() => {
+        {/* Add-ons (optional) — only shown once a class type with eligible add-ons
+            is selected. Never offered on team bookings: the price is a flat or
+            per-seat rate negotiated with the company. */}
+        {!isTeam && (() => {
           const eligibleAddonIds = classTypes.find((t) => t.id === form.class_type_id)?.addon_ids ?? [];
           const eligibleAddons = addons.filter((a) => eligibleAddonIds.includes(a.id));
           if (eligibleAddons.length === 0) return null;
@@ -857,7 +1270,13 @@ export default function CreateSessionClient({
             disabled={loading}
             className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition-colors duration-150 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
           >
-            {loading ? "Creating session…" : "Submit for Approval"}
+            {loading
+              ? isTeam
+                ? "Creating team booking…"
+                : "Creating session…"
+              : isTeam
+                ? "Create Team Booking & Get Link"
+                : "Submit for Approval"}
           </button>
           <Link
             href="/admin/sessions"

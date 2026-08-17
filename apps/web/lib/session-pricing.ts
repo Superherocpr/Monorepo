@@ -18,6 +18,19 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/**
+ * Optional pricing overrides.
+ *
+ * `teamPricePerSeat` replaces the catalog-derived price for a signup made
+ * through a team/corporate link, where staff negotiated a per-seat rate on a
+ * call. It must always be resolved server-side from the team_bookings row the
+ * share token points at — never accepted from the client, which would let a
+ * buyer name their own price (THREAT-013).
+ */
+export interface SessionPricingOptions {
+  teamPricePerSeat?: number | null;
+}
+
 /** Result when the session and its class type were found and price could be resolved. */
 export interface SessionPricingFound {
   found: true;
@@ -46,10 +59,12 @@ export type SessionPricingResult = SessionPricingFound | SessionPricingNotFound;
  * Never trust a client-supplied price — always call this server-side.
  * @param supabase  - Admin Supabase client (service role).
  * @param sessionId - UUID of the class_sessions row.
+ * @param options   - Optional server-resolved overrides (see SessionPricingOptions).
  */
 export async function getSessionPricing(
   supabase: SupabaseClient,
-  sessionId: string
+  sessionId: string,
+  options: SessionPricingOptions = {}
 ): Promise<SessionPricingResult> {
   const { data: sessionRow, error } = await supabase
     .from("class_sessions")
@@ -96,8 +111,18 @@ export async function getSessionPricing(
   const discountPercent =
     Number.isFinite(parsedDiscountPercent) && parsedDiscountPercent > 0 ? parsedDiscountPercent : 0;
 
-  const basePrice =
-    discountPercent > 0 ? parseFloat((rawPrice * (1 - discountPercent / 100)).toFixed(2)) : rawPrice;
+  // A team/corporate rate is the negotiated price for that link's buyers and
+  // fully replaces the catalog price — the instructor's session-level discount
+  // is not stacked on top, since the quoted rate already reflects the deal.
+  const teamOverride = options.teamPricePerSeat;
+  const hasTeamOverride =
+    typeof teamOverride === "number" && Number.isFinite(teamOverride) && teamOverride >= 0;
+
+  const basePrice = hasTeamOverride
+    ? parseFloat(teamOverride.toFixed(2))
+    : discountPercent > 0
+      ? parseFloat((rawPrice * (1 - discountPercent / 100)).toFixed(2))
+      : rawPrice;
 
   return {
     found: true,

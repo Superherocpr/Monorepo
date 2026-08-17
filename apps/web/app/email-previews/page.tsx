@@ -29,6 +29,9 @@ import {
   unclaimedOpportunityEscalationEmail,
   payoutDeniedAdminEmail,
   instructorPayoutSentEmail,
+  instructorBookingNotificationEmail,
+  teamBookingCreatedEmail,
+  teamSignupConfirmationEmail,
 } from "@/lib/emails";
 
 // Dev-only preview page for all transactional emails.
@@ -319,6 +322,82 @@ export default async function Page() {
     baseUrl: "http://localhost:3000",
   });
   previews.push({ id: "payout-sent", name: "Instructor Payout Sent", subject: payoutSent.subject, src: b64(payoutSent.html) });
+
+  // ── Instructor new-booking notification ──────────────────────────────────
+  const instructorNotify = instructorBookingNotificationEmail({
+    instructorFirstName: "Ray",
+    customerName: "Jane Smith",
+    className: "BLS Provider",
+    startsAt: "2026-09-14T13:00:00Z",
+    locationName: "Acme HQ",
+    source: "online",
+  });
+  previews.push({ id: "instructor-booking-notify", name: "Instructor — New Booking", subject: instructorNotify.subject, src: b64(instructorNotify.html) });
+
+  // ── Team bookings ────────────────────────────────────────────────────────
+  const teamCreatedPerSeat = teamBookingCreatedEmail({
+    staffFirstName: "Ada",
+    companyName: "Acme Hospital",
+    contactName: "Dana Reyes",
+    className: "BLS Provider",
+    startsAt: "2026-09-14T13:00:00Z",
+    locationName: "Acme HQ",
+    shareUrl: "https://superherocpr.com/team/a0000000-0000-4000-8000-000000000000",
+    paymentMode: "per_seat",
+    priceLabel: "$80.00 per seat",
+    invoiceNumber: null,
+    pendingApproval: false,
+  });
+  previews.push({ id: "team-created-per-seat", name: "Team Booking Created (Per Seat)", subject: teamCreatedPerSeat.subject, src: b64(teamCreatedPerSeat.html) });
+
+  const teamCreatedCompany = teamBookingCreatedEmail({
+    staffFirstName: "Ada",
+    companyName: "Acme Hospital",
+    contactName: "Dana Reyes",
+    className: "BLS Provider",
+    startsAt: "2026-09-14T13:00:00Z",
+    locationName: "Acme HQ",
+    shareUrl: "https://superherocpr.com/team/a0000000-0000-4000-8000-000000000000",
+    paymentMode: "company",
+    priceLabel: "$1200.00 total, billed to the company",
+    invoiceNumber: "INV-00042",
+    pendingApproval: true,
+  });
+  previews.push({ id: "team-created-company", name: "Team Booking Created (Company Paid, Pending Approval)", subject: teamCreatedCompany.subject, src: b64(teamCreatedCompany.html) });
+
+  const teamSignupPaid = teamSignupConfirmationEmail({
+    firstName: "Jane",
+    companyName: "Acme Hospital",
+    className: "BLS Provider",
+    startsAt: "2026-09-14T13:00:00Z",
+    locationName: "Acme HQ",
+    locationAddress: "1 Main St",
+    locationCity: "Tampa",
+    locationState: "FL",
+    locationZip: "33602",
+    amountPaid: 80,
+    companyPaid: false,
+    instructorName: "Ray Holt",
+    cancellationPhone: "(813) 966-3969",
+  });
+  previews.push({ id: "team-signup-paid", name: "Team Signup Confirmation (Employee Paid)", subject: teamSignupPaid.subject, src: b64(teamSignupPaid.html) });
+
+  const teamSignupFree = teamSignupConfirmationEmail({
+    firstName: "John",
+    companyName: "Acme Hospital",
+    className: "BLS Provider",
+    startsAt: "2026-09-14T13:00:00Z",
+    locationName: "Acme HQ",
+    locationAddress: "1 Main St",
+    locationCity: "Tampa",
+    locationState: "FL",
+    locationZip: "33602",
+    amountPaid: 0,
+    companyPaid: true,
+    instructorName: "Ray Holt",
+    cancellationPhone: "555-0199",
+  });
+  previews.push({ id: "team-signup-free", name: "Team Signup Confirmation (Company Paid)", subject: teamSignupFree.subject, src: b64(teamSignupFree.html) });
 
   return (
     <main className="p-8">
