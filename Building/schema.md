@@ -284,6 +284,18 @@
 | created_at | timestamptz | NN | Default: now() |
 | updated_at | timestamptz | NN | Default: now() |
 
+> **Gotcha:** `bookings` has three FKs to `profiles` (`customer_id`, `created_by`,
+> `cancelled_by`). A bare `.select("profiles ( ... )")` embed is ambiguous —
+> PostgREST rejects the whole query rather than guessing, and the failure comes
+> back as `{ data: null, error }`, not a thrown exception. Always disambiguate
+> with the constraint name, e.g. `profiles!bookings_customer_id_fkey ( ... )`
+> (10+ existing call sites do this — search the codebase for that string for
+> examples). This bit the team-bookings attendee list on 2026-08-17: the query
+> silently returned null, the signed-up list rendered empty, and seat math read
+> as "more spots free than actually existed" because the code didn't check the
+> query's error field. Always check `error` on a query embedding `bookings`,
+> not just `data`.
+
 ---
 
 ### `payments`
