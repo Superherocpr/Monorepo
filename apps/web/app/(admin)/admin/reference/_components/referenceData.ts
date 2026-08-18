@@ -221,7 +221,10 @@ export const GROUPS: GroupDef[] = [
         bullets: [
           "View all payments across the platform — 50 records per page with pagination",
           "Filter by payment type (online, cash, check, deposit, invoice), status, date range, customer, and instructor",
-          "Summary strip at the top shows the current month's total online + invoice revenue and total cash/check/deposit revenue",
+          "Summary strip at the top shows the current month's total online + invoice revenue, total cash/check/deposit revenue, and the number of failed payment attempts",
+          "Failed and declined online payment attempts are recorded automatically — click the Failed Attempts card, or the Failed status filter, to see them",
+          "The Details column explains why each payment failed (card declined, class filled up during checkout, captured and refunded, and so on)",
+          { text: "Failed payments also appear in the Recent Activity feed on the admin dashboard with a red badge", role: "super" },
           "Table columns: customer, session, instructor, payment type, status, amount, date, and who logged it",
         ],
       },

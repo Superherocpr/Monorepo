@@ -641,3 +641,30 @@ Team invoices are additionally written with `student_count = 0` so they consume
 no capacity while unpaid; the PayPal line item is supplied separately as a flat
 quantity-1 charge via the new `primaryLineItem` option on `createAndSendInvoice()`.
 The guard is the primary protection and does not depend on that value being 0.
+
+---
+
+## THREAT-060 — Unauthenticated confirm route could flood the payments table
+
+**Severity:** 4/10 (medium) — availability/data-quality, no data or funds exposed
+**Files:** `apps/web/app/api/bookings/confirm/route.ts`, `apps/web/lib/payment-failures.ts`
+**Date:** 2026-08-18
+**Status:** MITIGATED
+
+**Description:** `/api/bookings/confirm` is unauthenticated by design — the
+PayPal order id is the verification. Adding failed-payment logging to it
+introduced a write primitive reachable without credentials: a script holding a
+real `customerId` and `sessionId` (both UUIDs that appear in normal client
+traffic) could post fabricated `paypalOrderId` values in a loop. Each one fails
+the PayPal capture and, unguarded, would have written a `payments` row with
+status `failed`. That bloats the table and — more damagingly — buries genuine
+customer declines under noise on `/admin/payments`, defeating the purpose of
+the feature.
+
+**Fix:** `isLoggableCaptureFailure()` skips the insert for capture issues that
+mean no real payment attempt occurred: `RESOURCE_NOT_FOUND`,
+`INVALID_RESOURCE_ID`, `ORDER_NOT_APPROVED`, `ORDER_ALREADY_CAPTURED`. A
+fabricated order id always lands in that set, while a genuine decline requires
+a real PayPal order the caller had to create and submit a card against first —
+which is not free to generate at volume. Unparseable errors are still logged so
+real server-side anomalies stay visible.

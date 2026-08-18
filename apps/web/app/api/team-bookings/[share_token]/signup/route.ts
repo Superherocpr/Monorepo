@@ -35,6 +35,11 @@ import {
 import { recordBookingEarning } from "@/lib/instructor-earnings";
 import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
 import { maybeSendAssistantReminder } from "@/lib/assistant-reminder";
+import {
+  logPaymentFailure,
+  describeBookSpotFailure,
+  isLoggableCaptureFailure,
+} from "@/lib/payment-failures";
 import { Resend } from "resend";
 import { teamSignupConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
 import { NextResponse } from "next/server";
@@ -292,7 +297,27 @@ export async function POST(
     const errorText = await captureResponse.text().catch(() => "Unknown capture error");
     console.error("[team-signup] PayPal capture failed:", errorText);
 
-    const { declined } = classifyCaptureRequestError(errorText);
+    const { declined, issue } = classifyCaptureRequestError(errorText);
+
+    // An unapproved or fabricated order id is not a real payment attempt and
+    // would only add noise to the admin payments page.
+    if (isLoggableCaptureFailure(issue)) {
+      await logPaymentFailure(
+        supabase,
+        {
+          customerId: user.id,
+          amount: expectedPrice,
+          // No capture exists yet — record the order id so the attempt can
+          // still be traced back to a PayPal order in the merchant dashboard.
+          paypalTransactionId: paypalOrderId,
+          notes: declined
+            ? `Card declined: ${issue ?? "unspecified"}`
+            : `Payment capture failed (HTTP ${captureResponse.status})`,
+        },
+        "team-signup"
+      );
+    }
+
     if (declined) {
       return NextResponse.json(
         {
@@ -320,6 +345,20 @@ export async function POST(
       captureStatus: outcome.status,
     });
     const isPending = outcome.status === "PENDING";
+
+    await logPaymentFailure(
+      supabase,
+      {
+        customerId: user.id,
+        amount: expectedPrice,
+        paypalTransactionId: outcome.captureId ?? paypalOrderId,
+        notes: `Capture not settled: status=${outcome.status ?? "unknown"}${
+          outcome.processorResponseCode ? ` (processor ${outcome.processorResponseCode})` : ""
+        }`,
+      },
+      "team-signup"
+    );
+
     return NextResponse.json(
       {
         declined: !isPending,
@@ -341,6 +380,17 @@ export async function POST(
           console.error("[team-signup] Refund after amount mismatch failed:", err)
         );
       }
+      await logPaymentFailure(
+        supabase,
+        {
+          customerId: user.id,
+          amount: expectedPrice,
+          paypalTransactionId,
+          notes: `Captured and refunded: amount mismatch (captured $${outcome.capturedAmount.toFixed(2)}, expected $${expectedPrice.toFixed(2)})`,
+        },
+        "team-signup"
+      );
+
       return NextResponse.json(
         { error: "Payment amount mismatch — transaction reversed." },
         { status: 502 }
@@ -357,12 +407,25 @@ export async function POST(
   });
 
   if (rpcError || !bookingId) {
+    const msg = rpcError?.message ?? "";
     if (paypalTransactionId) {
       await refundCapture(paypalTransactionId).catch((err) =>
         console.error("[team-signup] Refund after booking failure failed:", err)
       );
     }
-    return bookSpotErrorResponse(rpcError?.message ?? "", true);
+
+    await logPaymentFailure(
+      supabase,
+      {
+        customerId: user.id,
+        amount: expectedPrice,
+        paypalTransactionId,
+        notes: `Captured and refunded: ${describeBookSpotFailure(msg)}`,
+      },
+      "team-signup"
+    );
+
+    return bookSpotErrorResponse(msg, true);
   }
 
   const routingNote = appliedPromoCode
