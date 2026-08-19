@@ -1,0 +1,240 @@
+# Feature → Health Signal Coverage Map
+
+Every feature, and what signal would tell you it broke. Built 2026-08-19.
+Companion to [`maintenance-overhaul.md`](maintenance-overhaul.md).
+
+## Signal legend
+
+| Code | Signal | What it proves |
+|---|---|---|
+| **U** | Unit test | Logic is correct in isolation |
+| **E**° | e2e — smoke | The page renders (proves almost nothing about behaviour) |
+| **E**● | e2e — outcome | A real action completes and the result is asserted |
+| **C** | Cron / automated alert | Something machine-checks it on a schedule |
+| **A** | Admin surface | A human *could* notice, if they happen to look |
+| **I** | SQL invariant | Data corruption would be caught (none exist yet) |
+| **M** | Manual Todoist task | A human is scheduled to look |
+
+**A is not a signal.** It's the possibility of a signal. Counting it as coverage is
+how features go dark for weeks. It's tracked here to show what's *only* watched
+that way.
+
+---
+
+## The rule
+
+> **Every feature ships with a health signal.** A feature nobody can tell is
+> broken is a feature that will break silently. Before a feature is done, it must
+> have at least one signal that would **fail loudly** if it stopped working.
+>
+> An admin page where someone *could* notice is **not** a health signal. Neither
+> is a test that only asserts a page loads. The signal must assert an outcome.
+>
+> Pick at least one: an **SQL invariant** in the nightly canary (the feature
+> writes data that must stay internally consistent) · an **outcome e2e test**
+> (it's a user flow that can be driven end to end) · a **cron/alert** (it's
+> scheduled, or its failure mode is silence) · a **unit test** (pure logic —
+> necessary, never sufficient on its own).
+>
+> Model outcome e2e tests on `apps/web/tests/e2e/rollcall.spec.ts`. Do not add
+> tests in the style of `admin.spec.ts`.
+>
+> **When you add or materially change a feature, update this file in the same
+> task:** add the row, fill in the signals, state the verdict honestly. Shipping
+> without a signal is acceptable if you say so here and leave a `// TODO:`. An
+> acknowledged gap is fine; an invisible one is not.
+>
+> Inbound integrations (webhooks, third-party callbacks) need extra care —
+> nothing in the app initiates them, so failure produces silence that looks
+> exactly like a quiet day. They always need a heartbeat or an invariant, never
+> just a log line.
+
+This is the canonical, version-controlled copy. `apps/web/CLAUDE.md` §6 carries
+the same rule for agent sessions, but that file is gitignored
+(`apps/web/.gitignore`, under `# Claude`) and therefore does not survive a fresh
+clone — so this file is the one that travels with the repo.
+
+---
+
+## Money
+
+| Feature | U | E | C | A | I | M | Verdict |
+|---|---|---|---|---|---|---|---|
+| Booking + PayPal checkout | ✅ | ○ smoke | — | ✅ | ✅ | — | **No test completes a payment.** Blocked by blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` |
+| Payment-failure log | ✅ | — | — | ✅ | ✅ | — | Shipped last commit; only signal is someone opening `/admin/payments` |
+| Invoices | ✅ | — | — | ✅ | ✅ | — | No outcome test on create/send/mark-paid |
+| **PayPal invoice webhook** | — | — | — | ~ | — | — | Never fired in prod — but `invoices` is empty, so **untested, not proven broken** |
+| **PayPal payouts webhook** | — | — | — | — | ✅ | — | ✅ **Confirmed live** — received events 2026-08-17. Now covered by `payout_webhook_silent` |
+| Payouts | ✅✅✅✅ | ○ smoke | ✅✅✅ | ✅ | ✅✅✅ | ✅✅ | **Best-covered feature.** The model for everything else |
+| Promo codes | ✅ | — | — | ✅ | — | ✅ | Quarterly abuse audit only. No `max_uses` column exists, so there is no redemption cap to check |
+| Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
+| Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
+| **Team bookings** (0055) | ✅ | — | — | **✗** | ✅ | — | Admin surface still missing, but now has an invariant — see below |
+
+### Team bookings — was invisible, now partially covered
+
+Shipped 2026-08-17. It takes money via shareable group links and CSV upload. It has
+3 API routes, 1 public page (`/team/[share_token]`), 1 unit test, and **no admin page
+anywhere** — `grep` across `app/(admin)` finds no reference.
+
+As of 2026-08-19 it has one real signal: `team_booking_company_no_invoice` in the
+nightly canary. That check earned its place immediately — it found a breach on
+staging on its first run: a $1,200 "Acme Hospital" company-mode booking from your
+2026-08-17 testing with **no invoice ever raised**. No invoice row exists for that
+session at all, so `createTeamInvoice` failed outright, logged
+`invoice creation failed (non-fatal)` to console, and returned success. Nothing
+told anyone.
+
+Still open: the operator cannot see group bookings anywhere in the product. That's
+a product gap, not just a monitoring one.
+
+---
+
+## Operations
+
+| Feature | U | E | C | A | I | M | Verdict |
+|---|---|---|---|---|---|---|---|
+| Sessions & scheduling | ✅✅ | ○ smoke | ✅ | ✅ | ✅✅ | — | Cron covers unclaimed escalation only |
+| Class requests | — | — | — | ✅ | — | — | No test of any kind |
+| **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
+| Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
+| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Annual deprecation check; external, brittle |
+| Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
+| Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
+
+---
+
+## Communications
+
+| Feature | U | E | C | A | I | M | Verdict |
+|---|---|---|---|---|---|---|---|
+| Transactional email (Resend) | — | — | — | — | — | ✅✅ | ~20 send sites, **zero automated checks**. Daily bounce skim + semiannual DKIM |
+| Contact form / Zoho | ✅✅ | ○ validation | — | ✅ | — | — | Zoho OAuth token can be revoked with no signal |
+| Daily summary email | — | — | ✅ | ~ | — | — | Its own arrival is the signal — but nobody's alerted if it *doesn't* arrive |
+| Social feed | ✅ | ○ presence | ✅ | ✅ | — | — | Dead FB token → 200 + empty cache. Fails silently |
+
+---
+
+## Platform
+
+| Feature | U | E | C | A | I | M | Verdict |
+|---|---|---|---|---|---|---|---|
+| Auth / roles / RLS | ✅✅ | ● redirects | — | ✅ | — | ✅ | Redirect assertions are real; quarterly RLS review |
+| Blog / SEO | — | — | — | ✅ | — | ✅ | No test; quarterly Lighthouse |
+| Analytics | — | ○ smoke | — | ✅ | — | — | — |
+| File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
+
+---
+
+## What the map exposes
+
+**1. The test suite has the same disease as the monitoring.**
+Of 41 test files, the e2e layer is overwhelmingly existence-checking:
+
+- `admin.spec.ts` — **19 tests, all "page loads"**. Zero admin *features* are tested.
+- `public-pages.spec.ts` — 17 tests, near-all page loads
+- `booking-flow.spec.ts` — 4 tests, none reach payment
+- `merch.spec.ts` — 6 tests, cart UI only, no order completes
+
+`rollcall.spec.ts` is the exception and the template: it checks a student in and
+asserts the database row. **Rollcall is the only feature where a passing suite
+means the feature works.**
+
+**2. Webhooks are the darkest corner.** Both PayPal webhooks have no unit test,
+no e2e, no cron, no invariant. They're inbound — nothing in the app initiates
+them — so a broken one produces *silence*, which is indistinguishable from a
+quiet day.
+
+**3. Coverage is inversely correlated with recency.** Payouts (Jul 30) is
+well-covered because it was built after a real incident. Team bookings (Aug 17)
+and payment-failure logging (Aug 18) have almost nothing. Without a rule tying
+shipping to health signals, every new feature starts dark.
+
+**4. Six features have no test of any kind:** class requests, grading/CCF,
+transactional email, blog, both PayPal webhooks.
+
+---
+
+## Ranked by blast radius
+
+| # | Gap | Why it ranks here |
+|---|---|---|
+| 1 | **Team bookings fully invisible** | Takes money, no admin surface, 2 days old, subtle capacity logic |
+| 2 | **PayPal payouts webhook** | May be inert entirely; real money already went DENIED once |
+| 3 | **PayPal invoice webhook** | Silent failure = invoices never mark paid = revenue leak |
+| 4 | **No booking completes in any test** | The primary revenue path |
+| 5 | **Transactional email unmonitored** | ~20 send sites; silent non-delivery |
+| 6 | **Admin suite is 19 page loads** | Gives false confidence that admin is covered |
+| 7 | **Cron false-green** | Confirmed live failure today (see checklist §0) |
+| 8 | **Class requests / grading untested** | Operational, not financial |
+
+---
+
+## Proposed fills
+
+Cheapest-first, since several of these collapse multiple gaps at once.
+
+**SQL invariants** (fills the entire `I` column, one nightly job)
+Catches #1, #3, #4 partially — corrupt or missing data shows up regardless of
+which code path failed. Bolts onto the daily summary email, which already runs
+and already queries revenue, bookings, and invoices.
+
+**Webhook heartbeat** (#2, #3)
+Log every inbound webhook receipt. "No PayPal webhook in N days" is then a
+detectable condition. Same pattern as the cron heartbeat.
+
+**Promote e2e from smoke to outcome** (#4, #6)
+Not more tests — better ones. Use `rollcall.spec.ts` as the template. Requires
+clearing the two blockers in `qa-todo.md` first: staging admin credentials and
+the blank PayPal client ID. Sandbox PayPal makes a real booking assertable.
+
+**Team bookings admin surface** (#1)
+Arguably a product gap, not just a monitoring one — the operator can't see group
+bookings at all today.
+
+**CLAUDE.md rule** (prevents recurrence)
+Shipping a feature includes declaring its health signal. This is the fix for the
+root cause; everything above is remediation.
+
+---
+
+## Shipped 2026-08-19
+
+**CLAUDE.md §6 — "Every feature ships with a health signal."** Codifies that an
+admin page is not a signal and a page-load test is not a signal, points at
+`rollcall.spec.ts` as the template, and adds item 6 to the pre-code checklist.
+Sections 6–9 renumbered to 7–10.
+
+**Migration 0056 — `public.health_invariants()`.** Twelve cross-table consistency
+checks in one SECURITY DEFINER function. Applied to **staging**; production
+pending.
+
+Design points worth remembering:
+
+- It returns **every** check with its breach count, not only the failures. A
+  canary that goes quiet when healthy is indistinguishable from a canary that
+  died, so `checksRun: 0` is rendered as "checks did not run" — explicitly *not*
+  an all-clear.
+- Grace windows (1h, 6h, 24h) on anything with an async follow-up step, so a row
+  observed mid-write is not reported as corruption.
+- `REVOKE ... FROM PUBLIC` first — revoking from `anon`/`authenticated` alone is a
+  silent no-op. Verified post-apply: only `service_role` and `postgres` hold EXECUTE.
+- `search_path` pinned, per migration 0047.
+
+**`lib/health-invariants.ts`** + 11 unit tests. The pure `summarizeInvariants()`
+holds the reporting logic so it is testable without a database. Full suite: 375
+tests passing, typecheck and lint clean.
+
+**Daily summary email** now leads with a health banner in three states —
+all-clear, breached, or did-not-run — placed above revenue so a breach is above
+the fold. Critical breaches also `console.error` so they are greppable without
+opening an inbox.
+
+Also corrected: the route docstring claimed the cron fires at 12:00 UTC; migration
+0053 and `cron.job` both say 11:00 UTC.
+
+### What the invariants do not yet cover
+
+Merch orders, add-ons, blog, class requests, grading/CCF, contact/Zoho, and
+transactional email have no invariant — several have no natural one, and need an
+outcome test or a heartbeat instead.

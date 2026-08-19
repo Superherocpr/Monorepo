@@ -1,7 +1,7 @@
 /**
  * POST /api/admin/daily-summary
  * Called by:
- *   - pg_cron job (migration 0053) — daily at 12:00 UTC (~7am ET/EST, 8am ET/EDT) (CRON_SECRET bearer)
+ *   - pg_cron job (migration 0053) — daily at 11:00 UTC (7am EDT / 6am EST) (CRON_SECRET bearer)
  *   - super_admin or manager session (manual trigger)
  * Auth: super_admin/manager session OR Authorization: Bearer {CRON_SECRET}
  * Queries yesterday's activity (midnight-to-midnight in America/New_York), builds
@@ -10,6 +10,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
+import { fetchHealthInvariants, summarizeInvariants } from "@/lib/health-invariants";
 import { Resend } from "resend";
 import {
   dailySummaryEmail,
@@ -146,6 +147,7 @@ export async function POST(request: Request): Promise<Response> {
     newCustomersResult,
     pendingClassApprovalsResult,
     recipientsResult,
+    healthInvariants,
   ] = await Promise.all([
     // Revenue: completed payments yesterday
     admin
@@ -233,6 +235,10 @@ export async function POST(request: Request): Promise<Response> {
       .select("id, email, first_name")
       .in("role", ["super_admin", "manager"])
       .eq("deactivated", false),
+
+    // Data-consistency canary (migration 0056). Never throws — a failed call
+    // returns [] and is reported in the digest as "checks did not run".
+    fetchHealthInvariants(admin),
   ]);
 
   // Log any query errors but continue — a partial digest is better than none
@@ -462,9 +468,21 @@ export async function POST(request: Request): Promise<Response> {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
   const adminUrl = `${baseUrl}/admin`;
 
+  const health = summarizeInvariants(healthInvariants);
+
+  // Surface breaches in the server log too — the digest reaches admins, but a
+  // critical breach should also be greppable without opening an inbox.
+  if (health.criticalBreaches > 0) {
+    console.error(
+      "[POST /api/admin/daily-summary] data-consistency breaches",
+      health.breached.filter((b) => b.severity === "critical")
+    );
+  }
+
   const { subject, html } = dailySummaryEmail({
     dateLabel,
     adminUrl,
+    health,
     totalRevenue,
     revenueBreakdown,
     bookings,
