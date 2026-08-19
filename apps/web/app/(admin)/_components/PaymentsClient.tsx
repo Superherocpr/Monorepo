@@ -72,6 +72,8 @@ export interface PaymentsPageData {
   currentPage: number;
   onlineInvoiceTotal: number;
   cashCheckTotal: number;
+  /** Count of failed online payment attempts this month. */
+  failedCount: number;
   instructors: InstructorOption[];
   actorRole: UserRole;
   actorId: string;
@@ -244,6 +246,7 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
     currentPage,
     onlineInvoiceTotal,
     cashCheckTotal,
+    failedCount,
     instructors,
     actorRole,
     filters,
@@ -436,7 +439,7 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
       </div>
 
       {/* ── Summary strip ────────────────────────────────────────────────── */}
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-lg bg-gray-50 p-4">
           <p className="text-2xl font-bold text-gray-900">
             {fmtCurrency(onlineInvoiceTotal)}
@@ -453,6 +456,32 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
             Cash &amp; Check - This Month
           </p>
         </div>
+        {/* Failed attempts — a count, not a total. These never settled, so a
+            dollar figure would misread as lost revenue. Links into the
+            already-existing status=failed filter. */}
+        <Link
+          href={buildUrl(filters, { status: "failed" })}
+          className={`block rounded-lg p-4 transition-colors ${
+            failedCount > 0
+              ? "bg-red-50 hover:bg-red-100"
+              : "bg-gray-50 hover:bg-gray-100"
+          }`}
+        >
+          <p
+            className={`text-2xl font-bold ${
+              failedCount > 0 ? "text-red-700" : "text-gray-900"
+            }`}
+          >
+            {failedCount}
+          </p>
+          <p
+            className={`mt-0.5 text-sm ${
+              failedCount > 0 ? "text-red-600" : "text-gray-500"
+            }`}
+          >
+            Failed Attempts - This Month
+          </p>
+        </Link>
       </div>
 
       {/* ── Filter bar ───────────────────────────────────────────────────── */}

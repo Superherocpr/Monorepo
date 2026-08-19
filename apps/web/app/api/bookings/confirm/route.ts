@@ -36,6 +36,11 @@ import { resolvePromoDiscount } from "@/lib/promo-codes";
 import { resolveAddonsSelection, type ResolvedAddon } from "@/lib/addon-checkout";
 import { maybeSendAssistantReminder } from "@/lib/assistant-reminder";
 import { getSessionPricing } from "@/lib/session-pricing";
+import {
+  logPaymentFailure,
+  describeBookSpotFailure,
+  isLoggableCaptureFailure,
+} from "@/lib/payment-failures";
 
 /** Acceptable rounding tolerance when comparing client/server prices. */
 const PRICE_TOLERANCE = 0.01;
@@ -184,7 +189,28 @@ export async function POST(request: Request) {
     // not only as a 2xx capture with status DECLINED (see evaluateCaptureOutcome
     // below) — confirmed live 2026-08-04. Give the buyer actionable advice
     // instead of "please refresh and try again", which is wrong for a decline.
-    const { declined } = classifyCaptureRequestError(errorText);
+    const { declined, issue } = classifyCaptureRequestError(errorText);
+
+    // Skipped for fabricated/unapproved order ids — this route is
+    // unauthenticated, so logging those would let a script flood the payments
+    // table and bury real declines.
+    if (isLoggableCaptureFailure(issue)) {
+      await logPaymentFailure(
+        supabase,
+        {
+          customerId,
+          amount: expectedPrice,
+          // No capture exists yet — record the order id so the attempt can
+          // still be traced back to a PayPal order in the merchant dashboard.
+          paypalTransactionId: paypalOrderId,
+          notes: declined
+            ? `Card declined: ${issue ?? "unspecified"}`
+            : `Payment capture failed (HTTP ${captureResponse.status})`,
+        },
+        "bookings/confirm"
+      );
+    }
+
     if (declined) {
       return Response.json(
         {
@@ -225,6 +251,20 @@ export async function POST(request: Request) {
     // TODO: subscribe to PAYMENT.CAPTURE.COMPLETED to auto-confirm a booking if
     // a PENDING capture later settles, instead of asking the buyer to retry.
     const isPending = outcome.status === "PENDING";
+
+    await logPaymentFailure(
+      supabase,
+      {
+        customerId,
+        amount: expectedPrice,
+        paypalTransactionId: outcome.captureId ?? paypalOrderId,
+        notes: `Capture not settled: status=${outcome.status ?? "unknown"}${
+          outcome.processorResponseCode ? ` (processor ${outcome.processorResponseCode})` : ""
+        }`,
+      },
+      "bookings/confirm"
+    );
+
     return Response.json(
       {
         success: false,
@@ -259,6 +299,17 @@ export async function POST(request: Request) {
           console.error("[bookings/confirm] Refund after amount mismatch failed:", err)
         );
       }
+      await logPaymentFailure(
+        supabase,
+        {
+          customerId,
+          amount: expectedPrice,
+          paypalTransactionId,
+          notes: `Captured and refunded: amount mismatch (captured $${outcome.capturedAmount.toFixed(2)}, expected $${expectedPrice.toFixed(2)})`,
+        },
+        "bookings/confirm"
+      );
+
       return Response.json(
         { success: false, error: "Payment amount mismatch — transaction reversed." },
         { status: 502 }
@@ -285,6 +336,17 @@ export async function POST(request: Request) {
         console.error("[bookings/confirm] Refund after booking failure failed:", err)
       );
     }
+    await logPaymentFailure(
+      supabase,
+      {
+        customerId,
+        amount: expectedPrice,
+        paypalTransactionId,
+        notes: `Captured and refunded: ${describeBookSpotFailure(msg)}`,
+      },
+      "bookings/confirm"
+    );
+
     if (msg.includes("already_booked")) {
       return Response.json(
         { success: false, error: "You're already booked into this class. Payment refunded." },

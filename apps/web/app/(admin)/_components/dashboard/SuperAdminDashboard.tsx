@@ -24,7 +24,7 @@ export interface QuickStats {
 /** A single item in the recent activity feed. */
 export interface ActivityItem {
   id: string;
-  type: "booking" | "payment" | "invoice" | "customer";
+  type: "booking" | "payment" | "payment_failed" | "invoice" | "customer";
   description: string;
   created_at: string;
 }
@@ -46,6 +46,7 @@ export interface SuperAdminDashboardProps extends ManagerDashboardProps {
 const ACTIVITY_LABELS: Record<ActivityItem["type"], string> = {
   booking: "Booking",
   payment: "Payment",
+  payment_failed: "Failed Payment",
   invoice: "Invoice",
   customer: "New Customer",
 };
@@ -53,6 +54,7 @@ const ACTIVITY_LABELS: Record<ActivityItem["type"], string> = {
 const ACTIVITY_COLORS: Record<ActivityItem["type"], string> = {
   booking: "bg-blue-100 text-blue-700",
   payment: "bg-green-100 text-green-700",
+  payment_failed: "bg-red-100 text-red-700",
   invoice: "bg-purple-100 text-purple-700",
   customer: "bg-gray-100 text-gray-600",
 };
