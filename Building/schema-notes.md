@@ -155,6 +155,53 @@ The Enrollware browser extension authenticates using the instructor's Supabase s
 
 ---
 
+## Team / Corporate Bookings
+
+The corporate path that replaces "group invoice + spreadsheet" when the company's
+attendees need to be real, named people (so RollCall works on class day).
+
+**Flow:**
+1. Corporate inquiry arrives via "Request a Class" on `/book`
+2. Admin/manager calls the customer back and gathers class + billing details
+3. From `/admin/sessions/new` they toggle "team/corporate booking", which creates
+   the class **and** a `team_bookings` row. Optionally reached via
+   "Convert to team booking" on a class request
+4. Staff hand the `/team/<share_token>` link to the company contact
+5. The company distributes it themselves — we never email employees
+6. Each employee signs up through the link with their own account
+7. The same page shows who has signed up (first + last name only) and a live count
+
+**Payment modes:**
+- `company` — flat total, contact receives a PayPal invoice via the normal
+  invoice system. Employees sign up free and may do so **before** it clears.
+- `per_seat` — each employee pays the staff-quoted price at signup. Promo codes
+  apply; add-ons are not offered.
+
+**Key invariants — both protect headcount:**
+- Team invoices are written with `student_count = 0` so they never consume
+  capacity in `book_spot`'s `sum(student_count) ... where status not in
+  ('cancelled','paid')` subquery while unpaid.
+- `mark_invoice_paid` (redefined in `0055`) **skips** its placeholder-booking
+  insert when a `team_bookings` row points at the invoice. Real employee
+  bookings already exist; running the insert too would double the headcount.
+- Bookings made through a team link keep `booking_source = 'online'` and are
+  identified by `bookings.team_booking_id`. This is deliberate: it inherits
+  `book_spot`'s `already_booked` guard and the
+  `bookings_online_session_customer_unique` index (0038) unchanged, which is
+  what prevents an employee signing up for the same class twice.
+
+**Visibility:** the session is created with `is_private = true`, filtered out of
+`/book`, `/schedule`, and the `class_sessions_anon_read_public` RLS policy.
+
+**Approval:** manager/super-admin-created team sessions are auto-approved so the
+link is live immediately. Instructor-created ones still go through the normal
+approvals queue — `book_spot` rejects signups until approved.
+
+**Cancellations:** phone-only, like all bookings. The number shown is the
+instructor's when an instructor created the booking, otherwise the main line.
+
+---
+
 ## Class Approval Workflow
 
 ```

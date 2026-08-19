@@ -310,12 +310,26 @@ export default async function AdminDashboardPage() {
               .order("created_at", { ascending: false })
               .limit(5),
 
-            // Activity feed: recent payments
+            // Activity feed: recent payments. Must stay filtered to 'completed'
+            // — failed attempts are also stored in this table and would
+            // otherwise render as "X paid $Y", describing a decline as a sale.
             admin
               .from("payments")
               .select(
                 "id, created_at, amount, profiles!payments_customer_id_fkey ( first_name, last_name )"
               )
+              .eq("status", "completed")
+              .order("created_at", { ascending: false })
+              .limit(5),
+
+            // Activity feed: recent failed payment attempts, so the owner sees
+            // customers hitting payment trouble without waiting to be told.
+            admin
+              .from("payments")
+              .select(
+                "id, created_at, amount, notes, profiles!payments_customer_id_fkey ( first_name, last_name )"
+              )
+              .eq("status", "failed")
               .order("created_at", { ascending: false })
               .limit(5),
 
@@ -485,6 +499,7 @@ export default async function AdminDashboardPage() {
       { data: paidInvoices },
       { data: recentBookingsActivity },
       { data: recentPaymentsActivity },
+      { data: recentFailedPaymentsActivity },
       { data: recentInvoicesActivity },
       { data: recentCustomersActivity },
       { data: completedSessionsForSuperAdmin },
@@ -547,6 +562,23 @@ export default async function AdminDashboardPage() {
           description: customer
             ? `${customer.first_name} ${customer.last_name} paid $${Number(p.amount).toFixed(2)}`
             : `Payment of $${Number(p.amount).toFixed(2)}`,
+          created_at: p.created_at,
+        };
+      }),
+      ...(recentFailedPaymentsActivity ?? []).map((p) => {
+        const customer = p.profiles as unknown as {
+          first_name: string;
+          last_name: string;
+        } | null;
+        const who = customer
+          ? `${customer.first_name} ${customer.last_name}`
+          : "A customer";
+        return {
+          id: p.id,
+          type: "payment_failed" as const,
+          description: `${who} — payment of $${Number(p.amount).toFixed(2)} failed${
+            p.notes ? ` (${p.notes})` : ""
+          }`,
           created_at: p.created_at,
         };
       }),

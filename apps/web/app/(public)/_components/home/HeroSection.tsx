@@ -29,12 +29,15 @@ export default async function HeroSection() {
   const supabase = await createClient();
 
   // Fetch the next upcoming approved class session
-  // Must be approved — unapproved sessions do not appear publicly
+  // Must be approved — unapproved sessions do not appear publicly.
+  // is_private excludes team/corporate classes, which are reachable only
+  // through their own signup link and must never be advertised publicly.
   const { data: nextSession } = await supabase
     .from("class_sessions")
     .select("starts_at, class_types(name), locations(name)")
     .eq("status", "scheduled")
     .eq("approval_status", "approved")
+    .eq("is_private", false)
     .gte("starts_at", new Date().toISOString())
     .order("starts_at", { ascending: true })
     .limit(1)

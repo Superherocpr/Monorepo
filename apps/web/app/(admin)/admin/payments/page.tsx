@@ -167,6 +167,16 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
     )
     .reduce((sum, p) => sum + Number(p.amount), 0);
 
+  // Failed online payment attempts this month. Counted, not summed — a failed
+  // attempt never settled, so a dollar total would read as lost revenue when
+  // most of these are simply customers retrying with a different card.
+  const { count: failedCount } = await admin
+    .from("payments")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "failed")
+    .eq("payment_type", "online")
+    .gte("created_at", startOfMonth);
+
   // ── Instructors list for filter dropdown ───────────────────────────────────
   const { data: instructors } = await admin
     .from("profiles")
@@ -183,6 +193,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
     currentPage: page,
     onlineInvoiceTotal,
     cashCheckTotal,
+    failedCount: failedCount ?? 0,
     instructors: instructors ?? [],
     actorRole: actor.effectiveRole,
     actorId: actor.user.id,

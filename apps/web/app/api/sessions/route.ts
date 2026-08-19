@@ -16,6 +16,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
+import { createClassSession } from "@/lib/session-create";
 import { NextResponse } from "next/server";
 
 /** Staff roles that are permitted to create sessions. */
@@ -111,122 +112,36 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  // ── Verify class_type exists and is active ─────────────────────────────────
-  const { data: classType } = await adminClient
-    .from("class_types")
-    .select("id")
-    .eq("id", class_type_id)
-    .eq("active", true)
-    .single();
-
-  if (!classType) {
-    return NextResponse.json(
-      { error: "Class type not found or inactive." },
-      { status: 400 }
-    );
+  // ── Validate add_on ids are well-formed before handing off ─────────────────
+  // Eligibility itself is checked inside createClassSession; this only guards
+  // the raw shape coming off the request body.
+  if (
+    addon_ids !== undefined &&
+    (!Array.isArray(addon_ids) || !addon_ids.every((id) => typeof id === "string"))
+  ) {
+    return NextResponse.json({ error: "addon_ids must be an array of strings." }, { status: 400 });
   }
 
-  // ── Validate add-on selection against this class type's eligibility ────────
-  // addon_ids is optional. Every submitted id must appear in addon_class_types
-  // for the chosen class_type_id — trusting the client's checklist alone would
-  // let a caller assign an add-on that isn't actually eligible for this class.
-  let resolvedAddonIds: string[] = [];
-  if (addon_ids !== undefined) {
-    if (
-      !Array.isArray(addon_ids) ||
-      !addon_ids.every((id) => typeof id === "string")
-    ) {
-      return NextResponse.json({ error: "addon_ids must be an array of strings." }, { status: 400 });
-    }
-    resolvedAddonIds = [...new Set(addon_ids as string[])];
+  // ── Create the session via the shared helper ───────────────────────────────
+  // Shared with POST /api/team-bookings so FK validation, add-on eligibility,
+  // and the insert can never drift between the two entry points.
+  const result = await createClassSession(adminClient, {
+    classTypeId: class_type_id,
+    instructorId: resolvedInstructorId,
+    locationId: location_id,
+    startsAt: starts_at,
+    endsAt: ends_at,
+    maxCapacity: max_capacity,
+    discountPercent: resolvedDiscount,
+    notes: typeof notes === "string" ? notes : null,
+    addonIds: addon_ids as string[] | undefined,
+    // An instructor's own id came from their authenticated session, not the body.
+    skipInstructorCheck: isInstructor,
+  });
 
-    if (resolvedAddonIds.length > 0) {
-      const { data: eligible } = await adminClient
-        .from("addon_class_types")
-        .select("addon_id")
-        .eq("class_type_id", class_type_id)
-        .in("addon_id", resolvedAddonIds);
-
-      const eligibleIds = new Set((eligible ?? []).map((e) => e.addon_id));
-      if (resolvedAddonIds.some((id) => !eligibleIds.has(id))) {
-        return NextResponse.json(
-          { error: "One or more selected add-ons are not eligible for this class type." },
-          { status: 400 }
-        );
-      }
-    }
+  if (!result.success) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  // ── Verify location exists ─────────────────────────────────────────────────
-  const { data: location } = await adminClient
-    .from("locations")
-    .select("id")
-    .eq("id", location_id)
-    .single();
-
-  if (!location) {
-    return NextResponse.json(
-      { error: "Location not found." },
-      { status: 400 }
-    );
-  }
-
-  // ── Verify instructor exists and is a staff member ─────────────────────────
-  // Only check if a non-instructor user supplied an instructor_id.
-  if (!isInstructor) {
-    const { data: instructor } = await adminClient
-      .from("profiles")
-      .select("id, role")
-      .eq("id", resolvedInstructorId)
-      .in("role", ["instructor", "manager", "super_admin"])
-      .eq("deactivated", false)
-      .single();
-
-    if (!instructor) {
-      return NextResponse.json(
-        { error: "Instructor not found or inactive." },
-        { status: 400 }
-      );
-    }
-  }
-
-  // ── Insert the new session ─────────────────────────────────────────────────
-  const { data: newSession, error: insertError } = await adminClient
-    .from("class_sessions")
-    .insert({
-      class_type_id,
-      instructor_id: resolvedInstructorId,
-      location_id,
-      starts_at,
-      ends_at,
-      max_capacity,
-      discount_percent: resolvedDiscount,
-      // notes is optional — only set if truthy to avoid storing empty strings
-      ...(typeof notes === "string" && notes.trim() ? { notes: notes.trim() } : {}),
-      // Defaults set by DB: status = 'scheduled', approval_status = 'pending_approval'
-    })
-    .select("id")
-    .single();
-
-  if (insertError || !newSession) {
-    console.error("[POST /api/sessions] insert error:", insertError);
-    return NextResponse.json(
-      { error: "Failed to create session. Please try again." },
-      { status: 500 }
-    );
-  }
-
-  // ── Attach the selected add-ons to the new session ──────────────────────────
-  if (resolvedAddonIds.length > 0) {
-    const { error: addonError } = await adminClient
-      .from("session_addons")
-      .insert(resolvedAddonIds.map((addon_id) => ({ session_id: newSession.id, addon_id })));
-
-    if (addonError) {
-      console.error("[POST /api/sessions] session_addons insert error:", addonError);
-      // Session was created successfully — don't fail the whole request over add-ons.
-    }
-  }
-
-  return NextResponse.json({ id: newSession.id }, { status: 201 });
+  return NextResponse.json({ id: result.sessionId }, { status: 201 });
 }

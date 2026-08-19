@@ -67,6 +67,10 @@ export const GROUPS: GroupDef[] = [
           { text: "Assign an instructor to the session", role: "manager" },
           "Attach eligible add-ons from a checklist automatically filtered to the chosen class type",
           "Submission routes the session to the approvals queue for manager review before it goes live",
+          "Tick \"This is a team / corporate booking\" to set up a company class instead — enter the company name and contact, choose whether the company is invoiced a flat total or each employee pays per seat, and get a signup link to send the contact",
+          "Team classes are hidden from the public schedule and are only reachable through their link; add-ons are not offered on them",
+          { text: "Team bookings you create go live immediately — no approval needed", role: "manager" },
+          { text: "Team bookings you create still go to the approvals queue before the link accepts signups", role: "instructor" },
         ],
       },
       {
@@ -217,7 +221,10 @@ export const GROUPS: GroupDef[] = [
         bullets: [
           "View all payments across the platform — 50 records per page with pagination",
           "Filter by payment type (online, cash, check, deposit, invoice), status, date range, customer, and instructor",
-          "Summary strip at the top shows the current month's total online + invoice revenue and total cash/check/deposit revenue",
+          "Summary strip at the top shows the current month's total online + invoice revenue, total cash/check/deposit revenue, and the number of failed payment attempts",
+          "Failed and declined online payment attempts are recorded automatically — click the Failed Attempts card, or the Failed status filter, to see them",
+          "The Details column explains why each payment failed (card declined, class filled up during checkout, captured and refunded, and so on)",
+          { text: "Failed payments also appear in the Recent Activity feed on the admin dashboard with a red badge", role: "super" },
           "Table columns: customer, session, instructor, payment type, status, amount, date, and who logged it",
         ],
       },
@@ -423,7 +430,8 @@ export const GROUPS: GroupDef[] = [
           "Approve — automatically creates a linked session from the request data and redirects to it",
           "Reject — requires a written reason (minimum 10 characters); reason is displayed on the record",
           "If already approved, shows a direct link to the created session",
-          "Approve and Reject buttons only appear for pending requests",
+          "Convert to Team Booking — for corporate callers, opens the New Session form pre-filled with the company and contact details so you can set up a private class plus a signup link",
+          "Approve, Reject, and Convert buttons only appear for pending requests",
         ],
       },
       {
