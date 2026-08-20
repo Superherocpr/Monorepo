@@ -33,3 +33,12 @@ npm-debug.log*
 apps/web/tests/.auth/
 apps/web/playwright-report/
 apps/web/test-results/
+
+# Playwright MCP scratch output.
+# MUST stay ignored. These are verbatim accessibility dumps of whatever page the
+# browser was on, including input field VALUES. On 2026-08-20 a session opened the
+# Amplify environment-variables editor and the resulting snapshots captured the
+# Supabase service-role key, PayPal secret, Resend key, Facebook token, Zoho secret,
+# CRON_SECRET and the Turnstile secret in plaintext — which were then auto-committed.
+# Caught before any push; nothing reached the remote. Do not un-ignore this.
+.playwright-mcp/
