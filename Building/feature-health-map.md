@@ -108,10 +108,11 @@ a product gap, not just a monitoring one.
 
 | Feature | U | E | C | A | I | M | Verdict |
 |---|---|---|---|---|---|---|---|
-| Transactional email (Resend) | — | — | — | — | — | ✅✅ | ~20 send sites, **zero automated checks**. Daily bounce skim + semiannual DKIM |
-| Contact form / Zoho | ✅✅ | ○ validation | — | ✅ | — | — | Zoho OAuth token can be revoked with no signal |
+| Transactional email (Resend) | — | — | ✅ | — | — | ✅✅ | Was "zero automated checks". The weekly credential probe now verifies the API key **and** that the sending domain is still `verified` |
+| Contact form / Zoho | ✅✅ | ○ validation | ✅ | ✅ | — | — | Was "token can be revoked with no signal". The probe now exchanges the refresh token weekly and alerts if Zoho refuses it |
 | Daily summary email | — | — | ✅ | ~ | — | — | Its own arrival is the signal — but nobody's alerted if it *doesn't* arrive |
-| Social feed | ✅ | ○ presence | ✅ | ✅ | — | — | Dead FB token → 200 + empty cache. Fails silently |
+| Social feed | ✅ | ○ presence | ✅✅ | ✅ | — | — | Dead FB token → 200 + empty cache. Refresh cron, **plus** weekly `debug_token` liveness check |
+| **Third-party credentials** | ✅ (22) | — | ✅ | — | — | — | New 2026-08-20. Weekly probe of 5 credentials; 502 on failure escalates through `cron_health()` into the digest |
 
 ---
 
@@ -253,6 +254,38 @@ This also changed one existing test's premise: the unclaimed-opportunities route
 now writes a heartbeat even when it self-gates off-schedule. That's intended —
 "ran and did nothing" must be distinguishable from "never ran" — so the test was
 sharpened to assert no *opportunity* queries rather than no DB calls at all.
+
+## Shipped 2026-08-20
+
+**Weekly credential probe** (`probe-credentials`, migration 0058 — written, not
+yet applied). Closes §5's "nothing watches any of them" for five third-party
+credentials: Google Places, Facebook page token, Resend key + sending domain,
+Turnstile secret, Zoho refresh token.
+
+It exists because a manual audit that day found **`GOOGLE_PLACES_API_KEY` dead in
+production** — Google refusing every call because billing was disabled on the GCP
+project. Address autocomplete had been broken on three surfaces for an unknown
+length of time. Nothing alerted, because the route degrades politely to "enter the
+address manually" and logs to a console nobody reads. Three curl commands found
+it; this is those three curl commands on a schedule.
+
+The design rule, and the reason the probe is not just an uptime check: **assert on
+the provider's semantic verdict, never on HTTP status.** Google answered **HTTP
+200** with `"status": "REQUEST_DENIED"` in the body. A monitor checking `res.ok`
+would have reported healthy throughout — worse than no monitor, because it
+manufactures confidence. A test asserts exactly this, and was verified by
+temporarily reintroducing the mistake.
+
+Two properties carried over from the invariants canary, for the same reason:
+`probesRun: 0` reports **unhealthy** (a silent canary is not a well one), and an
+unreachable provider reports `probe_failed` rather than passing — unknown is never
+a pass. Conversely `unconfigured` is deliberately *not* actionable, since staging
+legitimately lacks some keys and a banner that cries wolf daily stops being read.
+
+Failure escalates without depending on anyone reading email: the route returns
+**502**, the heartbeat records `ok=false`, and because `cron_health()` measures the
+gap since the last *successful* run, a credential left broken surfaces the job as
+overdue in the digest's existing cron banner.
 
 ### What the invariants do not yet cover
 
