@@ -24,7 +24,7 @@ import { requireApiRole } from "@/lib/auth/effective-role";
 import { reconcilePayoutBatch } from "@/lib/payout-reconcile";
 import { notifyInstructorsPaid, notifyPayoutDenied } from "@/lib/payout-notify";
 import type { PayoutDenialSource } from "@/types/payouts";
-import { withCronHeartbeat } from "@/lib/cron-heartbeat";
+import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /**
  * Batch statuses worth re-checking against PayPal.
@@ -51,17 +51,6 @@ function isSyncBody(value: unknown): value is SyncRequestBody {
   return typeof value === "object" && value !== null;
 }
 
-/**
- * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
- * @param request - Incoming HTTP request.
- * @returns true when the header is valid, false otherwise.
- */
-function isCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = request.headers.get("Authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
 
 /**
  * Syncs either one requested payout batch or every unresolved batch.

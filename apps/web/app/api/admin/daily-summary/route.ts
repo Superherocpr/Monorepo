@@ -21,6 +21,7 @@ import {
   type DailySummaryClass,
 } from "@/lib/emails";
 import {
+  isCronRequest,
   withCronHeartbeat,
   fetchCronHealth,
   summarizeCronHealth,
@@ -28,17 +29,6 @@ import {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
- * @param request - Incoming HTTP request.
- * @returns true when the bearer token matches CRON_SECRET, false otherwise.
- */
-function isCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = request.headers.get("Authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
 
 /**
  * Returns the first element of an array or the value itself, or null if nil.
