@@ -99,9 +99,50 @@ immune to the 6h pg_net TTL.
 - [x] Applied to **both** envs; the `daily-ops-summary` block is guarded by an
       existence check so running 0057 on staging cannot create it there
       (verified: staging still has 0)
-- [ ] Confirm the alert that failed on 2026-08-19 actually fired, or re-run it
-- [ ] Consolidate the duplicated private `isCronRequest` helpers in the cron
-      routes onto the shared one now exported from `lib/cron-heartbeat.ts`
+- [x] **Resolved 2026-08-20 — the missed alert was inconsequential, and the
+      heartbeat is now proven working.**
+
+      *What the alert would have said:* production holds exactly **4** payout
+      batches, all `denied`, created 2026-08-10 → 2026-08-17. These are the same
+      four §4 investigated when tuning `payout_fee_total_mismatch`. `denied` is
+      terminal and the funds were returned, so nothing is stuck in a recoverable
+      state and no financial action was missed. The 2026-08-19 digest would have
+      listed four batches that are still denied and still visible in the admin
+      panel — and every daily run since would have re-sent the same list. No
+      re-run needed.
+
+      *Heartbeat validated end-to-end.* `cron_run_log` on production now holds real
+      rows from the two high-frequency jobs, the first proof that 0057 works in
+      production rather than just in principle:
+
+      | Job | Runs | Last | All OK | Slowest |
+      |---|---|---|---|---|
+      | `notify-unclaimed-opportunities` | 4 | 23:00 UTC | ✅ | 641 ms |
+      | `reconcile-instructor-payouts` | 5 | 22:15 UTC | ✅ | 1092 ms |
+
+      Note the durations: **~1 s at worst against pg_net's old 5 s default.** That
+      reinforces the original diagnosis — the 2026-08-19 timeout was a Lambda cold
+      start, not slow work — and confirms the 30 s timeout in 0057 is ample.
+
+      `alert-stuck-payout-batches` has no row yet purely because it runs daily at
+      14:00 UTC and the heartbeat code only went live at 18:12 UTC today. Its first
+      row lands tomorrow at 14:00 UTC; the daily jobs will fill in over the next
+      25 hours exactly as §2's "first deploy" note predicted.
+- [x] **Consolidated 2026-08-20.** Eight routes carried their own copy — six as a
+      private `function isCronRequest`, two inlined inside a local `isAuthorized`
+      (including `probe-credentials`, written earlier the same day). All six private
+      copies were verified **byte-identical** to the shared helper before removal, so
+      this was a pure deduplication with no behavioural change.
+
+      The risk it removes is drift, not tidiness: `withCronHeartbeat` uses the shared
+      helper to decide whether to write a heartbeat. Had a route's private copy ever
+      diverged, the route would keep accepting cron calls while the heartbeat quietly
+      stopped recording them — and `cron_health()` would report the job overdue with
+      no visible cause. That is precisely the false signal §2 exists to eliminate.
+
+      `process.env.CRON_SECRET` now appears in exactly two places: `cron-heartbeat.ts`
+      (verifies it) and `payout-trigger.ts` (sends it outbound — a different job, left
+      alone).
 
 **Note on first deploy:** until each job runs once after the code ships,
 `cron_health()` reports it overdue. Daily jobs take up to 25h to clear. This is
@@ -377,9 +418,21 @@ used here: Amplify app `dzmna7ztg21it` (us-east-2), build job **74** on `main`
       `aws amplify update-app --environment-variables` **replaces the entire map**,
       so a single-variable CLI call would have wiped the other 25 and taken
       production down. The console edit is additive. Use it for any future env var.
-- [ ] Decide on `ENCRYPTION_KEY` — set in Amplify (app-level value has a stray
-      trailing space; `main` overrides with a clean one) but referenced **nowhere** in
-      code. Dead config: either delete it or document what it was for.
+- [x] **`ENCRYPTION_KEY` — DECIDED 2026-08-20: leave it, documented.** Confirmed
+      dead: zero references across `.ts`, `.tsx`, `.js` and `.yml` in the whole repo.
+      Set at Amplify app level (with a stray **trailing space** in the value) and
+      overridden cleanly on `main`.
+
+      It is also **not in the `amplify.yml` injection grep**, so it never reaches the
+      running app at all — it exists purely as Amplify console config and does
+      literally nothing today.
+
+      Not deleting it, on the reasoning that deletion buys nothing measurable (it is
+      not injected, so it is not even in the SSR bundle's blast radius) while carrying
+      a non-zero risk that something outside this repo — a script, a Lambda, a
+      one-off tool — still reads it. Revisit and delete if that is ever ruled out.
+      The trailing space is a latent trap if it is ever wired up: fix the value at
+      the same time.
 - [x] `S3_BUCKET_NAME` — staging inherits the app-level `superherocpr-assets-prod`
       and writes into the same bucket as production. **Confirmed intentional
       (2026-08-20):** one shared asset bucket for both environments is the design.
@@ -484,7 +537,18 @@ the table being created.
 - [x] **Security re-run after 0058 — both environments ERROR-free.** Production
       80 WARN / 28 INFO, staging 1 WARN / 28 INFO, **zero ERROR on either**. The
       0058 DDL introduced nothing, and THREAT-061 stays fixed.
-- [ ] Add to the recurring schedule (Todoist)
+- [x] **Add to the recurring schedule (Todoist) — already existed; now updated.**
+      "Run Supabase security + performance advisors on both projects" (monthly, p1,
+      id `6hJ7fQHwGHg45rx4`). Extended 2026-08-20 with a **numeric baseline**
+      (security: 0 ERROR both envs, prod 80 WARN / 28 INFO, staging 1 WARN / 28 INFO;
+      performance: 8 WARN / 41 INFO) so a future run can tell "same as always" from
+      "something new landed" at a glance, plus the full accepted-findings list from
+      this triage and the still-open `auth_rls_initplan` work.
+
+      **Verification note:** searching Todoist for this task by keyword initially
+      returned nothing, which nearly led to recording §9's claims as false. The
+      search returns partial results with an unreliable `totalCount`. Confirm a task
+      is absent by more than one query before concluding it was never created.
 
 ### Performance triage (production, 2026-08-20)
 
