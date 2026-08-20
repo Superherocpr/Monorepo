@@ -22,6 +22,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { submitReservedPayout } from "@/lib/payout-submit";
 import type { ReservedPayoutResult } from "@/types/payouts";
+import { withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /**
  * Returns the current super admin's profile id or a Response when unauthorized.
@@ -108,7 +109,7 @@ function isScheduleDue(schedule: string): boolean {
  * Side effects: database reservation + PayPal Payouts API call + DB status updates.
  * @param request - Incoming HTTP request (used for cron auth and source header).
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   let actorId: string;
 
   // ── Cron / system bearer path ────────────────────────────────────────────
@@ -191,3 +192,11 @@ export async function POST(request: Request) {
     itemCount: result.itemCount,
   });
 }
+
+/**
+ * Cron-invoked entry point. The heartbeat wrapper records a cron_run_log row on
+ * every outcome so cron_health() can prove this job actually ran — pg_cron's own
+ * job_run_details cannot, because net.http_post is fire-and-forget (migration 0057).
+ * Manual admin triggers pass straight through unlogged.
+ */
+export const POST = withCronHeartbeat("scheduled-instructor-payouts", handlePOST);

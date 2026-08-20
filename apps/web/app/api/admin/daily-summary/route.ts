@@ -20,6 +20,11 @@ import {
   type DailySummaryContact,
   type DailySummaryClass,
 } from "@/lib/emails";
+import {
+  withCronHeartbeat,
+  fetchCronHealth,
+  summarizeCronHealth,
+} from "@/lib/cron-heartbeat";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -120,7 +125,7 @@ function getETBoundaries(): {
  * Side effects: reads multiple DB tables, sends one Resend email per recipient.
  * @param request - No body required; cron requests carry a CRON_SECRET bearer token.
  */
-export async function POST(request: Request): Promise<Response> {
+async function handlePOST(request: Request): Promise<Response> {
 
   // ── Auth check ──────────────────────────────────────────────────────────────
   const viaCron = isCronRequest(request);
@@ -148,6 +153,7 @@ export async function POST(request: Request): Promise<Response> {
     pendingClassApprovalsResult,
     recipientsResult,
     healthInvariants,
+    cronHealthRows,
   ] = await Promise.all([
     // Revenue: completed payments yesterday
     admin
@@ -239,6 +245,10 @@ export async function POST(request: Request): Promise<Response> {
     // Data-consistency canary (migration 0056). Never throws — a failed call
     // returns [] and is reported in the digest as "checks did not run".
     fetchHealthInvariants(admin),
+
+    // Scheduled-job heartbeat (migration 0057). Same contract: never throws,
+    // and an empty result is reported as unknown rather than healthy.
+    fetchCronHealth(admin),
   ]);
 
   // Log any query errors but continue — a partial digest is better than none
@@ -469,6 +479,16 @@ export async function POST(request: Request): Promise<Response> {
   const adminUrl = `${baseUrl}/admin`;
 
   const health = summarizeInvariants(healthInvariants);
+  const cronHealth = summarizeCronHealth(cronHealthRows);
+
+  // An overdue job means scheduled work silently stopped. Log it alongside the
+  // invariant breaches so both are greppable without opening an inbox.
+  if (cronHealth.overdue.length > 0) {
+    console.error(
+      "[POST /api/admin/daily-summary] scheduled jobs overdue",
+      cronHealth.overdue.map((j) => j.jobName)
+    );
+  }
 
   // Surface breaches in the server log too — the digest reaches admins, but a
   // critical breach should also be greppable without opening an inbox.
@@ -483,6 +503,7 @@ export async function POST(request: Request): Promise<Response> {
     dateLabel,
     adminUrl,
     health,
+    cronHealth,
     totalRevenue,
     revenueBreakdown,
     bookings,
@@ -522,3 +543,11 @@ export async function POST(request: Request): Promise<Response> {
     triggeredBy: viaCron ? "cron" : actorId,
   });
 }
+
+/**
+ * Cron-invoked entry point. The heartbeat wrapper records a cron_run_log row on
+ * every outcome so cron_health() can prove this job actually ran — pg_cron's own
+ * job_run_details cannot, because net.http_post is fire-and-forget (migration 0057).
+ * Manual admin triggers pass straight through unlogged.
+ */
+export const POST = withCronHeartbeat("daily-ops-summary", handlePOST);

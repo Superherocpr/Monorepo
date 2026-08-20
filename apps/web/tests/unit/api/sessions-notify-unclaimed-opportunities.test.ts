@@ -85,7 +85,7 @@ describe("POST /api/sessions/notify-unclaimed-opportunities", () => {
   });
 
   describe("Eastern-hour self-gate", () => {
-    test("no-ops without querying the DB when the current Eastern hour isn't a target hour", async () => {
+    test("no-ops without querying opportunity data when the current Eastern hour isn't a target hour", async () => {
       vi.setSystemTime(new Date("2026-01-15T15:00:00.000Z")); // 10am EST — not a target hour
       const mockFrom = mockFromSequence([]);
       const res = await POST(cronRequest());
@@ -93,7 +93,13 @@ describe("POST /api/sessions/notify-unclaimed-opportunities", () => {
       const json = await res.json();
       expect(json.data.notified).toBe(0);
       expect(json.data.skipped).toBeDefined();
-      expect(mockFrom).not.toHaveBeenCalled();
+
+      // The heartbeat wrapper (migration 0057) writes a cron_run_log row on every
+      // cron-invoked call, deliberately including self-gated no-ops — "ran and did
+      // nothing" has to be distinguishable from "never ran". What must NOT happen
+      // off-schedule is any query against opportunity data.
+      const tablesTouched = mockFrom.mock.calls.map((c) => c[0]);
+      expect(tablesTouched.filter((t) => t !== "cron_run_log")).toEqual([]);
     });
 
     test("runs at 9am Eastern during standard time (EST, UTC-5)", async () => {

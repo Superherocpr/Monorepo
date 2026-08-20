@@ -233,6 +233,27 @@ opening an inbox.
 Also corrected: the route docstring claimed the cron fires at 12:00 UTC; migration
 0053 and `cron.job` both say 11:00 UTC.
 
+**Migration 0057 — cron heartbeat.** Applied to **both** environments.
+
+- `cron_run_log` + `cron_health()` + a `cron_job_expectations` table holding each
+  job's allowed gap. All 7 HTTP routes now write a completion row through
+  `withCronHeartbeat()`; the digest carries a second banner for overdue jobs.
+- **`timeout_milliseconds := 30000` on all 7 jobs.** pg_net's signature confirms
+  the default is `5000` — which is what caused the 2026-08-19 failure. None of
+  the original migrations set it.
+- The wrapper deliberately **does not** log manual admin triggers. Counting one
+  would mask a dead schedule: someone clicks the button, the job looks healthy,
+  and nobody notices the cron stopped firing.
+- The one pure-SQL job is wrapped in `regenerate_access_codes_logged()` so it
+  reports in alongside the rest instead of being a special case.
+- The `daily-ops-summary` block is guarded by an existence check, so running 0057
+  on staging cannot create the production-only job there. Verified.
+
+This also changed one existing test's premise: the unclaimed-opportunities route
+now writes a heartbeat even when it self-gates off-schedule. That's intended —
+"ran and did nothing" must be distinguishable from "never ran" — so the test was
+sharpened to assert no *opportunity* queries rather than no DB calls at all.
+
 ### What the invariants do not yet cover
 
 Merch orders, add-ons, blog, class requests, grading/CCF, contact/Zoho, and

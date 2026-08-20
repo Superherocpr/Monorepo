@@ -66,19 +66,33 @@ Covered today: payouts, promo codes, threats log, infrastructure.
 
 ---
 
-## 2. Cron outcome verification (heartbeat)
+## 2. Cron outcome verification (heartbeat) — BUILT (staging + production)
 
-Replaces existence-checking with outcome-checking. Durable, immune to the 6h TTL.
+Migration **0057**. Replaces existence-checking with outcome-checking. Durable,
+immune to the 6h pg_net TTL.
 
-- [ ] Create a `cron_run_log` table (job name, started/finished, ok/fail, duration,
-      records touched, error)
-- [ ] Each of the 7 HTTP cron endpoints writes a row on completion
-- [ ] Set explicit `timeout_milliseconds` on all 7 `net.http_post` calls
-- [ ] One query answering "did every job report in within its window?"
-- [ ] Wire that query into the daily summary email
-- [ ] Decide handling for `regenerate-instructor-access-codes` — the one pure-SQL
-      job, where `job_run_details` *is* trustworthy
-- [ ] Backfill-safe: confirm the alert that failed today actually fired or re-run it
+- [x] `cron_run_log` table — job name, ran_at, ok, duration_ms, records_touched, error
+- [x] All 7 HTTP cron endpoints write a row on completion, via the
+      `withCronHeartbeat()` wrapper in `apps/web/lib/cron-heartbeat.ts`
+- [x] Explicit `timeout_milliseconds := 30000` on all 7 `net.http_post` calls
+      (confirmed pg_net's signature defaults it to **5000**)
+- [x] `cron_health()` answers "did every job report in within its window?",
+      driven by a `cron_job_expectations` table (max gap per job)
+- [x] Wired into the daily summary email as a second banner
+- [x] `regenerate-instructor-access-codes` handled — wrapped in
+      `regenerate_access_codes_logged()` so the one pure-SQL job reports in too
+      rather than being a special case someone has to remember
+- [x] `prune_cron_run_log()` for 180-day retention
+- [x] Applied to **both** envs; the `daily-ops-summary` block is guarded by an
+      existence check so running 0057 on staging cannot create it there
+      (verified: staging still has 0)
+- [ ] Confirm the alert that failed on 2026-08-19 actually fired, or re-run it
+- [ ] Consolidate the duplicated private `isCronRequest` helpers in the cron
+      routes onto the shared one now exported from `lib/cron-heartbeat.ts`
+
+**Note on first deploy:** until each job runs once after the code ships,
+`cron_health()` reports it overdue. Daily jobs take up to 25h to clear. This is
+correct behaviour (never-reported is genuinely unknown), and self-resolves.
 
 ---
 

@@ -17,6 +17,7 @@
 
 import { wrapEmail } from "@/lib/email";
 import type { InvariantSummary } from "@/lib/health-invariants";
+import type { CronHealthSummary } from "@/lib/cron-heartbeat";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -2884,11 +2885,13 @@ export interface DailySummaryClass {
  * @param outstandingInvoicesTotal - Combined dollar total of all outstanding invoices.
  * @param newCustomersCount        - Number of new customer registrations yesterday.
  * @param health                   - Result of the data-consistency canary (migration 0056).
+ * @param cronHealth               - Scheduled-job heartbeat status (migration 0057).
  */
 export function dailySummaryEmail({
   dateLabel,
   adminUrl,
   health,
+  cronHealth,
   totalRevenue,
   revenueBreakdown,
   bookings,
@@ -2904,6 +2907,7 @@ export function dailySummaryEmail({
   dateLabel: string;
   adminUrl: string;
   health: InvariantSummary;
+  cronHealth: CronHealthSummary;
   totalRevenue: number;
   revenueBreakdown: DailySummaryRevenue[];
   bookings: DailySummaryBooking[];
@@ -2976,6 +2980,62 @@ export function dailySummaryEmail({
             <div style="font-size:14px;font-weight:700;color:${bannerColour};margin-bottom:8px;">${headline} &mdash; of ${health.checksRun} run</div>
             <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
               <tbody>${healthRows}</tbody>
+            </table>
+          </td>
+        </tr>
+      </table>`;
+  }
+
+  // ── Scheduled-job heartbeat ──────────────────────────────────────────────────
+  // Same three-state logic as the invariants banner. "Overdue" means the job has
+  // not reported a successful run within its allowed gap — which pg_cron's own
+  // job_run_details cannot tell you, since net.http_post is fire-and-forget.
+  const overdueRows = cronHealth.overdue
+    .map((j) => {
+      const since =
+        j.minutesSince === null
+          ? "never reported in"
+          : j.minutesSince >= 120
+          ? `${Math.floor(j.minutesSince / 60)}h ago`
+          : `${j.minutesSince}m ago`;
+      return `
+        <tr>
+          <td style="padding:6px 10px;border-bottom:1px solid #fee2e2;font-size:13px;color:#dc2626;font-weight:600;">${escapeHtml(j.jobName)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #fee2e2;font-size:13px;color:#6b7280;font-family:monospace;">${escapeHtml(j.schedule)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #fee2e2;font-size:13px;color:#374151;text-align:right;">${escapeHtml(since)}</td>
+        </tr>`;
+    })
+    .join("");
+
+  let cronSection: string;
+
+  if (cronHealth.jobsTracked === 0) {
+    cronSection = `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+        <tr>
+          <td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:12px 16px;">
+            <div style="font-size:14px;font-weight:700;color:#92400e;">Scheduled-job check did not run</div>
+            <div style="font-size:13px;color:#78350f;margin-top:4px;">cron_health() returned nothing. Treat as an unknown state, not an all-clear.</div>
+          </td>
+        </tr>
+      </table>`;
+  } else if (cronHealth.healthy) {
+    cronSection = `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+        <tr>
+          <td style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 16px;">
+            <span style="font-size:13px;font-weight:600;color:#166534;">All ${cronHealth.jobsTracked} scheduled jobs reported in on time.</span>
+          </td>
+        </tr>
+      </table>`;
+  } else {
+    cronSection = `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+        <tr>
+          <td style="background:#fef2f2;border:1px solid #dc2626;border-radius:6px;padding:12px 16px;">
+            <div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:8px;">${cronHealth.overdue.length} of ${cronHealth.jobsTracked} scheduled job${cronHealth.overdue.length === 1 ? " has" : "s have"} not reported in</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+              <tbody>${overdueRows}</tbody>
             </table>
           </td>
         </tr>
@@ -3159,6 +3219,7 @@ export function dailySummaryEmail({
       </table>
 
       ${healthSection}
+      ${cronSection}
 
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px 0;" />
 
