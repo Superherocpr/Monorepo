@@ -478,8 +478,74 @@ the table being created.
       `max_gap_minutes` via PostgREST and silently disabled overdue detection for
       every cron job. RLS enabled on both envs; 0057 amended so a replay cannot
       reintroduce it. Verified: **zero** public tables now lack RLS.
-- [ ] Run performance advisors on both projects, triage
+- [x] **Run performance advisors on both projects, triage — DONE 2026-08-20.**
+      First-ever performance run. 49 findings on production: 8 WARN, 41 INFO.
+      Triage below; the two zero-risk wins are already fixed (migration 0059).
+- [x] **Security re-run after 0058 — both environments ERROR-free.** Production
+      80 WARN / 28 INFO, staging 1 WARN / 28 INFO, **zero ERROR on either**. The
+      0058 DDL introduced nothing, and THREAT-061 stays fixed.
 - [ ] Add to the recurring schedule (Todoist)
+
+### Performance triage (production, 2026-08-20)
+
+**Fixed — migration 0059, applied to both environments**
+
+Two pairs of *byte-identical* indexes. Verified via `pg_indexes` before dropping,
+and verified afterwards that exactly one of each survives:
+
+| Table | Dropped | Kept |
+|---|---|---|
+| `instructor_payout_items` | `instructor_payout_items_batch_idx` | `idx_instructor_payout_items_batch_id` |
+| `processed_webhook_events` | `processed_webhook_events_received_idx` | `idx_webhook_events_received_at` |
+
+A duplicate index is pure cost — double write amplification on every insert, extra
+storage, and the planner only ever uses one. Dropping one is functionally a no-op,
+which makes this the safest class of schema change there is.
+
+**Worth doing, but as its own reviewed change — 5 × `auth_rls_initplan` (WARN)**
+
+`profiles` (3 policies: `profiles_auth_read_own`, `profiles_anon_insert_own`,
+`profiles_auth_update_own`), `bookings` (`bookings_auth_read_own`), `orders`
+(`orders_auth_read_own`) each re-evaluate `auth.<function>()` **per row**. The fix
+is mechanical — wrap as `(select auth.uid())` so it evaluates once — and the gain
+grows with table size.
+
+Deliberately **not** bundled into 0059. These are live access-control policies on
+customer data; a typo does not degrade performance, it changes who can read what.
+That is the THREAT-061 failure class. It deserves its own migration, its own review,
+and a verification query per policy.
+
+**Deliberately not acting — 25 × `unused_index` (INFO)**
+
+"Never used" is being reported for indexes on tables created days ago —
+`cron_run_log` (0057, one day old), `team_bookings` and `bookings_team_booking_id_idx`
+(0055, three days). Index usage counters measure observed traffic, so on a young
+index the statistic reflects its *age*, not its usefulness. Dropping on this
+evidence would be acting on a number that has not had time to mean anything.
+Revisit after a few weeks of real traffic, and only for indexes on mature tables.
+
+**Deliberately not acting — 16 × `unindexed_foreign_keys` (INFO)**
+
+Real, but low-value at current volume: these cost on cascading deletes and joins,
+and adding sixteen indexes carries its own write penalty. Reassess if any of these
+tables grows or a slow query appears.
+
+**Noted, not a finding — a near-duplicate the advisor correctly ignored**
+
+`instructor_payout_items` also carries `idx_instructor_payout_items_instructor_id`
+`(instructor_id)` alongside `instructor_payout_items_instructor_idx`
+`(instructor_id, status)`. Not identical, so not flagged — but the composite covers
+the single-column one as a leading-column prefix, so the narrow index is arguably
+redundant. Left alone: it is smaller and marginally faster for pure `instructor_id`
+lookups, and the call is genuinely close. Checked rather than assumed.
+
+**Environment parity note**
+
+Production reports 78 `pg_graphql_*_table_exposed` warnings; staging reports none,
+despite an equivalent schema. Same root cause as the 26-table anon-grant item
+already deferred to Todoist (default `public` grants), surfaced through the GraphQL
+endpoint instead of PostgREST. The prod/staging asymmetry is unexplained and worth
+a look when that deferred item is picked up.
 
 ### Remaining findings — triaged, not yet actioned
 
