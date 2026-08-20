@@ -1,0 +1,54 @@
+name: CI
+
+# Runs typecheck, lint, and unit tests on every pull request targeting main or
+# staging. All three jobs must pass before the branch can merge (required status
+# check wired in GitHub branch protection settings).
+#
+# Playwright e2e tests are NOT included here — they require a live staging URL
+# and credentials that haven't been wired into Actions secrets yet. Add them in
+# a separate workflow once the secrets are available.
+#
+# IMPORTANT: never swap `npm run build` for `next build --turbopack`.
+# Turbopack breaks @aws-sdk/client-s3 on Amplify (all S3 routes return 500).
+# The build script in apps/web/package.json already enforces --webpack; this
+# comment is here so a future reader knows it's intentional.
+
+on:
+  pull_request:
+    branches: [main, staging]
+
+# Only one run per PR branch at a time — cancels the in-progress run when a new
+# commit is pushed, keeping the queue from building up.
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: apps/web
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint -- lib app
+
+      - name: Unit tests
+        run: npm run test:unit
