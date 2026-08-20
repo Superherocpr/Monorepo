@@ -13,27 +13,40 @@ Related: [`qa-todo.md`](qa-todo.md) · [`threats.md`](threats.md) · Todoist pro
 
 These are verified facts, not hypotheses. Each needs an action.
 
-- [!] **`alert-stuck-payout-batches` timed out on production today.**
+- [~] **`alert-stuck-payout-batches` timed out on production today.** Cause fixed
+      (0057, 30s timeout). Whether that specific run's work completed is still
+      unknown — tracked in the Deferred Fixes project.
+  ORIGINAL:
   2026-08-19 14:00 UTC, `status_code: null`, `timed_out: true`,
   "Timeout of 5000 ms reached. Total time: 5001.6 ms". A p1 financial safety net
   silently did not run. `cron.job_run_details` recorded it as **succeeded**.
-- [!] **No `timeout_milliseconds` set on any of the 7 HTTP cron jobs.** All inherit
+- [x] **FIXED (0057)** — all 7 now pass `timeout_milliseconds := 30000`. Verified
+      pg_net's signature defaults it to 5000. All inherit
   pg_net's 5000ms default. Targets are Amplify SSR Lambdas, where cold starts
   routinely exceed that. Affects migrations 0007, 0021, 0026/0029, 0048, 0050, 0051, 0053.
-- [!] **`cron.job_run_details.status` is false-green.** 7 of 8 jobs are fire-and-forget
+- [x] **ADDRESSED (0057)** — `cron_run_log` + `cron_health()` now give an
+      outcome-based signal. 7 of 8 jobs are fire-and-forget
   `net.http_post`; "succeeded" means Postgres queued the request, not that the
   endpoint did the work. Last 7 days showed 8/8 green while the above was failing.
-- [!] **`net._http_response` self-prunes after ~6 hours.** Any polling-interval check
+- [x] **ADDRESSED (0057)** — heartbeats are captured at run time and retained
+      180 days, so this no longer matters. Any polling-interval check
   (the current weekly cron task) is structurally incapable of ever seeing a failure.
-- [!] **Todoist weekly cron task is stale.** Says "all 6 pg_cron jobs", lists 6 names,
+- [x] **FIXED** — rewritten to verify the monitoring rather than the jobs.
+      Was: "all 6 pg_cron jobs", listing 6 names,
   and states "Cert expiry reminders are NOT a cron job". Reality: **8 on production,
   7 on staging**. `cert-expiry-reminders` (0051), `alert-stuck-payout-batches` (0050),
   and `daily-ops-summary` (0053, prod-only by design) are all missing from the task.
-- [!] **Todoist daily Resend task is stale.** Excludes cert reminders on the grounds
+- [x] **FIXED** — cert reminders no longer excluded. Was: excluded on the grounds
   that they are manually triggered. They have been automated since 0051.
 - [x] **Memory corrected:** 0048/0049 are on *both* envs, not staging-only.
 - [x] **Memory corrected:** both envs confirmed at **0055**, with 0053 prod-only
   by design.
+- [x] **FIXED — THREAT-061 (self-inflicted, same day).** `cron_job_expectations`,
+      created by 0057 earlier that day, shipped **without RLS**. Supabase grants
+      anon/authenticated full DML on every `public` table by default, so anon
+      could have UPDATEd `max_gap_minutes` over PostgREST and silently disabled
+      overdue detection for every cron job. Caught by the first-ever advisor run.
+      RLS enabled on both envs; 0057 amended. Zero public tables now lack RLS.
 - [x] **Noted:** comparing envs by migration *name* yields false positives — several
   were applied under different names per env (staging `add_discount_percent_to_class_sessions`
   vs prod `0028_discount_percent_catchup`; staging `class_assistants` / `unique_access_code`
@@ -107,12 +120,25 @@ admin reference, settings, the PayPal card section, add-booking). None are new �
 they accumulated unnoticed precisely because `npm run build` never runs lint.
 Clearing them is a prerequisite for making CI a merge gate rather than noise.
 
-- [ ] `typecheck` + `lint` + `vitest` on every PR
-- [ ] Playwright against staging on merge
-- [ ] Preserve the `next build --webpack` constraint — Turbopack breaks
-      `@aws-sdk/client-s3` on Amplify (all S3 routes 500)
-- [ ] Confirm Amplify build and CI don't diverge in Node version / install step
-- [ ] Decide branch protection: does CI gate merges, or just report?
+- [x] 16 lint errors cleared — `tsc`, lint, 398 unit tests all clean
+- [x] `typecheck` + `lint` + `vitest` on every PR —
+      `.github/workflows/ci.yml` (Node 22, `npm ci`, `apps/web` working-dir,
+      `--webpack` constraint noted, concurrent runs cancelled)
+- [x] Decision: CI **blocks merges** (required status check)
+- [!] **Manual step required:** enable the required status check in GitHub.
+      Go to: `github.com/Superherocpr/Monorepo` → Settings → Branches →
+      Add rule for `main` → check "Require status checks to pass" →
+      search for **`ci`** (that's the job name) → Save.
+      Do the same for `staging` if you want it gated too.
+- [ ] Playwright against staging on merge — deferred; needs a staging URL
+      wired into Actions secrets
+- [x] Preserve the `next build --webpack` constraint — Turbopack breaks
+      `@aws-sdk/client-s3` on Amplify (all S3 routes 500). Comment in the
+      workflow explains this; the build script in package.json already
+      enforces it.
+- [x] Node version matched — CI uses Node 22 (same as local); Amplify has no
+      `.nvmrc`, so CI is currently ahead of it. Low risk for lint/test.
+- [x] Decide branch protection: blocks merges (see manual step above)
 
 ---
 
@@ -193,25 +219,80 @@ Replaces "skim logs daily" — a human doing a machine's job.
 
 ---
 
-## 8. Supabase advisors
+## 8. Supabase advisors — RUN 2026-08-19
 
-Free, catches missing RLS, and absent from the plan entirely.
+Immediately justified itself: it caught an ERROR-level finding within an hour of
+the table being created.
 
-- [ ] Run security advisors on both projects, triage
+- [x] Run security advisors on both projects, triage
+- [x] **FIXED — THREAT-061.** `cron_job_expectations` (created by 0057 earlier
+      the same day) shipped **without RLS**. Supabase grants anon and
+      authenticated full DML on every `public` table by default, so RLS is the
+      only thing making those grants inert. Anon could have UPDATEd
+      `max_gap_minutes` via PostgREST and silently disabled overdue detection for
+      every cron job. RLS enabled on both envs; 0057 amended so a replay cannot
+      reintroduce it. Verified: **zero** public tables now lack RLS.
 - [ ] Run performance advisors on both projects, triage
-- [ ] Add to the recurring schedule
+- [ ] Add to the recurring schedule (Todoist)
+
+### Remaining findings — triaged, not yet actioned
+
+**26 tables grant `anon` SELECT while having no anon read policy.** These are safe
+*today* because RLS denies every row, but the grant is a loaded gun: the moment
+anyone adds a permissive policy or drops RLS, the data is public. That is exactly
+the failure mode of THREAT-061. Defence-in-depth fix is to revoke the grant on
+tables that never serve unauthenticated reads:
+
+`addon_class_types, addons, api_keys, booking_addons, bookings, certifications,
+class_requests, contact_notes, contact_replies, contact_submissions,
+cron_job_expectations, cron_run_log, invoice_activity_log, invoices, order_items,
+orders, payments, preset_grades, promo_code_class_types, promo_code_sessions,
+promo_codes, roster_uploads, session_addons, stock_adjustments, system_settings,
+team_bookings`
+
+Provably a no-op functionally — with no anon read policy, no unauthenticated
+request can read these rows regardless of the grant.
+
+**13 tables legitimately serve anon reads** and must keep the grant:
+`blog_post_tags, blog_posts, blog_slug_redirects, blog_tags, cert_types,
+class_sessions, class_types, locations, product_variants, products, profiles,
+roster_records, social_feed_cache`.
+
+- [→] **Deferred to the Todoist "SuperheroCPR Deferred Fixes" project**
+      (ID `6hJ7hvWqw87jV85F`), with full context. Further analysis on 2026-08-19
+      corrected the scope: **`contact_submissions` has an anon INSERT policy —
+      it is the public contact form.** A blanket `REVOKE ALL FROM anon` across
+      all 26 would break it. Correct split is 25 tables safe for a full revoke,
+      plus `contact_submissions` where only SELECT/UPDATE/DELETE may be revoked.
+- [ ] `auth_leaked_password_protection` is **disabled** — a dashboard toggle that
+      checks new passwords against HaveIBeenPwned. Free win, needs a human click.
+- [ ] `pg_net` is installed in the `public` schema (WARN). Pre-existing; moving an
+      extension is riskier than the finding. Documented, deliberately not touched.
 
 ---
 
-## 9. Todoist plan hygiene
+## 9. Todoist plan hygiene — DONE 2026-08-19
 
-The plan drifted because nothing keeps it in sync with the system.
+- [x] **Rewrote the stale weekly cron task.** It claimed "all 6 pg_cron jobs" and
+      that cert reminders were not a cron. Now that heartbeat monitoring is
+      automated, the manual task shifted from *checking the jobs* to *checking
+      the monitoring hasn't drifted* — job list matches `cron.job` (8 prod /
+      7 staging), nothing chronically overdue, and `max_gap_minutes` still
+      matches each real schedule.
+- [x] **Fixed the stale daily Resend task** — cert reminders have been automated
+      since 0051 and are now the highest-volume send, not an excluded one.
+- [x] **Added: Supabase advisors** (monthly, p1) with the accepted-findings list
+      so known noise isn't re-triaged every time.
+- [x] **Added: feature health coverage map review** (quarterly) — the recurring
+      counterpart to the §6 rule, listing the still-open gaps.
+- [x] **Added: third-party credential liveness** (weekly, p1) — closes §5's
+      "nothing watches any of them".
+- [ ] Retire or downgrade any remaining task the automation has made redundant
+      (the daily payout-batch check is still valid: nothing yet watches batches
+      stuck in `assumed_complete`)
 
-- [ ] Fix the stale weekly cron task (6 → 8 jobs, correct names, note prod-only 0053)
-- [ ] Fix the stale daily Resend task (cert reminders are automated now)
-- [ ] Retire tasks the automation above makes redundant
-- [ ] Add tasks for the uncovered features from §1
-- [ ] Add a recurring "does this plan still match the system?" review
+**The deeper fix** is §1's CLAUDE.md rule plus the quarterly map review. The plan
+drifted because shipping a feature had no step that touched it; now it does.
 
 ---
 

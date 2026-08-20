@@ -1,0 +1,321 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner "Global navigation menu" [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e10]:
+          - button "Open menu" [ref=e12] [cursor=pointer]
+          - link "Homepage (g then d)" [ref=e15] [cursor=pointer]:
+            - /url: /
+        - generic [ref=e18]:
+          - navigation "Breadcrumbs" [ref=e19]:
+            - list [ref=e20]:
+              - listitem [ref=e21]:
+                - link "Superherocpr" [ref=e22] [cursor=pointer]:
+                  - /url: /Superherocpr
+              - listitem [ref=e24]:
+                - link "Monorepo" [ref=e25] [cursor=pointer]:
+                  - /url: /Superherocpr/Monorepo
+                - button "Switch repository (option shift r)" [ref=e26] [cursor=pointer]
+          - button "Open quick search dialog, type / to search" [ref=e31] [cursor=pointer]:
+            - generic [ref=e33]:
+              - generic:
+                - text: Type
+                - generic: /
+                - text: to search
+        - generic [ref=e34]:
+          - generic [ref=e35]:
+            - generic [ref=e38]:
+              - link "Chat with Copilot" [ref=e40] [cursor=pointer]:
+                - /url: /copilot
+              - button "Open Copilot…" [ref=e45] [cursor=pointer]
+            - button "Create new..." [ref=e47] [cursor=pointer]
+            - generic [ref=e49]:
+              - link "All issues" [ref=e50] [cursor=pointer]:
+                - /url: /issues
+              - link "All pull requests" [ref=e54] [cursor=pointer]:
+                - /url: /pulls
+              - link "All repositories" [ref=e57] [cursor=pointer]:
+                - /url: /repos
+          - link "You have no unread notifications (g then n)" [ref=e60] [cursor=pointer]:
+            - /url: /notifications
+          - button "Open user navigation menu" [ref=e64] [cursor=pointer]:
+            - img "User avatar" [ref=e65]
+      - heading "Repository navigation" [level=2] [ref=e66]
+      - navigation "Repository" [ref=e67]:
+        - list [ref=e68]:
+          - listitem [ref=e69]:
+            - link "Code" [ref=e70] [cursor=pointer]:
+              - /url: /Superherocpr/Monorepo
+          - listitem [ref=e75]:
+            - link "Issues" [ref=e76] [cursor=pointer]:
+              - /url: /Superherocpr/Monorepo/issues
+          - listitem [ref=e82]:
+            - link "Pull requests" [ref=e83] [cursor=pointer]:
+              - /url: /Superherocpr/Monorepo/pulls
+          - listitem [ref=e88]:
+            - link "Actions" [ref=e89] [cursor=pointer]:
+              - /url: /Superherocpr/Monorepo/actions
+          - listitem [ref=e94]:
+            - link "Projects" [ref=e95] [cursor=pointer]:
+              - /url: /Superherocpr/Monorepo/projects
+          - listitem [ref=e100]:
+            - link "Wiki" [ref=e101] [cursor=pointer]:
+              - /url: /Superherocpr/Monorepo/wiki
+          - listitem [ref=e106]:
+            - link "Security and quality" [ref=e107] [cursor=pointer]:
+              - /url: /Superherocpr/Monorepo/security
+          - listitem [ref=e112]:
+            - link "Insights" [ref=e113] [cursor=pointer]:
+              - /url: /Superherocpr/Monorepo/pulse
+          - listitem [ref=e118]:
+            - link "Settings" [ref=e119] [cursor=pointer]:
+              - /url: /Superherocpr/Monorepo/settings
+  - main [ref=e127]:
+    - generic [ref=e129]:
+      - 'heading "Settings: Superherocpr/Monorepo" [level=1] [ref=e130]'
+      - generic [ref=e132]:
+        - navigation "General settings" [ref=e135]:
+          - list [ref=e137]:
+            - listitem [ref=e138]:
+              - link "General" [ref=e139] [cursor=pointer]:
+                - /url: /Superherocpr/Monorepo/settings
+            - listitem [ref=e141]
+            - listitem [ref=e142]:
+              - generic [ref=e145]:
+                - heading "Access" [level=2] [ref=e147]
+                - list "Access" [ref=e148]:
+                  - listitem [ref=e149]:
+                    - link "Collaborators" [ref=e150] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/access
+                  - listitem [ref=e152]:
+                    - button "Moderation" [ref=e153] [cursor=pointer]
+            - listitem [ref=e155]
+            - listitem [ref=e156]:
+              - generic [ref=e159]:
+                - heading "Code, planning, and automation" [level=2] [ref=e161]
+                - list "Code, planning, and automation" [ref=e162]:
+                  - listitem [ref=e163]:
+                    - link "Branches" [ref=e164] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/branches
+                  - listitem [ref=e166]:
+                    - link "Tags" [ref=e167] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/tag_protection
+                  - listitem [ref=e169]:
+                    - button "Rulesets" [expanded] [ref=e170] [cursor=pointer]
+                    - list "Rulesets" [ref=e172]:
+                      - listitem [ref=e173]:
+                        - link "Rulesets" [ref=e174] [cursor=pointer]:
+                          - /url: /Superherocpr/Monorepo/settings/rules
+                  - listitem [ref=e176]:
+                    - button "Actions" [ref=e177] [cursor=pointer]
+                  - listitem [ref=e179]:
+                    - link "Webhooks" [ref=e180] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/hooks
+                  - listitem [ref=e182]:
+                    - button "Copilot" [ref=e183] [cursor=pointer]
+                  - listitem [ref=e185]:
+                    - button "Planning" [ref=e186] [cursor=pointer]
+                  - listitem [ref=e188]:
+                    - link "Environments" [ref=e189] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/environments
+                  - listitem [ref=e191]:
+                    - link "Codespaces" [ref=e192] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/codespaces
+                  - listitem [ref=e194]:
+                    - link "Pages" [ref=e195] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/pages
+            - listitem [ref=e197]
+            - listitem [ref=e198]:
+              - generic [ref=e201]:
+                - heading "Security and quality" [level=2] [ref=e203]
+                - list "Security and quality" [ref=e204]:
+                  - listitem [ref=e205]:
+                    - link "Advanced Security" [ref=e206] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/security_analysis
+                  - listitem [ref=e208]:
+                    - link "Deploy keys" [ref=e209] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/keys
+                  - listitem [ref=e211]:
+                    - button "Secrets and variables" [ref=e212] [cursor=pointer]
+            - listitem [ref=e214]
+            - listitem [ref=e215]:
+              - generic [ref=e218]:
+                - heading "Integrations" [level=2] [ref=e220]
+                - list "Integrations" [ref=e221]:
+                  - listitem [ref=e222]:
+                    - link "GitHub Apps" [ref=e223] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/installations
+                  - listitem [ref=e225]:
+                    - link "Email notifications" [ref=e226] [cursor=pointer]:
+                      - /url: /Superherocpr/Monorepo/settings/notifications
+        - generic [ref=e231]:
+          - generic [ref=e233]:
+            - link "Rulesets" [ref=e234] [cursor=pointer]:
+              - /url: /Superherocpr/Monorepo/settings/rules
+            - generic [ref=e235]: /
+            - generic [ref=e236]: New branch ruleset
+          - separator [ref=e237]
+          - generic [ref=e238]:
+            - generic [ref=e244]:
+              - heading "Protect your most important branches" [level=2] [ref=e245]
+              - paragraph [ref=e246]:
+                - link "Rulesets" [ref=e247] [cursor=pointer]:
+                  - /url: https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets
+                - text: define whether collaborators can delete or force push and set requirements for any pushes, such as passing status checks or a linear commit history.
+            - generic [ref=e248]:
+              - generic [ref=e250]:
+                - generic [ref=e251]:
+                  - generic [ref=e253] [cursor=pointer]:
+                    - generic [ref=e254]: Ruleset Name
+                    - generic [ref=e255]: "*"
+                  - textbox "Ruleset Name *" [ref=e257]:
+                    - /placeholder: Protect main
+                    - text: Protect main
+                - generic [ref=e258]:
+                  - generic [ref=e259] [cursor=pointer]: Enforcement status
+                  - button "Active, Enforcement status" [ref=e491] [cursor=pointer]:
+                    - generic [ref=e261]: Active
+              - generic [ref=e266]:
+                - generic [ref=e267]:
+                  - heading "Bypass list" [level=2] [ref=e269]
+                  - text: Exempt roles, teams, agents, apps, and users from this ruleset by adding them to the bypass list.
+                - generic [ref=e270]:
+                  - generic [ref=e271]:
+                    - heading "Actors" [level=3] [ref=e272]
+                    - generic [ref=e273]:
+                      - list "Filter actors by category" [ref=e274]:
+                        - listitem [ref=e275]:
+                          - button "All" [pressed] [ref=e276] [cursor=pointer]
+                        - listitem [ref=e279]:
+                          - button "Roles" [ref=e280] [cursor=pointer]
+                        - listitem [ref=e283]:
+                          - button "Teams" [ref=e284] [cursor=pointer]
+                        - listitem [ref=e287]:
+                          - button "Apps" [ref=e288] [cursor=pointer]
+                        - listitem [ref=e291]:
+                          - button "Users" [ref=e292] [cursor=pointer]
+                        - listitem [ref=e295]:
+                          - button "Others" [ref=e296] [cursor=pointer]
+                      - button "Add bypass" [ref=e299] [cursor=pointer]
+                  - heading "Bypass list is empty" [level=3] [ref=e304]
+              - generic [ref=e306]:
+                - generic [ref=e307]:
+                  - heading "Target branches" [level=2] [ref=e309]
+                  - text: Which branches should be matched?
+                - generic [ref=e312]:
+                  - generic [ref=e313]:
+                    - heading "Branch targeting criteria" [level=3] [ref=e314]
+                    - button "Add target" [active] [ref=e315] [cursor=pointer]
+                  - list [ref=e518]:
+                    - listitem [ref=e519]:
+                      - generic [ref=e520]: Default
+                      - button "Delete include of Default" [ref=e528] [cursor=pointer]
+              - generic [ref=e322]:
+                - heading "Rules" [level=2] [ref=e324]
+                - text: Which rules should be applied?
+                - generic [ref=e326]:
+                  - heading "Branch rules" [level=3] [ref=e329]
+                  - group [ref=e332]:
+                    - generic [ref=e335]:
+                      - checkbox "Restrict creations" [ref=e337] [cursor=pointer]
+                      - generic [ref=e338]:
+                        - generic [ref=e339] [cursor=pointer]: Restrict creations
+                        - generic [ref=e340]: Only allow users with bypass permission to create matching refs.
+                    - generic [ref=e343]:
+                      - checkbox "Restrict updates" [ref=e345] [cursor=pointer]
+                      - generic [ref=e346]:
+                        - generic [ref=e347] [cursor=pointer]: Restrict updates
+                        - generic [ref=e348]: Only allow users with bypass permission to update matching refs.
+                    - generic [ref=e351]:
+                      - checkbox "Restrict deletions" [checked] [ref=e353] [cursor=pointer]
+                      - generic [ref=e354]:
+                        - generic [ref=e355] [cursor=pointer]: Restrict deletions
+                        - generic [ref=e356]: Only allow users with bypass permissions to delete matching refs.
+                    - generic [ref=e359]:
+                      - checkbox "Require linear history" [ref=e361] [cursor=pointer]
+                      - generic [ref=e362]:
+                        - generic [ref=e363] [cursor=pointer]: Require linear history
+                        - generic [ref=e364]: Prevent merge commits from being pushed to matching refs.
+                    - generic [ref=e367]:
+                      - checkbox "Require deployments to succeed" [ref=e369] [cursor=pointer]
+                      - generic [ref=e370]:
+                        - generic [ref=e371] [cursor=pointer]: Require deployments to succeed
+                        - generic [ref=e372]: Choose which environments must be successfully deployed to before refs can be pushed into a ref that matches this rule.
+                    - generic [ref=e375]:
+                      - checkbox "Require signed commits" [ref=e377] [cursor=pointer]
+                      - generic [ref=e378]:
+                        - generic [ref=e379] [cursor=pointer]: Require signed commits
+                        - generic [ref=e380]: Commits pushed to matching refs must have verified signatures.
+                    - generic [ref=e383]:
+                      - checkbox "Require a pull request before merging" [ref=e385] [cursor=pointer]
+                      - generic [ref=e386]:
+                        - generic [ref=e387] [cursor=pointer]: Require a pull request before merging
+                        - generic [ref=e388]: Require all commits be made to a non-target branch and submitted via a pull request before they can be merged.
+                    - generic [ref=e391]:
+                      - checkbox "Require status checks to pass" [ref=e393] [cursor=pointer]
+                      - generic [ref=e394]:
+                        - generic [ref=e395] [cursor=pointer]: Require status checks to pass
+                        - generic [ref=e396]: Choose which status checks must pass before the ref is updated. When enabled, commits must first be pushed to another ref where the checks pass.
+                    - generic [ref=e399]:
+                      - checkbox "Block force pushes" [checked] [ref=e401] [cursor=pointer]
+                      - generic [ref=e402]:
+                        - generic [ref=e403] [cursor=pointer]: Block force pushes
+                        - generic [ref=e404]: Prevent users with push access from force pushing to refs.
+                    - generic [ref=e407]:
+                      - checkbox "Require code scanning results" [ref=e409] [cursor=pointer]
+                      - generic [ref=e410]:
+                        - generic [ref=e411] [cursor=pointer]: Require code scanning results
+                        - generic [ref=e412]: Choose which tools must provide code scanning results before the reference is updated. When configured, code scanning must be enabled and have results for both the commit and the reference being updated.
+                    - generic [ref=e415]:
+                      - checkbox "Require code quality results" [ref=e417] [cursor=pointer]
+                      - generic [ref=e418]:
+                        - generic [ref=e419] [cursor=pointer]: Require code quality results
+                        - generic [ref=e420]: Choose which severity levels of code quality results should block pull request merges. When configured, a code quality analysis must be done on the pull request before the changes can be merged.
+                    - generic [ref=e423]:
+                      - checkbox "Restrict code coverage" [ref=e425] [cursor=pointer]
+                      - generic [ref=e426]:
+                        - generic [ref=e427] [cursor=pointer]: Restrict code coverage
+                        - generic [ref=e428]: Enforce minimum line coverage thresholds on pull requests. When configured, uploaded coverage data must meet the specified criteria before changes can be merged.
+                    - generic [ref=e431]:
+                      - checkbox "Automatically request Copilot code review" [ref=e433] [cursor=pointer]
+                      - generic [ref=e434]:
+                        - generic [ref=e435] [cursor=pointer]: Automatically request Copilot code review
+                        - generic [ref=e436]: Request Copilot code review for new pull requests automatically if the author has access to Copilot code review and their premium requests quota has not reached the limit.
+            - button "Create" [ref=e438] [cursor=pointer]
+  - contentinfo [ref=e441]:
+    - heading "Footer" [level=2] [ref=e442]
+    - generic [ref=e443]:
+      - generic [ref=e444]:
+        - link "GitHub Homepage" [ref=e445] [cursor=pointer]:
+          - /url: https://github.com
+        - generic [ref=e448]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=e449]:
+        - heading "Footer navigation" [level=3] [ref=e450]
+        - list "Footer navigation" [ref=e451]:
+          - listitem [ref=e452]:
+            - link "Terms" [ref=e453] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=e454]:
+            - link "Privacy" [ref=e455] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=e456]:
+            - link "Security" [ref=e457] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=e458]:
+            - link "Status" [ref=e459] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=e460]:
+            - link "Community" [ref=e461] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=e462]:
+            - link "Docs" [ref=e463] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=e464]:
+            - link "Contact" [ref=e465] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=e466]:
+            - button "Manage cookies" [ref=e468] [cursor=pointer]
+          - listitem [ref=e469]:
+            - button "Do not share my personal information" [ref=e471] [cursor=pointer]

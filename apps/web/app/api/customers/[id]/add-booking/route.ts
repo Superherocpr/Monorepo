@@ -114,11 +114,13 @@ export async function POST(
       ? session.profiles[0]
       : session.profiles;
     const className = (() => {
+      // PostgREST returns an embedded relation as either an object or a
+      // one-element array depending on cardinality, so both shapes are handled.
       const ct = session.class_types as unknown;
-      if (!ct) return "CPR Class";
-      if (Array.isArray(ct)) return (ct[0] as any)?.name ?? "CPR Class";
-      if (typeof ct === "object" && ct !== null) return (ct as any).name ?? "CPR Class";
-      return "CPR Class";
+      const named = Array.isArray(ct) ? ct[0] : ct;
+      if (typeof named !== "object" || named === null) return "CPR Class";
+      const name = (named as { name?: unknown }).name;
+      return typeof name === "string" && name ? name : "CPR Class";
     })();
     const location = Array.isArray(session.locations)
       ? session.locations[0] ?? null

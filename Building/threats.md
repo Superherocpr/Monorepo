@@ -668,3 +668,47 @@ fabricated order id always lands in that set, while a genuine decline requires
 a real PayPal order the caller had to create and submit a card against first —
 which is not free to generate at volume. Unparseable errors are still logged so
 real server-side anomalies stay visible.
+
+---
+
+## THREAT-061 — New cron_job_expectations table shipped without RLS
+
+**Severity:** 6/10 (medium) — unauthenticated write primitive against a
+monitoring control table; no PII, funds, or accounts exposed
+**Files:** `apps/migrations/0057_cron_heartbeat.sql`
+**Date:** 2026-08-19
+**Status:** FIXED (same day)
+
+**Description:** Migration 0057 created two tables. `cron_run_log` got
+`enable row level security`; `cron_job_expectations` did not.
+
+Supabase grants `anon` and `authenticated` full DML — SELECT, INSERT, UPDATE,
+DELETE, TRUNCATE — on every table in the `public` schema by default. RLS is the
+only thing that makes those grants inert. Verified on production before the fix:
+
+```
+cron_job_expectations | anon | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+cron_job_expectations | rls_enabled = false
+```
+
+Every other table in the schema (`payments`, `team_bookings`, `cron_run_log`)
+carries the same grants but has RLS on, so they are protected. This one was
+reachable through PostgREST with the public anon key.
+
+**Attack vector:** `PATCH /rest/v1/cron_job_expectations` with the anon key,
+setting `max_gap_minutes` to a very large value on every row. `cron_health()`
+would then never report any job overdue, silently disabling the entire
+scheduled-job monitoring system added in the same migration — including the
+heartbeat on `alert-stuck-payout-batches`, a financial safety net. Deleting rows
+is less damaging (the function falls back to a 1500-minute default), and
+inserting junk rows is inert because the job list is derived from `cron.job`.
+
+**Fix:** `alter table public.cron_job_expectations enable row level security;`
+applied to production and staging, and added to 0057 so a replay cannot
+reintroduce it. No policies are defined, which denies anon and authenticated
+entirely; `service_role` bypasses RLS and is the only intended caller.
+
+**Lesson:** the Supabase advisor caught this within an hour of the table being
+created, as an ERROR-level `rls_disabled_in_public`. Adding an advisor check to
+the recurring maintenance schedule (§8 of the overhaul checklist) is what turns
+that from luck into process. A new table is not finished until RLS is on it.

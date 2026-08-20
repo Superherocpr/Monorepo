@@ -69,6 +69,13 @@ create table if not exists public.cron_job_expectations (
   note             text
 );
 
+-- MUST be enabled. Supabase grants anon and authenticated full DML on every
+-- table in `public` by default, so RLS is the only thing standing between an
+-- unauthenticated caller and this data over PostgREST. Shipping this table
+-- without it (fixed same day, see THREAT-061) left anon able to UPDATE
+-- max_gap_minutes and silently disable overdue detection for every cron job.
+alter table public.cron_job_expectations enable row level security;
+
 comment on table public.cron_job_expectations is
   'How long each scheduled job may go without reporting in before cron_health() calls it overdue.';
 

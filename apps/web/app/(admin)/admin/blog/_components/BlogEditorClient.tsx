@@ -15,6 +15,7 @@ import CoverImageUpload from "./CoverImageUpload";
 import MdFileUpload from "./MdFileUpload";
 import SeoPanel from "./SeoPanel";
 import type { BlogPost, BlogTag } from "@/types/blog";
+import Link from "next/link";
 
 interface BlogEditorClientProps {
   /** Undefined when creating a new post. */
@@ -170,7 +171,7 @@ export default function BlogEditorClient({ post, allTags }: BlogEditorClientProp
       {/* ── Top bar ────────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <a href="/admin/blog" className="text-sm text-gray-500 hover:text-gray-900">← Blog</a>
+          <Link href="/admin/blog" className="text-sm text-gray-500 hover:text-gray-900">← Blog</Link>
           <span className="text-gray-300">|</span>
           <span className="text-sm font-medium text-gray-700">
             {isEditing ? "Edit post" : "New post"}
@@ -266,9 +267,9 @@ export default function BlogEditorClient({ post, allTags }: BlogEditorClientProp
             {allTags.length === 0 ? (
               <p className="text-xs text-gray-400">
                 No tags yet.{" "}
-                <a href="/admin/blog/tags" className="text-red-600 hover:underline">
+                <Link href="/admin/blog/tags" className="text-red-600 hover:underline">
                   Manage tags
-                </a>
+                </Link>
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -290,9 +291,9 @@ export default function BlogEditorClient({ post, allTags }: BlogEditorClientProp
               </div>
             )}
             <p className="text-xs text-gray-400 mt-2">
-              <a href="/admin/blog/tags" className="text-red-600 hover:underline">
+              <Link href="/admin/blog/tags" className="text-red-600 hover:underline">
                 Manage tags
-              </a>
+              </Link>
             </p>
           </div>
 

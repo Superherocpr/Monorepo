@@ -60,7 +60,7 @@ clone — so this file is the one that travels with the repo.
 
 | Feature | U | E | C | A | I | M | Verdict |
 |---|---|---|---|---|---|---|---|
-| Booking + PayPal checkout | ✅ | ○ smoke | — | ✅ | ✅ | — | **No test completes a payment.** Blocked by blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` |
+| Booking + PayPal checkout | ✅✅ | ○ smoke | — | ✅ | ✅ | — | **No e2e test completes a payment** (blocked by blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID`). The card form itself now has 6 unit tests (`PayPalCardPaymentSection.test.tsx`) covering the submit gate, the invalid-field block, and latest-`onApprove` delivery — the SDK is mocked, so this proves the component's logic, not the PayPal round trip |
 | Payment-failure log | ✅ | — | — | ✅ | ✅ | — | Shipped last commit; only signal is someone opening `/admin/payments` |
 | Invoices | ✅ | — | — | ✅ | ✅ | — | No outcome test on create/send/mark-paid |
 | **PayPal invoice webhook** | — | — | — | ~ | — | — | Never fired in prod — but `invoices` is empty, so **untested, not proven broken** |
