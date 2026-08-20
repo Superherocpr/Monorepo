@@ -192,11 +192,20 @@ Clearing them is a prerequisite for making CI a merge gate rather than noise.
       trains everyone to ignore it; narrow and green beats broad and red. Flip the
       variable once those clear.
 
-      **Needs three repo secrets before the first run can pass:**
+      **Three repo secrets — SET 2026-08-20, verified present:**
       `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_ANON_KEY`,
-      `STAGING_SUPABASE_SERVICE_ROLE_KEY` — staging values only. The workflow
-      checks for them up front and fails with a readable message rather than
-      letting the dev server crash on boot.
+      `STAGING_SUPABASE_SERVICE_ROLE_KEY`. Staging values only; URL and publishable
+      key read straight from the Supabase API for the staging project rather than
+      copied from memory. The workflow still checks for them up front and fails
+      with a readable message, so a future secret deletion is obvious rather than
+      surfacing as an opaque dev-server crash.
+
+      **Not yet runnable — waits on the merge.** GitHub only registers `schedule:`
+      and `workflow_dispatch` for workflows present on the **default branch**, so
+      `e2e.yml` living on `MaintenanceUpdate` is inert: it does not appear in the
+      Actions tab and cannot be dispatched. Confirmed no syntax error. Nightly runs
+      begin from the first 07:00 UTC after this merges to `main`, and the merge
+      itself triggers the first run via the `push` trigger.
 
       The monthly Todoist task was rewritten from *run the suite* to
       *review the nightly results and widen coverage*.
