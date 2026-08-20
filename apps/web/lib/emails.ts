@@ -16,6 +16,8 @@
  */
 
 import { wrapEmail } from "@/lib/email";
+import type { InvariantSummary } from "@/lib/health-invariants";
+import type { CronHealthSummary } from "@/lib/cron-heartbeat";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -2882,10 +2884,14 @@ export interface DailySummaryClass {
  * @param outstandingInvoicesCount - Number of invoices sent but not yet paid.
  * @param outstandingInvoicesTotal - Combined dollar total of all outstanding invoices.
  * @param newCustomersCount        - Number of new customer registrations yesterday.
+ * @param health                   - Result of the data-consistency canary (migration 0056).
+ * @param cronHealth               - Scheduled-job heartbeat status (migration 0057).
  */
 export function dailySummaryEmail({
   dateLabel,
   adminUrl,
+  health,
+  cronHealth,
   totalRevenue,
   revenueBreakdown,
   bookings,
@@ -2900,6 +2906,8 @@ export function dailySummaryEmail({
 }: {
   dateLabel: string;
   adminUrl: string;
+  health: InvariantSummary;
+  cronHealth: CronHealthSummary;
   totalRevenue: number;
   revenueBreakdown: DailySummaryRevenue[];
   bookings: DailySummaryBooking[];
@@ -2916,6 +2924,123 @@ export function dailySummaryEmail({
     n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
   const safeAdminUrl = escapeHtml(adminUrl);
+
+  // ── System health banner ─────────────────────────────────────────────────────
+  // Three distinct states, and the third is the one that matters most:
+  //   healthy      — checks ran, nothing breached
+  //   breached     — checks ran, something is wrong
+  //   did not run  — zero checks came back, which is NOT the same as "all clear"
+  // Rendered first so a breach is above the fold rather than buried under revenue.
+  const healthRows = health.breached
+    .map((b) => {
+      const colour = b.severity === "critical" ? "#dc2626" : "#d97706";
+      const label = escapeHtml(b.checkName.replace(/_/g, " "));
+      return `
+        <tr>
+          <td style="padding:6px 10px;border-bottom:1px solid #fee2e2;font-size:13px;color:${colour};font-weight:600;text-transform:capitalize;">${label}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #fee2e2;font-size:13px;color:#374151;">${escapeHtml(b.detail)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #fee2e2;font-size:13px;color:${colour};font-weight:700;text-align:right;">${b.breachCount}</td>
+        </tr>`;
+    })
+    .join("");
+
+  let healthSection: string;
+
+  if (health.checksRun === 0) {
+    healthSection = `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+        <tr>
+          <td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:12px 16px;">
+            <div style="font-size:14px;font-weight:700;color:#92400e;">Consistency checks did not run</div>
+            <div style="font-size:13px;color:#78350f;margin-top:4px;">The health_invariants canary returned nothing. This is not an all-clear &mdash; treat it as an unknown state and check the server logs.</div>
+          </td>
+        </tr>
+      </table>`;
+  } else if (health.healthy) {
+    healthSection = `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+        <tr>
+          <td style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 16px;">
+            <span style="font-size:13px;font-weight:600;color:#166534;">All ${health.checksRun} data-consistency checks passed.</span>
+          </td>
+        </tr>
+      </table>`;
+  } else {
+    const headline =
+      health.criticalBreaches > 0
+        ? `${health.breachedCount} consistency check${health.breachedCount === 1 ? "" : "s"} failed`
+        : `${health.breachedCount} consistency warning${health.breachedCount === 1 ? "" : "s"}`;
+    const bannerColour = health.criticalBreaches > 0 ? "#dc2626" : "#d97706";
+    const bannerBg = health.criticalBreaches > 0 ? "#fef2f2" : "#fffbeb";
+
+    healthSection = `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+        <tr>
+          <td style="background:${bannerBg};border:1px solid ${bannerColour};border-radius:6px;padding:12px 16px;">
+            <div style="font-size:14px;font-weight:700;color:${bannerColour};margin-bottom:8px;">${headline} &mdash; of ${health.checksRun} run</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+              <tbody>${healthRows}</tbody>
+            </table>
+          </td>
+        </tr>
+      </table>`;
+  }
+
+  // ── Scheduled-job heartbeat ──────────────────────────────────────────────────
+  // Same three-state logic as the invariants banner. "Overdue" means the job has
+  // not reported a successful run within its allowed gap — which pg_cron's own
+  // job_run_details cannot tell you, since net.http_post is fire-and-forget.
+  const overdueRows = cronHealth.overdue
+    .map((j) => {
+      const since =
+        j.minutesSince === null
+          ? "never reported in"
+          : j.minutesSince >= 120
+          ? `${Math.floor(j.minutesSince / 60)}h ago`
+          : `${j.minutesSince}m ago`;
+      return `
+        <tr>
+          <td style="padding:6px 10px;border-bottom:1px solid #fee2e2;font-size:13px;color:#dc2626;font-weight:600;">${escapeHtml(j.jobName)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #fee2e2;font-size:13px;color:#6b7280;font-family:monospace;">${escapeHtml(j.schedule)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #fee2e2;font-size:13px;color:#374151;text-align:right;">${escapeHtml(since)}</td>
+        </tr>`;
+    })
+    .join("");
+
+  let cronSection: string;
+
+  if (cronHealth.jobsTracked === 0) {
+    cronSection = `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+        <tr>
+          <td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:12px 16px;">
+            <div style="font-size:14px;font-weight:700;color:#92400e;">Scheduled-job check did not run</div>
+            <div style="font-size:13px;color:#78350f;margin-top:4px;">cron_health() returned nothing. Treat as an unknown state, not an all-clear.</div>
+          </td>
+        </tr>
+      </table>`;
+  } else if (cronHealth.healthy) {
+    cronSection = `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+        <tr>
+          <td style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 16px;">
+            <span style="font-size:13px;font-weight:600;color:#166534;">All ${cronHealth.jobsTracked} scheduled jobs reported in on time.</span>
+          </td>
+        </tr>
+      </table>`;
+  } else {
+    cronSection = `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+        <tr>
+          <td style="background:#fef2f2;border:1px solid #dc2626;border-radius:6px;padding:12px 16px;">
+            <div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:8px;">${cronHealth.overdue.length} of ${cronHealth.jobsTracked} scheduled job${cronHealth.overdue.length === 1 ? " has" : "s have"} not reported in</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+              <tbody>${overdueRows}</tbody>
+            </table>
+          </td>
+        </tr>
+      </table>`;
+  }
 
   // ── Revenue section ──────────────────────────────────────────────────────────
   const revenueRows = revenueBreakdown
@@ -3092,6 +3217,9 @@ export function dailySummaryEmail({
           </td>
         </tr>
       </table>
+
+      ${healthSection}
+      ${cronSection}
 
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px 0;" />
 

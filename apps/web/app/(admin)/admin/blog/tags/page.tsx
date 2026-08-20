@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import type { BlogTag } from "@/types/blog";
+import Link from "next/link";
 
 interface TagWithCount extends BlogTag {
   post_count: number;
@@ -24,8 +25,10 @@ export default function BlogTagsPage(): React.ReactElement {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Deliberately does not set `loading` back to true. On mount it already
+  // starts true, and on the refetches after create/delete keeping the current
+  // list on screen avoids a spinner flash over data that is about to reappear.
   async function fetchTags(): Promise<void> {
-    setLoading(true);
     const res = await fetch("/api/admin/blog/tags");
     const json = (await res.json()) as { data: BlogTag[] | null; error: string | null };
     setTags(
@@ -34,6 +37,7 @@ export default function BlogTagsPage(): React.ReactElement {
     setLoading(false);
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchTags is async; setState calls happen after the network round-trip, not synchronously
   useEffect(() => { void fetchTags(); }, []);
 
   async function handleCreate(e: React.FormEvent): Promise<void> {
@@ -78,9 +82,9 @@ export default function BlogTagsPage(): React.ReactElement {
     <div className="p-6 max-w-xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <a href="/admin/blog" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+        <Link href="/admin/blog" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
           ← Blog posts
-        </a>
+        </Link>
         <span className="text-gray-300">|</span>
         <h1 className="text-xl font-bold text-gray-900">Manage tags</h1>
       </div>

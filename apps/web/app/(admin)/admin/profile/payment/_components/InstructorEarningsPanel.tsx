@@ -7,7 +7,7 @@
  * Used by: app/(admin)/admin/profile/payment/page.tsx
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -135,7 +135,11 @@ const MONTH_NAMES = [
  * @param earnings - All earning rows for this instructor, newest first.
  */
 function EarningsTable({ earnings }: { earnings: InstructorOwnEarning[] }): React.ReactElement {
-  const [showAll, setShowAll] = useState(false);
+  // Tracks WHICH filter the "show all" expansion applies to, rather than a bare
+  // boolean plus an effect that resets it. Changing the filter changes the key,
+  // so the list collapses back to the first page automatically — no effect, and
+  // no cascading render. (React: you might not need an effect.)
+  const [showAllForFilter, setShowAllForFilter] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
 
@@ -168,10 +172,8 @@ function EarningsTable({ earnings }: { earnings: InstructorOwnEarning[] }): Reac
     [earnings, filterYear, filterMonth]
   );
 
-  // Reset "show all" whenever the filter changes so the user starts at the top.
-  useEffect(() => {
-    setShowAll(false);
-  }, [filterYear, filterMonth]);
+  const filterKey = `${filterYear ?? "all"}-${filterMonth ?? "all"}`;
+  const showAll = showAllForFilter === filterKey;
 
   const isFiltered = filterYear !== null || filterMonth !== null;
   const visible = showAll ? filteredEarnings : filteredEarnings.slice(0, INITIAL_ROWS);
@@ -302,7 +304,7 @@ function EarningsTable({ earnings }: { earnings: InstructorOwnEarning[] }): Reac
             <div className="border-t border-gray-100 px-4 py-3 text-center">
               <button
                 type="button"
-                onClick={() => setShowAll((prev) => !prev)}
+                onClick={() => setShowAllForFilter(showAll ? null : filterKey)}
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900"
               >
                 {showAll ? (

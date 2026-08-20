@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import BlogPostCard from "../../_components/BlogPostCard";
 import TagFilter from "../../_components/TagFilter";
 import type { BlogPostSummary, BlogTag } from "@/types/blog";
+import Link from "next/link";
 
 type PageProps = { params: Promise<{ tag: string }> };
 
@@ -85,9 +86,9 @@ export default async function TagPage({ params }: PageProps): Promise<React.Reac
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Page header */}
       <div className="mb-10">
-        <a href="/blog" className="text-sm text-gray-500 hover:text-red-600 transition-colors mb-4 inline-block">
+        <Link href="/blog" className="text-sm text-gray-500 hover:text-red-600 transition-colors mb-4 inline-block">
           ← All articles
-        </a>
+        </Link>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">{tag.name}</h1>
         <p className="text-gray-500 text-base">
           {posts.length} {posts.length === 1 ? "article" : "articles"} in this topic

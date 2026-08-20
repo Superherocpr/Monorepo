@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import BlogPostContent from "../_components/BlogPostContent";
 import TagFilter from "../_components/TagFilter";
 import type { BlogPost, BlogTag } from "@/types/blog";
+import Link from "next/link";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -125,9 +126,9 @@ export default async function BlogPostPage({ params }: PageProps): Promise<React
     <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Back + tag filter */}
       <div className="mb-8 flex flex-col gap-4">
-        <a href="/blog" className="text-sm text-gray-500 hover:text-red-600 transition-colors">
+        <Link href="/blog" className="text-sm text-gray-500 hover:text-red-600 transition-colors">
           ← Back to all articles
-        </a>
+        </Link>
         {allTags && allTags.length > 0 && (
           <TagFilter tags={allTags as BlogTag[]} activeTag={tags[0]?.slug ?? null} />
         )}

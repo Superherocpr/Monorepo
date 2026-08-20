@@ -19,6 +19,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
 import { fetchFacebookPhotoPosts } from "@/lib/facebook";
+import { withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /**
  * Verifies the request comes from either an authenticated super_admin or the
@@ -44,7 +45,7 @@ async function isAuthorized(req: Request): Promise<boolean> {
   }
 }
 
-export async function POST(req: Request): Promise<NextResponse> {
+async function handlePOST(req: Request): Promise<NextResponse> {
   if (!(await isAuthorized(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -92,3 +93,11 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+/**
+ * Cron-invoked entry point. The heartbeat wrapper records a cron_run_log row on
+ * every outcome so cron_health() can prove this job actually ran — pg_cron's own
+ * job_run_details cannot, because net.http_post is fire-and-forget (migration 0057).
+ * Manual admin triggers pass straight through unlogged.
+ */
+export const POST = withCronHeartbeat("refresh-social-feed-cache", handlePOST);

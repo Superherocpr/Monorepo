@@ -28,6 +28,7 @@ import {
   unclaimedOpportunityEscalationEmail,
   type UnclaimedOpportunitySummary,
 } from "@/lib/emails";
+import { withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /** The Eastern-time hours (0–23) this job should actually run at. */
 const TARGET_EASTERN_HOURS = new Set([0, 9, 12, 15, 18, 21]);
@@ -59,7 +60,7 @@ function isScheduledEasternHour(now: Date): boolean {
   return TARGET_EASTERN_HOURS.has(hour);
 }
 
-export async function POST(request: Request): Promise<Response> {
+async function handlePOST(request: Request): Promise<Response> {
   if (!isCronRequest(request)) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
@@ -145,3 +146,11 @@ export async function POST(request: Request): Promise<Response> {
 
   return NextResponse.json({ data: { notified: unclaimed.length } });
 }
+
+/**
+ * Cron-invoked entry point. The heartbeat wrapper records a cron_run_log row on
+ * every outcome so cron_health() can prove this job actually ran — pg_cron's own
+ * job_run_details cannot, because net.http_post is fire-and-forget (migration 0057).
+ * Manual admin triggers pass straight through unlogged.
+ */
+export const POST = withCronHeartbeat("notify-unclaimed-opportunities", handlePOST);

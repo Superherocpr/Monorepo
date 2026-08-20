@@ -1477,6 +1477,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                   Not connected
                 </p>
               </div>
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- OAuth redirect requires full browser navigation; Next Link would intercept it */}
               <a
                 href="/api/contact/zoho-auth"
                 className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
