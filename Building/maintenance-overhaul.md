@@ -171,8 +171,35 @@ Clearing them is a prerequisite for making CI a merge gate rather than noise.
       Add rule for `main` → check "Require status checks to pass" →
       search for **`ci`** (that's the job name) → Save.
       Do the same for `staging` if you want it gated too.
-- [ ] Playwright against staging on merge — deferred; needs a staging URL
-      wired into Actions secrets
+- [x] **Playwright now scheduled — `.github/workflows/e2e.yml` (2026-08-20).**
+      Nightly 07:00 UTC (03:00 EDT, so results wait at the start of the day), on
+      every push to `main`, and on manual dispatch. Kept out of the PR gate on
+      purpose — `ci.yml` must stay fast; e2e boots a server and drives a browser.
+
+      **It boots the app locally against staging Supabase rather than hitting a
+      staging URL, and that is not a shortcut.** `tests/e2e/rollcall.spec.ts` — the
+      suite's only outcome test — calls `test.skip()` unless the target is
+      localhost, because it seeds staging Supabase directly. Point
+      `PLAYWRIGHT_BASE_URL` at a deployed origin and that test silently skips: the
+      run stays green while the best coverage in the repo quietly stops running.
+      That is precisely the false-green this whole overhaul exists to remove, so
+      the workflow uses the `webServer` path `playwright.config.ts` already assumes.
+
+      **Scope is deliberately narrow — only the `guest` project runs.** `customer`
+      and `admin` are gated behind the repo variable `RUN_AUTHENTICATED_E2E`
+      because §10's blockers are still live: staging admin credentials fail, and
+      `NEXT_PUBLIC_PAYPAL_CLIENT_ID` is blank. A suite that is red every night
+      trains everyone to ignore it; narrow and green beats broad and red. Flip the
+      variable once those clear.
+
+      **Needs three repo secrets before the first run can pass:**
+      `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_ANON_KEY`,
+      `STAGING_SUPABASE_SERVICE_ROLE_KEY` — staging values only. The workflow
+      checks for them up front and fails with a readable message rather than
+      letting the dev server crash on boot.
+
+      The monthly Todoist task was rewritten from *run the suite* to
+      *review the nightly results and widen coverage*.
 - [x] Preserve the `next build --webpack` constraint — Turbopack breaks
       `@aws-sdk/client-s3` on Amplify (all S3 routes 500). Comment in the
       workflow explains this; the build script in package.json already
