@@ -181,17 +181,157 @@ booking with no invoice ever raised. See `feature-health-map.md`.
 Each of these fails *silently and partially* — e.g. `refresh-social-feed-cache`
 returns 200 and caches nothing when the token is dead.
 
-- [ ] `FACEBOOK_PAGE_ACCESS_TOKEN` — long-lived tokens expire ~60 days
-- [ ] Zoho OAuth refresh token — revocable, and the contact inbox depends on it
-- [ ] `PAYPAL_INVOICE_WEBHOOK_ID` — verify webhooks are actually being delivered
-- [ ] `PAYPAL_PAYOUTS_WEBHOOK_ID` — same; per memory this may still be unset in
-      Amplify, leaving the webhook route inert and the hourly sync carrying
-      reconciliation alone. **Verify.**
-- [ ] `GOOGLE_PLACES_API_KEY` — quota headroom
-- [ ] `TURNSTILE_SECRET_KEY` — liveness
-- [ ] Resend DKIM/SPF/DMARC — already a semiannual Todoist task, keep
+**Audited 2026-08-20 by probing each service directly.** One dead credential found
+(Google Places), one assumption corrected (Facebook), one partial config (Resend).
+
+- [x] `FACEBOOK_PAGE_ACCESS_TOKEN` — **HEALTHY, and the premise here was wrong.**
+      `debug_token` reports `is_valid: true`, `type: PAGE`, `expires_at: 0` — i.e.
+      **never expires.** Issued 2026-04-24, still valid ~4 months later. Page tokens
+      derived from a long-lived user token do not expire on a timer, so the "~60 day"
+      note was incorrect. It can still be killed by a password change, permission
+      revocation, or a Page role change — so it needs *liveness* monitoring, just not
+      *expiry* monitoring. Scopes: `pages_show_list`, `pages_read_engagement`,
+      `pages_read_user_content`, `public_profile`.
+- [ ] Zoho OAuth refresh token — revocable, and the contact inbox depends on it.
+      **Blocked this pass:** the refresh token is not an Amplify env var (only
+      `ZOHO_CLIENT_ID`/`_SECRET`/`_REDIRECT_URI` are), so it lives in the database
+      and the Supabase MCP is unauthorized in this session. Check by authorizing
+      Supabase, or hit the token endpoint from a session that can read it.
+- [ ] `PAYPAL_INVOICE_WEBHOOK_ID` — verify webhooks are actually being delivered.
+      The ID **is** set and injected (build 74), so the route is configured; what is
+      unverified is whether PayPal has ever delivered to it. Per the health map,
+      `invoices` is empty, so this is *untested*, not proven broken.
+- [x] `PAYPAL_PAYOUTS_WEBHOOK_ID` — **VERIFIED SET** (2026-08-20). Present on the
+      Amplify app and confirmed injected in build 74's `.env.production`. The earlier
+      note that it might be unset was wrong; the webhook route is configured. Whether
+      PayPal is actually *delivering* to it is a separate question — covered by the
+      `payout_webhook_silent` invariant.
+- [!] `GOOGLE_PLACES_API_KEY` — **DEAD IN PRODUCTION. Address autocomplete has been
+      broken and nobody knew.** Probing the exact endpoint the app calls returns:
+
+      status: REQUEST_DENIED
+      error_message: "You must enable Billing on the Google Cloud Project"
+
+      Not a quota ceiling — **billing is disabled on the GCP project**, so every
+      Places call is refused. Confirmed this is the production key, not a local one:
+      the value in `.env.local` is byte-identical to the Amplify app-level
+      `GOOGLE_PLACES_API_KEY`.
+
+      **Blast radius — 3 address-entry surfaces, all degraded not broken:**
+      `dashboard/settings` (customer profile address), `AddLocationPanel` and
+      `LocationsClient` (admin location management). Nothing depends on coordinates —
+      `places/details` only populates address/city/state/zip — so manual entry is a
+      genuine fallback and no flow is blocked.
+
+      **Why it stayed invisible:** `app/api/places/autocomplete/route.ts:81-86`
+      catches the bad status, `console.error`s it, and returns a friendly 502
+      ("Address lookup unavailable. Please enter the address manually."). Correct
+      UX, zero alerting — the textbook §5 failure. A user assumes the feature was
+      never there.
+
+      **Fix is in Google Cloud, not this repo:** re-enable billing on the project
+      that owns the key. Verify by re-running the probe and expecting `status: OK`.
+- [~] `TURNSTILE_SECRET_KEY` — **SET 2026-08-20, redeploy pending.** Was unset, so
+      `verifyTurnstileToken()` failed open and Cloudflare recorded 0 siteverify
+      requests against 23 solved challenges. Added at "All branches" scope.
+      **THREAT-062.** Takes effect on the next `main` build (env vars inject at
+      build time). Note the client-side widget was already blocking the ordinary
+      spam bots — this closes the direct-to-API gap beneath it.
+- [~] Resend DKIM/SPF/DMARC — **partially configured; mail is almost certainly
+      delivering, but on one leg instead of two.** Sending domain is
+      `update.superherocpr.com` (from `RESEND_FROM_EMAIL`).
+
+      | Record | State |
+      |---|---|
+      | DKIM `resend._domainkey.update.superherocpr.com` | ✅ present |
+      | SPF on `update.superherocpr.com` | ❌ **absent — zero TXT records on that name** |
+      | DMARC on `update.superherocpr.com` | ❌ absent, inherits root |
+      | Root DMARC | ⚠️ `p=none`, `rua=mailto:rua@dmarc.brevo.com` |
+      | Root SPF | `v=spf1 include:zohomail.com ~all` — authorizes Zoho only, not Resend/SES |
+
+      DMARC passes on DKIM alignment alone, which is why nothing is bouncing. But
+      SPF is a hard miss: subdomains do **not** inherit the parent's SPF, and the
+      root record wouldn't authorize Resend anyway. That leaves DKIM as a single
+      point of failure for all transactional mail (~20 send sites).
+
+      Two pieces of stale config: the DMARC `rua` still points at **Brevo**, a
+      provider no longer in use, so aggregate reports go to an address nobody reads;
+      and a leftover `brevo-code` TXT sits on the root. With `p=none` there is no
+      enforcement either.
+
+      Actions: add SPF on `update.superherocpr.com` authorizing Resend, repoint
+      `rua` to a mailbox someone actually reads, then consider `p=quarantine` once
+      reports look clean.
 - [ ] Build a weekly probe job that calls each with a cheap read and reports
-      what's expiring
+      what's dead or expiring. **This audit is the argument for it:** three manual
+      curl commands found a credential that has been dead in production for an
+      unknown length of time. The same three calls on a schedule would have caught
+      it the week it broke.
+
+      **BUILT 2026-08-20 — code complete, migration not yet applied.**
+
+      | File | Role |
+      |---|---|
+      | `apps/web/lib/credential-probes.ts` | 5 probes + pure `summarizeProbes()` |
+      | `apps/web/lib/credential-notify.ts` | alert email, super admins only |
+      | `apps/web/app/api/cron/probe-credentials/route.ts` | route, `withCronHeartbeat("probe-credentials")` |
+      | `apps/migrations/0058_credential_probes.sql` | schedules Mon 12:00 UTC |
+      | `apps/web/tests/unit/lib/credential-probes.test.ts` | 22 tests |
+
+      Probes: Google Places, Facebook `debug_token`, Resend (key **and**
+      sending-domain verification), Turnstile secret, Zoho refresh token.
+
+      **The rule the module is built around:** assert on the provider's semantic
+      verdict, never on HTTP status. Google returned **200** with `REQUEST_DENIED`
+      in the body — a probe checking `res.ok` would have called that healthy for
+      months. Verified by temporarily reintroducing exactly that mistake: the
+      REQUEST_DENIED and OVER_QUERY_LIMIT tests failed with
+      `expected 'healthy' to be 'dead'` while the other 20 passed, then reverted.
+
+      Three deliberate design choices worth not undoing:
+      - **Zero probes ≠ healthy.** `probesRun: 0` reports unhealthy, same reasoning
+        as `checksRun: 0` in the invariants canary — a silent canary is not a
+        well one.
+      - **`unconfigured` is not actionable, `probe_failed` is.** Staging genuinely
+        lacks some keys, so absence must not cry wolf; but an unreachable provider
+        is an *unknown*, and unknown is never a pass.
+      - **A missing `TURNSTILE_SECRET_KEY` reports `dead`, not `unconfigured`** —
+        absence there means verification fails open (THREAT-062), which is a live
+        hole rather than a disabled feature.
+
+      **How a failure escalates without anyone reading email:** the route returns
+      **502** when something is wrong, so the heartbeat records `ok=false`. Since
+      `cron_health()` measures the gap since the last *successful* run, a
+      credential left broken past 7d+3h surfaces the job as overdue in the daily
+      digest's existing cron banner. No third banner was added — the escalation
+      path already routes through one, and the alert email covers immediacy.
+
+      **Migration 0058 APPLIED to both environments 2026-08-20.** Verified:
+      `probe-credentials` active on both, schedule `0 12 * * 1`,
+      `max_gap_minutes = 10260`. Production now has **9** cron jobs, staging **8**.
+      Both were at 0057 beforehand; staging still correctly lacks 0053.
+
+      ⚠️ **The schedule is live but the endpoint is not deployed yet.** Production
+      is still serving build 74, which has no `/api/cron/probe-credentials`. Until
+      the next deploy, the Monday run will 404, no heartbeat will be written, and
+      `cron_health()` will report `probe-credentials` overdue in the digest. That
+      is *technically accurate* — the job genuinely is not working — but it is
+      expected noise, not a new fault. It self-resolves on the first deploy that
+      ships the route.
+
+      **Staging is scheduled but does not email.** `isProductionEnvironment()` in
+      `lib/credential-notify.ts` gates the alert on the base URL being
+      `superherocpr.com`. Reasoning: staging inherits nearly every credential from
+      the app-level Amplify config, so it reaches the same verdict as production,
+      and staging's `profiles` holds the same two **real** super_admin addresses —
+      one dead key would otherwise send two identical emails a week to the same
+      people, and a duplicated alert is a filtered alert. Staging still runs the
+      probe and still writes a heartbeat, which remains a real canary for the route
+      itself. Note staging has no digest either way, since 0053 is production-only.
+
+      **After the next deploy:** trigger once by hand to give `cron_health()` a
+      baseline. Expect 502 with `google_places` in `actionable` until GCP billing
+      is restored — that is the probe working, not failing.
 
 ---
 
@@ -207,15 +347,121 @@ Replaces "skim logs daily" — a human doing a machine's job.
 
 ---
 
-## 7. Environment parity
+## 7. Environment parity — AUDITED 2026-08-20
 
-- [ ] Check Amplify env vars against every `process.env.*` referenced in code
-      (33 distinct vars found). The [`amplify.yml`](../amplify.yml) grep has a
-      documented history of silently matching zero vars for prefix entries.
-- [ ] Maintain an **allowlist of intentional differences** — `0053_daily_summary_cron`
-      is production-only and must never reach staging (admins would get daily
-      emails of fake data)
+39 `process.env.*` references found across `apps/web/`. Cross-referenced against
+the `amplify.yml` grep pattern. All vars categorised below.
+
+**Method note — read the build log, not just the config.** The `amplify.yml` grep
+is *intent*; the build log line `Env var names written:` is *truth*. A var can be
+in the grep and still have no value set, or be set at app level and overridden per
+branch. This audit only became reliable once both were compared. Source of truth
+used here: Amplify app `dzmna7ztg21it` (us-east-2), build job **74** on `main`
+(2026-08-20), which injected **22** vars.
+
+- [x] Audit complete — verified against live Amplify config *and* the production
+      build log, not inferred from the grep pattern alone
+- [x] **FIXED — real production bug.** `TeamSignupClient.tsx` read
+      `NEXT_PUBLIC_PAYPAL_ENVIRONMENT`, which is set **nowhere**. It resolved to
+      `undefined`, so the ternary fell through to `"sandbox"` and handed
+      `PayPalProvider` a sandbox environment alongside a **production** clientId and
+      clientToken. Renamed to `NEXT_PUBLIC_PAYPAL_ENV` (confirmed injected, value
+      `"production"`), matching the other three payment surfaces. See below.
+- [x] `DATAFORSEO_` prefix added to the `amplify.yml` grep — forward-looking only;
+      the vars are not set in Amplify at all, so the SEO check route stays inert
+      until someone adds values.
+- [x] **`TURNSTILE_SECRET_KEY` set in Amplify** (2026-08-20, "All branches" scope).
+      Was in the grep with no value, so `verifyTurnstileToken()` failed open.
+      **THREAT-062.** Effective on the next `main` build.
+      **Method note:** added via the console UI, not the CLI —
+      `aws amplify update-app --environment-variables` **replaces the entire map**,
+      so a single-variable CLI call would have wiped the other 25 and taken
+      production down. The console edit is additive. Use it for any future env var.
+- [ ] Decide on `ENCRYPTION_KEY` — set in Amplify (app-level value has a stray
+      trailing space; `main` overrides with a clean one) but referenced **nowhere** in
+      code. Dead config: either delete it or document what it was for.
+- [x] `S3_BUCKET_NAME` — staging inherits the app-level `superherocpr-assets-prod`
+      and writes into the same bucket as production. **Confirmed intentional
+      (2026-08-20):** one shared asset bucket for both environments is the design.
+      Do not "fix" this by adding a staging override.
 - [ ] Migration parity by content, not name (see finding above)
+
+### The PayPal environment bug — what was actually wrong
+
+Three payment surfaces read `NEXT_PUBLIC_PAYPAL_ENV`:
+`book/payment/page.tsx`, `MerchClient.tsx`, `SessionDetailClient.tsx`. All correct.
+
+`team/[share_token]/_components/TeamSignupClient.tsx` read
+`NEXT_PUBLIC_PAYPAL_ENVIRONMENT` — a name that appears in no Amplify config and no
+build log. The effective value was therefore:
+
+```js
+undefined === "production" ? "production" : "sandbox"   // → "sandbox"
+```
+
+That `"sandbox"` was passed to `<PayPalProvider environment={...}>` at both call
+sites (the clientToken path and the clientId-only fallback), while `clientId`,
+`clientToken`, and `PAYPAL_API_BASE` were all production. A production credential
+against sandbox endpoints does not degrade gracefully — the SDK rejects it, so
+per-seat team signup payments were most likely failing outright in production
+rather than quietly charging the wrong account.
+
+**Not caught by tests** because the component reads `process.env` at module scope
+and no test asserts the resolved environment. **Not caught by typecheck** because
+any `process.env.*` access is `string | undefined` and the ternary is valid either
+way. This is exactly the failure class §7 exists to find.
+
+### Gaps: in the grep, but no value set in Amplify
+
+| Var | Consequence |
+|---|---|
+| `TURNSTILE_SECRET_KEY` | **THREAT-062** — captcha verification silently skipped |
+| `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | Admin blog SEO check returns an error; prefix now in the grep, values still needed |
+| `PLATFORM_FEE_PERCENT` | Falls back to the in-code default |
+| `AWS_S3_REGION` | Falls back to hardcoded `"us-east-2"` — intended, see `lib/s3.ts` |
+| `TWILIO_*` | Nothing set; no code path appears to depend on it |
+
+### Intentional gaps (correct — no fix needed)
+
+| Var | Why it's OK |
+|---|---|
+| `AWS_REGION` | Amplify SSR Lambda does **not** expose this to Next.js (documented in `lib/s3.ts`). Code falls back to `AWS_S3_REGION` (captured by `AWS_S3_` prefix) then hardcoded `"us-east-2"`. Intentional. |
+| `NODE_ENV` | Set by Next.js/build system. Not injected; not needed. |
+| `CI` | Set by GitHub Actions runner. Test-only; not in Amplify. |
+| `PLAYWRIGHT_BASE_URL` | e2e test config. Not deployed. |
+| `TEST_ADMIN_EMAIL` / `TEST_ADMIN_PASSWORD` / `TEST_CUSTOMER_EMAIL` / `TEST_CUSTOMER_PASSWORD` | Playwright credentials. Not deployed. |
+
+### Verified reaching production — the 22 vars in build 74's `.env.production`
+
+`CRON_SECRET` · `FACEBOOK_PAGE_ACCESS_TOKEN` · `FACEBOOK_PAGE_ID` ·
+`GOOGLE_PLACES_API_KEY` · `NEXT_PUBLIC_BASE_URL` · `NEXT_PUBLIC_PAYPAL_CLIENT_ID` ·
+`NEXT_PUBLIC_PAYPAL_ENV` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` ·
+`NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_TURNSTILE_SITE_KEY` · `OWNER_EMAIL` ·
+`PAYPAL_API_BASE` · `PAYPAL_INVOICE_WEBHOOK_ID` · `PAYPAL_PAYOUTS_WEBHOOK_ID` ·
+`PAYPAL_SECRET` · `RESEND_API_KEY` · `RESEND_FROM_EMAIL` · `S3_BUCKET_NAME` ·
+`SUPABASE_SERVICE_ROLE_KEY` · `ZOHO_CLIENT_ID` · `ZOHO_CLIENT_SECRET` ·
+`ZOHO_REDIRECT_URI`
+
+**Resolves a §5 open question:** `PAYPAL_PAYOUTS_WEBHOOK_ID` **is** set and **is**
+injected. The memory note suggesting it might be unset in Amplify was wrong — the
+payouts webhook route is not inert for lack of configuration.
+
+**Also confirms the build spec question:** the preBuild env-injection step ran, so
+the repo's `amplify.yml` is what executes. The build spec stored in the Amplify
+console is stale (no preBuild, no injection) but is correctly overridden by the
+repo file. Worth deleting from the console to avoid confusing a future reader.
+
+### Allowlist of intentional staging/production differences
+
+- Migration `0053` (`daily_summary_cron`) — **production only**, must never reach
+  staging. Admins would receive daily emails of fake data.
+- `main` overrides `NEXT_PUBLIC_BASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ZOHO_REDIRECT_URI`,
+  `ENCRYPTION_KEY`, `S3_BUCKET_NAME` at branch level; the app-level values are the
+  staging ones. `staging` overrides only the two Supabase keys and inherits the rest.
+- **One S3 bucket serves both environments** (`superherocpr-assets-prod`). Staging
+  uploads land in the production bucket by design — confirmed 2026-08-20. This is why
+  the weekly bucket-size Todoist check cannot attribute growth to an environment.
 
 ---
 

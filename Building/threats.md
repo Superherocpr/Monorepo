@@ -712,3 +712,136 @@ entirely; `service_role` bypasses RLS and is the only intended caller.
 created, as an ERROR-level `rls_disabled_in_public`. Adding an advisor check to
 the recurring maintenance schedule (§8 of the overhaul checklist) is what turns
 that from luck into process. A new table is not finished until RLS is on it.
+
+---
+
+## THREAT-062 — Contact form captcha fails open in production
+
+**Severity:** 4/10 (medium-low) — **downgraded from 5/10 on 2026-08-20.** The
+client-side Turnstile gate is empirically stopping the spam the site was actually
+receiving (see "What is working" below); the residual gap needs a deliberate
+direct-to-API bypass, not drive-by spam. No PII, funds, or accounts exposed.
+**Files:** `apps/web/lib/turnstile.ts`, `apps/web/app/api/contact/route.ts`,
+`amplify.yml`
+**Date:** 2026-08-20
+**Status:** VARIABLE SET 2026-08-20 — **awaiting redeploy to take effect.**
+`TURNSTILE_SECRET_KEY` added to the Amplify app at "All branches" scope via the
+console (the CLI's `update-app --environment-variables` replaces the whole map and
+was not used). Verified: app-level key count went 25 → 26 with nothing lost, and
+both branch-level override sets are unchanged (main 7, staging 2). Because
+`amplify.yml` injects env vars at **build** time, the running app will not see the
+value until `main` rebuilds. Confirm by checking the next build log for 23 injected
+names including `TURNSTILE_SECRET_KEY`, then reload the Turnstile analytics page and
+watch "Siteverify requests" climb off zero.
+
+**Description:** `verifyTurnstileToken()` deliberately no-ops and returns
+`{ success: true }` when `TURNSTILE_SECRET_KEY` is unset, so local dev works
+without a Cloudflare key. That is reasonable for dev and dangerous in prod,
+because nothing distinguishes the two.
+
+**Turnstile is a two-key system, and only one of the two is set.**
+
+- `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public) — renders the widget, which scores the
+  visitor from browser signals and issues a token. This **is** set and **is**
+  injected, so the front end genuinely works: real visitors pass, and the widget
+  is doing its job.
+- `TURNSTILE_SECRET_KEY` (private) — the server passes this to Cloudflare's
+  `siteverify` endpoint to check that a submitted token is real. This is **not**
+  set anywhere.
+
+Because Turnstile is invisible/passive rather than a question-and-answer
+challenge, nothing about the working widget reveals that its verdict is being
+discarded. The token is issued, submitted, and never validated.
+
+`TURNSTILE_SECRET_KEY` **is** listed in the `amplify.yml` injection grep — someone
+intended to set it — but it has no value on the Amplify app or on either branch.
+Confirmed three ways: `amplify list-apps`, `amplify list-branches` (both `main` and
+`staging`), and the production build log for job 74 (main, 2026-08-20), which echoes
+the injected names — 22 vars written to `.env.production`, `TURNSTILE_SECRET_KEY`
+not among them while `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is.
+
+**Independently confirmed by Cloudflare.** The Turnstile dashboard raises its own
+banner on this exact widget (named "Captcha", site key `0x4AAAAAADTP6NdfgFlMIL87`,
+4 hostnames, Managed mode):
+
+> **Siteverify isn't being called for Captcha** — Without a server-side siteverify
+> call, widget tokens aren't validated. The forms these widgets protect remain open
+> to bots.
+
+Cloudflare observes token issuance but zero `siteverify` requests for the widget,
+which is precisely the signature of the early return in `lib/turnstile.ts`. This is
+third-party runtime evidence, not inference from config.
+
+Widget analytics, last 24h to 2026-08-20 (hostname `superherocpr.com`, so this is
+production traffic, not local testing):
+
+| Metric | Value |
+|---|---|
+| Challenges issued | 27 |
+| Challenges solved | 23 (100% non-interactive) |
+| Likely human / likely bot | 85.19% / **14.81%** |
+| **Siteverify requests** | **0** |
+| Valid tokens | 0 |
+| Invalid tokens | 0 |
+
+23 solved tokens, 0 validated. Bots are already being *identified* (14.81%) and
+then admitted anyway, because identification without server-side enforcement
+changes nothing. Note also that a bot need not defeat the widget at all — the
+widget is client-side JS, so a direct POST to `/api/contact` never loads it. With
+no token present, `lib/turnstile.ts:44` would reject the request, but line 37
+returns success first.
+
+**Verification after the fix:** reload this same analytics page. "Siteverify
+requests" should track close to "Challenges solved" and "Valid tokens" should
+climb. No log inspection required.
+
+**Do not accept Cloudflare's "Fix with Spin" offer.** It proposes generating
+server-side siteverify code, which already exists and is correct. The missing piece
+is the environment variable, not the implementation.
+
+**What IS working — do not undersell this.** The site owner reports that spam
+stopped completely when Turnstile was added and has not returned. That is real and
+expected. `ContactSection.tsx:79` gates submission on possessing a live token:
+
+```js
+if (TURNSTILE_SITE_KEY ? !captchaToken : !captchaChecked) { ...refuse... }
+```
+
+Because the site key **is** set in production, the real `TurnstileWidget` renders
+(not the `CaptchaCheckbox` fallback) and the form will not submit until Cloudflare
+issues a token. Headless browsers and automated form-fillers are refused a token,
+so they never reach the network at all. That defeats the entire class of
+opportunistic spam bots — which is what the site was getting. The client-side half
+is doing genuine work.
+
+**What is missing** is only the floor beneath it: an attacker who skips the browser
+entirely. The widget is client-side JS; a direct POST never loads it, is never
+scored by Cloudflare, and appears in no Turnstile analytics.
+
+**Attack vector:** POST directly to `/api/contact` with no `captchaToken`, or any
+arbitrary string. `verifyTurnstileToken` short-circuits to success before it ever
+calls Cloudflare. Each accepted submission writes a `contact_submissions` row,
+sends mail through Resend, and pushes to Zoho — so a script can burn the Resend
+quota, flood the inbox, and fill the table. The visible captcha widget makes the
+endpoint look protected during any manual review.
+
+**Why it went unnoticed:** the secret **is** present in `apps/web/.env.local`, so
+the full verify path — token → `siteverify` → pass/fail — works correctly on a
+developer machine. `.env.local` is gitignored and never reaches the Amplify build
+(`git ls-files` shows no committed `.env` beyond `Building/.env.example`), so only
+the *deployed* environment fails open. Testing the contact form locally, or
+watching the widget behave normally in production, both look like success.
+`components/CaptchaCheckbox.tsx` documents the requirement in its own header —
+"set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`" — so the two-key
+requirement was understood when it was written; only the deploy step was missed.
+
+**Fix:** set `TURNSTILE_SECRET_KEY` on the Amplify app (the grep already forwards
+it, so no `amplify.yml` change is needed) and redeploy. Longer term, the helper
+should fail *closed* when `NODE_ENV === "production"` rather than treating a
+missing key as permission to skip verification — a dev convenience should not be
+reachable in prod.
+
+**Lesson:** a var being present in the injection allowlist proves nothing about
+whether it has a value. This audit only found it by reading the build log's
+"Env var names written" line and diffing that against the grep pattern — the
+pattern is the intent, the log is the truth.
