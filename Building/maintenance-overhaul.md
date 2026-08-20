@@ -663,9 +663,30 @@ roster_records, social_feed_cache`.
       counterpart to the §6 rule, listing the still-open gaps.
 - [x] **Added: third-party credential liveness** (weekly, p1) — closes §5's
       "nothing watches any of them".
-- [ ] Retire or downgrade any remaining task the automation has made redundant
-      (the daily payout-batch check is still valid: nothing yet watches batches
-      stuck in `assumed_complete`)
+- [x] **Retire or downgrade tasks the automation made redundant — DONE 2026-08-20.**
+
+      **Rewritten + downgraded p1 → p3: "Verify third-party credentials and tokens
+      are still live"** (weekly, Mon 12:00). Migration 0058's `probe-credentials`
+      job runs at exactly that slot and does exactly that work, so the task was
+      fully redundant. Retitled *"Confirm the credential probe is running and its
+      findings are being acted on"* — the same shift from *doing the check* to
+      *checking the checker* that §9 applied to the cron task. Its three remaining
+      human steps: did the probe run, was a failing result acted on or filtered,
+      and does the probe list still cover every credential the app uses.
+
+      Also corrected four stale claims inside it: the Facebook token does **not**
+      expire on a ~60-day timer, `PAYPAL_PAYOUTS_WEBHOOK_ID` **is** set,
+      `TURNSTILE_SECRET_KEY` was unset entirely (THREAT-062), and
+      `GOOGLE_PLACES_API_KEY` is dead.
+
+      **Updated, not retired: "Check email deliverability (SPF/DKIM/DMARC)"**
+      (bi-yearly). The probe checks Resend's *API key and domain-verified status*;
+      it does not check DNS. Complementary, not redundant — Resend can report
+      "verified" while the DNS underneath has drifted. Loaded the task with the
+      audited state and four concrete actions, chiefly the missing SPF record.
+
+      **Left alone deliberately:** the daily payout-batch check still earns its
+      place — nothing automated watches batches stuck in `assumed_complete`.
 
 **The deeper fix** is §1's CLAUDE.md rule plus the quarterly map review. The plan
 drifted because shipping a feature had no step that touched it; now it does.
