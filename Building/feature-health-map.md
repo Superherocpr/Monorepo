@@ -226,10 +226,21 @@ Design points worth remembering:
 holds the reporting logic so it is testable without a database. Full suite: 375
 tests passing, typecheck and lint clean.
 
-**Daily summary email** now leads with a health banner in three states —
-all-clear, breached, or did-not-run — placed above revenue so a breach is above
-the fold. Critical breaches also `console.error` so they are greppable without
-opening an inbox.
+**Daily summary email** carries a health banner in three states — all-clear,
+breached, or did-not-run. Critical breaches also `console.error` so they are
+greppable without opening an inbox.
+
+**Moved to the bottom 2026-08-20.** It originally rendered above revenue, on the
+reasoning that a breach should be above the fold. The owner's call reversed that:
+the digest goes to every super_admin and manager, most of whom do not know what
+these checks mean, so leading with them buried the business numbers people
+actually open the email for. Both banners now sit last under a "System checks"
+heading, with a line saying most admins need take no action.
+
+The tradeoff is accepted rather than overlooked — a breach is now below the fold.
+It is still not silent: the banner renders red, criticals still `console.error`,
+and credential or cron failures escalate independently through the probe alert
+email and `cron_health()`. This email is the summary; it is not the alarm.
 
 Also corrected: the route docstring claimed the cron fires at 12:00 UTC; migration
 0053 and `cron.job` both say 11:00 UTC.

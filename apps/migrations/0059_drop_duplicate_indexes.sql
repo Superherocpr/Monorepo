@@ -1,0 +1,53 @@
+-- 0059_drop_duplicate_indexes.sql
+--
+-- Drops two pairs of byte-identical indexes found by the first-ever performance
+-- advisor run (2026-08-20, maintenance overhaul §8).
+--
+-- Each pair indexes the same column, the same way, on the same table. A duplicate
+-- index is pure cost: it doubles the write amplification on every INSERT/UPDATE to
+-- that table and consumes storage, while the query planner will only ever use one.
+--
+-- Verified identical via pg_indexes before dropping:
+--
+--   idx_instructor_payout_items_batch_id
+--     CREATE INDEX ... ON public.instructor_payout_items USING btree (payout_batch_id)
+--   instructor_payout_items_batch_idx
+--     CREATE INDEX ... ON public.instructor_payout_items USING btree (payout_batch_id)
+--
+--   idx_webhook_events_received_at
+--     CREATE INDEX ... ON public.processed_webhook_events USING btree (received_at DESC)
+--   processed_webhook_events_received_idx
+--     CREATE INDEX ... ON public.processed_webhook_events USING btree (received_at DESC)
+--
+-- The `idx_`-prefixed name is kept in each pair, matching the dominant convention
+-- elsewhere in the schema (idx_bookings_invoice_id, idx_certifications_session_id,
+-- idx_cron_run_log_job_ran_at, ...). The duplicates almost certainly arose from the
+-- same logical index being added under two names across separate migrations.
+--
+-- SAFETY: dropping a duplicate is functionally a no-op. The surviving index covers
+-- exactly the same queries, so no plan can regress. This is the safest possible
+-- class of schema change — but it is still a DROP, hence `if exists` so a replay or
+-- an environment that only ever had one of the pair cannot error.
+--
+-- NOT INCLUDED, deliberately:
+--   * The 25 "unused index" findings. Most sit on tables created within the last
+--     few days (cron_run_log 0057, team_bookings 0055), where "never used" reflects
+--     the index's age and the absence of production traffic, not its usefulness.
+--     Dropping those would be acting on a statistic that has not had time to mean
+--     anything. Revisit after a few weeks of real traffic.
+--   * The 5 auth_rls_initplan warnings. Those require rewriting live RLS policies
+--     on profiles, bookings and orders — real access-control surface. Worth doing,
+--     but as its own reviewed change, not bundled with an index cleanup.
+--
+-- IDEMPOTENT: safe to re-run.
+
+drop index if exists public.instructor_payout_items_batch_idx;
+drop index if exists public.processed_webhook_events_received_idx;
+
+-- Verification:
+--   select indexname from pg_indexes
+--   where schemaname = 'public'
+--     and tablename in ('instructor_payout_items','processed_webhook_events')
+--   order by tablename, indexname;
+--
+-- Expect exactly one index per previously-duplicated column, both `idx_`-prefixed.

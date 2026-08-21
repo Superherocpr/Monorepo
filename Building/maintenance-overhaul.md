@@ -99,9 +99,50 @@ immune to the 6h pg_net TTL.
 - [x] Applied to **both** envs; the `daily-ops-summary` block is guarded by an
       existence check so running 0057 on staging cannot create it there
       (verified: staging still has 0)
-- [ ] Confirm the alert that failed on 2026-08-19 actually fired, or re-run it
-- [ ] Consolidate the duplicated private `isCronRequest` helpers in the cron
-      routes onto the shared one now exported from `lib/cron-heartbeat.ts`
+- [x] **Resolved 2026-08-20 — the missed alert was inconsequential, and the
+      heartbeat is now proven working.**
+
+      *What the alert would have said:* production holds exactly **4** payout
+      batches, all `denied`, created 2026-08-10 → 2026-08-17. These are the same
+      four §4 investigated when tuning `payout_fee_total_mismatch`. `denied` is
+      terminal and the funds were returned, so nothing is stuck in a recoverable
+      state and no financial action was missed. The 2026-08-19 digest would have
+      listed four batches that are still denied and still visible in the admin
+      panel — and every daily run since would have re-sent the same list. No
+      re-run needed.
+
+      *Heartbeat validated end-to-end.* `cron_run_log` on production now holds real
+      rows from the two high-frequency jobs, the first proof that 0057 works in
+      production rather than just in principle:
+
+      | Job | Runs | Last | All OK | Slowest |
+      |---|---|---|---|---|
+      | `notify-unclaimed-opportunities` | 4 | 23:00 UTC | ✅ | 641 ms |
+      | `reconcile-instructor-payouts` | 5 | 22:15 UTC | ✅ | 1092 ms |
+
+      Note the durations: **~1 s at worst against pg_net's old 5 s default.** That
+      reinforces the original diagnosis — the 2026-08-19 timeout was a Lambda cold
+      start, not slow work — and confirms the 30 s timeout in 0057 is ample.
+
+      `alert-stuck-payout-batches` has no row yet purely because it runs daily at
+      14:00 UTC and the heartbeat code only went live at 18:12 UTC today. Its first
+      row lands tomorrow at 14:00 UTC; the daily jobs will fill in over the next
+      25 hours exactly as §2's "first deploy" note predicted.
+- [x] **Consolidated 2026-08-20.** Eight routes carried their own copy — six as a
+      private `function isCronRequest`, two inlined inside a local `isAuthorized`
+      (including `probe-credentials`, written earlier the same day). All six private
+      copies were verified **byte-identical** to the shared helper before removal, so
+      this was a pure deduplication with no behavioural change.
+
+      The risk it removes is drift, not tidiness: `withCronHeartbeat` uses the shared
+      helper to decide whether to write a heartbeat. Had a route's private copy ever
+      diverged, the route would keep accepting cron calls while the heartbeat quietly
+      stopped recording them — and `cron_health()` would report the job overdue with
+      no visible cause. That is precisely the false signal §2 exists to eliminate.
+
+      `process.env.CRON_SECRET` now appears in exactly two places: `cron-heartbeat.ts`
+      (verifies it) and `payout-trigger.ts` (sends it outbound — a different job, left
+      alone).
 
 **Note on first deploy:** until each job runs once after the code ships,
 `cron_health()` reports it overdue. Daily jobs take up to 25h to clear. This is
@@ -130,8 +171,44 @@ Clearing them is a prerequisite for making CI a merge gate rather than noise.
       Add rule for `main` → check "Require status checks to pass" →
       search for **`ci`** (that's the job name) → Save.
       Do the same for `staging` if you want it gated too.
-- [ ] Playwright against staging on merge — deferred; needs a staging URL
-      wired into Actions secrets
+- [x] **Playwright now scheduled — `.github/workflows/e2e.yml` (2026-08-20).**
+      Nightly 07:00 UTC (03:00 EDT, so results wait at the start of the day), on
+      every push to `main`, and on manual dispatch. Kept out of the PR gate on
+      purpose — `ci.yml` must stay fast; e2e boots a server and drives a browser.
+
+      **It boots the app locally against staging Supabase rather than hitting a
+      staging URL, and that is not a shortcut.** `tests/e2e/rollcall.spec.ts` — the
+      suite's only outcome test — calls `test.skip()` unless the target is
+      localhost, because it seeds staging Supabase directly. Point
+      `PLAYWRIGHT_BASE_URL` at a deployed origin and that test silently skips: the
+      run stays green while the best coverage in the repo quietly stops running.
+      That is precisely the false-green this whole overhaul exists to remove, so
+      the workflow uses the `webServer` path `playwright.config.ts` already assumes.
+
+      **Scope is deliberately narrow — only the `guest` project runs.** `customer`
+      and `admin` are gated behind the repo variable `RUN_AUTHENTICATED_E2E`
+      because §10's blockers are still live: staging admin credentials fail, and
+      `NEXT_PUBLIC_PAYPAL_CLIENT_ID` is blank. A suite that is red every night
+      trains everyone to ignore it; narrow and green beats broad and red. Flip the
+      variable once those clear.
+
+      **Three repo secrets — SET 2026-08-20, verified present:**
+      `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_ANON_KEY`,
+      `STAGING_SUPABASE_SERVICE_ROLE_KEY`. Staging values only; URL and publishable
+      key read straight from the Supabase API for the staging project rather than
+      copied from memory. The workflow still checks for them up front and fails
+      with a readable message, so a future secret deletion is obvious rather than
+      surfacing as an opaque dev-server crash.
+
+      **Not yet runnable — waits on the merge.** GitHub only registers `schedule:`
+      and `workflow_dispatch` for workflows present on the **default branch**, so
+      `e2e.yml` living on `MaintenanceUpdate` is inert: it does not appear in the
+      Actions tab and cannot be dispatched. Confirmed no syntax error. Nightly runs
+      begin from the first 07:00 UTC after this merges to `main`, and the merge
+      itself triggers the first run via the `push` trigger.
+
+      The monthly Todoist task was rewritten from *run the suite* to
+      *review the nightly results and widen coverage*.
 - [x] Preserve the `next build --webpack` constraint — Turbopack breaks
       `@aws-sdk/client-s3` on Amplify (all S3 routes 500). Comment in the
       workflow explains this; the build script in package.json already
@@ -377,9 +454,21 @@ used here: Amplify app `dzmna7ztg21it` (us-east-2), build job **74** on `main`
       `aws amplify update-app --environment-variables` **replaces the entire map**,
       so a single-variable CLI call would have wiped the other 25 and taken
       production down. The console edit is additive. Use it for any future env var.
-- [ ] Decide on `ENCRYPTION_KEY` — set in Amplify (app-level value has a stray
-      trailing space; `main` overrides with a clean one) but referenced **nowhere** in
-      code. Dead config: either delete it or document what it was for.
+- [x] **`ENCRYPTION_KEY` — DECIDED 2026-08-20: leave it, documented.** Confirmed
+      dead: zero references across `.ts`, `.tsx`, `.js` and `.yml` in the whole repo.
+      Set at Amplify app level (with a stray **trailing space** in the value) and
+      overridden cleanly on `main`.
+
+      It is also **not in the `amplify.yml` injection grep**, so it never reaches the
+      running app at all — it exists purely as Amplify console config and does
+      literally nothing today.
+
+      Not deleting it, on the reasoning that deletion buys nothing measurable (it is
+      not injected, so it is not even in the SSR bundle's blast radius) while carrying
+      a non-zero risk that something outside this repo — a script, a Lambda, a
+      one-off tool — still reads it. Revisit and delete if that is ever ruled out.
+      The trailing space is a latent trap if it is ever wired up: fix the value at
+      the same time.
 - [x] `S3_BUCKET_NAME` — staging inherits the app-level `superherocpr-assets-prod`
       and writes into the same bucket as production. **Confirmed intentional
       (2026-08-20):** one shared asset bucket for both environments is the design.
@@ -478,8 +567,85 @@ the table being created.
       `max_gap_minutes` via PostgREST and silently disabled overdue detection for
       every cron job. RLS enabled on both envs; 0057 amended so a replay cannot
       reintroduce it. Verified: **zero** public tables now lack RLS.
-- [ ] Run performance advisors on both projects, triage
-- [ ] Add to the recurring schedule (Todoist)
+- [x] **Run performance advisors on both projects, triage — DONE 2026-08-20.**
+      First-ever performance run. 49 findings on production: 8 WARN, 41 INFO.
+      Triage below; the two zero-risk wins are already fixed (migration 0059).
+- [x] **Security re-run after 0058 — both environments ERROR-free.** Production
+      80 WARN / 28 INFO, staging 1 WARN / 28 INFO, **zero ERROR on either**. The
+      0058 DDL introduced nothing, and THREAT-061 stays fixed.
+- [x] **Add to the recurring schedule (Todoist) — already existed; now updated.**
+      "Run Supabase security + performance advisors on both projects" (monthly, p1,
+      id `6hJ7fQHwGHg45rx4`). Extended 2026-08-20 with a **numeric baseline**
+      (security: 0 ERROR both envs, prod 80 WARN / 28 INFO, staging 1 WARN / 28 INFO;
+      performance: 8 WARN / 41 INFO) so a future run can tell "same as always" from
+      "something new landed" at a glance, plus the full accepted-findings list from
+      this triage and the still-open `auth_rls_initplan` work.
+
+      **Verification note:** searching Todoist for this task by keyword initially
+      returned nothing, which nearly led to recording §9's claims as false. The
+      search returns partial results with an unreliable `totalCount`. Confirm a task
+      is absent by more than one query before concluding it was never created.
+
+### Performance triage (production, 2026-08-20)
+
+**Fixed — migration 0059, applied to both environments**
+
+Two pairs of *byte-identical* indexes. Verified via `pg_indexes` before dropping,
+and verified afterwards that exactly one of each survives:
+
+| Table | Dropped | Kept |
+|---|---|---|
+| `instructor_payout_items` | `instructor_payout_items_batch_idx` | `idx_instructor_payout_items_batch_id` |
+| `processed_webhook_events` | `processed_webhook_events_received_idx` | `idx_webhook_events_received_at` |
+
+A duplicate index is pure cost — double write amplification on every insert, extra
+storage, and the planner only ever uses one. Dropping one is functionally a no-op,
+which makes this the safest class of schema change there is.
+
+**Worth doing, but as its own reviewed change — 5 × `auth_rls_initplan` (WARN)**
+
+`profiles` (3 policies: `profiles_auth_read_own`, `profiles_anon_insert_own`,
+`profiles_auth_update_own`), `bookings` (`bookings_auth_read_own`), `orders`
+(`orders_auth_read_own`) each re-evaluate `auth.<function>()` **per row**. The fix
+is mechanical — wrap as `(select auth.uid())` so it evaluates once — and the gain
+grows with table size.
+
+Deliberately **not** bundled into 0059. These are live access-control policies on
+customer data; a typo does not degrade performance, it changes who can read what.
+That is the THREAT-061 failure class. It deserves its own migration, its own review,
+and a verification query per policy.
+
+**Deliberately not acting — 25 × `unused_index` (INFO)**
+
+"Never used" is being reported for indexes on tables created days ago —
+`cron_run_log` (0057, one day old), `team_bookings` and `bookings_team_booking_id_idx`
+(0055, three days). Index usage counters measure observed traffic, so on a young
+index the statistic reflects its *age*, not its usefulness. Dropping on this
+evidence would be acting on a number that has not had time to mean anything.
+Revisit after a few weeks of real traffic, and only for indexes on mature tables.
+
+**Deliberately not acting — 16 × `unindexed_foreign_keys` (INFO)**
+
+Real, but low-value at current volume: these cost on cascading deletes and joins,
+and adding sixteen indexes carries its own write penalty. Reassess if any of these
+tables grows or a slow query appears.
+
+**Noted, not a finding — a near-duplicate the advisor correctly ignored**
+
+`instructor_payout_items` also carries `idx_instructor_payout_items_instructor_id`
+`(instructor_id)` alongside `instructor_payout_items_instructor_idx`
+`(instructor_id, status)`. Not identical, so not flagged — but the composite covers
+the single-column one as a leading-column prefix, so the narrow index is arguably
+redundant. Left alone: it is smaller and marginally faster for pure `instructor_id`
+lookups, and the call is genuinely close. Checked rather than assumed.
+
+**Environment parity note**
+
+Production reports 78 `pg_graphql_*_table_exposed` warnings; staging reports none,
+despite an equivalent schema. Same root cause as the 26-table anon-grant item
+already deferred to Todoist (default `public` grants), surfaced through the GraphQL
+endpoint instead of PostgREST. The prod/staging asymmetry is unexplained and worth
+a look when that deferred item is picked up.
 
 ### Remaining findings — triaged, not yet actioned
 
@@ -533,9 +699,30 @@ roster_records, social_feed_cache`.
       counterpart to the §6 rule, listing the still-open gaps.
 - [x] **Added: third-party credential liveness** (weekly, p1) — closes §5's
       "nothing watches any of them".
-- [ ] Retire or downgrade any remaining task the automation has made redundant
-      (the daily payout-batch check is still valid: nothing yet watches batches
-      stuck in `assumed_complete`)
+- [x] **Retire or downgrade tasks the automation made redundant — DONE 2026-08-20.**
+
+      **Rewritten + downgraded p1 → p3: "Verify third-party credentials and tokens
+      are still live"** (weekly, Mon 12:00). Migration 0058's `probe-credentials`
+      job runs at exactly that slot and does exactly that work, so the task was
+      fully redundant. Retitled *"Confirm the credential probe is running and its
+      findings are being acted on"* — the same shift from *doing the check* to
+      *checking the checker* that §9 applied to the cron task. Its three remaining
+      human steps: did the probe run, was a failing result acted on or filtered,
+      and does the probe list still cover every credential the app uses.
+
+      Also corrected four stale claims inside it: the Facebook token does **not**
+      expire on a ~60-day timer, `PAYPAL_PAYOUTS_WEBHOOK_ID` **is** set,
+      `TURNSTILE_SECRET_KEY` was unset entirely (THREAT-062), and
+      `GOOGLE_PLACES_API_KEY` is dead.
+
+      **Updated, not retired: "Check email deliverability (SPF/DKIM/DMARC)"**
+      (bi-yearly). The probe checks Resend's *API key and domain-verified status*;
+      it does not check DNS. Complementary, not redundant — Resend can report
+      "verified" while the DNS underneath has drifted. Loaded the task with the
+      audited state and four concrete actions, chiefly the missing SPF record.
+
+      **Left alone deliberately:** the daily payout-batch check still earns its
+      place — nothing automated watches batches stuck in `assumed_complete`.
 
 **The deeper fix** is §1's CLAUDE.md rule plus the quarterly map review. The plan
 drifted because shipping a feature had no step that touched it; now it does.
