@@ -15,22 +15,11 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { Resend } from "resend";
 import { certReminderEmail } from "@/lib/emails";
-import { withCronHeartbeat } from "@/lib/cron-heartbeat";
+import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /** Reminder milestones, in days-before-expiry, nearest-to-expiry first. */
 const MILESTONES_ASC = [7, 30, 60, 90] as const;
 
-/**
- * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
- * @param request - Incoming HTTP request.
- * @returns true when the header is valid, false otherwise.
- */
-function isCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = request.headers.get("Authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
 
 /**
  * Returns the milestone (90/60/30/7) a cert has currently reached — the

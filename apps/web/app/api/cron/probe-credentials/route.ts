@@ -25,7 +25,7 @@
 import { NextResponse } from "next/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
 import { getSetting } from "@/lib/zoho";
-import { withCronHeartbeat } from "@/lib/cron-heartbeat";
+import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 import { runCredentialProbes, summarizeProbes } from "@/lib/credential-probes";
 import { notifyCredentialProblems } from "@/lib/credential-notify";
 
@@ -37,10 +37,11 @@ import { notifyCredentialProblems } from "@/lib/credential-notify";
  * @returns true when the caller is authorized.
  */
 async function isAuthorized(req: Request): Promise<boolean> {
-  // Cron path first — avoids a DB round trip for scheduled invocations.
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.get("authorization");
-  if (cronSecret && authHeader === `Bearer ${cronSecret}`) return true;
+  // Cron path first — avoids a DB round trip for scheduled invocations. Uses the
+  // shared helper so this route and withCronHeartbeat cannot disagree about what
+  // counts as a cron call; a divergence there would mean the heartbeat silently
+  // stops recording while the route keeps working.
+  if (isCronRequest(req)) return true;
 
   try {
     const actor = await getAdminActor();

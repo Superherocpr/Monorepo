@@ -22,7 +22,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { submitReservedPayout } from "@/lib/payout-submit";
 import type { ReservedPayoutResult } from "@/types/payouts";
-import { withCronHeartbeat } from "@/lib/cron-heartbeat";
+import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /**
  * Returns the current super admin's profile id or a Response when unauthorized.
@@ -36,17 +36,6 @@ async function requireSuperAdmin(): Promise<string | Response> {
   return actor.user.id;
 }
 
-/**
- * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
- * @param request - Incoming HTTP request.
- * @returns true when the header is valid, false otherwise.
- */
-function isCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = request.headers.get("Authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
 
 /**
  * Finds the UUID of any active super_admin to use as the actor for system-triggered payouts.

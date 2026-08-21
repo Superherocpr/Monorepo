@@ -28,22 +28,11 @@ import {
   unclaimedOpportunityEscalationEmail,
   type UnclaimedOpportunitySummary,
 } from "@/lib/emails";
-import { withCronHeartbeat } from "@/lib/cron-heartbeat";
+import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /** The Eastern-time hours (0–23) this job should actually run at. */
 const TARGET_EASTERN_HOURS = new Set([0, 9, 12, 15, 18, 21]);
 
-/**
- * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
- * @param request - Incoming HTTP request.
- * @returns true when the header is valid, false otherwise.
- */
-function isCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = request.headers.get("Authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
 
 /**
  * Whether the current moment falls on one of TARGET_EASTERN_HOURS in

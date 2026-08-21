@@ -19,7 +19,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
 import { fetchFacebookPhotoPosts } from "@/lib/facebook";
-import { withCronHeartbeat } from "@/lib/cron-heartbeat";
+import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /**
  * Verifies the request comes from either an authenticated super_admin or the
@@ -29,10 +29,10 @@ import { withCronHeartbeat } from "@/lib/cron-heartbeat";
  * @returns true if the caller is authorized
  */
 async function isAuthorized(req: Request): Promise<boolean> {
-  // Cron path — checked first to avoid a DB round-trip for scheduled calls
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.get("authorization");
-  if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
+  // Cron path — checked first to avoid a DB round-trip for scheduled calls.
+  // Uses the shared helper so this route and withCronHeartbeat cannot disagree
+  // about what counts as a cron call.
+  if (isCronRequest(req)) {
     return true;
   }
 

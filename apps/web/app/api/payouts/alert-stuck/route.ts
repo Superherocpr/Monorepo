@@ -15,7 +15,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { notifyPayoutIssuesDigest } from "@/lib/payout-notify";
-import { withCronHeartbeat } from "@/lib/cron-heartbeat";
+import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /** Batches older than this since their last alert are re-alerted. */
 const RE_ALERT_AFTER_HOURS = 18;
@@ -23,17 +23,6 @@ const RE_ALERT_AFTER_HOURS = 18;
 /** Statuses considered unresolved and worth alerting on. */
 const STUCK_STATUSES = ["needs_review", "denied", "failed"];
 
-/**
- * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
- * @param request - Incoming HTTP request.
- * @returns true when the header is valid, false otherwise.
- */
-function isCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = request.headers.get("Authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
 
 /**
  * Sweeps for unresolved payout batches and emails super_admins a digest.
