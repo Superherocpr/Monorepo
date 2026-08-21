@@ -2930,7 +2930,16 @@ export function dailySummaryEmail({
   //   healthy      — checks ran, nothing breached
   //   breached     — checks ran, something is wrong
   //   did not run  — zero checks came back, which is NOT the same as "all clear"
-  // Rendered first so a breach is above the fold rather than buried under revenue.
+  //
+  // Rendered LAST, under a "System checks" heading, not at the top. This digest
+  // goes to every super_admin and manager, and the owner's call (2026-08-20) was
+  // that most recipients do not know what these mean, so leading with them buries
+  // the business numbers they actually opened the email for.
+  //
+  // The tradeoff is real and accepted: a breach is now below the fold. It is not
+  // silent — the banner still renders in red, criticals still console.error, and a
+  // credential or cron failure escalates independently through the probe alert
+  // email and cron_health(). This email is the summary, not the alarm.
   const healthRows = health.breached
     .map((b) => {
       const colour = b.severity === "critical" ? "#dc2626" : "#d97706";
@@ -3218,9 +3227,6 @@ export function dailySummaryEmail({
         </tr>
       </table>
 
-      ${healthSection}
-      ${cronSection}
-
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px 0;" />
 
       <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 12px 0;">Yesterday&rsquo;s Revenue</h2>
@@ -3263,6 +3269,13 @@ export function dailySummaryEmail({
           </td>
         </tr>
       </table>
+
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 16px 0;" />
+
+      <p style="font-size:12px;font-weight:700;color:#6b7280;margin:0 0 10px 0;text-transform:uppercase;letter-spacing:0.5px;">System checks</p>
+      <p style="font-size:12px;color:#9ca3af;margin:0 0 12px 0;line-height:1.5;">Automated technical monitoring. Nothing here needs action from most admins &mdash; if something is wrong it will say so plainly.</p>
+      ${healthSection}
+      ${cronSection}
     `),
   };
 }
