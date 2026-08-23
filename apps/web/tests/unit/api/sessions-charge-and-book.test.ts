@@ -66,6 +66,20 @@ vi.mock("@/lib/instructor-earnings", () => ({
   recordBookingEarning: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Off by default so all pre-existing tests exercise the real capture path
+// unmodified; mock-mode tests below override this per-test and the global
+// beforeEach resets it back to false.
+vi.mock("@/lib/mock-payments", () => ({
+  isMockPaymentsEnabled: vi.fn().mockReturnValue(false),
+  createMockOrderId: vi.fn(() => "MOCK-ORDER-test"),
+  mockCaptureOutcome: vi.fn((amount: number) => ({
+    settled: true,
+    captureId: "MOCK-CAPTURE-test",
+    capturedAmount: amount,
+    fees: { grossAmount: null, paypalFee: null, netAmount: null },
+  })),
+}));
+
 vi.mock("@/lib/payout-trigger", () => ({
   maybeTriggerImmediatePayout: vi.fn().mockResolvedValue(undefined),
 }));
@@ -85,6 +99,7 @@ vi.mock("resend", () => ({
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
+import { isMockPaymentsEnabled } from "@/lib/mock-payments";
 // Not mocked: class times are floating wall-clock values since migration 0060,
 // so the route compares ends_at against floatingNow() rather than a real
 // instant. Fixtures are built in that same space — offsetting from real
@@ -240,6 +255,10 @@ describe("POST /api/sessions/[id]/charge-and-book", () => {
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     mockActor();
+    // clearAllMocks() clears call history but not a factory-level
+    // mockReturnValue, so this is reasserted explicitly each test rather than
+    // relying on that behavior — mock-mode tests override it after this runs.
+    (isMockPaymentsEnabled as ReturnType<typeof vi.fn>).mockReturnValue(false);
   });
 
   test("returns 400 when the PayPal order id is missing", async () => {
@@ -516,5 +535,85 @@ describe("POST /api/sessions/[id]/charge-and-book", () => {
         manual_booking_reason: expect.stringContaining("list price $75.00"),
       })
     );
+  });
+
+  describe("MOCK_PAYMENTS active (staging PayPal bypass — see lib/mock-payments.ts)", () => {
+    beforeEach(() => {
+      (isMockPaymentsEnabled as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    });
+
+    test("books the student without ever calling PayPal", async () => {
+      const { rpc } = mockAdminClient();
+
+      const res = await POST(makeRequest(baseBody), params());
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.mock).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(rpc).toHaveBeenCalledWith(
+        "book_spot",
+        expect.objectContaining({ p_booking_source: "manual" })
+      );
+    });
+
+    test("never creates an instructor earning — a mock charge must not enter the real payout pipeline", async () => {
+      mockAdminClient();
+
+      await POST(makeRequest(baseBody), params());
+
+      expect(recordBookingEarning).not.toHaveBeenCalled();
+    });
+
+    test("still enforces the pre-capture guards — a full class is rejected with zero PayPal calls", async () => {
+      const { rpc } = mockAdminClient({ bookedCount: 10 });
+
+      const res = await POST(makeRequest(baseBody), params());
+
+      expect(res.status).toBe(409);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(rpc).not.toHaveBeenCalled();
+      expect(recordBookingEarning).not.toHaveBeenCalled();
+    });
+
+    test("on a book_spot failure, does not attempt a refund against the fabricated capture id", async () => {
+      mockAdminClient({
+        bookSpotResult: { data: null, error: { message: "session_full" } },
+      });
+
+      const res = await POST(makeRequest(baseBody), params());
+
+      expect(res.status).toBe(409);
+      // A real refundCapture() would call fetch — zero calls proves the
+      // route never tried to reverse a charge that was never real.
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(recordBookingEarning).not.toHaveBeenCalled();
+    });
+
+    test("marks the booking reason and payment routing note as a mock payment", async () => {
+      const { from } = mockAdminClient();
+
+      await POST(makeRequest(baseBody), params());
+
+      const stamped = from.mock.results
+        .map((r) => r.value as Record<string, ReturnType<typeof vi.fn>>)
+        .find((c) => c.update?.mock.calls.length);
+      expect(stamped?.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          manual_booking_reason: expect.stringContaining("[MOCK PAYMENT"),
+        })
+      );
+
+      const paymentInsert = from.mock.results
+        .map((r) => r.value as Record<string, ReturnType<typeof vi.fn>>)
+        .find((c) => c.insert?.mock.calls.length);
+      expect(paymentInsert?.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          routing_note: expect.stringContaining("[MOCK PAYMENT"),
+          paypal_transaction_id: expect.stringContaining("MOCK-"),
+        })
+      );
+    });
   });
 });

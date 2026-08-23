@@ -35,6 +35,7 @@ import {
 } from "@/app/(admin)/admin/sessions/[id]/actions";
 import { PayPalProvider } from "@paypal/react-paypal-js/sdk-v6";
 import { CardPaymentSection } from "@/app/_components/PayPalCardPaymentSection";
+import { MockCardPaymentSection } from "@/app/_components/MockCardPaymentSection";
 
 // ─── Exported types (imported by the server component) ────────────────────────
 
@@ -515,6 +516,13 @@ export default function SessionDetailClient({
   const [paypalClientToken, setPaypalClientToken] = useState<string | undefined>(undefined);
   const [paypalClientTokenError, setPaypalClientTokenError] = useState(false);
   const [isLoadingPayPalClientToken, setIsLoadingPayPalClientToken] = useState(false);
+  /**
+   * Whether staging's PayPal bypass is active (see lib/mock-payments.ts).
+   * `null` means not yet checked — the real client-token fetch below waits
+   * for an explicit `false` so mock mode is never raced by a real PayPal
+   * network call before this resolves.
+   */
+  const [mockPaymentsEnabled, setMockPaymentsEnabled] = useState<boolean | null>(null);
   const [chargeAmount, setChargeAmount] = useState("");
   const [chargeDescription, setChargeDescription] = useState("");
   const [chargeNotes, setChargeNotes] = useState("");
@@ -972,7 +980,38 @@ export default function SessionDetailClient({
   }
 
   useEffect(() => {
-    if (!showAddStudentModal || paypalClientToken || paypalClientTokenError) return;
+    if (!showAddStudentModal) return;
+
+    let cancelled = false;
+    fetch("/api/paypal/mock-status")
+      .then((res) => (res.ok ? res.json() : { mock: false }))
+      .then((data: { mock?: boolean }) => {
+        if (!cancelled) setMockPaymentsEnabled(!!data.mock);
+      })
+      .catch((err: unknown) => {
+        // Fail toward the real PayPal UI, never toward the mock stub — an
+        // unreachable status check must not accidentally hide a real charge.
+        console.error("[admin/session] Mock-payments status check failed:", err);
+        if (!cancelled) setMockPaymentsEnabled(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showAddStudentModal]);
+
+  useEffect(() => {
+    // Waits for an explicit `false` (not just falsy `null`) so this can never
+    // fire a real PayPal network call before the mock-status check above has
+    // actually resolved — see mockPaymentsEnabled's declaration.
+    if (
+      !showAddStudentModal ||
+      mockPaymentsEnabled !== false ||
+      paypalClientToken ||
+      paypalClientTokenError
+    ) {
+      return;
+    }
 
     let cancelled = false;
     setIsLoadingPayPalClientToken(true);
@@ -1001,7 +1040,7 @@ export default function SessionDetailClient({
     return () => {
       cancelled = true;
     };
-  }, [showAddStudentModal, paypalClientToken, paypalClientTokenError]);
+  }, [showAddStudentModal, mockPaymentsEnabled, paypalClientToken, paypalClientTokenError]);
 
   const paypalEnvironment =
     process.env.NEXT_PUBLIC_PAYPAL_ENV === "production" ? "production" : "sandbox";
@@ -1086,11 +1125,13 @@ export default function SessionDetailClient({
         return;
       }
 
+      const mockSuffix = result.mock ? " (mock — no real charge was made)" : "";
+
       if (canAddWithoutCharging) {
-        setChargeSuccessMessage("Charge recorded successfully.");
+        setChargeSuccessMessage(`Charge recorded successfully.${mockSuffix}`);
       } else {
         setChargeSuccessMessage(
-          `Charged ${selectedCustomer.first_name} ${selectedCustomer.last_name} and added them to the class.`
+          `Charged ${selectedCustomer.first_name} ${selectedCustomer.last_name} and added them to the class.${mockSuffix}`
         );
         // Surface the new student in the roster behind the modal.
         router.refresh();
@@ -1697,7 +1738,7 @@ export default function SessionDetailClient({
                       }}
                       className="text-xs font-medium text-red-600 hover:text-red-700"
                     >
-                      {showNewCustomerForm ? "Cancel new student" : "+ New student"}
+                      {showNewCustomerForm ? "Cancel new customer" : "+ New Customer"}
                     </button>
                   </div>
                   <input
@@ -1940,11 +1981,22 @@ export default function SessionDetailClient({
                 </p>
 
                 <div className="space-y-3">
-                  {paypalClientTokenError ? (
+                  {mockPaymentsEnabled === true ? (
+                    <MockCardPaymentSection
+                      onCreateOrder={handleCreateManualChargeOrder}
+                      onApprove={handleManualChargeApprove}
+                      onError={handleChargeError}
+                      amount={Number(chargeAmount) || 0}
+                      disabled={!selectedCustomer || isProcessingCharge}
+                    />
+                  ) : paypalClientTokenError ? (
                     <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-                      Card payment could not be initialized right now. You can still add the student without charging their card.
+                      Card payment could not be initialized right now.
+                      {canAddWithoutCharging
+                        ? " You can still add the student without charging their card."
+                        : " Close this dialog and try again."}
                     </div>
-                  ) : !paypalClientToken || isLoadingPayPalClientToken ? (
+                  ) : mockPaymentsEnabled === null || !paypalClientToken || isLoadingPayPalClientToken ? (
                     <div className="rounded-md bg-white border border-gray-200 p-4 text-sm text-gray-500">
                       Loading card fields…
                     </div>
@@ -2834,6 +2886,7 @@ export default function SessionDetailClient({
                       setChargeSuccessMessage(null);
                       setPaypalClientToken(undefined);
                       setPaypalClientTokenError(false);
+                      setMockPaymentsEnabled(null);
                       setShowNewCustomerForm(false);
                       setNewCustomerForm(EMPTY_NEW_CUSTOMER_FORM);
                       setNewCustomerError(null);

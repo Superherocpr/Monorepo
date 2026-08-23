@@ -15,8 +15,10 @@ import {
   getPayPalApiBase,
   evaluateCaptureOutcome,
   classifyCaptureRequestError,
+  type CaptureOutcome,
 } from "@/lib/paypal";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
+import { isMockPaymentsEnabled, mockCaptureOutcome } from "@/lib/mock-payments";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -85,43 +87,57 @@ export async function POST(request: Request) {
   const classType = Array.isArray(classTypeJoin) ? classTypeJoin[0] : classTypeJoin;
   const className = classType?.name?.trim() || "CPR Class";
 
-  const accessToken = await getPayPalAccessToken();
-  const captureResponse = await fetch(
-    `${getPayPalApiBase()}/v2/checkout/orders/${encodeURIComponent(paypalOrderId)}/capture`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
+  // See lib/mock-payments.ts. When active, no PayPal call happens at all —
+  // the rest of this route runs unmodified against a synthesized outcome.
+  const mockMode = isMockPaymentsEnabled();
+  let outcome: CaptureOutcome;
 
-  if (!captureResponse.ok) {
-    const errorText = await captureResponse.text().catch(() => "Unknown capture error");
-    console.error("[capture-manual-charge] PayPal capture failed:", errorText);
-
-    // See classifyCaptureRequestError in lib/paypal.ts — PayPal rejects a
-    // declined card at the HTTP level too (422 PAYMENT_DENIED), a separate
-    // failure shape from the DECLINED-in-body case evaluateCaptureOutcome
-    // handles below.
-    const { declined } = classifyCaptureRequestError(errorText);
-    if (declined) {
-      return Response.json(
-        {
-          success: false,
-          declined: true,
-          error: "The card was declined and no payment was taken. Please try another card.",
+  if (mockMode) {
+    console.log("[capture-manual-charge] MOCK PAYMENTS active — synthesizing a settled capture", {
+      sessionId,
+      customerId,
+      amount: parsedAmount,
+    });
+    outcome = mockCaptureOutcome(parsedAmount);
+  } else {
+    const accessToken = await getPayPalAccessToken();
+    const captureResponse = await fetch(
+      `${getPayPalApiBase()}/v2/checkout/orders/${encodeURIComponent(paypalOrderId)}/capture`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
         },
-        { status: 402 }
-      );
+      }
+    );
+
+    if (!captureResponse.ok) {
+      const errorText = await captureResponse.text().catch(() => "Unknown capture error");
+      console.error("[capture-manual-charge] PayPal capture failed:", errorText);
+
+      // See classifyCaptureRequestError in lib/paypal.ts — PayPal rejects a
+      // declined card at the HTTP level too (422 PAYMENT_DENIED), a separate
+      // failure shape from the DECLINED-in-body case evaluateCaptureOutcome
+      // handles below.
+      const { declined } = classifyCaptureRequestError(errorText);
+      if (declined) {
+        return Response.json(
+          {
+            success: false,
+            declined: true,
+            error: "The card was declined and no payment was taken. Please try another card.",
+          },
+          { status: 402 }
+        );
+      }
+
+      return Response.json({ success: false, error: "Payment capture failed." }, { status: 502 });
     }
 
-    return Response.json({ success: false, error: "Payment capture failed." }, { status: 502 });
+    const captureData = await captureResponse.json();
+    outcome = evaluateCaptureOutcome(captureData);
   }
-
-  const captureData = await captureResponse.json();
-  const outcome = evaluateCaptureOutcome(captureData);
 
   if (!outcome.settled) {
     console.error("[capture-manual-charge] Capture did not settle:", {
@@ -183,7 +199,10 @@ export async function POST(request: Request) {
     .maybeSingle();
   const linkedBookingId = (existingBooking as { id: string } | null)?.id ?? null;
 
-  const routingNote = `Manual register charge — ${descriptionText} (session: ${className})`;
+  const baseRoutingNote = `Manual register charge — ${descriptionText} (session: ${className})`;
+  const routingNote = mockMode
+    ? `[MOCK PAYMENT — staging test, no funds moved] ${baseRoutingNote}`
+    : baseRoutingNote;
   const { data: paymentRow, error: paymentInsertError } = await adminClient
     .from("payments")
     .insert({
@@ -210,21 +229,29 @@ export async function POST(request: Request) {
   // Same accounting path as a normal online booking (recordBookingEarning),
   // just without a bookingId when "Add Student" was never clicked — see the
   // comment on BookingEarningParams.bookingId for why that's intentional.
-  await recordBookingEarning(adminClient, {
-    instructorId,
-    bookingId: linkedBookingId,
-    paymentId: (paymentRow as { id?: string } | null)?.id ?? null,
-    grossAmount: recordedAmount,
-    note: routingNote,
-  }).catch((err: unknown) => {
-    console.error("[capture-manual-charge] CRITICAL: instructor earning insert failed", {
-      sessionId,
+  //
+  // Skipped entirely in mock mode: see lib/mock-payments.ts — staging's
+  // scheduled payout cron would eventually submit any unbatched earning row
+  // to real PayPal Payouts, and a mock charge has no real money behind it.
+  if (mockMode) {
+    console.log("[capture-manual-charge] MOCK PAYMENTS — skipping instructor earning (would risk a real payout for a fabricated charge)");
+  } else {
+    await recordBookingEarning(adminClient, {
       instructorId,
-      paypalTransactionId,
-      amount: recordedAmount,
-      error: err,
+      bookingId: linkedBookingId,
+      paymentId: (paymentRow as { id?: string } | null)?.id ?? null,
+      grossAmount: recordedAmount,
+      note: routingNote,
+    }).catch((err: unknown) => {
+      console.error("[capture-manual-charge] CRITICAL: instructor earning insert failed", {
+        sessionId,
+        instructorId,
+        paypalTransactionId,
+        amount: recordedAmount,
+        error: err,
+      });
     });
-  });
+  }
 
-  return Response.json({ success: true });
+  return Response.json({ success: true, mock: mockMode });
 }

@@ -70,7 +70,26 @@ clone — so this file is the one that travels with the repo.
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
 | **Team bookings** (0055) | ✅ | — | — | **✗** | ✅ | — | Admin surface still missing, but now has an invariant — see below |
-| **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 20 unit tests on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
+| **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
+
+### Staging mock payments — a narrower fix for a bigger discovery
+
+While verifying whether this feature was safe to test on staging, found that
+**staging runs every payment surface against the live PayPal merchant account**
+(`PAYPAL_API_BASE` and `NEXT_PUBLIC_PAYPAL_ENV` are Amplify APP-level, not
+branch-level, so `staging` inherits the same live credentials as `main`). See
+THREAT-065 in threats.md for the full writeup.
+
+Shipped 2026-08-23, scoped to exactly what was asked: `lib/mock-payments.ts`
+bypasses PayPal for the Add Student modal only (charge-and-book,
+capture-manual-charge, create-manual-charge-order), gated on three independent
+conditions so a single misconfigured env var can't fabricate a charge. It
+deliberately never creates an `instructor_earnings` row — staging's payout
+cron runs on a schedule regardless of trigger mode, and a mock earning would
+eventually pay real money to a real PayPal account. Every other payment
+surface (booking checkout, merch, team signups, invoices) is untouched and
+still charges real cards on staging. Widening this is tracked in the Todoist
+maintenance backlog as a deliberately deferred follow-up, not an oversight.
 
 ### Instructor charge-and-book — the guarantee is invisible, so it has an invariant
 

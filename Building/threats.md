@@ -917,3 +917,66 @@ search term before interpolation.
 
 **Watch for:** a spike in `profiles` rows with `role = 'customer'` and no booking
 would indicate abuse of (2). No check exists for that today.
+
+---
+
+## THREAT-065 — Staging site runs every payment surface against the live PayPal merchant account
+
+**Severity:** 8/10 (high) — operational/financial, not attacker-driven
+**File:** Amplify app `dzmna7ztg21it` env vars (not application code)
+**Date:** 2026-08-23
+**Status:** PARTIALLY MITIGATED — Add Student modal only; see below
+
+**Description:** `PAYPAL_API_BASE` (`https://api-m.paypal.com`) and
+`NEXT_PUBLIC_PAYPAL_ENV` (`production`) are set at the Amplify APP level, not
+per-branch. Since only the `main` branch overrides a handful of other vars
+(base URL, Supabase project) and neither of these two, both `main` (production)
+and `staging` inherit the same live PayPal credentials — same merchant account,
+same real money. Every payment surface on staging — booking checkout
+(/book/payment), merch checkout, team-booking signups, and the admin manual
+charge register/modal — has been charging real cards through the real business
+account since the app was created. This is not a code vulnerability; it is an
+environment configuration that never distinguished "staging" from "production"
+for money movement.
+
+**Discovered while:** verifying deployed config (per
+[[feedback_verify_deployed_config]]) before answering whether the new
+instructor "Add Student → Charge" flow could be tested without moving real
+money — it could not, and neither could anything else on staging.
+
+**Mitigation shipped this session — scoped narrowly:** `lib/mock-payments.ts`
+adds a staging-only bypass wired into ONLY the three routes behind the Add
+Student modal (`charge-and-book`, `capture-manual-charge`,
+`create-manual-charge-order`) plus a `mock-status` check the modal's client
+uses to render a stub charge button instead of loading the real PayPal SDK.
+Booking checkout, merch, team signups, and invoices are UNCHANGED and still
+hit live PayPal on staging.
+
+Activation requires three independent conditions (see the file header for the
+full reasoning): `MOCK_PAYMENTS=true` set on the `staging` BRANCH specifically
+(never the app level — that inheritance is the root cause of this very
+threat), plus `NEXT_PUBLIC_BASE_URL` and `NEXT_PUBLIC_SUPABASE_URL` both not
+matching their hard-coded production literals. Absence of the flag is the
+production default and changes nothing.
+
+The mock path deliberately never creates an `instructor_earnings` row.
+Staging's `payout_trigger` system_setting is `"scheduled"` (confirmed live via
+`execute_sql` 2026-08-23): a cron submits any unbatched earning to real PayPal
+Payouts on its own timer, independent of how the earning was created. A mock
+earning would eventually pay real money to a real PayPal account for a charge
+that never happened — there is no later point to gate that on, so the row is
+simply never written. Confirmation/notification emails are skipped in mock
+mode for the same class of reason: Resend on staging is the same real account.
+
+**Not fixed further because:** the user explicitly scoped the fix to the Add
+Student modal only, with the wider fix deliberately deferred — see the
+Todoist maintenance backlog task filed the same day. The two real remaining
+options for the rest of the site are (a) point `PAYPAL_API_BASE` /
+`NEXT_PUBLIC_PAYPAL_CLIENT_ID` / `NEXT_PUBLIC_PAYPAL_ENV` at a real PayPal
+sandbox app on the `staging` branch specifically, or (b) extend the same mock
+module into `bookings/confirm`, `orders/confirm` (merch), and
+`team-bookings/[token]/signup`.
+
+**Until the wider fix ships:** every OTHER payment surface on staging still
+charges real cards. Anyone testing booking checkout, merch, or team signups on
+staging is moving real money through the real business account.

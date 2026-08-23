@@ -28,6 +28,7 @@ import {
   evaluateCaptureOutcome,
   classifyCaptureRequestError,
   refundCapture,
+  type CaptureOutcome,
 } from "@/lib/paypal";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
 import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
@@ -37,6 +38,7 @@ import { logPaymentFailure, describeBookSpotFailure } from "@/lib/payment-failur
 import { floatingNow } from "@/lib/business-time";
 import { Resend } from "resend";
 import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
+import { isMockPaymentsEnabled, mockCaptureOutcome } from "@/lib/mock-payments";
 
 /** Acceptable rounding tolerance when comparing captured and submitted amounts. */
 const AMOUNT_TOLERANCE = 0.01;
@@ -231,55 +233,70 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
   const listPrice = pricing.found ? pricing.basePrice : null;
 
   // ── Capture the card ──────────────────────────────────────────────────────
-  const accessToken = await getPayPalAccessToken();
-  const captureResponse = await fetch(
-    `${getPayPalApiBase()}/v2/checkout/orders/${encodeURIComponent(paypalOrderId)}/capture`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
+  // See lib/mock-payments.ts. When active, no PayPal call happens at all and
+  // no PayPal SDK ever loaded on the client either — the rest of this route
+  // runs unmodified against a synthesized settled outcome.
+  const mockMode = isMockPaymentsEnabled();
+  let outcome: CaptureOutcome;
 
-  if (!captureResponse.ok) {
-    const errorText = await captureResponse.text().catch(() => "Unknown capture error");
-    console.error("[charge-and-book] PayPal capture failed:", errorText);
-
-    // PayPal rejects a declined card at the HTTP level (422 PAYMENT_DENIED) as
-    // well as via a 2xx capture with status DECLINED — both have to be handled.
-    const { declined, issue } = classifyCaptureRequestError(errorText);
-
-    await logPaymentFailure(
-      supabase,
+  if (mockMode) {
+    console.log("[charge-and-book] MOCK PAYMENTS active — synthesizing a settled capture", {
+      sessionId,
+      customerId,
+      amount: parsedAmount,
+    });
+    outcome = mockCaptureOutcome(parsedAmount);
+  } else {
+    const accessToken = await getPayPalAccessToken();
+    const captureResponse = await fetch(
+      `${getPayPalApiBase()}/v2/checkout/orders/${encodeURIComponent(paypalOrderId)}/capture`,
       {
-        customerId,
-        amount: parsedAmount,
-        // No capture exists — the order id keeps the attempt traceable in PayPal.
-        paypalTransactionId: paypalOrderId,
-        notes: declined
-          ? `Card declined on manual charge: ${issue ?? "unspecified"}`
-          : `Manual charge capture failed (HTTP ${captureResponse.status})`,
-      },
-      "charge-and-book"
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
     );
 
-    if (declined) {
-      return Response.json(
+    if (!captureResponse.ok) {
+      const errorText = await captureResponse.text().catch(() => "Unknown capture error");
+      console.error("[charge-and-book] PayPal capture failed:", errorText);
+
+      // PayPal rejects a declined card at the HTTP level (422 PAYMENT_DENIED) as
+      // well as via a 2xx capture with status DECLINED — both have to be handled.
+      const { declined, issue } = classifyCaptureRequestError(errorText);
+
+      await logPaymentFailure(
+        supabase,
         {
-          success: false,
-          declined: true,
-          error: "The card was declined and no payment was taken. The student was NOT added.",
+          customerId,
+          amount: parsedAmount,
+          // No capture exists — the order id keeps the attempt traceable in PayPal.
+          paypalTransactionId: paypalOrderId,
+          notes: declined
+            ? `Card declined on manual charge: ${issue ?? "unspecified"}`
+            : `Manual charge capture failed (HTTP ${captureResponse.status})`,
         },
-        { status: 402 }
+        "charge-and-book"
       );
+
+      if (declined) {
+        return Response.json(
+          {
+            success: false,
+            declined: true,
+            error: "The card was declined and no payment was taken. The student was NOT added.",
+          },
+          { status: 402 }
+        );
+      }
+
+      return Response.json({ success: false, error: "Payment capture failed." }, { status: 502 });
     }
 
-    return Response.json({ success: false, error: "Payment capture failed." }, { status: 502 });
+    outcome = evaluateCaptureOutcome(await captureResponse.json());
   }
-
-  const outcome = evaluateCaptureOutcome(await captureResponse.json());
 
   // Nothing below this line may run unless money actually moved. A declined
   // card still returns HTTP 201 with a full amount breakdown, so the capture
@@ -333,7 +350,11 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
       claimedAmount: parsedAmount,
     });
 
-    if (paypalTransactionId) {
+    // Unreachable in mock mode today — mockCaptureOutcome always sets
+    // capturedAmount to exactly parsedAmount — but guarded anyway so a future
+    // change to that function can't accidentally send a fabricated capture id
+    // to the real PayPal refund endpoint.
+    if (!mockMode && paypalTransactionId) {
       await refundCapture(paypalTransactionId).catch((err: unknown) =>
         console.error("[charge-and-book] Refund after amount mismatch failed:", err)
       );
@@ -371,7 +392,9 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
   if (rpcError || !bookingId) {
     const msg = rpcError?.message ?? "";
 
-    if (paypalTransactionId) {
+    // A real refund would fail against a fabricated capture id, and there is
+    // no real charge to reverse — nothing to do here in mock mode.
+    if (!mockMode && paypalTransactionId) {
       await refundCapture(paypalTransactionId).catch((err: unknown) =>
         console.error("[charge-and-book] Refund after booking failure failed:", err)
       );
@@ -421,8 +444,9 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
     listPrice !== null && Math.abs(listPrice - chargedAmount) > AMOUNT_TOLERANCE
       ? ` (list price $${listPrice.toFixed(2)})`
       : "";
+  const mockNote = mockMode ? "[MOCK PAYMENT — staging test, no funds moved] " : "";
   const reason =
-    `Added and charged $${chargedAmount.toFixed(2)}${priceNote} by ` +
+    `${mockNote}Added and charged $${chargedAmount.toFixed(2)}${priceNote} by ` +
     `${actor.profile.first_name} ${actor.profile.last_name} from the session page.`;
 
   const { error: stampError } = await supabase
@@ -439,7 +463,7 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
   }
 
   // ── Payment + instructor earning ──────────────────────────────────────────
-  const routingNote = `Manual card charge at class — ${descriptionText}${priceNote}`;
+  const routingNote = `${mockNote}Manual card charge at class — ${descriptionText}${priceNote}`;
 
   const { data: paymentRow, error: paymentInsertError } = await supabase
     .from("payments")
@@ -473,30 +497,45 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
   // Credited to the session's instructor, which is who taught the class —
   // the same rule capture-manual-charge uses, and identical for the common
   // case where the instructor charged their own student.
-  await recordBookingEarning(supabase, {
-    instructorId,
-    bookingId: bookingId as string,
-    paymentId: (paymentRow as { id?: string } | null)?.id ?? null,
-    grossAmount: chargedAmount,
-    note: routingNote,
-  }).catch((err: unknown) => {
-    console.error("[charge-and-book] CRITICAL: instructor earning insert failed", {
-      bookingId,
+  //
+  // Skipped entirely in mock mode: see lib/mock-payments.ts — staging's
+  // scheduled payout cron would eventually submit any unbatched earning row
+  // to real PayPal Payouts, and a mock charge has no real money behind it.
+  if (mockMode) {
+    console.log("[charge-and-book] MOCK PAYMENTS — skipping instructor earning (would risk a real payout for a fabricated charge)");
+  } else {
+    await recordBookingEarning(supabase, {
       instructorId,
-      paypalTransactionId,
-      amount: chargedAmount,
-      error: err,
+      bookingId: bookingId as string,
+      paymentId: (paymentRow as { id?: string } | null)?.id ?? null,
+      grossAmount: chargedAmount,
+      note: routingNote,
+    }).catch((err: unknown) => {
+      console.error("[charge-and-book] CRITICAL: instructor earning insert failed", {
+        bookingId,
+        instructorId,
+        paypalTransactionId,
+        amount: chargedAmount,
+        error: err,
+      });
     });
-  });
+  }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
   await maybeSendAssistantReminder(supabase, sessionId, baseUrl).catch((err: unknown) => {
     console.error("[charge-and-book] Assistant reminder check failed (non-fatal):", err);
   });
-  await maybeTriggerImmediatePayout(supabase);
+  // No earning was created above in mock mode, so there is nothing new for a
+  // payout trigger to pick up — skipped to avoid a pointless real HTTP call
+  // to the payout route on every test charge.
+  if (!mockMode) {
+    await maybeTriggerImmediatePayout(supabase);
+  }
 
   // ── Confirmation emails (best-effort) ─────────────────────────────────────
-  if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
+  // Skipped entirely in mock mode: Resend on staging is the same real
+  // account, and nobody should get "you were charged $75" for a test run.
+  if (!mockMode && process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
     const location = firstRelation(
       session.locations as
         | { name: string; address: string; city: string; state: string; zip: string }
@@ -589,7 +628,9 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
         console.error("[charge-and-book] Instructor notification failed:", err);
       }
     }
+  } else if (mockMode) {
+    console.log("[charge-and-book] MOCK PAYMENTS — skipping confirmation and instructor notification emails");
   }
 
-  return Response.json({ success: true, bookingId, amount: chargedAmount });
+  return Response.json({ success: true, bookingId, amount: chargedAmount, mock: mockMode });
 }

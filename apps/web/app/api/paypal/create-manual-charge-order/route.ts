@@ -16,6 +16,7 @@ import { randomUUID } from "crypto";
 import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { createAdminClient } from "@/lib/supabase/server";
+import { isMockPaymentsEnabled, createMockOrderId } from "@/lib/mock-payments";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -61,6 +62,15 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
+  }
+
+  // See lib/mock-payments.ts. All the validation and ownership checks above
+  // still ran — only the real PayPal call is skipped.
+  if (isMockPaymentsEnabled()) {
+    console.log("[create-manual-charge-order] MOCK PAYMENTS active — skipping real PayPal order creation", {
+      sessionId,
+    });
+    return NextResponse.json({ orderId: createMockOrderId(), mock: true });
   }
 
   const description =
