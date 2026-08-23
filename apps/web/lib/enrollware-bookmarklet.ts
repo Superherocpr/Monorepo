@@ -367,7 +367,7 @@ export function getBookmarkletSource(apiBase: string): string {
   function showClassPicker(classes) {
     var items = classes.map(function(c, idx) {
       var start = new Date(c.starts_at);
-      var timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      var timeStr = start.toLocaleTimeString('en-US', { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' });
       var count = c.students ? c.students.length : 0;
       var submitted = c.enrollware_submitted
         ? '<span style="color:#888;font-size:11px"> &#x2713; submitted</span>'
@@ -594,7 +594,7 @@ export function getBookmarkletSource(apiBase: string): string {
   function showClassPickerForStudents(classes) {
     var items = classes.map(function(c, idx) {
       var start = new Date(c.starts_at);
-      var timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      var timeStr = start.toLocaleTimeString('en-US', { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' });
       var count = c.students ? c.students.length : 0;
       return '<div style="border:1px solid #ddd;border-radius:4px;padding:8px;' +
              'margin-bottom:8px;cursor:pointer" ' +

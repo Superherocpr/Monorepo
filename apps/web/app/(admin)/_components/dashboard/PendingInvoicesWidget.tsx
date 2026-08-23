@@ -24,6 +24,7 @@ export interface PendingInvoice {
  */
 function formatDate(timestamp: string): string {
   return new Date(timestamp).toLocaleDateString("en-US", {
+    timeZone: "UTC", // class times are floating wall-clock values
     month: "short",
     day: "numeric",
     year: "numeric",

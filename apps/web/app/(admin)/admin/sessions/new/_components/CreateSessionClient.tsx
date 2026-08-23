@@ -17,6 +17,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AddLocationPanel, { type NewLocationResult } from "@/app/(admin)/_components/AddLocationPanel";
+import { toFloatingISO, addFloatingMinutes } from "@/lib/business-time";
 
 /** A class type option for the dropdown. */
 export interface ClassTypeOption {
@@ -129,18 +130,6 @@ interface TeamBookingCreated {
   autoApproved: boolean;
   invoiceError?: string;
   sessionId: string;
-}
-
-/**
- * Converts a local date string and time string into a UTC ISO timestamp.
- * Relies on the browser's local timezone, which is appropriate since staff
- * are always in the same timezone as the classes they schedule.
- * @param date - YYYY-MM-DD
- * @param time - HH:MM (24-hour)
- * @returns ISO 8601 string in UTC.
- */
-function toISO(date: string, time: string): string {
-  return new Date(`${date}T${time}:00`).toISOString();
 }
 
 /**
@@ -398,11 +387,10 @@ export default function CreateSessionClient({
       }
     }
 
-    // Compute starts_at / ends_at as UTC ISO strings
-    const starts_at = toISO(form.date, form.start_time);
-    const endsDate = new Date(starts_at);
-    endsDate.setMinutes(endsDate.getMinutes() + durationMin);
-    const ends_at = endsDate.toISOString();
+    // Stored as floating wall-clock time — the time entered here is the time
+    // shown everywhere, with no timezone conversion. See lib/business-time.ts.
+    const starts_at = toFloatingISO(form.date, form.start_time);
+    const ends_at = addFloatingMinutes(starts_at, durationMin);
 
     const payload: Record<string, unknown> = {
       class_type_id: form.class_type_id,

@@ -14,6 +14,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor, type AdminActor } from "@/lib/auth/effective-role";
 import { bookingCancelledEmail } from "@/lib/emails";
 import type { UserRole } from "@/types/users";
+import { floatingNow } from "@/lib/business-time";
 
 /**
  * Auth guard for these server actions. Server actions are network-invocable
@@ -124,9 +125,9 @@ export interface SessionEditFields {
   class_type_id: string;
   instructor_id: string;
   location_id: string;
-  /** UTC ISO datetime string. Client converts datetime-local (local time) to UTC before passing here. */
+  /** Floating wall-clock ISO string — the time as typed, unconverted (lib/business-time.ts). */
   starts_at: string;
-  /** UTC ISO datetime string. Client converts datetime-local (local time) to UTC before passing here. */
+  /** Floating wall-clock ISO string — the time as typed, unconverted (lib/business-time.ts). */
   ends_at: string;
   max_capacity: number;
   /** Promotional discount as a percentage (0–50). Null = no discount. */
@@ -417,7 +418,10 @@ export async function removeBookingFromSession(
       const toEmail = profile?.email ?? null;
       const firstName = profile?.first_name ?? "there";
       const className = classType?.name ?? "CPR Class";
-      const startsAt = session?.starts_at ?? new Date().toISOString();
+      // Degenerate fallback when the session join is missing. floatingNow keeps
+      // it in the same space as a real class time, so the email renders a
+      // sensible business-clock time rather than a UTC one.
+      const startsAt = session?.starts_at ?? floatingNow();
 
       if (toEmail) {
         const resend = new Resend(process.env.RESEND_API_KEY);

@@ -18,6 +18,12 @@ import {
   rollcallChannelTopic,
 } from "@/lib/rollcall-realtime";
 import {
+  toDatetimeLocalValue,
+  fromDatetimeLocalValue,
+  classDate,
+  msUntilClass,
+} from "@/lib/business-time";
+import {
   approveSession,
   rejectSession,
   updateSession,
@@ -308,19 +314,6 @@ function formatDateTime(iso: string): string {
 }
 
 /**
- * Converts a UTC ISO timestamp to the format expected by a datetime-local input,
- * expressed in the browser's local timezone so the displayed time matches the
- * actual class time as seen by the user.
- * Example: "2026-04-21T14:00:00Z" in CDT (UTC-5) → "2026-04-21T09:00"
- * @param iso - UTC ISO datetime string from the database.
- */
-function toDatetimeLocal(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/**
  * Triggers a CSV file download in the browser with the given content.
  * @param content - The CSV string content.
  * @param filename - The suggested filename for the download.
@@ -438,10 +431,10 @@ export default function SessionDetailClient({
   );
   const [editLocationId, setEditLocationId] = useState(session.location_id);
   const [editStartsAt, setEditStartsAt] = useState(
-    toDatetimeLocal(session.starts_at)
+    toDatetimeLocalValue(session.starts_at)
   );
   const [editEndsAt, setEditEndsAt] = useState(
-    toDatetimeLocal(session.ends_at)
+    toDatetimeLocalValue(session.ends_at)
   );
   const [editMaxCapacity, setEditMaxCapacity] = useState(session.max_capacity);
   const [editNotes, setEditNotes] = useState(session.notes ?? "");
@@ -1121,15 +1114,15 @@ export default function SessionDetailClient({
   async function handleSaveEdit() {
     setIsSavingEdit(true);
     setActionError(null);
-    // datetime-local strings have no timezone — new Date() interprets them as
-    // local time, so .toISOString() correctly converts back to UTC for storage.
+    // Class times are stored as floating wall-clock values: the datetime-local
+    // string is kept exactly as typed, with no timezone conversion.
     const parsedDiscount = editDiscountPercent === "" ? null : parseFloat(editDiscountPercent);
     const fields: SessionEditFields = {
       class_type_id: editClassTypeId,
       instructor_id: editInstructorId,
       location_id: editLocationId,
-      starts_at: new Date(editStartsAt).toISOString(),
-      ends_at: new Date(editEndsAt).toISOString(),
+      starts_at: fromDatetimeLocalValue(editStartsAt),
+      ends_at: fromDatetimeLocalValue(editEndsAt),
       max_capacity: editMaxCapacity,
       discount_percent: (parsedDiscount !== null && !isNaN(parsedDiscount)) ? parsedDiscount : null,
       notes: editNotes,
@@ -1190,7 +1183,7 @@ export default function SessionDetailClient({
       )
       .join("\n");
 
-    const date = new Date(session.starts_at).toISOString().slice(0, 10);
+    const date = classDate(session.starts_at);
     const className = session.class_types?.name ?? "session";
     downloadFile(csv, `${className}-${date}-students.csv`);
   }
@@ -1384,9 +1377,10 @@ export default function SessionDetailClient({
   // Instructors cannot cancel online within 48 hours of the class starting —
   // they're directed to call the owner directly instead. Managers/super_admins
   // are never restricted by this window.
-  const hoursUntilStart = new Date(session.starts_at).getTime() - Date.now();
+  // msUntilClass measures against the business wall clock, matching the identical
+  // server-side gate in POST /api/sessions/[id]/cancel.
   const instructorBlockedByWindow =
-    isInstructor && !isManager && hoursUntilStart < 48 * 60 * 60 * 1000;
+    isInstructor && !isManager && msUntilClass(session.starts_at) < 48 * 60 * 60 * 1000;
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Render

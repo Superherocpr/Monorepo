@@ -16,6 +16,7 @@ import {
   STATUS_BADGES,
   PLATFORM_LABELS,
 } from "@/lib/invoice-utils";
+import { formatClassDateTimeLong } from "@/lib/business-time";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -290,7 +291,9 @@ export default function InvoiceDetailClient({
                 </div>
                 <div>
                   <dt className="text-gray-500">Date &amp; Time</dt>
-                  <dd className="text-gray-900">{formatDateTime(session.starts_at)}</dd>
+                  {/* Class time — formatClassDateTimeLong, not formatDateTime, which is
+                      for real instants like created_at. See lib/business-time.ts. */}
+                  <dd className="text-gray-900">{formatClassDateTimeLong(session.starts_at)}</dd>
                 </div>
                 {session.locations && (
                   <div className="sm:col-span-2">

@@ -9,6 +9,7 @@
 
 import { MapPin, Clock, User, DollarSign, Tag } from "lucide-react";
 import type { BookingStore, AppliedPromoCode, SelectedAddon } from "@/lib/booking-store";
+import { formatClassDate, formatClassTimeRange } from "@/lib/business-time";
 
 interface OrderSummaryProps {
   /** Session details from the booking store — null-safe (renders loading skeleton) */
@@ -17,27 +18,6 @@ interface OrderSummaryProps {
   appliedPromoCode?: AppliedPromoCode | null;
   /** Add-ons selected at checkout — shown as extra line items above the total */
   selectedAddons?: SelectedAddon[];
-}
-
-/** Formats an ISO timestamp to a readable date string, e.g. "Tuesday, April 22, 2025". */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-/** Formats a start + end ISO pair to e.g. "9:00 AM – 11:00 AM". */
-function formatTimeRange(startsAt: string, endsAt: string): string {
-  const fmt = (d: string) =>
-    new Date(d).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  return `${fmt(startsAt)} – ${fmt(endsAt)}`;
 }
 
 /**
@@ -76,8 +56,8 @@ export default function OrderSummary({ details, appliedPromoCode, selectedAddons
         <div className="flex items-start gap-2.5">
           <Clock size={15} className="text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p>{formatDate(details.startsAt)}</p>
-            <p className="text-gray-500">{formatTimeRange(details.startsAt, details.endsAt)}</p>
+            <p>{formatClassDate(details.startsAt)}</p>
+            <p className="text-gray-500">{formatClassTimeRange(details.startsAt, details.endsAt)}</p>
           </div>
         </div>
 

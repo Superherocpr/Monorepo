@@ -29,6 +29,7 @@ import {
   type UnclaimedOpportunitySummary,
 } from "@/lib/emails";
 import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
+import { floatingNow, addFloatingMinutes } from "@/lib/business-time";
 
 /** The Eastern-time hours (0–23) this job should actually run at. */
 const TARGET_EASTERN_HOURS = new Set([0, 9, 12, 15, 18, 21]);
@@ -61,7 +62,9 @@ async function handlePOST(request: Request): Promise<Response> {
   }
 
   const admin = await createAdminClient();
-  const fortyEightHoursFromNow = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+  // Measured from the business wall clock — starts_at is a floating wall-clock
+  // value, so a raw Date.now() would shift this window by the UTC offset.
+  const fortyEightHoursFromNow = addFloatingMinutes(floatingNow(), 48 * 60);
 
   const { data: unclaimed, error: queryError } = await admin
     .from("class_sessions")

@@ -12,6 +12,7 @@ import { getAdminActor } from "@/lib/auth/effective-role";
 import CustomerDetailClient, {
   type CustomerDetailData,
 } from "@/app/(admin)/_components/CustomerDetailClient";
+import { floatingNow } from "@/lib/business-time";
 
 /** Page props — Next.js 15+ provides params as a Promise in App Router. */
 interface PageProps {
@@ -127,7 +128,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       )
       .eq("approval_status", "approved")
       .eq("status", "scheduled")
-      .gte("starts_at", new Date().toISOString())
+      .gte("starts_at", floatingNow())
       .order("starts_at", { ascending: true })
       .limit(50),
 

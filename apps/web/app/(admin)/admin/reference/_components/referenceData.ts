@@ -63,6 +63,7 @@ export const GROUPS: GroupDef[] = [
         role: "all",
         bullets: [
           "Create a single class session — pick class type, location, date/time, and max capacity",
+          "The time you enter is the time everyone sees — on the booking page, in confirmation emails, and on every admin screen. It is never adjusted for anyone's timezone, so enter the local time at the venue",
           "Set a discount percent or travel fee for the session",
           { text: "Assign an instructor to the session", role: "manager" },
           "Attach eligible add-ons from a checklist automatically filtered to the chosen class type",

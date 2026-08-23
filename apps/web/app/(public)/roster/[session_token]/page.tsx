@@ -8,6 +8,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import RosterCorrectionClient from "./_components/RosterCorrectionClient";
+import { formatClassDate } from "@/lib/business-time";
 
 /** Next.js 15+: params is a Promise in App Router. */
 interface PageProps {
@@ -70,12 +71,7 @@ export default async function RosterCorrectionPage({ params }: PageProps) {
       : false;
 
   if (windowClosed) {
-    const dateStr = new Date(session.starts_at).toLocaleDateString("en-US", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    });
+    const dateStr = formatClassDate(session.starts_at);
 
     return (
       <main className="min-h-screen bg-gray-50 flex items-start justify-center pt-16 px-4">

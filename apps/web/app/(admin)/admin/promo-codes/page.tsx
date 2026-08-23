@@ -10,6 +10,7 @@ import { requireApiRole } from "@/lib/auth/effective-role";
 import { createAdminClient } from "@/lib/supabase/server";
 import PromoCodesClient from "./_components/PromoCodesClient";
 import type { PromoCodeRow } from "@/app/api/admin/promo-codes/route";
+import { floatingNow } from "@/lib/business-time";
 
 export const metadata = { title: "Promo Codes" };
 
@@ -55,7 +56,7 @@ export default async function PromoCodesPage() {
     supabase
       .from("class_sessions")
       .select("id, starts_at, class_types(name), locations(name)")
-      .gte("starts_at", new Date().toISOString())
+      .gte("starts_at", floatingNow())
       .order("starts_at", { ascending: true }),
 
     // All active class types for the class-type picker
