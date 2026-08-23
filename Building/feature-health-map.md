@@ -95,12 +95,49 @@ a product gap, not just a monitoring one.
 | Feature | U | E | C | A | I | M | Verdict |
 |---|---|---|---|---|---|---|---|
 | Sessions & scheduling | ✅✅ | ○ smoke | ✅ | ✅ | ✅✅ | — | Cron covers unclaimed escalation only |
+| **Class time correctness** | ✅✅ | — | — | ✅ | — | — | ⚠️ Unit-only — see note below |
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
 | Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Annual deprecation check; external, brittle |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
+
+### Class time correctness (added 2026-08-22)
+
+Class times are stored as **floating wall-clock values**: the time the instructor
+typed is stored literally and read back verbatim everywhere, with no timezone
+conversion. The contract lives in `apps/web/lib/business-time.ts`; migration
+`0060_floating_session_times.sql` converted the existing rows.
+
+This exists because a customer reported a booking-confirmation email showing
+1:00 PM for a 9:00 AM class. `/book` rendered in the student's browser (Eastern)
+while the email rendered on a UTC server — same formatting code, four-hour
+disagreement.
+
+**Signal:** `tests/unit/lib/business-time.test.ts` (22 tests). They assert exact
+wall-clock strings ("9:00 AM"), which only hold while the helpers pin UTC — so a
+regression that reintroduced a timezone conversion fails them.
+
+`pnpm test:unit:tz` re-runs that file under five process timezones (UTC, Eastern,
+Pacific, Tokyo, Sydney) and is the sharpest version of the check: the original bug
+was precisely that the same code gave different answers in the browser and on the
+UTC email server. Verified passing in all five on 2026-08-22. **This is not wired
+into CI** — it is a command someone must run.
+
+**Honest gap:** this is unit-only. The unit tests prove the helpers are correct;
+nothing asserts that every *call site* uses them. A future call site that
+hand-rolls `toLocaleTimeString` without `timeZone: "UTC"` would be wrong and
+silent. Two things that would close it:
+
+- `// TODO:` An outcome e2e test that books a session and asserts the time shown
+  on `/book`, on the confirmation page, and in the captured email body all match
+  the time the session was seeded with.
+- `// TODO:` A lint rule banning bare `toLocaleTimeString`/`toLocaleDateString`
+  on a `starts_at`/`ends_at` value outside `lib/business-time.ts`.
+
+Neither is built. Until one is, the coverage here is "the helpers are right",
+not "the app uses them everywhere".
 
 ---
 

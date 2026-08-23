@@ -17,6 +17,7 @@
 
 import { useState, useRef } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
+import { formatClassTime } from "@/lib/business-time";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,17 +37,6 @@ interface VerifyCodeResult {
 type Step = 1 | 2 | 3 | 4;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Formats an ISO datetime to a short time string, e.g. "9:00 AM".
- * @param iso - ISO date string
- */
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -361,7 +351,7 @@ export default function RecruitPage() {
             >
               <p className="font-semibold text-gray-900">{s.classTypeName}</p>
               <p className="text-sm text-gray-500 mt-0.5">
-                {formatTime(s.startsAt)} · {s.locationName}
+                {formatClassTime(s.startsAt)} · {s.locationName}
               </p>
             </button>
           ))}

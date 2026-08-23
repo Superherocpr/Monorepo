@@ -8,6 +8,7 @@ import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
 import BookSessionSelector from "./_components/BookSessionSelector";
 import type { ScheduleSession, ClassTypeOption } from "@/types/schedule";
+import { floatingNow } from "@/lib/business-time";
 
 export const metadata: Metadata = {
   title: "Book a Class — SuperHeroCPR",
@@ -75,7 +76,7 @@ export default async function BookPage({ searchParams }: BookPageProps) {
     // Team/corporate classes are private to the company that booked them —
     // they must never be listed here or the public could take their seats.
     .eq("is_private", false)
-    .gte("starts_at", new Date().toISOString())
+    .gte("starts_at", floatingNow())
     .order("starts_at", { ascending: true });
 
   // Fetch active class types for filter pills

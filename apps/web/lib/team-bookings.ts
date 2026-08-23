@@ -24,6 +24,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClassSession, type CreateClassSessionParams } from "@/lib/session-create";
 import { createAndSendInvoice } from "@/lib/invoice-actions";
 import { teamBookingCreatedEmail } from "@/lib/emails";
+import { floatingNow } from "@/lib/business-time";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabaseClient = SupabaseClient<any, "public", any>;
@@ -599,7 +600,7 @@ export async function getTeamBookingByShareToken(
       ? "cancelled"
       : session.approval_status !== "approved"
         ? "unapproved"
-        : new Date(session.starts_at as string) <= new Date()
+        : new Date(session.starts_at as string) <= new Date(floatingNow())
           ? "past"
           : spotsRemaining <= 0
             ? "full"

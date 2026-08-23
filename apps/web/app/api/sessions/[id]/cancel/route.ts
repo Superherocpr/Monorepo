@@ -10,7 +10,9 @@
  *
  * On success, emails (best-effort):
  *   1. All admin/manager profiles
- *   2. All active instructor/manager/super_admin profiles (the claim opportunity)
+ *   2. All active instructor/manager/super_admin profiles (the claim opportunity) —
+ *      only sent when at least one student has already booked the session; if there
+ *      are no bookings there is nothing to claim, so the email is suppressed.
  *
  * Enrolled students are NOT emailed at cancellation time — they only hear about
  * this once a new instructor claims the class (POST /api/sessions/[id]/claim),
@@ -29,6 +31,7 @@ import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { sessionCancelledAdminEmail, openOpportunityInstructorEmail } from "@/lib/emails";
+import { msUntilClass } from "@/lib/business-time";
 
 /** Route handler params from the dynamic [id] segment. */
 interface Params {
@@ -96,8 +99,10 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
       );
     }
 
-    const hoursUntilStart = new Date(session.starts_at).getTime() - Date.now();
-    if (hoursUntilStart < FORTY_EIGHT_HOURS_MS) {
+    // msUntilClass compares against the business wall clock — starts_at is a
+    // floating wall-clock value, so a raw Date.now() would skew this window by
+    // the UTC offset. See lib/business-time.ts.
+    if (msUntilClass(session.starts_at) < FORTY_EIGHT_HOURS_MS) {
       return NextResponse.json(
         {
           data: null,
@@ -139,18 +144,26 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
   const classType = session.class_types as unknown as { name: string } | null;
   const location = session.locations as unknown as { name: string; city: string; state: string } | null;
 
-  const [{ data: adminProfiles }, { data: instructorProfiles }] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("email")
-      .in("role", ["super_admin", "manager"])
-      .eq("deactivated", false),
-    admin
-      .from("profiles")
-      .select("email")
-      .in("role", ["instructor", "manager", "super_admin"])
-      .eq("deactivated", false),
-  ]);
+  const [{ data: adminProfiles }, { data: instructorProfiles }, { count: bookingCount }] =
+    await Promise.all([
+      admin
+        .from("profiles")
+        .select("email")
+        .in("role", ["super_admin", "manager"])
+        .eq("deactivated", false),
+      admin
+        .from("profiles")
+        .select("email")
+        .in("role", ["instructor", "manager", "super_admin"])
+        .eq("deactivated", false),
+      // Only send the instructor opportunity email when students have already booked;
+      // an empty class has no one to teach, so notifying instructors is unnecessary noise.
+      admin
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", sessionId)
+        .eq("cancelled", false),
+    ]);
 
   if (classType && location) {
     const adminEmails = (adminProfiles ?? []).map((p) => p.email).filter(Boolean);
@@ -177,7 +190,7 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
     }
 
     const instructorEmails = (instructorProfiles ?? []).map((p) => p.email).filter(Boolean);
-    if (instructorEmails.length > 0) {
+    if ((bookingCount ?? 0) > 0 && instructorEmails.length > 0) {
       const opportunityEmail = openOpportunityInstructorEmail({
         className: classType.name,
         sessionDate: session.starts_at,

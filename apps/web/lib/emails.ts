@@ -16,6 +16,12 @@
  */
 
 import { wrapEmail } from "@/lib/email";
+import {
+  formatClassDate,
+  formatClassTime,
+  formatClassDateTimeLong,
+  formatClassDateTimeShort,
+} from "@/lib/business-time";
 import type { InvariantSummary } from "@/lib/health-invariants";
 import type { CronHealthSummary } from "@/lib/cron-heartbeat";
 
@@ -916,12 +922,7 @@ export function invoiceResendEmail({
   paymentPlatform: string | null;
 }): EmailContent {
   const formattedDate = sessionDate
-    ? new Date(sessionDate).toLocaleDateString("en-US", {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      })
+    ? formatClassDate(sessionDate)
     : "See your instructor for details";
 
   const formattedAmount =
@@ -1010,18 +1011,8 @@ export function bookingConfirmationEmail({
   instructorPhone?: string | null;
   addons?: { name: string; price: number }[];
 }): EmailContent {
-  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const formattedDate = formatClassDate(startsAt);
+  const formattedTime = formatClassTime(startsAt);
 
   const safeFirstName      = firstName ? escapeHtml(firstName.trim()) : null;
   const safeClassName      = escapeHtml(className.trim());
@@ -1135,12 +1126,7 @@ export function invoiceEmail({
   notes: string | null;
   paymentLink: string | null;
 }): EmailContent {
-  const formattedDate = new Date(classDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  const formattedDate = formatClassDate(classDate);
 
   const formattedAmount = new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -1741,15 +1727,7 @@ export function instructorAcceptedAdminEmail({
   const safeCity = escapeHtml(venueCity.trim());
   const safeState = escapeHtml(venueState.trim());
 
-  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/New_York",
-  });
+  const formattedDate = formatClassDateTimeLong(sessionDate);
 
   const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
@@ -1836,15 +1814,7 @@ export function instructorConfirmedCustomerEmail({
   const safeCity = escapeHtml(venueCity.trim());
   const safeState = escapeHtml(venueState.trim());
 
-  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/New_York",
-  });
+  const formattedDate = formatClassDateTimeLong(sessionDate);
 
   return {
     subject: `An instructor has been confirmed for your ${safeClass} class!`,
@@ -1916,12 +1886,7 @@ export function invoicePaymentConfirmedCustomerEmail({
   classDate: string;
   totalAmount: number;
 }): EmailContent {
-  const formattedDate = new Date(classDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  const formattedDate = formatClassDate(classDate);
 
   const formattedAmount = new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -2013,15 +1978,7 @@ export function sessionCancelledAdminEmail({
   const safeCancelledBy = escapeHtml(cancelledByName.trim());
   const safeReason = escapeHtml(reason.trim());
 
-  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/New_York",
-  });
+  const formattedDate = formatClassDateTimeLong(sessionDate);
 
   const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
@@ -2102,15 +2059,7 @@ export function openOpportunityInstructorEmail({
   const safeCity = escapeHtml(venueCity.trim());
   const safeState = escapeHtml(venueState.trim());
 
-  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/New_York",
-  });
+  const formattedDate = formatClassDateTimeLong(sessionDate);
 
   const claimLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
@@ -2195,15 +2144,7 @@ export function sessionClaimedStudentEmail({
   const safeState = escapeHtml(newVenueState.trim());
   const safePhone = newInstructorPhone ? escapeHtml(newInstructorPhone.trim()) : null;
 
-  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/New_York",
-  });
+  const formattedDate = formatClassDateTimeLong(sessionDate);
 
   return {
     subject: `Good news — your class has a new instructor (${safeClass})`,
@@ -2270,15 +2211,7 @@ export function sessionClaimedAdminEmail({
   const safeClass = escapeHtml(className.trim());
   const safeInstructor = escapeHtml(newInstructorName.trim());
 
-  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/New_York",
-  });
+  const formattedDate = formatClassDateTimeLong(sessionDate);
 
   const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
@@ -2344,14 +2277,7 @@ export function unclaimedOpportunityEscalationEmail({
     .map((s) => {
       const safeClass = escapeHtml(s.className.trim());
       const safeVenue = escapeHtml(s.venueName.trim());
-      const formattedDate = new Date(s.sessionDate).toLocaleDateString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: "America/New_York",
-      });
+      const formattedDate = formatClassDateTimeShort(s.sessionDate);
       const link = `${baseUrl}/admin/sessions/${s.sessionId}`;
       return `
         <tr>
@@ -2419,15 +2345,7 @@ export function assistantNeededEmail({
   const safeInstructor = escapeHtml(instructorName.trim());
   const safeClass = escapeHtml(className.trim());
 
-  const formattedDate = new Date(sessionDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/New_York",
-  });
+  const formattedDate = formatClassDateTimeLong(sessionDate);
 
   const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
@@ -2714,18 +2632,8 @@ export function bookingCancelledEmail({
   const safeFirstName = escapeHtml(firstName.trim());
   const safeClassName = escapeHtml(className.trim());
 
-  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-
-  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const formattedDate = formatClassDate(startsAt);
+  const formattedTime = formatClassTime(startsAt);
 
   return {
     subject: `Your booking for ${safeClassName} has been cancelled`,
@@ -2782,19 +2690,8 @@ export function instructorBookingNotificationEmail({
   const safeClass     = escapeHtml(className.trim());
   const safeLoc       = escapeHtml(locationName.trim());
 
-  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
-    weekday: "long",
-    month:   "long",
-    day:     "numeric",
-    year:    "numeric",
-    timeZone: "America/New_York",
-  });
-  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
-    hour:    "numeric",
-    minute:  "2-digit",
-    hour12:  true,
-    timeZone: "America/New_York",
-  });
+  const formattedDate = formatClassDate(startsAt);
+  const formattedTime = formatClassTime(startsAt);
 
   const sourceNote =
     source === "manual"
@@ -3331,19 +3228,8 @@ export function teamBookingCreatedEmail({
   const safeUrl     = escapeHtml(shareUrl);
   const safePrice   = escapeHtml(priceLabel);
 
-  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
-    weekday: "long",
-    month:   "long",
-    day:     "numeric",
-    year:    "numeric",
-    timeZone: "America/New_York",
-  });
-  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
-    hour:    "numeric",
-    minute:  "2-digit",
-    hour12:  true,
-    timeZone: "America/New_York",
-  });
+  const formattedDate = formatClassDate(startsAt);
+  const formattedTime = formatClassTime(startsAt);
 
   const paymentNote =
     paymentMode === "company"
@@ -3439,19 +3325,8 @@ export function teamSignupConfirmationEmail({
     .join(", ");
   const safeAddress = escapeHtml(addressLine);
 
-  const formattedDate = new Date(startsAt).toLocaleDateString("en-US", {
-    weekday: "long",
-    month:   "long",
-    day:     "numeric",
-    year:    "numeric",
-    timeZone: "America/New_York",
-  });
-  const formattedTime = new Date(startsAt).toLocaleTimeString("en-US", {
-    hour:    "numeric",
-    minute:  "2-digit",
-    hour12:  true,
-    timeZone: "America/New_York",
-  });
+  const formattedDate = formatClassDate(startsAt);
+  const formattedTime = formatClassTime(startsAt);
 
   const paymentRow = companyPaid
     ? `<tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Cost to you</td><td><strong>Nothing — ${safeCompany} has covered this class.</strong></td></tr>`

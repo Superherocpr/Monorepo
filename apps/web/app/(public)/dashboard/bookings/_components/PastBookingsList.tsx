@@ -6,6 +6,7 @@
  */
 
 import type { BookingRecord } from "@/types/bookings";
+import { formatClassDate } from "@/lib/business-time";
 
 interface PastBookingsListProps {
   bookings: BookingRecord[];
@@ -26,15 +27,6 @@ function getStatusLabel(status: string): string {
   if (status === "completed") return "Completed";
   if (status === "cancelled") return "Cancelled";
   return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-/** Formats a date string to a short readable label: "April 1, 2024". */
-function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 /** Renders a compact table-style list of past bookings. Returns null if empty. */
@@ -59,7 +51,7 @@ export default function PastBookingsList({ bookings }: PastBookingsListProps) {
                   {booking.class_sessions.class_types.name}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {formatShortDate(booking.class_sessions.starts_at)}
+                  {formatClassDate(booking.class_sessions.starts_at, { weekday: false })}
                 </p>
                 <p className="text-xs text-gray-500">
                   Instructor: {instructor.first_name} {instructor.last_name}

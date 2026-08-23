@@ -117,6 +117,7 @@ function fmtDateTime(iso: string): string {
  */
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
+    timeZone: "UTC", // class times are floating wall-clock values
     month: "short",
     day: "numeric",
     year: "numeric",

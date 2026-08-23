@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { CalendarX, Info, MapPin, User, Clock } from "lucide-react";
 import type { BookingRecord } from "@/types/bookings";
+import { formatClassDate, formatClassTimeRange } from "@/lib/business-time";
 
 interface UpcomingBookingsListProps {
   bookings: BookingRecord[];
@@ -51,25 +52,6 @@ function getPaymentStatus(payments: BookingRecord["payments"]): {
 }
 
 /** Formats a date string to a full readable label: "Tuesday, April 22, 2026". */
-function formatLongDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-/** Formats a start/end pair into a time range string: "9:00 AM – 1:00 PM". */
-function formatTimeRange(startsAt: string, endsAt: string): string {
-  const fmt = (s: string) =>
-    new Date(s).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  return `${fmt(startsAt)} – ${fmt(endsAt)}`;
-}
-
 const paymentColorClasses = {
   green: "bg-green-100 text-green-800",
   amber: "bg-amber-100 text-amber-800",
@@ -163,9 +145,9 @@ export default function UpcomingBookingsList({
                     aria-hidden="true"
                   />
                   <div>
-                    <p>{formatLongDate(booking.class_sessions.starts_at)}</p>
+                    <p>{formatClassDate(booking.class_sessions.starts_at)}</p>
                     <p className="text-gray-500">
-                      {formatTimeRange(
+                      {formatClassTimeRange(
                         booking.class_sessions.starts_at,
                         booking.class_sessions.ends_at
                       )}

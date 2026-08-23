@@ -948,6 +948,7 @@ export default function RosterImportClient({
         <p className="mt-1 text-sm text-gray-600">
           {session.class_type_name} -{" "}
           {new Date(session.starts_at).toLocaleDateString("en-US", {
+            timeZone: "UTC", // floating wall-clock class time
             weekday: "long",
             year: "numeric",
             month: "long",

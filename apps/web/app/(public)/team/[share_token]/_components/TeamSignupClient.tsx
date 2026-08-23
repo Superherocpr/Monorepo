@@ -22,6 +22,7 @@ import { createClient } from "@/lib/supabase/client";
 import { CardPaymentSection } from "@/app/_components/PayPalCardPaymentSection";
 import type { CreateOrderResult } from "@/app/_components/PayPalCardPaymentSection";
 import type { TeamBookingPublicView } from "@/lib/team-bookings";
+import { formatClassDate, formatClassTime } from "@/lib/business-time";
 
 interface Props {
   /** Token from the URL — passed on every API call as the credential. */
@@ -46,27 +47,12 @@ const PAYPAL_ENVIRONMENT =
   process.env.NEXT_PUBLIC_PAYPAL_ENV === "production" ? "production" : "sandbox";
 
 /**
- * Formats a session start time for display in the venue's local convention.
- * @param iso - ISO 8601 datetime string.
+ * Formats a class start time as the wall clock the instructor set.
+ * @param iso - Stored class timestamp.
  * @returns Object with human-readable date and time strings.
  */
 function formatWhen(iso: string): { date: string; time: string } {
-  const d = new Date(iso);
-  return {
-    date: d.toLocaleDateString("en-US", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-      timeZone: "America/New_York",
-    }),
-    time: d.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: "America/New_York",
-    }),
-  };
+  return { date: formatClassDate(iso), time: formatClassTime(iso) };
 }
 
 /**

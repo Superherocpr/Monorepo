@@ -5,6 +5,7 @@
  */
 
 import Link from "next/link";
+import { formatClassDate } from "@/lib/business-time";
 
 /** A cancelled session with no instructor, open for any instructor to claim. */
 export interface OpenOpportunity {
@@ -19,11 +20,7 @@ export interface OpenOpportunity {
  * @param timestamp - ISO timestamp string
  */
 function formatDate(timestamp: string): string {
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatClassDate(timestamp, { month: "short", weekday: false });
 }
 
 interface OpenOpportunitiesWidgetProps {

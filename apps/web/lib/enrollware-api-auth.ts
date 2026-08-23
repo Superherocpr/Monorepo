@@ -154,15 +154,21 @@ export function enrollwareCorsHeaders(origin: string | null): Record<string, str
 export const DEFAULT_INSTRUCTOR_TZ = "America/New_York";
 
 /**
- * Computes the UTC start and end timestamps that bracket the local-calendar
- * "today" in the given IANA timezone. Used so that a query for "today's
- * classes" returns the instructor's local day, not the UTC day (which would
- * roll over hours before midnight Eastern).
+ * Computes the bounds that bracket the local-calendar "today" for querying
+ * class_sessions.starts_at.
+ *
+ * The `tz` argument decides *which* calendar day counts as today for this
+ * instructor — so an instructor outside Eastern still gets their own day, and
+ * the day does not roll over hours before their midnight.
+ *
+ * The bounds themselves are floating wall-clock values (that calendar date at
+ * literal midnight), because starts_at stores a floating wall-clock time rather
+ * than a real instant — see lib/business-time.ts. No offset is applied.
  *
  * @param tz - IANA timezone name (e.g. "America/New_York"). Falls back to
  *             DEFAULT_INSTRUCTOR_TZ if the value is missing or not a valid
  *             IANA name.
- * @returns Object with ISO strings for the local day's start and end in UTC.
+ * @returns ISO strings bracketing the local day, plus the resolved timezone.
  */
 export function localDayWindow(tz: string | null | undefined): {
   startIso: string;
@@ -191,47 +197,9 @@ export function localDayWindow(tz: string | null | undefined): {
   const month = get("month");
   const day = get("day");
 
-  // Build the local-midnight Date by computing the TZ offset for that wall-clock
-  // moment. We use the "shortOffset" trick to read the zone offset in minutes,
-  // then convert back to a UTC instant.
-  const localMidnightAsUtc = Date.UTC(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    0,
-    0,
-    0,
-    0
-  );
-
-  // Determine the offset (in ms) between UTC and the target TZ at that local
-  // midnight. Doing the round-trip via Intl ensures DST is handled correctly.
-  const tzMidnight = new Date(localMidnightAsUtc);
-  const tzFormatted = new Intl.DateTimeFormat("en-US", {
-    timeZone: safeTz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).formatToParts(tzMidnight);
-
-  const tgt = (t: string) => Number(tzFormatted.find((p) => p.type === t)?.value ?? "0");
-  // Reconstruct what UTC ms the formatter said the wall-clock was, then diff
-  // against the actual UTC ms to get the zone's offset.
-  const interpretedAsUtc = Date.UTC(
-    tgt("year"),
-    tgt("month") - 1,
-    tgt("day"),
-    tgt("hour"),
-    tgt("minute"),
-    tgt("second")
-  );
-  const offsetMs = interpretedAsUtc - localMidnightAsUtc;
-
-  const startMs = localMidnightAsUtc - offsetMs;
+  // Floating bounds: that calendar date at literal midnight, with no offset
+  // applied, matching how class times are stored.
+  const startMs = Date.UTC(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
   // 24h-1ms window — covers the entire local calendar day
   const endMs = startMs + 24 * 60 * 60 * 1000 - 1;
 

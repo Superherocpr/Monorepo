@@ -10,6 +10,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { formatClassDate } from "@/lib/business-time";
 
 // ─── Exported types (used by the server component) ────────────────────────────
 
@@ -260,12 +261,7 @@ export default function GradingClient({ session, students, presetGrades }: Props
   // Render
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const sessionDate = new Date(session.starts_at).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  const sessionDate = formatClassDate(session.starts_at);
 
   return (
     <div className="space-y-6">

@@ -14,6 +14,7 @@ import Link from "next/link";
 import AddLocationPanel, {
   type NewLocationResult,
 } from "@/app/(admin)/_components/AddLocationPanel";
+import { toFloatingISO, addFloatingMinutes } from "@/lib/business-time";
 import type {
   ClassTypeOption,
   LocationOption,
@@ -66,17 +67,6 @@ interface BulkCreateSessionClientProps {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Converts a local date string and time string to a UTC ISO timestamp.
- * Relies on the browser's local timezone — appropriate since staff are always
- * in the same timezone as the classes they schedule.
- * @param date - YYYY-MM-DD
- * @param time - HH:MM (24-hour)
- */
-function toISO(date: string, time: string): string {
-  return new Date(`${date}T${time}:00`).toISOString();
-}
 
 /**
  * Computes a human-readable duration label from a number of minutes.
@@ -314,12 +304,11 @@ export default function BulkCreateSessionClient({
     const durationMins = Math.round(parseFloat(shared.duration_minutes) * 60);
 
     const sessions = rows.map((r) => {
-      const starts_at = toISO(r.date, r.start_time);
-      const endsDate = new Date(starts_at);
-      endsDate.setMinutes(endsDate.getMinutes() + durationMins);
+      // Stored as floating wall-clock time — no timezone conversion.
+      const starts_at = toFloatingISO(r.date, r.start_time);
       return {
         starts_at,
-        ends_at: endsDate.toISOString(),
+        ends_at: addFloatingMinutes(starts_at, durationMins),
         max_capacity: parseInt(r.max_capacity, 10),
         ...(r.notes.trim() ? { notes: r.notes.trim() } : {}),
       };

@@ -5,6 +5,7 @@
  */
 
 import Link from "next/link";
+import { formatClassDate } from "@/lib/business-time";
 
 /** A completed session where one or more roster students still need grades. */
 export interface PendingGradeSession {
@@ -15,15 +16,11 @@ export interface PendingGradeSession {
 }
 
 /**
- * Formats a timestamptz string as a readable date, e.g. "Jun 12, 2025".
- * @param timestamp - ISO timestamp string
+ * Formats a class date, e.g. "Jun 12, 2025".
+ * @param timestamp - Stored class timestamp
  */
 function formatDate(timestamp: string): string {
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatClassDate(timestamp, { month: "short", weekday: false });
 }
 
 interface PendingGradesWidgetProps {

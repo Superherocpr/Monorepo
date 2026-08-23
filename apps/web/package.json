@@ -10,6 +10,7 @@
     "test": "playwright test",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
+    "test:unit:tz": "for tz in UTC America/New_York America/Los_Angeles Asia/Tokyo Australia/Sydney; do echo \"── TZ=$tz\"; TZ=$tz vitest run tests/unit/lib/business-time.test.ts || exit 1; done",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "test:report": "playwright show-report"

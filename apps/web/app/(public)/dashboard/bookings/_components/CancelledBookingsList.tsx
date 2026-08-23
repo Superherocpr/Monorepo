@@ -6,18 +6,10 @@
  */
 
 import type { BookingRecord } from "@/types/bookings";
+import { formatClassDate } from "@/lib/business-time";
 
 interface CancelledBookingsListProps {
   bookings: BookingRecord[];
-}
-
-/** Formats a date string to a short readable label: "April 1, 2024". */
-function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 /** Renders a collapsible section of cancelled bookings. Returns null if empty. */
@@ -53,7 +45,7 @@ export default function CancelledBookingsList({
                 {booking.class_sessions.class_types.name}
               </p>
               <p className="text-xs text-gray-500">
-                {formatShortDate(booking.class_sessions.starts_at)}
+                {formatClassDate(booking.class_sessions.starts_at, { weekday: false })}
               </p>
               {booking.cancellation_note && (
                 <p className="text-xs text-gray-400 italic mt-0.5">

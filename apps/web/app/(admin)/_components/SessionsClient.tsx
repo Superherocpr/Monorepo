@@ -12,6 +12,7 @@ import Link from "next/link";
 import type { SessionWithMeta, InstructorOption } from "../admin/sessions/page";
 import type { SessionApprovalStatus, SessionStatus } from "@/types/schedule";
 import type { UserRole } from "@/types/users";
+import { formatClassTimeRange, floatingNow, classDate } from "@/lib/business-time";
 
 interface SessionsClientProps {
   sessions: SessionWithMeta[];
@@ -47,27 +48,20 @@ const STATUS_BADGES: Record<SessionStatus, { label: string; classes: string }> =
   };
 
 /**
- * Formats a timestamptz string as a readable date + time, e.g. "Mon, Jun 12 · 9:00 AM – 11:00 AM".
- * @param startsAt - ISO start timestamp
- * @param endsAt - ISO end timestamp
+ * Formats a class time as a readable date + range, e.g. "Mon, Jun 12 · 9:00 AM – 11:00 AM".
+ * timeZone is pinned to UTC because class times are floating wall-clock values —
+ * see lib/business-time.ts.
+ * @param startsAt - Stored class start timestamp
+ * @param endsAt - Stored class end timestamp
  */
 function formatSessionTime(startsAt: string, endsAt: string): string {
-  const start = new Date(startsAt);
-  const end = new Date(endsAt);
-  const date = start.toLocaleDateString("en-US", {
+  const date = new Date(startsAt).toLocaleDateString("en-US", {
+    timeZone: "UTC",
     weekday: "short",
     month: "short",
     day: "numeric",
   });
-  const startTime = start.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const endTime = end.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `${date} · ${startTime} – ${endTime}`;
+  return `${date} · ${formatClassTimeRange(startsAt, endsAt)}`;
 }
 
 /**
@@ -77,7 +71,9 @@ function formatSessionTime(startsAt: string, endsAt: string): string {
 function groupByMonth(sessions: SessionWithMeta[]): [string, SessionWithMeta[]][] {
   const map = new Map<string, SessionWithMeta[]>();
   for (const session of sessions) {
+    // UTC-pinned: class times are floating wall-clock values (lib/business-time.ts).
     const key = new Date(session.starts_at).toLocaleDateString("en-US", {
+      timeZone: "UTC",
       month: "long",
       year: "numeric",
     });
@@ -94,7 +90,9 @@ export default function SessionsClient({
   userRole,
   userId,
 }: SessionsClientProps) {
-  const today = new Date().toISOString().slice(0, 10);
+  // Business-day date, so "past" matches the wall clock where classes happen
+  // rather than the viewer's or the server's UTC date.
+  const today = classDate(floatingNow());
   const isManager = userRole === "manager" || userRole === "super_admin";
   const router = useRouter();
 
