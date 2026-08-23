@@ -1,0 +1,125 @@
+name: E2E
+
+# Playwright end-to-end suite, on a schedule rather than as a monthly chore.
+#
+# WHY NIGHTLY AND NOT ON EVERY PR
+#   ci.yml is the PR gate and must stay fast (typecheck + lint + unit, ~2 min).
+#   The e2e suite boots a real Next.js server and drives a browser, so it belongs
+#   on a cadence instead. Nightly at 07:00 UTC (03:00 EDT) means results are
+#   waiting at the start of the working day, and a merge to main triggers a run
+#   immediately so a regression is caught the same day it ships.
+#
+# WHY IT RUNS THE APP LOCALLY INSTEAD OF HITTING THE STAGING URL
+#   Not an arbitrary choice. tests/e2e/rollcall.spec.ts — the only outcome test in
+#   the suite, the one that checks a student in and asserts the resulting
+#   roster_record and realtime broadcast — calls test.skip() unless the target is
+#   localhost, because it seeds data into staging Supabase directly and firing a
+#   staging seed code at a non-staging origin would be wrong.
+#
+#   Point PLAYWRIGHT_BASE_URL at a deployed URL and that test silently skips. The
+#   run stays green while the best coverage quietly stops executing — the exact
+#   false-signal failure this project has been removing everywhere else. So the
+#   workflow lets Playwright's own webServer start the app on localhost:3000
+#   against STAGING Supabase, which is what playwright.config.ts already assumes.
+#
+# SCOPE — read before widening
+#   Only the `guest` project runs by default, because it is the only one that can
+#   currently pass. The `customer` and `admin` projects are blocked by known
+#   issues recorded in Building/qa-todo.md §10: staging admin login credentials
+#   fail, and NEXT_PUBLIC_PAYPAL_CLIENT_ID is blank so no booking reaches payment.
+#
+#   Scheduling a suite that is red every night trains everyone to ignore it, which
+#   is worse than not running it. Once those blockers clear, set the repository
+#   variable RUN_AUTHENTICATED_E2E to "true" and the customer + admin projects
+#   join the run.
+#
+# REQUIRED SECRETS (staging values only — never production)
+#   STAGING_SUPABASE_URL, STAGING_SUPABASE_ANON_KEY, STAGING_SUPABASE_SERVICE_ROLE_KEY
+# OPTIONAL, for the authenticated projects
+#   TEST_CUSTOMER_EMAIL, TEST_CUSTOMER_PASSWORD, TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD
+
+on:
+  schedule:
+    # 07:00 UTC daily. Deliberately clear of the 11:00 UTC ops digest and the
+    # Monday 12:00 UTC credential probe.
+    - cron: '0 7 * * *'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: apps/web
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      CI: 'true'
+      # Left at the default localhost:3000 on purpose — see the note above about
+      # rollcall.spec.ts skipping itself against a remote origin.
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      TEST_CUSTOMER_EMAIL: ${{ secrets.TEST_CUSTOMER_EMAIL }}
+      TEST_CUSTOMER_PASSWORD: ${{ secrets.TEST_CUSTOMER_PASSWORD }}
+      TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
+      TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      # Fail with a readable message rather than letting the dev server crash on
+      # boot with a Supabase client error that takes ten minutes to diagnose.
+      - name: Check required secrets are present
+        run: |
+          missing=""
+          [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] && missing="$missing STAGING_SUPABASE_URL"
+          [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] && missing="$missing STAGING_SUPABASE_ANON_KEY"
+          [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && missing="$missing STAGING_SUPABASE_SERVICE_ROLE_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required repository secrets:$missing"
+            echo "Add them under Settings > Secrets and variables > Actions."
+            echo "Use STAGING values only. Never production."
+            exit 1
+          fi
+          echo "All required secrets present."
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # The guest project needs no login and is the only one that can pass today.
+      # playwright.config.ts's webServer starts `npm run dev` on localhost:3000.
+      - name: Run guest e2e suite
+        run: npx playwright test --project=guest
+
+      # Opt-in until the qa-todo.md §10 blockers are cleared. Set the repository
+      # variable RUN_AUTHENTICATED_E2E to "true" to enable.
+      - name: Run authenticated e2e suites
+        if: vars.RUN_AUTHENTICATED_E2E == 'true'
+        run: npx playwright test --project=customer --project=admin
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 14

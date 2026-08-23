@@ -126,7 +126,10 @@ export default function ReferenceContent({
         sections: group.sections.filter((s) => sectionMatches(s, query, userRole)),
       }))
       .filter((group) => group.sections.length > 0);
-  }, [query, accessibleGroups]);
+    // userRole is read via sectionMatches. It is currently redundant with
+    // accessibleGroups (which is memoized on userRole), but declaring it keeps
+    // the dependency list honest and lets React Compiler optimize this.
+  }, [query, accessibleGroups, userRole]);
 
   const matchCount = filteredGroups.reduce((n, g) => n + g.sections.length, 0);
 

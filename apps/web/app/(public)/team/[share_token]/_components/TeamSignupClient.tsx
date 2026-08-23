@@ -36,8 +36,14 @@ type Step = "details" | "auth" | "payment" | "done";
 /** Whether the auth panel is creating an account or signing in. */
 type AuthMode = "create" | "signin";
 
+// NOTE: must stay `NEXT_PUBLIC_PAYPAL_ENV` — that is the name actually set in
+// Amplify (app-level, "production"). This file previously read
+// `NEXT_PUBLIC_PAYPAL_ENVIRONMENT`, which is set nowhere, so it silently
+// resolved to "sandbox" and handed the SDK a sandbox environment alongside a
+// production clientId/clientToken. Verified against Amplify app dzmna7ztg21it
+// on 2026-08-20; the other three payment surfaces already use this name.
 const PAYPAL_ENVIRONMENT =
-  process.env.NEXT_PUBLIC_PAYPAL_ENVIRONMENT === "production" ? "production" : "sandbox";
+  process.env.NEXT_PUBLIC_PAYPAL_ENV === "production" ? "production" : "sandbox";
 
 /**
  * Formats a session start time for display in the venue's local convention.

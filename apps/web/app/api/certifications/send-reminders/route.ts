@@ -15,21 +15,11 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { Resend } from "resend";
 import { certReminderEmail } from "@/lib/emails";
+import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /** Reminder milestones, in days-before-expiry, nearest-to-expiry first. */
 const MILESTONES_ASC = [7, 30, 60, 90] as const;
 
-/**
- * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
- * @param request - Incoming HTTP request.
- * @returns true when the header is valid, false otherwise.
- */
-function isCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = request.headers.get("Authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
 
 /**
  * Returns the milestone (90/60/30/7) a cert has currently reached — the
@@ -52,7 +42,7 @@ function currentMilestone(daysRemaining: number): (typeof MILESTONES_ASC)[number
  * @param request - No body required; cron calls carry a CRON_SECRET bearer
  *   token instead of a session.
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
 
   // ── Auth & role check ──────────────────────────────────────────────────────
   const viaCron = isCronRequest(request);
@@ -160,3 +150,11 @@ export async function POST(request: Request) {
 
   return Response.json({ success: true, count: sentCount, triggeredBy: viaCron ? "cron" : actorId });
 }
+
+/**
+ * Cron-invoked entry point. The heartbeat wrapper records a cron_run_log row on
+ * every outcome so cron_health() can prove this job actually ran — pg_cron's own
+ * job_run_details cannot, because net.http_post is fire-and-forget (migration 0057).
+ * Manual admin triggers pass straight through unlogged.
+ */
+export const POST = withCronHeartbeat("cert-expiry-reminders", handlePOST);

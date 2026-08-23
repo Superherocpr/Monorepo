@@ -15,6 +15,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { notifyPayoutIssuesDigest } from "@/lib/payout-notify";
+import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /** Batches older than this since their last alert are re-alerted. */
 const RE_ALERT_AFTER_HOURS = 18;
@@ -22,17 +23,6 @@ const RE_ALERT_AFTER_HOURS = 18;
 /** Statuses considered unresolved and worth alerting on. */
 const STUCK_STATUSES = ["needs_review", "denied", "failed"];
 
-/**
- * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
- * @param request - Incoming HTTP request.
- * @returns true when the header is valid, false otherwise.
- */
-function isCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = request.headers.get("Authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
 
 /**
  * Sweeps for unresolved payout batches and emails super_admins a digest.
@@ -40,7 +30,7 @@ function isCronRequest(request: Request): boolean {
  * writes admin_alert_sent_at on every batch included in the digest.
  * @param request - No body required.
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const viaCron = isCronRequest(request);
   let actorId: string | null = null;
 
@@ -92,3 +82,11 @@ export async function POST(request: Request) {
     triggeredBy: viaCron ? "cron" : actorId,
   });
 }
+
+/**
+ * Cron-invoked entry point. The heartbeat wrapper records a cron_run_log row on
+ * every outcome so cron_health() can prove this job actually ran — pg_cron's own
+ * job_run_details cannot, because net.http_post is fire-and-forget (migration 0057).
+ * Manual admin triggers pass straight through unlogged.
+ */
+export const POST = withCronHeartbeat("alert-stuck-payout-batches", handlePOST);

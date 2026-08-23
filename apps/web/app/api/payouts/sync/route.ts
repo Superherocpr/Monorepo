@@ -24,6 +24,7 @@ import { requireApiRole } from "@/lib/auth/effective-role";
 import { reconcilePayoutBatch } from "@/lib/payout-reconcile";
 import { notifyInstructorsPaid, notifyPayoutDenied } from "@/lib/payout-notify";
 import type { PayoutDenialSource } from "@/types/payouts";
+import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 
 /**
  * Batch statuses worth re-checking against PayPal.
@@ -50,24 +51,13 @@ function isSyncBody(value: unknown): value is SyncRequestBody {
   return typeof value === "object" && value !== null;
 }
 
-/**
- * Verifies an Authorization: Bearer {CRON_SECRET} header on the request.
- * @param request - Incoming HTTP request.
- * @returns true when the header is valid, false otherwise.
- */
-function isCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = request.headers.get("Authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
 
 /**
  * Syncs either one requested payout batch or every unresolved batch.
  * Side effects: PayPal status reads plus payout item/earning/attempt/batch writes.
  * @param request - Optional JSON body with { batchId }.
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   // Cron runs without a session; an admin click must be a super_admin.
   const viaCron = isCronRequest(request);
   let actorId: string | null = null;
@@ -160,3 +150,11 @@ export async function POST(request: Request) {
     triggeredBy: viaCron ? "cron" : actorId,
   });
 }
+
+/**
+ * Cron-invoked entry point. The heartbeat wrapper records a cron_run_log row on
+ * every outcome so cron_health() can prove this job actually ran — pg_cron's own
+ * job_run_details cannot, because net.http_post is fire-and-forget (migration 0057).
+ * Manual admin triggers pass straight through unlogged.
+ */
+export const POST = withCronHeartbeat("reconcile-instructor-payouts", handlePOST);

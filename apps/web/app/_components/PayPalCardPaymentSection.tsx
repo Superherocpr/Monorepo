@@ -78,17 +78,28 @@ function CardPaymentForm({
   unavailableMessage = DEFAULT_UNAVAILABLE_MESSAGE,
 }: CardPaymentFormProps): ReactElement {
   const [nameOnCard, setNameOnCard] = useState("");
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [payAttempted, setPayAttempted] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCardUnavailable, setIsCardUnavailable] = useState(false);
 
   const { submit, submitResponse, error } = usePayPalCardFieldsOneTimePaymentSession();
 
+  // Latest-ref pattern: the effects below must call the newest callbacks without
+  // re-running whenever the caller passes a new function identity — re-running
+  // them would re-report an error or re-approve an order.
+  //
+  // The assignments live in an effect rather than in the render body (React
+  // Compiler forbids mutating a ref during render). This effect is declared
+  // FIRST on purpose: effects fire in declaration order within a commit, so the
+  // refs are refreshed before either consuming effect below reads them.
   const onApproveRef = useRef(onApprove);
-  onApproveRef.current = onApprove;
   const onErrorRef = useRef(onError);
-  onErrorRef.current = onError;
+
+  useEffect(() => {
+    onApproveRef.current = onApprove;
+    onErrorRef.current = onError;
+  }, [onApprove, onError]);
 
   useEffect(() => {
     if (!error) return;
@@ -97,6 +108,7 @@ function CardPaymentForm({
       ? error.message || "Please check your card details and try again."
       : unavailableMessage;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reacting to PayPal SDK error; no alternative pattern exists
     setCardError(message);
     onErrorRef.current(message);
 
@@ -142,22 +154,26 @@ function CardPaymentForm({
   const allFieldsValid =
     validity.number.isValid && validity.expiry.isValid && validity.cvv.isValid;
 
-  useEffect(() => {
-    if (allFieldsValid) setValidationError(null);
-  }, [allFieldsValid]);
+  // Derived rather than stored: the message must always name the fields that are
+  // invalid *right now*. A stored string could resurface naming the wrong field if
+  // the buyer fixed one field and then broke a different one after a failed attempt.
+  const validationError =
+    payAttempted && !allFieldsValid
+      ? `Please enter a valid ${(Object.keys(FIELD_LABELS) as Array<keyof CardFieldsValidity>)
+          .filter((field) => !validity[field].isValid)
+          .map((field) => FIELD_LABELS[field])
+          .join(", ")}.`
+      : null;
 
   async function handlePay(): Promise<void> {
     setCardError(null);
-    setValidationError(null);
 
     if (!allFieldsValid) {
-      const missing = (Object.keys(FIELD_LABELS) as Array<keyof CardFieldsValidity>)
-        .filter((field) => !validity[field].isValid)
-        .map((field) => FIELD_LABELS[field]);
-      setValidationError(`Please enter a valid ${missing.join(", ")}.`);
+      setPayAttempted(true);
       return;
     }
 
+    setPayAttempted(false);
     setIsSubmitting(true);
     try {
       const { orderId } = await onCreateOrder();
@@ -309,7 +325,8 @@ function CardPaymentForm({
   );
 }
 
-interface CardPaymentSectionProps extends Omit<CardPaymentFormProps, "validity"> {}
+/** Same props as the inner form, minus `validity` which this component owns. */
+type CardPaymentSectionProps = Omit<CardPaymentFormProps, "validity">;
 
 export function CardPaymentSection(props: CardPaymentSectionProps): ReactElement {
   const [validity, setValidity] = useState<CardFieldsValidity>(PRISTINE_VALIDITY);
