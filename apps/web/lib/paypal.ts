@@ -437,3 +437,40 @@ export async function getMerchPayPalAccessToken(): Promise<string> {
   const data = (await response.json()) as { access_token: string };
   return data.access_token;
 }
+
+// ---------------------------------------------------------------------------
+// Refunds
+// ---------------------------------------------------------------------------
+
+/**
+ * Issues a full PayPal refund for a captured payment on the business account.
+ *
+ * Used by every checkout path that captures money before it knows the booking
+ * will succeed: if the reservation step then fails, the capture must be
+ * reversed rather than left as revenue for a spot the customer never got.
+ *
+ * Callers treat this as best-effort and log failures for manual
+ * reconciliation — a refund that does not go through is an ops problem, not
+ * something to surface to the person at the checkout screen.
+ *
+ * @param captureId - The PayPal capture id returned from /capture.
+ * @throws Error if PayPal rejects the refund request.
+ */
+export async function refundCapture(captureId: string): Promise<void> {
+  const accessToken = await getPayPalAccessToken();
+  const res = await fetch(
+    `${getPayPalApiBase()}/v2/payments/captures/${captureId}/refund`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    }
+  );
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Refund failed: ${res.status} ${txt}`);
+  }
+}

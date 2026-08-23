@@ -70,6 +70,41 @@ clone — so this file is the one that travels with the repo.
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
 | **Team bookings** (0055) | ✅ | — | — | **✗** | ✅ | — | Admin surface still missing, but now has an invariant — see below |
+| **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 20 unit tests on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
+
+### Instructor charge-and-book — the guarantee is invisible, so it has an invariant
+
+Shipped 2026-08-22. Instructors can add a student to their own class from the
+session page, but only by charging a card: `/api/sessions/[id]/charge-and-book`
+creates the booking inside the same request as the PayPal capture, and refunds
+the capture if the booking step then fails. Managers keep the older pair of
+independent actions (`add-booking` + `capture-manual-charge`), which deliberately
+allow adding a student without payment.
+
+That asymmetry is the entire feature, and it is invisible on every admin screen:
+a booking created without payment looks exactly like one created with it. A
+regression — a widened role allowlist, a reordered branch, a swallowed insert
+error — would produce free classes that nobody notices.
+
+Migration 0061 adds check #13, `instructor_booking_missing_payment`: active
+bookings created on or after 2026-08-22, older than 1h, whose `created_by` is an
+instructor and which have no completed payment row.
+
+The date floor was not in the first cut, and it showed. Applied to staging on
+2026-08-22 the check immediately reported **20 breaches** — every one a July seed
+row ("Mock class for testing — added by staff script") created long before
+instructor charge-and-book existed. Production reported 0. Rows that predate the
+guarantee cannot be evidence against it, and a critical check sitting permanently
+red is the same trap check #6 was scoped to avoid. Floored, staging reports 0. Existing check #2 does not cover this — it is scoped to
+`booking_source = 'online'`, while these write `'manual'`, the same source
+managers use for legitimate comp bookings. Keying on the creator's ROLE is what
+separates "must have been paid" from "may legitimately be free".
+
+Gap worth naming: the invariant catches an unpaid booking, not an *underpriced*
+one. Instructors type in their own charge amount, so a $10 charge on a $75 class
+is valid data by design. The mitigation is an audit trail, not a check — the
+booking's `manual_booking_reason` records the charged amount alongside the
+session's list price whenever the two differ.
 
 ### Team bookings — was invisible, now partially covered
 
