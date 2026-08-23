@@ -314,11 +314,20 @@ function invoiceStatusBadgeClass(status: string): string {
 // ─── Utility helpers ──────────────────────────────────────────────────────────
 
 /**
- * Formats an ISO timestamp for display. Returns e.g. "Mon, Apr 21, 2026 — 9:00 AM".
- * @param iso - ISO datetime string from the database.
+ * Formats a class timestamp for display. Returns e.g. "Mon, Apr 21, 2026, 9:00 AM".
+ *
+ * Class times are floating wall-clock values (migration 0060), not real
+ * instants — the stored "9:00 AM" carries no timezone meaning and must render
+ * back out verbatim. timeZone: "UTC" pins that, matching the FLOATING constant
+ * every formatClass* helper in lib/business-time.ts spreads in for the same
+ * reason. Without it, toLocaleString reinterprets the value in the browser's
+ * local timezone — a class stored as 9:00 AM Eastern would display as 5:00 AM
+ * (EDT) or 4:00 AM (EST) to anyone west of UTC.
+ * @param iso - Stored class timestamp.
  */
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
+    timeZone: "UTC",
     weekday: "short",
     month: "short",
     day: "numeric",
