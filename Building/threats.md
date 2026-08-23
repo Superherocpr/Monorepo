@@ -845,3 +845,75 @@ reachable in prod.
 whether it has a value. This audit only found it by reading the build log's
 "Env var names written" line and diffing that against the grep pattern — the
 pattern is the intent, the log is the truth.
+
+---
+
+## THREAT-063 — Instructor-set charge amount is unconstrained on the session page
+
+**Severity:** 3/10 (low)
+**File:** `apps/web/app/api/sessions/[id]/charge-and-book/route.ts`
+**Date:** 2026-08-22
+**Status:** ACCEPTED (deliberate product decision, mitigated by audit trail)
+
+**Description:** Instructors can now add a student to their own class from the
+session page, and type in the amount they are charging. The server does not
+constrain that figure to the session's price — that is intentional, since walk-in
+and negotiated rates differ from the catalog. The consequence is that an
+instructor can charge $10 for a $75 class. This is not an "add without paying"
+hole (the booking is created only after a settled capture, inside the same
+request), but it does move discount authority to the instructor.
+
+Exposure is insider misuse by an authenticated instructor on their own class, and
+the money loss lands mostly on the platform's cut — `recordBookingEarning`
+credits the instructor on the gross actually collected, so undercharging shrinks
+their own payout too.
+
+**Mitigations in place:**
+- The booking's `manual_booking_reason` records the charged amount alongside the
+  session's list price whenever the two differ, so an off-price charge is visible
+  on the booking itself rather than only in the PayPal dashboard.
+- `payments.routing_note` carries the same annotation.
+- A `$2,500` ceiling rejects a misplaced decimal point before the card is touched.
+- Ownership is enforced on both the order-creation and capture routes, so this
+  cannot be aimed at another instructor's class.
+
+**Not fixed because:** the owner explicitly chose a write-in price for this flow
+(2026-08-22). A price floor was offered and declined. If the audit trail ever
+shows this being abused, the durable fix is a server-side minimum expressed as a
+percentage of `getSessionPricing().basePrice`.
+
+---
+
+## THREAT-064 — Instructor access to customer lookup and account creation
+
+**Severity:** 3/10 (low)
+**File:** `apps/web/app/api/customers/lookup/route.ts`, `apps/web/app/api/customers/create/route.ts`
+**Date:** 2026-08-22
+**Status:** ACCEPTED (scoped down from the obvious implementation)
+
+**Description:** The charge-and-book flow needs instructors to find a student and,
+for a walk-in, create an account. Two previously manager-only capabilities were
+therefore widened:
+
+1. Customer lookup. The obvious route was to widen `/api/customers/search`, but
+   that route returns the first 100 profiles with NO query at all plus booking and
+   certification history — a full customer-list dump for every instructor. A
+   separate `/api/customers/lookup` was added instead: it requires a 3-character
+   term, caps at 20 rows, and returns contact fields only. An instructor can still
+   enumerate customers by iterating search terms; the cap makes it tedious rather
+   than trivial, and instructors already see full contact details for everyone on
+   their own rosters.
+2. Account creation. `/api/customers/create` now accepts instructors. An
+   instructor could create junk accounts or send unsolicited setup emails through
+   Resend. There is no rate limit; the duplicate-email check is the only guard.
+
+Both require an authenticated, non-archived, non-deactivated instructor account,
+so this is insider misuse or a compromised staff login rather than an external
+attack surface.
+
+**Mitigations in place:** the lookup's minimum term length, result cap, and
+reduced field set; PostgREST `or`-filter metacharacters are stripped from the
+search term before interpolation.
+
+**Watch for:** a spike in `profiles` rows with `role = 'customer'` and no booking
+would indicate abuse of (2). No check exists for that today.

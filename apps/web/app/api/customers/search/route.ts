@@ -8,10 +8,12 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
+import { floatingNow } from "@/lib/business-time";
 import {
-  getCertificationDaysUntilExpiry,
-  isCertificationActive,
-} from "@/lib/cert-utils";
+  CUSTOMER_ACTIVITY_SELECT,
+  summarizeCustomerActivity,
+  type CustomerActivityRow,
+} from "@/lib/customer-directory";
 
 /**
  * Handles customer search requests from the admin customers page.
@@ -35,17 +37,12 @@ export async function GET(request: Request) {
   const query = searchParams.get("q") ?? "";
 
   // ── Database query ─────────────────────────────────────────────────────────
-  // Use explicit FK hints on bookings because the bookings table has three FKs
-  // back to profiles (customer_id, created_by, cancelled_by). Without the hint
-  // PostgREST cannot resolve the join and the query returns no data.
+  // CUSTOMER_ACTIVITY_SELECT carries the FK hints the bookings join needs —
+  // see lib/customer-directory.ts.
   let dbQuery = adminClient
     .from("profiles")
     .select(
-      `
-      id, first_name, last_name, email, phone, created_at, archived,
-      bookings!customer_id ( id, cancelled, class_sessions ( starts_at ) ),
-      certifications!customer_id ( id, expires_at )
-    `
+      `id, first_name, last_name, email, phone, created_at, archived, ${CUSTOMER_ACTIVITY_SELECT}`
     )
     .eq("role", "customer")
     .order("last_name", { ascending: true })
@@ -66,43 +63,19 @@ export async function GET(request: Request) {
   }
 
   // ── Compute per-customer meta ──────────────────────────────────────────────
-  const now = new Date();
+  // Floating space: class times are wall-clock values since migration 0060.
+  const now = new Date(floatingNow());
 
-  const customersWithMeta = (customers ?? []).map((customer) => {
-    const activeBookings = customer.bookings.filter(
-      (b: { cancelled: boolean }) => !b.cancelled
-    );
-    const upcomingBookings = activeBookings.filter(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (b: any) => {
-        const session = Array.isArray(b.class_sessions)
-          ? b.class_sessions[0]
-          : b.class_sessions;
-        return session && new Date(session.starts_at) >= now;
-      }
-    );
-    const activeCerts = customer.certifications.filter(
-      (c: { expires_at: string }) => isCertificationActive(c.expires_at, now)
-    );
-    const expiringSoon = activeCerts.filter((c: { expires_at: string }) => {
-      const days = getCertificationDaysUntilExpiry(c.expires_at, now);
-      return days <= 90;
-    });
-
-    return {
-      id: customer.id,
-      first_name: customer.first_name,
-      last_name: customer.last_name,
-      email: customer.email,
-      phone: customer.phone,
-      created_at: customer.created_at,
-      archived: customer.archived,
-      upcomingBookingsCount: upcomingBookings.length,
-      totalBookingsCount: activeBookings.length,
-      activeCertsCount: activeCerts.length,
-      hasExpiringSoon: expiringSoon.length > 0,
-    };
-  });
+  const customersWithMeta = (customers ?? []).map((customer) => ({
+    id: customer.id,
+    first_name: customer.first_name,
+    last_name: customer.last_name,
+    email: customer.email,
+    phone: customer.phone,
+    created_at: customer.created_at,
+    archived: customer.archived,
+    ...summarizeCustomerActivity(customer as unknown as CustomerActivityRow, now),
+  }));
 
   return Response.json({ customers: customersWithMeta });
 }
