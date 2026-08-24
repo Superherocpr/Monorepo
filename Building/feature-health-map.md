@@ -149,7 +149,7 @@ a product gap, not just a monitoring one.
 | Feature | U | E | C | A | I | M | Verdict |
 |---|---|---|---|---|---|---|---|
 | Sessions & scheduling | ✅✅ | ○ smoke | ✅ | ✅ | ✅✅ | — | Cron covers unclaimed escalation only |
-| **Class time correctness** | ✅✅ | — | — | ✅ | — | — | ⚠️ Unit-only — see note below |
+| **Class time correctness** | ✅✅ | — | — | ✅ | — | — | ⚠️ Unit-only; call-site gap fired 2026-08-23 — see note below |
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
@@ -179,10 +179,25 @@ was precisely that the same code gave different answers in the browser and on th
 UTC email server. Verified passing in all five on 2026-08-22. **This is not wired
 into CI** — it is a command someone must run.
 
-**Honest gap:** this is unit-only. The unit tests prove the helpers are correct;
-nothing asserts that every *call site* uses them. A future call site that
-hand-rolls `toLocaleTimeString` without `timeZone: "UTC"` would be wrong and
-silent. Two things that would close it:
+**The gap was not theoretical — it fired (2026-08-23).** The floating-time
+migration fixed the two class pickers in `lib/enrollware-bookmarklet.ts` and
+missed `fillClassForm`, the function that writes the date and time *into
+Enrollware*. It still used `getHours()`, so an Eastern instructor submitting a
+9:00 AM class filled Enrollware with 5:00 AM, and an evening class could land on
+the wrong calendar date. Every unit test passed the whole time. Fixed by moving
+that block to the `getUTC*` getters.
+
+**Signal added for it:** `tests/unit/lib/enrollware-bookmarklet.test.ts` now runs
+the generated script against a fake Enrollware class-edit DOM and asserts the
+values that land in the form fields — an outcome assertion, not a string match.
+It is in `pnpm test:unit:tz`, so it runs under all five timezones; it fails
+against the pre-fix code (`expected '05:00' to be '09:00'`).
+
+**Honest gap:** still unit-only, and now covers exactly one call site. The unit
+tests prove the helpers are correct and that the Enrollware fill uses them;
+nothing asserts the *other* call sites do. Another one that hand-rolls
+`toLocaleTimeString` without `timeZone: "UTC"` would be wrong and silent in the
+same way. Two things that would close it:
 
 - `// TODO:` An outcome e2e test that books a session and asserts the time shown
   on `/book`, on the confirmation page, and in the captured email body all match
@@ -190,8 +205,10 @@ silent. Two things that would close it:
 - `// TODO:` A lint rule banning bare `toLocaleTimeString`/`toLocaleDateString`
   on a `starts_at`/`ends_at` value outside `lib/business-time.ts`.
 
-Neither is built. Until one is, the coverage here is "the helpers are right",
-not "the app uses them everywhere".
+Neither is built. Until one is, the coverage here is "the helpers are right, and
+the Enrollware fill uses them", not "the app uses them everywhere". The lint rule
+is the higher-value of the two — it is the only option that scales to call sites
+nobody thought to test.
 
 ---
 
