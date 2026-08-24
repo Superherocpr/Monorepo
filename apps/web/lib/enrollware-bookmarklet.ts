@@ -157,6 +157,13 @@ export function getBookmarkletSource(apiBase: string): string {
   // =========================================================
   // Class form fill
   // =========================================================
+  //
+  // Floating class times: starts_at / ends_at hold the wall clock the
+  // instructor typed, labelled Z but carrying no timezone meaning — a 9:00 AM
+  // class is stored as 09:00:00Z (see lib/business-time.ts). So every class
+  // time read in this script uses the getUTC* getters, or pins timeZone:'UTC'
+  // when formatting. Plain getHours() in an Eastern browser would write 5:00 AM
+  // into Enrollware for a 9:00 AM class.
 
   /**
    * Fills all class-detail form fields using the provided session data.
@@ -195,7 +202,7 @@ export function getBookmarkletSource(apiBase: string): string {
     var dateEl = document.getElementById('mainContent_startDate');
     if (dateEl && session.starts_at) {
       var d = new Date(session.starts_at);
-      dateEl.value = (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+      dateEl.value = (d.getUTCMonth() + 1) + '/' + d.getUTCDate() + '/' + d.getUTCFullYear();
     }
 
     // Start time — <input type="time"> expects HH:mm in 24-hour format
@@ -203,7 +210,7 @@ export function getBookmarkletSource(apiBase: string): string {
     if (startTimeEl && session.starts_at) {
       var sd = new Date(session.starts_at);
       startTimeEl.value =
-        pad2(sd.getHours()) + ':' + pad2(sd.getMinutes());
+        pad2(sd.getUTCHours()) + ':' + pad2(sd.getUTCMinutes());
     }
 
     // End time
@@ -211,7 +218,7 @@ export function getBookmarkletSource(apiBase: string): string {
     if (endTimeEl && session.ends_at) {
       var ed = new Date(session.ends_at);
       endTimeEl.value =
-        pad2(ed.getHours()) + ':' + pad2(ed.getMinutes());
+        pad2(ed.getUTCHours()) + ':' + pad2(ed.getUTCMinutes());
     }
 
     // Price
@@ -473,6 +480,15 @@ export function getBookmarkletSource(apiBase: string): string {
 
   function showStudentFill(session) {
     var students = session.students || [];
+
+    // Fill "Certificate Issued On" from the session date. This field only exists
+    // on existing-class pages (not new-class forms), so the null check is normal.
+    // starts_at is a floating wall-clock value — slice(0,10) gives YYYY-MM-DD
+    // verbatim with no timezone conversion, matching the date input's expected format.
+    var issueDateEl = document.getElementById('mainContent_issueDate');
+    if (issueDateEl && session.starts_at) {
+      issueDateEl.value = session.starts_at.slice(0, 10);
+    }
 
     if (students.length === 0) {
       showPanel(panelHeader() +

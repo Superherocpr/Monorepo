@@ -724,15 +724,10 @@ direct-to-API bypass, not drive-by spam. No PII, funds, or accounts exposed.
 **Files:** `apps/web/lib/turnstile.ts`, `apps/web/app/api/contact/route.ts`,
 `amplify.yml`
 **Date:** 2026-08-20
-**Status:** VARIABLE SET 2026-08-20 — **awaiting redeploy to take effect.**
-`TURNSTILE_SECRET_KEY` added to the Amplify app at "All branches" scope via the
-console (the CLI's `update-app --environment-variables` replaces the whole map and
-was not used). Verified: app-level key count went 25 → 26 with nothing lost, and
-both branch-level override sets are unchanged (main 7, staging 2). Because
-`amplify.yml` injects env vars at **build** time, the running app will not see the
-value until `main` rebuilds. Confirm by checking the next build log for 23 injected
-names including `TURNSTILE_SECRET_KEY`, then reload the Turnstile analytics page and
-watch "Siteverify requests" climb off zero.
+**Status:** FIXED — deployed in build #75 (2026-08-20, 18:43 ET). `TURNSTILE_SECRET_KEY`
+was set at Amplify app level on 2026-08-20 and confirmed injected in the next `main`
+build. `verifyTurnstileToken()` now validates tokens in production; the fail-open
+path no longer applies.
 
 **Description:** `verifyTurnstileToken()` deliberately no-ops and returns
 `{ success: true }` when `TURNSTILE_SECRET_KEY` is unset, so local dev works
