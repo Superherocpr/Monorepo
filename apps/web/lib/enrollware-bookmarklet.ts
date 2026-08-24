@@ -221,9 +221,10 @@ export function getBookmarkletSource(apiBase: string): string {
         pad2(ed.getUTCHours()) + ':' + pad2(ed.getUTCMinutes());
     }
 
-    // Price
+    // Price — only fill if we have a positive value; writing 0 would clobber
+    // whatever the instructor already entered for a free/unpriced class type.
     var priceEl = document.getElementById('mainContent_price');
-    if (priceEl && session.class_type && session.class_type.price != null) {
+    if (priceEl && session.class_type && session.class_type.price > 0) {
       priceEl.value = String(session.class_type.price);
     }
 
