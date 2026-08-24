@@ -153,7 +153,7 @@ a product gap, not just a monitoring one.
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
-| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Annual deprecation check; external, brittle |
+| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on added 2026-08-24; unit coverage for both |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
 

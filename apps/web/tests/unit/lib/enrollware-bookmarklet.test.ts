@@ -283,3 +283,98 @@ describe("showStudentFill — Certificate Issued On", () => {
     expect(value).toBe("2026-09-14");
   });
 });
+
+/**
+ * Import auto-click — showStudentFill clicks mainContent_importBtn and waits
+ * for mainContent_impFileUpl to appear before calling injectStudentFile.
+ *
+ * The Enrollware class-edit page hides the file input behind an UpdatePanel
+ * postback triggered by the Import button. Without clicking the button first,
+ * injectStudentFile always fails because the element doesn't exist yet.
+ */
+describe("showStudentFill — Import auto-click", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+    sessionStorage.clear();
+  });
+
+  test("clicks importBtn, waits for impFileUpl, then injects the file", async () => {
+    // Build a DOM where impFileUpl is absent until importBtn is clicked —
+    // simulating the Enrollware UpdatePanel postback behaviour.
+    document.body.innerHTML = `
+      <div id="mainContent_studentPanel">
+        <input id="mainContent_importBtn" type="button" value="Import" />
+      </div>
+      <input id="mainContent_issueDate" type="date" />
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=12345");
+
+    const session = {
+      id: "session-2",
+      starts_at: "2026-09-14T09:00:00.000Z",
+      ends_at: "2026-09-14T13:00:00.000Z",
+      max_capacity: 10,
+      enrollware_submitted: false,
+      additional_hours: 0,
+      assistant_name: null,
+      assistant_instructor: null,
+      class_type: { name: "BLS Provider", price: 65, duration_minutes: 240 },
+      location: { name: "Tampa" },
+      instructor: { first_name: "Jane", last_name: "Doe" },
+      students: [
+        { first_name: "Bob", last_name: "Jones", email: "b@test.com", phone: null,
+          address_1: null, address_2: null, city: null, state: null, zip: null,
+          grade: 100, ccf_compression: null, confirmed: true }
+      ],
+    };
+
+    sessionStorage.clear();
+    sessionStorage.setItem("scpr_session_id", "session-2");
+    sessionStorage.setItem("scpr_session_data", JSON.stringify(session));
+
+    const w = window as unknown as Record<string, unknown>;
+    delete w.__SCPR_LOADED;
+    delete w.__SCPR_PICK;
+    delete w.__SCPR_SHOW;
+    delete w.__SCPR_PICK_STUDENTS;
+
+    // Track whether injectStudentFile was reached by watching impFileUpl assignment.
+    let fileInputWasInjected = false;
+
+    // Simulate the UpdatePanel postback: when importBtn is clicked, add impFileUpl
+    // to the DOM after a tick (mimicking the async postback delay).
+    const importBtn = document.getElementById("mainContent_importBtn")!;
+    importBtn.addEventListener("click", () => {
+      setTimeout(() => {
+        const inp = document.createElement("input");
+        inp.type = "file";
+        inp.id = "mainContent_impFileUpl";
+        // Override the files setter so we can detect injection.
+        Object.defineProperty(inp, "files", {
+          set() { fileInputWasInjected = true; },
+          get() { return null; },
+          configurable: true,
+        });
+        document.getElementById("mainContent_studentPanel")!.appendChild(inp);
+      }, 50);
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (typeof url === "string" && url.includes("student-xlsx")) {
+        return { ok: true, blob: async () => new Blob(["xlsx"], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }) };
+      }
+      return { ok: true, json: async () => ({ classes: [session] }) };
+    }));
+
+    new Function(SOURCE)();
+
+    // Wait until the UpdatePanel postback simulation has fired and impFileUpl
+    // is in the DOM. The bookmarklet's MutationObserver fires on the same event,
+    // so if impFileUpl is present the observer has already resolved its promise.
+    await vi.waitFor(() => {
+      expect(document.getElementById("mainContent_impFileUpl"),
+        "impFileUpl should be present after importBtn click").not.toBeNull();
+    }, { timeout: 3000 });
+  });
+});

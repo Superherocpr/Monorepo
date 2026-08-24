@@ -503,13 +503,43 @@ export function getBookmarkletSource(apiBase: string): string {
       '<div style="text-align:center;padding:8px 0;color:#666">Preparing student file&hellip;</div>'
     );
 
-    fetchStudentXLSX(session.id).then(function(blob) {
+    // Fetch the XLSX blob and open the import panel in parallel so we can
+    // inject the file as soon as both are ready, minimising total wait time.
+    //
+    // mainContent_importBtn is an ASP.NET UpdatePanel submit button — clicking
+    // it triggers an async partial-postback that reveals mainContent_impFileUpl
+    // (the file input) without a full page reload. We click it and wait for the
+    // element to appear via MutationObserver rather than polling.
+    var blobPromise = fetchStudentXLSX(session.id);
+
+    var fileReadyPromise = new Promise(function(resolve) {
+      if (document.getElementById('mainContent_impFileUpl')) { resolve(true); return; }
+      var importBtn = document.getElementById('mainContent_importBtn');
+      if (!importBtn) { resolve(false); return; }
+      var done = false;
+      var observer = new MutationObserver(function() {
+        if (done) return;
+        if (document.getElementById('mainContent_impFileUpl')) {
+          done = true;
+          observer.disconnect();
+          resolve(true);
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      setTimeout(function() {
+        if (!done) { done = true; observer.disconnect(); resolve(false); }
+      }, 10000);
+      importBtn.click();
+    });
+
+    Promise.all([blobPromise, fileReadyPromise]).then(function(results) {
+      var blob = results[0];
       var injected = injectStudentFile(blob);
 
       showPanel(panelHeader() +
         (injected
           ? '<div style="color:#2d7a2d;margin-bottom:6px">&#x2713; ' + count + ' student' + (count !== 1 ? 's' : '') + ' loaded into the import file!</div>' +
-            '<div style="font-size:12px;color:#555;margin-bottom:10px">Scroll up and click <b>Import Students</b> to add them to this class.</div>'
+            '<div style="font-size:12px;color:#555;margin-bottom:10px">Click <b>Import Students</b> to add them to this class.</div>'
           : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not inject file automatically. Use the download button below.</div>'
         ) +
         '<button onclick="window.__SCPR_DOWNLOAD()" ' +
