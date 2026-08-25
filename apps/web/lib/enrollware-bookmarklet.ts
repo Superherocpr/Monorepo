@@ -458,6 +458,14 @@ export function getBookmarkletSource(apiBase: string): string {
           if (storedData) {
             try {
               var session = JSON.parse(storedData);
+              // Re-fill the price after the UpdatePanel postback resets the form
+              // from the server. The postback response carries Enrollware's stored
+              // price for the course ($0 if not configured on their side), which
+              // overwrites what we set before the instructor clicked Update Class.
+              var priceEl = document.getElementById('mainContent_price');
+              if (priceEl && session.class_type && session.class_type.price > 0) {
+                priceEl.value = String(session.class_type.price);
+              }
               setTimeout(function() { showStudentFill(session); }, 400);
             } catch (e) { /* ignore parse error */ }
           }
