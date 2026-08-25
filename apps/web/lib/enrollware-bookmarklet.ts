@@ -490,6 +490,15 @@ export function getBookmarkletSource(apiBase: string): string {
   function showStudentFill(session) {
     var students = session.students || [];
 
+    // Re-fill price: "Update Class" triggers a full ASP.NET postback (not UpdatePanel),
+    // so the page fully navigates. The existing-class page loads with Enrollware's
+    // stored price for the course ($0 if not configured on their side). We write
+    // the correct price here so it's visible and included in any subsequent saves.
+    var priceEl2 = document.getElementById('mainContent_price');
+    if (priceEl2 && session.class_type && session.class_type.price > 0) {
+      priceEl2.value = String(session.class_type.price);
+    }
+
     // Fill "Certificate Issued On" from the session date. This field only exists
     // on existing-class pages (not new-class forms), so the null check is normal.
     // starts_at is a floating wall-clock value — slice(0,10) gives YYYY-MM-DD
