@@ -1,6 +1,8 @@
 /**
  * InstructorTeamSection — grid of published supporting instructor cards on the /about page.
- * Returns null if no published, display-ready non-lead instructors exist.
+ * Includes instructors, managers, and super admins who have bio_published = true.
+ * Role labels are not shown — all appear simply as instructors to the public.
+ * Returns null if no published, display-ready non-lead members exist.
  * Used by: app/(public)/about/page.tsx
  */
 
@@ -104,7 +106,7 @@ export default async function InstructorTeamSection() {
   const { data: instructors, error } = await supabase
     .from("profiles")
     .select("id, first_name, last_name, bio_photo, bio_description, bio_credentials")
-    .eq("role", "instructor")
+    .in("role", ["instructor", "super_admin", "manager"])
     .eq("is_lead_instructor", false)
     .eq("deactivated", false)
     .eq("bio_published", true)
