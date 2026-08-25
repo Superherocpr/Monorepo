@@ -6,6 +6,7 @@
  */
 
 import Link from "next/link";
+import { formatClassTimeRange } from "@/lib/business-time";
 
 /** A class session happening today (all instructors). */
 export interface ManagerTodaySession {
@@ -61,25 +62,14 @@ const BOOKING_SOURCE_COLORS: Record<string, string> = {
 };
 
 /**
- * Formats a timestamptz string as a short time range, e.g. "9:00 AM – 11:00 AM".
- * @param startsAt - ISO start timestamp
- * @param endsAt - ISO end timestamp
- */
-function formatTimeRange(startsAt: string, endsAt: string): string {
-  const fmt = (d: string) =>
-    new Date(d).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  return `${fmt(startsAt)} – ${fmt(endsAt)}`;
-}
-
-/**
- * Formats a timestamptz string as a readable date, e.g. "Jun 12".
- * @param timestamp - ISO timestamp string
+ * Formats a class date as e.g. "Jun 12".
+ * timeZone is pinned to UTC because class times are floating wall-clock values —
+ * see lib/business-time.ts.
+ * @param timestamp - Stored class timestamp
  */
 function formatShortDate(timestamp: string): string {
   return new Date(timestamp).toLocaleDateString("en-US", {
+    timeZone: "UTC",
     month: "short",
     day: "numeric",
   });
@@ -168,7 +158,7 @@ export default function ManagerDashboard({
                         {session.instructor
                           ? `${session.instructor.first_name} ${session.instructor.last_name}`
                           : "Unknown Instructor"}{" "}
-                        · {formatTimeRange(session.starts_at, session.ends_at)}
+                        · {formatClassTimeRange(session.starts_at, session.ends_at)}
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {session.locations?.name ?? "-"}

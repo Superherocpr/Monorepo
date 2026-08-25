@@ -118,12 +118,14 @@ export async function POST(request: Request) {
     session: {
       className: session.class_types?.name ?? "CPR Class",
       date: startsAt.toLocaleDateString("en-US", {
+        timeZone: "UTC", // class times are floating wall-clock values
         weekday: "long",
         year: "numeric",
         month: "long",
         day: "numeric",
       }),
       time: startsAt.toLocaleTimeString("en-US", {
+        timeZone: "UTC", // class times are floating wall-clock values
         hour: "numeric",
         minute: "2-digit",
         hour12: true,

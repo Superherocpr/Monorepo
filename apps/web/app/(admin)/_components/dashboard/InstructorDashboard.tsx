@@ -14,6 +14,7 @@ import type { PendingGradeSession } from "./PendingGradesWidget";
 import type { PendingInvoice } from "./PendingInvoicesWidget";
 import type { OpenOpportunity } from "./OpenOpportunitiesWidget";
 import type { ActivePromoCode } from "./PromoCodesWidget";
+import { formatClassTimeRange } from "@/lib/business-time";
 
 export type { PendingGradeSession, PendingInvoice, OpenOpportunity, ActivePromoCode };
 
@@ -45,20 +46,6 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-700",
 };
-
-/**
- * Formats a timestamptz string as a short time range, e.g. "9:00 AM – 11:00 AM".
- * @param startsAt - ISO start timestamp
- * @param endsAt - ISO end timestamp
- */
-function formatTimeRange(startsAt: string, endsAt: string): string {
-  const fmt = (d: string) =>
-    new Date(d).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  return `${fmt(startsAt)} – ${fmt(endsAt)}`;
-}
 
 /** Role-specific dashboard for instructors. All data is pre-fetched and passed as props. */
 export default function InstructorDashboard({
@@ -102,7 +89,7 @@ export default function InstructorDashboard({
                         {session.class_types?.name ?? "Unknown Class"}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {formatTimeRange(session.starts_at, session.ends_at)}
+                        {formatClassTimeRange(session.starts_at, session.ends_at)}
                         {session.locations?.name
                           ? ` · ${session.locations.name}`
                           : ""}

@@ -11,7 +11,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { businessDate, isSameBusinessDay } from "@/lib/business-time";
+import { businessDate, isSameBusinessDay, classDate, floatingNow } from "@/lib/business-time";
 
 interface SessionRow {
   id: string;
@@ -114,12 +114,13 @@ export async function POST(request: Request) {
     return Response.json({ valid: false }, { status: 200 });
   }
 
-  // "Today" in the business time zone (Eastern). Query a generous ±24h UTC
-  // window, then keep only rows whose starts_at falls on the same Eastern
-  // calendar day as now — exact across DST, no offset arithmetic.
+  // "Today" in the business time zone. starts_at holds a floating wall-clock
+  // value, so the ±24h window is centred on the business wall clock rather than
+  // the true UTC instant, and the exact match below compares calendar dates.
   const now = new Date();
-  const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const windowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const nowFloating = new Date(floatingNow());
+  const windowStart = new Date(nowFloating.getTime() - 24 * 60 * 60 * 1000);
+  const windowEnd = new Date(nowFloating.getTime() + 24 * 60 * 60 * 1000);
 
   const { data: sessions, error: sessionsError } = await supabase
     .from("class_sessions")
@@ -139,9 +140,11 @@ export async function POST(request: Request) {
 
   // Nested to-one relations (class_types, locations) are typed as arrays by Supabase
   // typegen, but at runtime they are single objects. Cast through unknown to bridge.
+  // classDate reads the class's own calendar day straight off the stored wall
+  // clock; businessDate resolves the real instant "now" to a business-day date.
   const today = businessDate(now);
   const sessionRows = ((sessions ?? []) as unknown as SessionRow[]).filter(
-    (s) => businessDate(new Date(s.starts_at)) === today
+    (s) => classDate(s.starts_at) === today
   );
 
   if (sessionRows.length === 0) {

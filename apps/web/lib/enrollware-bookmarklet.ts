@@ -157,6 +157,13 @@ export function getBookmarkletSource(apiBase: string): string {
   // =========================================================
   // Class form fill
   // =========================================================
+  //
+  // Floating class times: starts_at / ends_at hold the wall clock the
+  // instructor typed, labelled Z but carrying no timezone meaning — a 9:00 AM
+  // class is stored as 09:00:00Z (see lib/business-time.ts). So every class
+  // time read in this script uses the getUTC* getters, or pins timeZone:'UTC'
+  // when formatting. Plain getHours() in an Eastern browser would write 5:00 AM
+  // into Enrollware for a 9:00 AM class.
 
   /**
    * Fills all class-detail form fields using the provided session data.
@@ -195,7 +202,7 @@ export function getBookmarkletSource(apiBase: string): string {
     var dateEl = document.getElementById('mainContent_startDate');
     if (dateEl && session.starts_at) {
       var d = new Date(session.starts_at);
-      dateEl.value = (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+      dateEl.value = (d.getUTCMonth() + 1) + '/' + d.getUTCDate() + '/' + d.getUTCFullYear();
     }
 
     // Start time — <input type="time"> expects HH:mm in 24-hour format
@@ -203,7 +210,7 @@ export function getBookmarkletSource(apiBase: string): string {
     if (startTimeEl && session.starts_at) {
       var sd = new Date(session.starts_at);
       startTimeEl.value =
-        pad2(sd.getHours()) + ':' + pad2(sd.getMinutes());
+        pad2(sd.getUTCHours()) + ':' + pad2(sd.getUTCMinutes());
     }
 
     // End time
@@ -211,12 +218,13 @@ export function getBookmarkletSource(apiBase: string): string {
     if (endTimeEl && session.ends_at) {
       var ed = new Date(session.ends_at);
       endTimeEl.value =
-        pad2(ed.getHours()) + ':' + pad2(ed.getMinutes());
+        pad2(ed.getUTCHours()) + ':' + pad2(ed.getUTCMinutes());
     }
 
-    // Price
+    // Price — only fill if we have a positive value; writing 0 would clobber
+    // whatever the instructor already entered for a free/unpriced class type.
     var priceEl = document.getElementById('mainContent_price');
-    if (priceEl && session.class_type && session.class_type.price != null) {
+    if (priceEl && session.class_type && session.class_type.price > 0) {
       priceEl.value = String(session.class_type.price);
     }
 
@@ -367,7 +375,7 @@ export function getBookmarkletSource(apiBase: string): string {
   function showClassPicker(classes) {
     var items = classes.map(function(c, idx) {
       var start = new Date(c.starts_at);
-      var timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      var timeStr = start.toLocaleTimeString('en-US', { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' });
       var count = c.students ? c.students.length : 0;
       var submitted = c.enrollware_submitted
         ? '<span style="color:#888;font-size:11px"> &#x2713; submitted</span>'
@@ -474,6 +482,15 @@ export function getBookmarkletSource(apiBase: string): string {
   function showStudentFill(session) {
     var students = session.students || [];
 
+    // Fill "Certificate Issued On" from the session date. This field only exists
+    // on existing-class pages (not new-class forms), so the null check is normal.
+    // starts_at is a floating wall-clock value — slice(0,10) gives YYYY-MM-DD
+    // verbatim with no timezone conversion, matching the date input's expected format.
+    var issueDateEl = document.getElementById('mainContent_issueDate');
+    if (issueDateEl && session.starts_at) {
+      issueDateEl.value = session.starts_at.slice(0, 10);
+    }
+
     if (students.length === 0) {
       showPanel(panelHeader() +
         '<div style="font-size:13px">No students found in the database for this class.</div>' +
@@ -487,13 +504,43 @@ export function getBookmarkletSource(apiBase: string): string {
       '<div style="text-align:center;padding:8px 0;color:#666">Preparing student file&hellip;</div>'
     );
 
-    fetchStudentXLSX(session.id).then(function(blob) {
+    // Fetch the XLSX blob and open the import panel in parallel so we can
+    // inject the file as soon as both are ready, minimising total wait time.
+    //
+    // mainContent_importBtn is an ASP.NET UpdatePanel submit button — clicking
+    // it triggers an async partial-postback that reveals mainContent_impFileUpl
+    // (the file input) without a full page reload. We click it and wait for the
+    // element to appear via MutationObserver rather than polling.
+    var blobPromise = fetchStudentXLSX(session.id);
+
+    var fileReadyPromise = new Promise(function(resolve) {
+      if (document.getElementById('mainContent_impFileUpl')) { resolve(true); return; }
+      var importBtn = document.getElementById('mainContent_importBtn');
+      if (!importBtn) { resolve(false); return; }
+      var done = false;
+      var observer = new MutationObserver(function() {
+        if (done) return;
+        if (document.getElementById('mainContent_impFileUpl')) {
+          done = true;
+          observer.disconnect();
+          resolve(true);
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      setTimeout(function() {
+        if (!done) { done = true; observer.disconnect(); resolve(false); }
+      }, 10000);
+      importBtn.click();
+    });
+
+    Promise.all([blobPromise, fileReadyPromise]).then(function(results) {
+      var blob = results[0];
       var injected = injectStudentFile(blob);
 
       showPanel(panelHeader() +
         (injected
           ? '<div style="color:#2d7a2d;margin-bottom:6px">&#x2713; ' + count + ' student' + (count !== 1 ? 's' : '') + ' loaded into the import file!</div>' +
-            '<div style="font-size:12px;color:#555;margin-bottom:10px">Scroll up and click <b>Import Students</b> to add them to this class.</div>'
+            '<div style="font-size:12px;color:#555;margin-bottom:10px">Click <b>Import Students</b> to add them to this class.</div>'
           : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not inject file automatically. Use the download button below.</div>'
         ) +
         '<button onclick="window.__SCPR_DOWNLOAD()" ' +
@@ -594,7 +641,7 @@ export function getBookmarkletSource(apiBase: string): string {
   function showClassPickerForStudents(classes) {
     var items = classes.map(function(c, idx) {
       var start = new Date(c.starts_at);
-      var timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      var timeStr = start.toLocaleTimeString('en-US', { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' });
       var count = c.students ? c.students.length : 0;
       return '<div style="border:1px solid #ddd;border-radius:4px;padding:8px;' +
              'margin-bottom:8px;cursor:pointer" ' +

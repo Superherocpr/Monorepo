@@ -26,6 +26,7 @@ import {
   fetchCronHealth,
   summarizeCronHealth,
 } from "@/lib/cron-heartbeat";
+import { formatClassTime } from "@/lib/business-time";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,8 +49,13 @@ function singular<T>(v: T | T[] | null | undefined): T | null {
 function getETBoundaries(): {
   yesterdayStart: string;
   yesterdayEnd: string;
-  todayStart: string;
-  todayEnd: string;
+  /**
+   * Bounds for today's class_sessions. These are floating wall-clock bounds
+   * (the ET calendar date at literal midnight), not real instants, because
+   * starts_at stores a floating wall-clock value — see lib/business-time.ts.
+   */
+  todayClassStart: string;
+  todayClassEnd: string;
   dateLabel: string;
 } {
   const now = new Date();
@@ -87,7 +93,6 @@ function getETBoundaries(): {
 
   const yStart = etMidnightUTC(yesterdayET);
   const yEnd = etMidnightUTC(todayET);
-  const tEnd = new Date(yEnd.getTime() + 24 * 60 * 60 * 1000);
 
   const [yy, ym, yd] = yesterdayET.split("-").map(Number);
   const dateLabel = new Date(Date.UTC(yy, ym - 1, yd)).toLocaleDateString("en-US", {
@@ -98,11 +103,18 @@ function getETBoundaries(): {
     timeZone: "UTC",
   });
 
+  // Today's ET calendar date, taken at literal midnight — matches how class
+  // times are stored, so no offset is applied to these two bounds.
+  const [ty, tm, td] = todayET.split("-").map(Number);
+  const nextDayET = new Date(Date.UTC(ty, tm - 1, td + 1))
+    .toISOString()
+    .slice(0, 10);
+
   return {
     yesterdayStart: yStart.toISOString(),
     yesterdayEnd: yEnd.toISOString(),
-    todayStart: yEnd.toISOString(),
-    todayEnd: tEnd.toISOString(),
+    todayClassStart: `${todayET}T00:00:00.000Z`,
+    todayClassEnd: `${nextDayET}T00:00:00.000Z`,
     dateLabel,
   };
 }
@@ -128,7 +140,7 @@ async function handlePOST(request: Request): Promise<Response> {
   }
 
   const admin = await createAdminClient();
-  const { yesterdayStart, yesterdayEnd, todayStart, todayEnd, dateLabel } = getETBoundaries();
+  const { yesterdayStart, yesterdayEnd, todayClassStart, todayClassEnd, dateLabel } = getETBoundaries();
 
   // ── Parallel data fetches — independent queries run together ────────────────
   const [
@@ -192,8 +204,8 @@ async function handlePOST(request: Request): Promise<Response> {
         locations ( name ),
         profiles!instructor_id ( first_name, last_name )
       `)
-      .gte("starts_at", todayStart)
-      .lt("starts_at", todayEnd)
+      .gte("starts_at", todayClassStart)
+      .lt("starts_at", todayClassEnd)
       .neq("status", "cancelled")
       .order("starts_at", { ascending: true }),
 
@@ -314,14 +326,15 @@ async function handlePOST(request: Request): Promise<Response> {
         : "—",
       classType: classType?.name ?? "—",
       classDate: session?.starts_at
-        ? new Date(session.starts_at).toLocaleDateString("en-US", {
+        ? new Date(session.starts_at).toLocaleString("en-US", {
+            // UTC-pinned: class times are floating wall-clock values.
+            timeZone: "UTC",
             month: "short",
             day: "numeric",
             year: "numeric",
             hour: "numeric",
             minute: "2-digit",
             hour12: true,
-            timeZone: "America/New_York",
           })
         : "—",
       location: location?.name ?? "—",
@@ -430,12 +443,7 @@ async function handlePOST(request: Request): Promise<Response> {
       instructorName: instructor
         ? `${instructor.first_name} ${instructor.last_name}`.trim()
         : "—",
-      startsAt: new Date(s.starts_at).toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-        timeZone: "America/New_York",
-      }),
+      startsAt: formatClassTime(s.starts_at),
       location: location?.name ?? "—",
       enrolled: enrollmentMap.get(s.id) ?? 0,
       maxCapacity: s.max_capacity,

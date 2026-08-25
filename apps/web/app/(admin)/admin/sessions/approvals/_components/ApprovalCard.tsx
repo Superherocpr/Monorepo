@@ -11,6 +11,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { formatClassTime } from "@/lib/business-time";
 
 /** Lifecycle state of a single approval card, managed by the parent section. */
 export type CardStatus = "idle" | "loading" | "approved" | "rejected";
@@ -51,25 +52,20 @@ interface ApprovalCardProps {
 }
 
 /**
- * Formats a UTC ISO datetime string for display as "Day, Mon D · H:MM AM/PM".
- * @param iso - ISO 8601 date string.
+ * Formats a class time for display as "Day, Mon D, YYYY · H:MM AM/PM".
+ * timeZone is pinned to UTC because class times are floating wall-clock values —
+ * see lib/business-time.ts.
+ * @param iso - Stored class timestamp.
  */
 function formatSessionDate(iso: string): string {
-  const d = new Date(iso);
-  return (
-    d.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }) +
-    " · " +
-    d.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    })
-  );
+  const date = new Date(iso).toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${date} · ${formatClassTime(iso)}`;
 }
 
 /**

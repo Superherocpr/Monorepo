@@ -63,6 +63,7 @@ export const GROUPS: GroupDef[] = [
         role: "all",
         bullets: [
           "Create a single class session — pick class type, location, date/time, and max capacity",
+          "The time you enter is the time everyone sees — on the booking page, in confirmation emails, and on every admin screen. It is never adjusted for anyone's timezone, so enter the local time at the venue",
           "Set a discount percent or travel fee for the session",
           { text: "Assign an instructor to the session", role: "manager" },
           "Attach eligible add-ons from a checklist automatically filtered to the chosen class type",
@@ -120,6 +121,15 @@ export const GROUPS: GroupDef[] = [
           "Edit customer contact info directly from this page via a modal",
           "Send Invoice — opens the invoice creation form pre-filled with this session",
           "Log a payment for a student manually",
+          "Add Student — search customers by name, email, or phone, or create an account on the spot for a walk-in who isn't in the system yet",
+          {
+            text: "Add Student — add someone to the class without taking payment, and charge a card as a separate action; the two are independent",
+            role: "manager",
+          },
+          {
+            text: "Add Student — take a card payment for your own class, typing in the amount you're charging; the student is added only when the charge goes through, and is never added if it declines",
+            role: "instructor",
+          },
           "View all invoices linked to this session and their current status",
           "View roster upload history and any pending customer-submitted roster files",
         ],

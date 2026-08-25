@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { getCertificationDaysUntilExpiry } from "@/lib/cert-utils";
 import type { UserRole } from "@/types/users";
+import { formatClassDate, formatClassTimeRange } from "@/lib/business-time";
 
 // ── Data types ────────────────────────────────────────────────────────────────
 
@@ -774,9 +775,13 @@ export default function CustomerDetailClient({
                         {b.class_sessions.class_types.name}
                       </p>
                       <p className="text-sm text-gray-500">
-                        {fmtDate(b.class_sessions.starts_at)} ·{" "}
-                        {fmtTime(b.class_sessions.starts_at)}–
-                        {fmtTime(b.class_sessions.ends_at)}
+                        {/* Class times — the shared helpers read the stored wall clock
+                            verbatim; fmtDate/fmtTime are for real instants. */}
+                        {formatClassDate(b.class_sessions.starts_at, { month: "short", weekday: false })} ·{" "}
+                        {formatClassTimeRange(
+                          b.class_sessions.starts_at,
+                          b.class_sessions.ends_at
+                        )}
                       </p>
                       <p className="text-sm text-gray-500">
                         {b.class_sessions.locations.name},{" "}

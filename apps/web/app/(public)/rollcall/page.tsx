@@ -18,6 +18,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { CheckCircle2, Loader2, ChevronRight, Pencil } from "lucide-react";
+import { formatClassTime } from "@/lib/business-time";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -60,17 +61,6 @@ interface StudentProfile {
 type Step = 1 | 2 | 3 | 4 | "4-edit" | 5;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Formats an ISO datetime to a short time string, e.g. "9:00 AM".
- * @param iso - ISO date string
- */
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -564,7 +554,7 @@ export default function RollcallPage() {
             >
               <p className="font-semibold text-gray-900 text-lg">{s.classTypeName}</p>
               <p className="text-gray-500 text-sm mt-0.5">
-                {formatTime(s.startsAt)} · {s.locationName}
+                {formatClassTime(s.startsAt)} · {s.locationName}
               </p>
             </button>
           ))}
@@ -582,7 +572,7 @@ export default function RollcallPage() {
         <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">Who are you?</h1>
         {selectedSession && (
           <p className="text-gray-500 text-center text-sm mb-6">
-            {selectedSession.classTypeName} · {formatTime(selectedSession.startsAt)}
+            {selectedSession.classTypeName} · {formatClassTime(selectedSession.startsAt)}
           </p>
         )}
 
@@ -870,7 +860,7 @@ export default function RollcallPage() {
 
         {selectedSession && (
           <p className="text-gray-500 text-base mb-4">
-            {selectedSession.classTypeName} at {formatTime(selectedSession.startsAt)}&nbsp;—{" "}
+            {selectedSession.classTypeName} at {formatClassTime(selectedSession.startsAt)}&nbsp;—{" "}
             {selectedSession.locationName}
           </p>
         )}

@@ -8,6 +8,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { formatClassDateTimeLong } from "@/lib/business-time";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,18 +73,12 @@ function storeDeviceToken(recordId: string, token: string): void {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Formats an ISO timestamp for display (e.g. "Monday, April 22 at 9:00 AM").
- * @param iso - ISO timestamp string
+ * Formats a class time for display (e.g. "Monday, April 22, 2026 at 9:00 AM").
+ * @param iso - Stored class timestamp.
  */
 function formatDateTime(iso: string): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }) + " at " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return formatClassDateTimeLong(iso);
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────

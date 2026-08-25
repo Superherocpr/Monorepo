@@ -56,6 +56,7 @@ function studentKey(s: VerifiedStudent): string {
  */
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
+    timeZone: "UTC", // class times are floating wall-clock values
     hour: "numeric",
     minute: "2-digit",
   });

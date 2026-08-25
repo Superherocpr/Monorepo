@@ -1,7 +1,9 @@
 /**
  * POST /api/customers/create
- * Called by: CustomersClient — "Create Account & Send Setup Email" button
- * Auth: Manager and super_admin only (verified server-side)
+ * Called by: CustomersClient — "Create Account & Send Setup Email" button,
+ *            and the "Add Student to Class" modal on /admin/sessions/[id]
+ *            when a walk-in has no account yet.
+ * Auth: instructor, manager, super_admin (verified server-side)
  * Creates a Supabase auth user, inserts a profile, generates a password
  * recovery link, and sends an account setup email via Resend.
  *
@@ -30,7 +32,7 @@ export async function POST(request: Request) {
   const supabase = await createAdminClient();
 
   // ── Auth & role check ──────────────────────────────────────────────────────
-  const authResult = await requireApiRole(["manager", "super_admin"]);
+  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
   const user = actor.user;
@@ -93,12 +95,16 @@ export async function POST(request: Request) {
   }
 
   // ── 3. Insert profile record ───────────────────────────────────────────────
-  const { error: profileError } = await supabase.from("profiles").insert({
+  const newCustomer = {
     id: authData.user.id,
     first_name: firstName.trim(),
     last_name: lastName.trim(),
     email: email.toLowerCase(),
     phone: cleanPhone,
+  };
+
+  const { error: profileError } = await supabase.from("profiles").insert({
+    ...newCustomer,
     role: "customer",
   });
 
@@ -133,5 +139,5 @@ export async function POST(request: Request) {
     });
   }
 
-  return Response.json({ success: true });
+  return Response.json({ success: true, customer: newCustomer });
 }

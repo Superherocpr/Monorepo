@@ -1,23 +1,31 @@
 /**
  * POST /api/paypal/create-manual-charge-order
  * Called by: admin session manual charge modal
- * Auth: Manager and super_admin only
+ * Auth: instructor (own session only), manager, super_admin
  * Creates a PayPal order for a manually-entered amount using the business PayPal account.
  * Returns { orderId } for the client to submit card details against.
+ *
+ * Instructors are allowed here because creating an order moves no money and
+ * books no one — the gates that matter live on the capture routes. The
+ * ownership check below still applies, so an instructor cannot open orders
+ * against another instructor's class.
  */
 
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import { requireApiRole } from "@/lib/auth/effective-role";
+import { createAdminClient } from "@/lib/supabase/server";
+import { isMockPaymentsEnabled, createMockOrderId } from "@/lib/mock-payments";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
 export async function POST(request: Request) {
-  const authResult = await requireApiRole(["manager", "super_admin"]);
+  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
   if ("error" in authResult) return authResult.error;
+  const { actor } = authResult;
 
   const body = await request.json().catch(() => null);
   if (!isObject(body)) {
@@ -35,6 +43,34 @@ export async function POST(request: Request) {
   const sessionId = body.sessionId;
   if (typeof sessionId !== "string" || !sessionId.trim()) {
     return NextResponse.json({ error: "Missing session ID." }, { status: 400 });
+  }
+
+  // Instructors may only open orders against their own class. Capture is
+  // gated independently, so this is defence in depth rather than the only
+  // check — but it keeps stray orders off other instructors' sessions.
+  if (actor.effectiveRole === "instructor") {
+    const supabase = await createAdminClient();
+    const { data: session } = await supabase
+      .from("class_sessions")
+      .select("instructor_id")
+      .eq("id", sessionId)
+      .maybeSingle();
+
+    if (!session || session.instructor_id !== actor.user.id) {
+      return NextResponse.json(
+        { error: "You can only take payments for your own classes." },
+        { status: 403 }
+      );
+    }
+  }
+
+  // See lib/mock-payments.ts. All the validation and ownership checks above
+  // still ran — only the real PayPal call is skipped.
+  if (isMockPaymentsEnabled()) {
+    console.log("[create-manual-charge-order] MOCK PAYMENTS active — skipping real PayPal order creation", {
+      sessionId,
+    });
+    return NextResponse.json({ orderId: createMockOrderId(), mock: true });
   }
 
   const description =

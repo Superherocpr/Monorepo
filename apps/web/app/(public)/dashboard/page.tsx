@@ -15,6 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { UpcomingBookingWidget } from "@/types/bookings";
 import type { CertificationWidgetItem } from "@/types/certifications";
 import type { RecentOrderWidget as RecentOrderWidgetType } from "@/types/orders";
+import { floatingNow } from "@/lib/business-time";
 
 export const metadata = {
   title: "My Dashboard | SuperHeroCPR",
@@ -52,7 +53,7 @@ async function fetchUpcomingBookings(
     )
     .eq("customer_id", userId)
     .eq("cancelled", false)
-    .gte("class_sessions.starts_at", new Date().toISOString())
+    .gte("class_sessions.starts_at", floatingNow())
     .order("class_sessions.starts_at", { ascending: true })
     .limit(2);
   // Cast via unknown — Supabase infers array shapes for joined tables without generated DB types.

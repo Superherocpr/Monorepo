@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { Resend } from "resend";
 import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
+import { floatingNow } from "@/lib/business-time";
 
 /**
  * Adds a manual booking for the specified customer.
@@ -69,7 +70,7 @@ export async function POST(
     );
   }
 
-  if (new Date(session.starts_at) <= new Date()) {
+  if (new Date(session.starts_at) <= new Date(floatingNow())) {
     return Response.json(
       { success: false, error: "Cannot book a session that has already started." },
       { status: 400 }

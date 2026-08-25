@@ -7,21 +7,17 @@
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
+import { formatClassTime, floatingNow } from "@/lib/business-time";
 
-/** Formats an ISO datetime to e.g. "Tuesday, April 22 at 9:00 AM". */
+/** Formats a class time to e.g. "Tuesday, April 22 at 9:00 AM". */
 function formatNextClass(isoDate: string): string {
-  const date = new Date(isoDate);
-  const datePart = date.toLocaleDateString("en-US", {
+  const datePart = new Date(isoDate).toLocaleDateString("en-US", {
+    timeZone: "UTC",
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-  const timePart = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${datePart} at ${timePart}`;
+  return `${datePart} at ${formatClassTime(isoDate)}`;
 }
 
 /** Renders the full-viewport home page hero with live "next class" data. */
@@ -38,7 +34,7 @@ export default async function HeroSection() {
     .eq("status", "scheduled")
     .eq("approval_status", "approved")
     .eq("is_private", false)
-    .gte("starts_at", new Date().toISOString())
+    .gte("starts_at", floatingNow())
     .order("starts_at", { ascending: true })
     .limit(1)
     .single();

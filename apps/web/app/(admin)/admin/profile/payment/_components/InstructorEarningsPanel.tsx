@@ -26,6 +26,7 @@ import type {
   InstructorOwnPayoutItem,
   PayoutItemStatus,
 } from "@/types/payouts";
+import { formatClassDate } from "@/lib/business-time";
 
 interface InstructorEarningsPanelProps {
   data: InstructorEarningsData;
@@ -276,7 +277,11 @@ function EarningsTable({ earnings }: { earnings: InstructorOwnEarning[] }): Reac
                             <span className="block font-medium text-gray-800">{earning.label}</span>
                             {earning.sessionDate || earning.detail ? (
                               <span className="block text-xs text-gray-500">
-                                {earning.sessionDate ? fmtDate(earning.sessionDate) : earning.detail}
+                                {/* sessionDate is a class time — read verbatim, unlike the
+                                    real instants fmtDate handles elsewhere here. */}
+                                {earning.sessionDate
+                                  ? formatClassDate(earning.sessionDate, { month: "short", weekday: false })
+                                  : earning.detail}
                               </span>
                             ) : null}
                           </span>

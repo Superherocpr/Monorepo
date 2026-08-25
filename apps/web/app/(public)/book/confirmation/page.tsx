@@ -14,27 +14,7 @@ import { CheckCircle, Clock, MapPin, User } from "lucide-react";
 import { getBookingStore, clearBookingStore } from "@/lib/booking-store";
 import BookingProgress from "../_components/BookingProgress";
 import type { BookingStore } from "@/lib/booking-store";
-
-/** Formats an ISO timestamp to a readable date, e.g. "Tuesday, April 22, 2025". */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-/** Formats a start + end ISO pair to "9:00 AM – 11:00 AM". */
-function formatTimeRange(startsAt: string, endsAt: string): string {
-  const fmt = (d: string) =>
-    new Date(d).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  return `${fmt(startsAt)} – ${fmt(endsAt)}`;
-}
+import { formatClassDate, formatClassTimeRange } from "@/lib/business-time";
 
 /** Renders the booking confirmation screen (Step 5). */
 export default function BookConfirmationPage() {
@@ -80,8 +60,8 @@ export default function BookConfirmationPage() {
             <div className="flex items-start gap-3 text-sm text-gray-700">
               <Clock size={16} className="text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
               <div>
-                <p className="font-medium">{formatDate(details.startsAt)}</p>
-                <p className="text-gray-500">{formatTimeRange(details.startsAt, details.endsAt)}</p>
+                <p className="font-medium">{formatClassDate(details.startsAt)}</p>
+                <p className="text-gray-500">{formatClassTimeRange(details.startsAt, details.endsAt)}</p>
               </div>
             </div>
 

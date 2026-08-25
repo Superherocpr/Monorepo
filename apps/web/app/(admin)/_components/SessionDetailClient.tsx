@@ -18,6 +18,12 @@ import {
   rollcallChannelTopic,
 } from "@/lib/rollcall-realtime";
 import {
+  toDatetimeLocalValue,
+  fromDatetimeLocalValue,
+  classDate,
+  msUntilClass,
+} from "@/lib/business-time";
+import {
   approveSession,
   rejectSession,
   updateSession,
@@ -29,6 +35,7 @@ import {
 } from "@/app/(admin)/admin/sessions/[id]/actions";
 import { PayPalProvider } from "@paypal/react-paypal-js/sdk-v6";
 import { CardPaymentSection } from "@/app/_components/PayPalCardPaymentSection";
+import { MockCardPaymentSection } from "@/app/_components/MockCardPaymentSection";
 
 // ─── Exported types (imported by the server component) ────────────────────────
 
@@ -86,6 +93,21 @@ interface CustomerSearchResult {
   activeCertsCount: number;
   hasExpiringSoon: boolean;
 }
+
+/** Fields collected when creating an account for a walk-in student. */
+interface NewCustomerFormValues {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+}
+
+const EMPTY_NEW_CUSTOMER_FORM: NewCustomerFormValues = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+};
 
 const EMPTY_CONTACT_FORM: ContactFormValues = {
   email: "",
@@ -292,11 +314,20 @@ function invoiceStatusBadgeClass(status: string): string {
 // ─── Utility helpers ──────────────────────────────────────────────────────────
 
 /**
- * Formats an ISO timestamp for display. Returns e.g. "Mon, Apr 21, 2026 — 9:00 AM".
- * @param iso - ISO datetime string from the database.
+ * Formats a class timestamp for display. Returns e.g. "Mon, Apr 21, 2026, 9:00 AM".
+ *
+ * Class times are floating wall-clock values (migration 0060), not real
+ * instants — the stored "9:00 AM" carries no timezone meaning and must render
+ * back out verbatim. timeZone: "UTC" pins that, matching the FLOATING constant
+ * every formatClass* helper in lib/business-time.ts spreads in for the same
+ * reason. Without it, toLocaleString reinterprets the value in the browser's
+ * local timezone — a class stored as 9:00 AM Eastern would display as 5:00 AM
+ * (EDT) or 4:00 AM (EST) to anyone west of UTC.
+ * @param iso - Stored class timestamp.
  */
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
+    timeZone: "UTC",
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -305,19 +336,6 @@ function formatDateTime(iso: string): string {
     minute: "2-digit",
     hour12: true,
   });
-}
-
-/**
- * Converts a UTC ISO timestamp to the format expected by a datetime-local input,
- * expressed in the browser's local timezone so the displayed time matches the
- * actual class time as seen by the user.
- * Example: "2026-04-21T14:00:00Z" in CDT (UTC-5) → "2026-04-21T09:00"
- * @param iso - UTC ISO datetime string from the database.
- */
-function toDatetimeLocal(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /**
@@ -394,6 +412,33 @@ export default function SessionDetailClient({
   // Whether the current user can use grading and enrollware tools
   const canUseTools = isSuperAdmin || (isInstructor && isOwnSession);
 
+  // Who may open the "Add Student to Class" modal at all.
+  const canAddStudents = isManager || (isInstructor && isOwnSession);
+
+  /**
+   * Whether a booking can be created WITHOUT taking payment.
+   *
+   * Managers and super admins can add a student and charge a card as two
+   * independent actions. Instructors deliberately cannot: for them the only
+   * route to a new booking is a settled card charge, enforced server-side by
+   * /api/sessions/[id]/charge-and-book. The modal is otherwise identical for
+   * both — this flag only removes the standalone "Add" action and switches
+   * which endpoint the card form submits to.
+   */
+  const canAddWithoutCharging = isManager;
+
+  /**
+   * The session's own price (class type price less any instructor discount),
+   * used to prefill the charge amount. The amount stays editable — walk-in and
+   * negotiated rates differ from the catalog — so this is a convenience only.
+   */
+  const sessionListPrice = useMemo(() => {
+    const base = session.class_types?.price;
+    if (base == null) return null;
+    const discount = session.discount_percent ?? 0;
+    return Number((Number(base) * (1 - discount / 100)).toFixed(2));
+  }, [session.class_types?.price, session.discount_percent]);
+
   // ── UI state ──────────────────────────────────────────────────────────────
 
   const [showRejectForm, setShowRejectForm] = useState(false);
@@ -438,10 +483,10 @@ export default function SessionDetailClient({
   );
   const [editLocationId, setEditLocationId] = useState(session.location_id);
   const [editStartsAt, setEditStartsAt] = useState(
-    toDatetimeLocal(session.starts_at)
+    toDatetimeLocalValue(session.starts_at)
   );
   const [editEndsAt, setEditEndsAt] = useState(
-    toDatetimeLocal(session.ends_at)
+    toDatetimeLocalValue(session.ends_at)
   );
   const [editMaxCapacity, setEditMaxCapacity] = useState(session.max_capacity);
   const [editNotes, setEditNotes] = useState(session.notes ?? "");
@@ -480,12 +525,26 @@ export default function SessionDetailClient({
   const [paypalClientToken, setPaypalClientToken] = useState<string | undefined>(undefined);
   const [paypalClientTokenError, setPaypalClientTokenError] = useState(false);
   const [isLoadingPayPalClientToken, setIsLoadingPayPalClientToken] = useState(false);
+  /**
+   * Whether staging's PayPal bypass is active (see lib/mock-payments.ts).
+   * `null` means not yet checked — the real client-token fetch below waits
+   * for an explicit `false` so mock mode is never raced by a real PayPal
+   * network call before this resolves.
+   */
+  const [mockPaymentsEnabled, setMockPaymentsEnabled] = useState<boolean | null>(null);
   const [chargeAmount, setChargeAmount] = useState("");
   const [chargeDescription, setChargeDescription] = useState("");
   const [chargeNotes, setChargeNotes] = useState("");
   const [isProcessingCharge, setIsProcessingCharge] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [chargeSuccessMessage, setChargeSuccessMessage] = useState<string | null>(null);
+
+  // Inline "student has no account yet" form inside the add-student modal —
+  // the walk-in at the door is usually not in the system.
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState(EMPTY_NEW_CUSTOMER_FORM);
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+  const [newCustomerError, setNewCustomerError] = useState<string | null>(null);
 
   // ── Assistant assignment state (documentation only, no pay impact) ────────
 
@@ -807,7 +866,14 @@ export default function SessionDetailClient({
       setIsLoadingCustomerSearch(true);
 
       try {
-        const url = new URL("/api/customers/search", window.location.origin);
+        // Managers use the admin customers search, which also backs the
+        // customers page and lists everyone when the box is empty. Instructors
+        // use the narrower lookup route: same result shape and columns, but it
+        // requires a real search term instead of dumping the customer list.
+        const url = new URL(
+          canAddWithoutCharging ? "/api/customers/search" : "/api/customers/lookup",
+          window.location.origin
+        );
         if (query.length >= 2) {
           url.searchParams.set("q", query);
         }
@@ -833,7 +899,64 @@ export default function SessionDetailClient({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [showAddStudentModal, customerSearchQuery]);
+  }, [showAddStudentModal, customerSearchQuery, canAddWithoutCharging]);
+
+  /**
+   * Creates an account for a walk-in who isn't in the system yet, then selects
+   * them so they can be charged straight away.
+   * Side effects: POSTs /api/customers/create (creates an auth user + profile
+   * and emails the customer an account setup link).
+   */
+  async function handleCreateCustomer(): Promise<void> {
+    const { firstName, lastName, email, phone } = newCustomerForm;
+
+    if (!firstName.trim() || !lastName.trim() || !email.trim()) {
+      setNewCustomerError("First name, last name, and email are required.");
+      return;
+    }
+
+    setIsCreatingCustomer(true);
+    setNewCustomerError(null);
+
+    try {
+      const res = await fetch("/api/customers/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          phone: phone.trim() || undefined,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json.success || !json.customer) {
+        setNewCustomerError(json.error ?? "Could not create the account. Please try again.");
+        return;
+      }
+
+      // Select the new student immediately — the point of creating them here
+      // is to charge them in the next click.
+      setSelectedCustomer({
+        ...json.customer,
+        upcomingBookingsCount: 0,
+        totalBookingsCount: 0,
+        activeCertsCount: 0,
+        hasExpiringSoon: false,
+      });
+      setShowNewCustomerForm(false);
+      setNewCustomerForm(EMPTY_NEW_CUSTOMER_FORM);
+      // Deliberately leaves the search box alone: changing it re-runs the
+      // search effect, which clears the selection we just made.
+    } catch (error) {
+      console.error("[create-customer]", error);
+      setNewCustomerError("Could not create the account. Please try again.");
+    } finally {
+      setIsCreatingCustomer(false);
+    }
+  }
 
   async function handleAddStudent(customerId: string): Promise<void> {
     setIsAddingStudent(true);
@@ -866,7 +989,38 @@ export default function SessionDetailClient({
   }
 
   useEffect(() => {
-    if (!showAddStudentModal || paypalClientToken || paypalClientTokenError) return;
+    if (!showAddStudentModal) return;
+
+    let cancelled = false;
+    fetch("/api/paypal/mock-status")
+      .then((res) => (res.ok ? res.json() : { mock: false }))
+      .then((data: { mock?: boolean }) => {
+        if (!cancelled) setMockPaymentsEnabled(!!data.mock);
+      })
+      .catch((err: unknown) => {
+        // Fail toward the real PayPal UI, never toward the mock stub — an
+        // unreachable status check must not accidentally hide a real charge.
+        console.error("[admin/session] Mock-payments status check failed:", err);
+        if (!cancelled) setMockPaymentsEnabled(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showAddStudentModal]);
+
+  useEffect(() => {
+    // Waits for an explicit `false` (not just falsy `null`) so this can never
+    // fire a real PayPal network call before the mock-status check above has
+    // actually resolved — see mockPaymentsEnabled's declaration.
+    if (
+      !showAddStudentModal ||
+      mockPaymentsEnabled !== false ||
+      paypalClientToken ||
+      paypalClientTokenError
+    ) {
+      return;
+    }
 
     let cancelled = false;
     setIsLoadingPayPalClientToken(true);
@@ -895,7 +1049,7 @@ export default function SessionDetailClient({
     return () => {
       cancelled = true;
     };
-  }, [showAddStudentModal, paypalClientToken, paypalClientTokenError]);
+  }, [showAddStudentModal, mockPaymentsEnabled, paypalClientToken, paypalClientTokenError]);
 
   const paypalEnvironment =
     process.env.NEXT_PUBLIC_PAYPAL_ENV === "production" ? "production" : "sandbox";
@@ -926,7 +1080,7 @@ export default function SessionDetailClient({
     }
 
     return { orderId: data.orderId };
-  }, [chargeAmount, chargeDescription, selectedCustomer]);
+  }, [chargeAmount, chargeDescription, selectedCustomer, session.id]);
 
   const handleManualChargeApprove = useCallback(
     async ({ orderId }: { orderId: string }): Promise<void> => {
@@ -942,19 +1096,32 @@ export default function SessionDetailClient({
         return;
       }
 
-      const response = await fetch("/api/paypal/capture-manual-charge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paypalOrderId: orderId,
-          sessionId: session.id,
-          customerId: selectedCustomer.id,
-          amount: parsedAmount,
-          description:
-            chargeDescription || `Manual charge for ${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
-          notes: chargeNotes || null,
-        }),
-      });
+      // Managers capture the charge on its own — adding the student is a
+      // separate button. Instructors post to charge-and-book, which creates
+      // the booking in the same request and refunds if that step fails, so
+      // they can never end up with a student added but not paid.
+      const payload = {
+        paypalOrderId: orderId,
+        customerId: selectedCustomer.id,
+        amount: parsedAmount,
+        description:
+          chargeDescription ||
+          `Manual charge for ${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
+        notes: chargeNotes || null,
+      };
+
+      const response = await fetch(
+        canAddWithoutCharging
+          ? "/api/paypal/capture-manual-charge"
+          : `/api/sessions/${session.id}/charge-and-book`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            canAddWithoutCharging ? { ...payload, sessionId: session.id } : payload
+          ),
+        }
+      );
 
       const result = await response.json().catch(() => ({ success: false, error: "Failed to capture payment." }));
       if (!result.success) {
@@ -967,10 +1134,20 @@ export default function SessionDetailClient({
         return;
       }
 
-      setChargeSuccessMessage("Charge recorded successfully.");
+      const mockSuffix = result.mock ? " (mock — no real charge was made)" : "";
+
+      if (canAddWithoutCharging) {
+        setChargeSuccessMessage(`Charge recorded successfully.${mockSuffix}`);
+      } else {
+        setChargeSuccessMessage(
+          `Charged ${selectedCustomer.first_name} ${selectedCustomer.last_name} and added them to the class.${mockSuffix}`
+        );
+        // Surface the new student in the roster behind the modal.
+        router.refresh();
+      }
       setIsProcessingCharge(false);
     },
-    [chargeAmount, chargeDescription, chargeNotes, selectedCustomer]
+    [chargeAmount, chargeDescription, chargeNotes, selectedCustomer, canAddWithoutCharging, session.id, router]
   );
 
   const handleChargeError = useCallback((message: string): void => {
@@ -1121,15 +1298,15 @@ export default function SessionDetailClient({
   async function handleSaveEdit() {
     setIsSavingEdit(true);
     setActionError(null);
-    // datetime-local strings have no timezone — new Date() interprets them as
-    // local time, so .toISOString() correctly converts back to UTC for storage.
+    // Class times are stored as floating wall-clock values: the datetime-local
+    // string is kept exactly as typed, with no timezone conversion.
     const parsedDiscount = editDiscountPercent === "" ? null : parseFloat(editDiscountPercent);
     const fields: SessionEditFields = {
       class_type_id: editClassTypeId,
       instructor_id: editInstructorId,
       location_id: editLocationId,
-      starts_at: new Date(editStartsAt).toISOString(),
-      ends_at: new Date(editEndsAt).toISOString(),
+      starts_at: fromDatetimeLocalValue(editStartsAt),
+      ends_at: fromDatetimeLocalValue(editEndsAt),
       max_capacity: editMaxCapacity,
       discount_percent: (parsedDiscount !== null && !isNaN(parsedDiscount)) ? parsedDiscount : null,
       notes: editNotes,
@@ -1190,7 +1367,7 @@ export default function SessionDetailClient({
       )
       .join("\n");
 
-    const date = new Date(session.starts_at).toISOString().slice(0, 10);
+    const date = classDate(session.starts_at);
     const className = session.class_types?.name ?? "session";
     downloadFile(csv, `${className}-${date}-students.csv`);
   }
@@ -1384,9 +1561,10 @@ export default function SessionDetailClient({
   // Instructors cannot cancel online within 48 hours of the class starting —
   // they're directed to call the owner directly instead. Managers/super_admins
   // are never restricted by this window.
-  const hoursUntilStart = new Date(session.starts_at).getTime() - Date.now();
+  // msUntilClass measures against the business wall clock, matching the identical
+  // server-side gate in POST /api/sessions/[id]/cancel.
   const instructorBlockedByWindow =
-    isInstructor && !isManager && hoursUntilStart < 48 * 60 * 60 * 1000;
+    isInstructor && !isManager && msUntilClass(session.starts_at) < 48 * 60 * 60 * 1000;
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Render
@@ -1542,7 +1720,9 @@ export default function SessionDetailClient({
               <div>
                 <h2 className="text-base font-bold text-gray-900">Add Student to Class</h2>
                 <p className="text-sm text-gray-500">
-                  Search customers by name, email, or phone, then charge a card or add the student separately.
+                  {canAddWithoutCharging
+                    ? "Search customers by name, email, or phone, then charge a card or add the student separately."
+                    : "Search customers by name, email, or phone, then charge their card to add them to the class."}
                 </p>
               </div>
               <button
@@ -1557,7 +1737,19 @@ export default function SessionDetailClient({
             <div className="grid gap-6 lg:grid-cols-[1.8fr_1fr]">
               <div className="space-y-3">
                 <div className="space-y-3">
-                  <label className="block text-xs font-medium text-gray-600">Search Customers</label>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="block text-xs font-medium text-gray-600">Search Customers</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNewCustomerForm((open) => !open);
+                        setNewCustomerError(null);
+                      }}
+                      className="text-xs font-medium text-red-600 hover:text-red-700"
+                    >
+                      {showNewCustomerForm ? "Cancel new customer" : "+ New Customer"}
+                    </button>
+                  </div>
                   <input
                     type="search"
                     value={customerSearchQuery}
@@ -1567,6 +1759,65 @@ export default function SessionDetailClient({
                   />
                 </div>
 
+                {/* Walk-ins usually have no account yet. Creating one here
+                    selects them straight away so they can be charged. */}
+                {showNewCustomerForm && (
+                  <div className="space-y-3 rounded-md border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-xs text-gray-600">
+                      Creates a customer account and emails them a link to set their password.
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <input
+                        type="text"
+                        value={newCustomerForm.firstName}
+                        onChange={(e) =>
+                          setNewCustomerForm((f) => ({ ...f, firstName: e.target.value }))
+                        }
+                        placeholder="First name"
+                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                      <input
+                        type="text"
+                        value={newCustomerForm.lastName}
+                        onChange={(e) =>
+                          setNewCustomerForm((f) => ({ ...f, lastName: e.target.value }))
+                        }
+                        placeholder="Last name"
+                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                      <input
+                        type="email"
+                        value={newCustomerForm.email}
+                        onChange={(e) =>
+                          setNewCustomerForm((f) => ({ ...f, email: e.target.value }))
+                        }
+                        placeholder="Email"
+                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                      <input
+                        type="tel"
+                        value={newCustomerForm.phone}
+                        onChange={(e) =>
+                          setNewCustomerForm((f) => ({ ...f, phone: e.target.value }))
+                        }
+                        placeholder="Phone (optional)"
+                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                    </div>
+                    {newCustomerError && (
+                      <p className="text-sm text-red-700">{newCustomerError}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateCustomer()}
+                      disabled={isCreatingCustomer}
+                      className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      {isCreatingCustomer ? "Creating…" : "Create & select"}
+                    </button>
+                  </div>
+                )}
+
                 {customerSearchError && (
                   <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
                     {customerSearchError}
@@ -1575,7 +1826,13 @@ export default function SessionDetailClient({
 
                 <div className="flex items-center justify-between text-xs text-gray-500">
                   <span>{customerSearchResults.length} customer{customerSearchResults.length === 1 ? "" : "s"} found</span>
-                  <span>{isLoadingCustomerSearch ? "Loading…" : "Showing up to 100 results"}</span>
+                  <span>
+                    {isLoadingCustomerSearch
+                      ? "Loading…"
+                      : canAddWithoutCharging
+                        ? "Showing up to 100 results"
+                        : "Showing up to 20 matches"}
+                  </span>
                 </div>
 
                 <div className="overflow-x-auto border border-gray-200 rounded-md">
@@ -1594,7 +1851,11 @@ export default function SessionDetailClient({
                       {customerSearchResults.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
-                            {isLoadingCustomerSearch ? "Searching customers…" : "No customers match that search."}
+                            {isLoadingCustomerSearch
+                              ? "Searching customers…"
+                              : !canAddWithoutCharging && customerSearchQuery.trim().length < 3
+                                ? "Type a name, email, or phone number to search."
+                                : "No customers match that search."}
                           </td>
                         </tr>
                       ) : (
@@ -1605,18 +1866,28 @@ export default function SessionDetailClient({
                           >
                             <td className="px-4 py-3">
                               <div className="flex flex-col gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => void handleAddStudent(customer.id)}
-                                  disabled={isAddingStudent}
-                                  className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
-                                >
-                                  {isAddingStudent ? "Adding…" : "Add"}
-                                </button>
+                                {/* Adding without payment is a manager action.
+                                    For instructors the only path to a booking
+                                    is the charge panel, so Select becomes the
+                                    row's primary action. */}
+                                {canAddWithoutCharging && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleAddStudent(customer.id)}
+                                    disabled={isAddingStudent}
+                                    className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                                  >
+                                    {isAddingStudent ? "Adding…" : "Add"}
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => setSelectedCustomer(customer)}
-                                  className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs rounded-md hover:bg-gray-50 transition-colors"
+                                  className={
+                                    canAddWithoutCharging
+                                      ? "px-3 py-1.5 border border-gray-300 text-gray-700 text-xs rounded-md hover:bg-gray-50 transition-colors"
+                                      : "px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-700 transition-colors"
+                                  }
                                 >
                                   Select
                                 </button>
@@ -1653,7 +1924,9 @@ export default function SessionDetailClient({
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold text-gray-900">Manual charge register</h3>
                   <p className="text-sm text-gray-500">
-                    Enter the amount, billing details, and charge the card independently from adding the student.
+                    {canAddWithoutCharging
+                      ? "Enter the amount, billing details, and charge the card independently from adding the student."
+                      : "Enter the amount you're charging, then take the card. The student joins the class once it goes through."}
                   </p>
                 </div>
 
@@ -1711,15 +1984,28 @@ export default function SessionDetailClient({
                 </div>
 
                 <p className="text-xs text-gray-500">
-                  Booking and payment are independent here. You can charge a card without adding the student, or add the student even if the charge declines.
+                  {canAddWithoutCharging
+                    ? "Booking and payment are independent here. You can charge a card without adding the student, or add the student even if the charge declines."
+                    : "The student is added to the class only when the charge goes through. If the card is declined, nothing is booked; if the class fills up first, the charge is refunded automatically."}
                 </p>
 
                 <div className="space-y-3">
-                  {paypalClientTokenError ? (
+                  {mockPaymentsEnabled === true ? (
+                    <MockCardPaymentSection
+                      onCreateOrder={handleCreateManualChargeOrder}
+                      onApprove={handleManualChargeApprove}
+                      onError={handleChargeError}
+                      amount={Number(chargeAmount) || 0}
+                      disabled={!selectedCustomer || isProcessingCharge}
+                    />
+                  ) : paypalClientTokenError ? (
                     <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-                      Card payment could not be initialized right now. You can still add the student without charging their card.
+                      Card payment could not be initialized right now.
+                      {canAddWithoutCharging
+                        ? " You can still add the student without charging their card."
+                        : " Close this dialog and try again."}
                     </div>
-                  ) : !paypalClientToken || isLoadingPayPalClientToken ? (
+                  ) : mockPaymentsEnabled === null || !paypalClientToken || isLoadingPayPalClientToken ? (
                     <div className="rounded-md bg-white border border-gray-200 p-4 text-sm text-gray-500">
                       Loading card fields…
                     </div>
@@ -2582,8 +2868,9 @@ export default function SessionDetailClient({
                   ({totalStudents})
                 </span>
               </h2>
-              {/* Student management actions — manager/super admin only */}
-              {isManager && (
+              {/* Student management actions — managers, plus instructors on
+                  their own class (charge-to-add only, see canAddWithoutCharging) */}
+              {canAddStudents && (
                 <div className="flex items-center gap-4">
                   <button
                     type="button"
@@ -2594,24 +2881,39 @@ export default function SessionDetailClient({
                       setCustomerSearchError(null);
                       setAddStudentError(null);
                       setSelectedCustomer(null);
-                      setChargeAmount("");
+                      // Prefill the class price for the charge-to-add flow —
+                      // still editable, since walk-in rates vary. Managers keep
+                      // the blank field their register has always had.
+                      setChargeAmount(
+                        !canAddWithoutCharging && sessionListPrice !== null
+                          ? sessionListPrice.toFixed(2)
+                          : ""
+                      );
                       setChargeDescription("");
                       setChargeNotes("");
                       setPaymentError(null);
                       setChargeSuccessMessage(null);
                       setPaypalClientToken(undefined);
                       setPaypalClientTokenError(false);
+                      setMockPaymentsEnabled(null);
+                      setShowNewCustomerForm(false);
+                      setNewCustomerForm(EMPTY_NEW_CUSTOMER_FORM);
+                      setNewCustomerError(null);
                     }}
                     className="text-sm font-medium text-red-600 hover:text-red-700"
                   >
                     Add Student
                   </button>
-                  <Link
-                    href={`/admin/sessions/${session.id}/roster`}
-                    className="text-sm font-medium text-red-600 hover:text-red-700"
-                  >
-                    Import Roster
-                  </Link>
+                  {/* Roster import is manager+ only — the page itself redirects
+                      instructors, so don't offer them the link. */}
+                  {isManager && (
+                    <Link
+                      href={`/admin/sessions/${session.id}/roster`}
+                      className="text-sm font-medium text-red-600 hover:text-red-700"
+                    >
+                      Import Roster
+                    </Link>
+                  )}
                 </div>
               )}
             </div>

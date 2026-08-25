@@ -2,14 +2,16 @@
  * Unit tests for POST /api/sessions/[id]/cancel (app/api/sessions/[id]/cancel/route.ts)
  *
  * Tests the 48-hour instructor cancellation window, ownership checks, the
- * manager/super_admin bypass of that window, and the already-cancelled guard.
+ * manager/super_admin bypass of that window, the already-cancelled guard, and the
+ * booking-gate that suppresses the instructor opportunity email when no students
+ * have booked the session.
  *
  * External dependencies are mocked:
  *   @/lib/supabase/server     — prevents Next.js cookies() runtime requirement
  *   @/lib/auth/effective-role — session auth resolution
  *   resend                    — prevents real email sends
  */
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { POST } from "@/app/api/sessions/[id]/cancel/route";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -34,13 +36,15 @@ vi.mock("resend", () => ({
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
+import { Resend } from "resend";
+import { floatingNow, addFloatingMinutes } from "@/lib/business-time";
 
 const INSTRUCTOR_ID = "11111111-1111-1111-1111-111111111111";
 const OTHER_INSTRUCTOR_ID = "22222222-2222-2222-2222-222222222222";
 const SESSION_ID = "33333333-3333-3333-3333-333333333333";
 
 /** A minimal chainable Supabase query builder mock resolving to `result`. */
-function chain(result: { data: unknown; error: unknown }) {
+function chain(result: { data: unknown; error: unknown; count?: number | null }) {
   const c: Record<string, unknown> = {};
   const self = () => c;
   c.select = vi.fn(self);
@@ -84,18 +88,22 @@ function mockFromSequence(chains: ReturnType<typeof chain>[]) {
   return mockFrom;
 }
 
+// starts_at is a floating wall-clock value, so these fixtures are built from
+// floatingNow() — the same clock the 48-hour gate measures against. Using a raw
+// Date.now() would make these offsets wrong by the UTC offset of whatever
+// timezone the test process happens to run in.
 const FUTURE_SESSION = {
   id: SESSION_ID,
   instructor_id: INSTRUCTOR_ID,
   status: "scheduled",
-  starts_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(), // 72h out
+  starts_at: addFloatingMinutes(floatingNow(), 72 * 60), // 72h out
   class_types: { name: "BLS Provider" },
   locations: { name: "HQ", city: "Tampa", state: "FL" },
 };
 
 const NEAR_SESSION = {
   ...FUTURE_SESSION,
-  starts_at: new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString(), // 10h out
+  starts_at: addFloatingMinutes(floatingNow(), 10 * 60), // 10h out
 };
 
 describe("POST /api/sessions/[id]/cancel", () => {
@@ -169,5 +177,58 @@ describe("POST /api/sessions/[id]/cancel", () => {
 
     const res = await POST(makeRequest(), params());
     expect(res.status).toBe(404);
+  });
+
+  describe("instructor opportunity email booking gate", () => {
+    const ADMIN_PROFILE = { email: "admin@superherocpr.com" };
+    const INSTRUCTOR_PROFILE = { email: "instructor@superherocpr.com" };
+
+    beforeEach(() => {
+      process.env.RESEND_API_KEY = "test-key";
+      process.env.RESEND_FROM_EMAIL = "noreply@superherocpr.com";
+    });
+
+    afterEach(() => {
+      delete process.env.RESEND_API_KEY;
+      delete process.env.RESEND_FROM_EMAIL;
+    });
+
+    test("skips instructor opportunity email when the session has no active bookings", async () => {
+      mockActor("manager");
+      mockFromSequence([
+        chain({ data: FUTURE_SESSION, error: null }),             // fetch session
+        chain({ data: null, error: null }),                       // update
+        chain({ data: [ADMIN_PROFILE], error: null }),            // admin profiles
+        chain({ data: [INSTRUCTOR_PROFILE], error: null }),       // instructor profiles
+        chain({ data: null, count: 0, error: null }),             // booking count → 0
+      ]);
+
+      const res = await POST(makeRequest(), params());
+      expect(res.status).toBe(200);
+
+      const ResendCtor = vi.mocked(Resend);
+      const instance = ResendCtor.mock.results[0].value as { emails: { send: ReturnType<typeof vi.fn> } };
+      // Only the admin notification should be sent; no instructor opportunity email.
+      expect(instance.emails.send).toHaveBeenCalledTimes(1);
+    });
+
+    test("sends instructor opportunity email when the session has active bookings", async () => {
+      mockActor("manager");
+      mockFromSequence([
+        chain({ data: FUTURE_SESSION, error: null }),             // fetch session
+        chain({ data: null, error: null }),                       // update
+        chain({ data: [ADMIN_PROFILE], error: null }),            // admin profiles
+        chain({ data: [INSTRUCTOR_PROFILE], error: null }),       // instructor profiles
+        chain({ data: null, count: 3, error: null }),             // booking count → 3
+      ]);
+
+      const res = await POST(makeRequest(), params());
+      expect(res.status).toBe(200);
+
+      const ResendCtor = vi.mocked(Resend);
+      const instance = ResendCtor.mock.results[0].value as { emails: { send: ReturnType<typeof vi.fn> } };
+      // Both the admin notification and the instructor opportunity email should be sent.
+      expect(instance.emails.send).toHaveBeenCalledTimes(2);
+    });
   });
 });

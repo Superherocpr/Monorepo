@@ -70,6 +70,60 @@ clone — so this file is the one that travels with the repo.
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
 | **Team bookings** (0055) | ✅ | — | — | **✗** | ✅ | — | Admin surface still missing, but now has an invariant — see below |
+| **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
+
+### Staging mock payments — a narrower fix for a bigger discovery
+
+While verifying whether this feature was safe to test on staging, found that
+**staging runs every payment surface against the live PayPal merchant account**
+(`PAYPAL_API_BASE` and `NEXT_PUBLIC_PAYPAL_ENV` are Amplify APP-level, not
+branch-level, so `staging` inherits the same live credentials as `main`). See
+THREAT-065 in threats.md for the full writeup.
+
+Shipped 2026-08-23, scoped to exactly what was asked: `lib/mock-payments.ts`
+bypasses PayPal for the Add Student modal only (charge-and-book,
+capture-manual-charge, create-manual-charge-order), gated on three independent
+conditions so a single misconfigured env var can't fabricate a charge. It
+deliberately never creates an `instructor_earnings` row — staging's payout
+cron runs on a schedule regardless of trigger mode, and a mock earning would
+eventually pay real money to a real PayPal account. Every other payment
+surface (booking checkout, merch, team signups, invoices) is untouched and
+still charges real cards on staging. Widening this is tracked in the Todoist
+maintenance backlog as a deliberately deferred follow-up, not an oversight.
+
+### Instructor charge-and-book — the guarantee is invisible, so it has an invariant
+
+Shipped 2026-08-22. Instructors can add a student to their own class from the
+session page, but only by charging a card: `/api/sessions/[id]/charge-and-book`
+creates the booking inside the same request as the PayPal capture, and refunds
+the capture if the booking step then fails. Managers keep the older pair of
+independent actions (`add-booking` + `capture-manual-charge`), which deliberately
+allow adding a student without payment.
+
+That asymmetry is the entire feature, and it is invisible on every admin screen:
+a booking created without payment looks exactly like one created with it. A
+regression — a widened role allowlist, a reordered branch, a swallowed insert
+error — would produce free classes that nobody notices.
+
+Migration 0061 adds check #13, `instructor_booking_missing_payment`: active
+bookings created on or after 2026-08-22, older than 1h, whose `created_by` is an
+instructor and which have no completed payment row.
+
+The date floor was not in the first cut, and it showed. Applied to staging on
+2026-08-22 the check immediately reported **20 breaches** — every one a July seed
+row ("Mock class for testing — added by staff script") created long before
+instructor charge-and-book existed. Production reported 0. Rows that predate the
+guarantee cannot be evidence against it, and a critical check sitting permanently
+red is the same trap check #6 was scoped to avoid. Floored, staging reports 0. Existing check #2 does not cover this — it is scoped to
+`booking_source = 'online'`, while these write `'manual'`, the same source
+managers use for legitimate comp bookings. Keying on the creator's ROLE is what
+separates "must have been paid" from "may legitimately be free".
+
+Gap worth naming: the invariant catches an unpaid booking, not an *underpriced*
+one. Instructors type in their own charge amount, so a $10 charge on a $75 class
+is valid data by design. The mitigation is an audit trail, not a check — the
+booking's `manual_booking_reason` records the charged amount alongside the
+session's list price whenever the two differ.
 
 ### Team bookings — was invisible, now partially covered
 
@@ -95,12 +149,66 @@ a product gap, not just a monitoring one.
 | Feature | U | E | C | A | I | M | Verdict |
 |---|---|---|---|---|---|---|---|
 | Sessions & scheduling | ✅✅ | ○ smoke | ✅ | ✅ | ✅✅ | — | Cron covers unclaimed escalation only |
+| **Class time correctness** | ✅✅ | — | — | ✅ | — | — | ⚠️ Unit-only; call-site gap fired 2026-08-23 — see note below |
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
-| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Annual deprecation check; external, brittle |
+| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on added 2026-08-24; unit coverage for both |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
+
+### Class time correctness (added 2026-08-22)
+
+Class times are stored as **floating wall-clock values**: the time the instructor
+typed is stored literally and read back verbatim everywhere, with no timezone
+conversion. The contract lives in `apps/web/lib/business-time.ts`; migration
+`0060_floating_session_times.sql` converted the existing rows.
+
+This exists because a customer reported a booking-confirmation email showing
+1:00 PM for a 9:00 AM class. `/book` rendered in the student's browser (Eastern)
+while the email rendered on a UTC server — same formatting code, four-hour
+disagreement.
+
+**Signal:** `tests/unit/lib/business-time.test.ts` (22 tests). They assert exact
+wall-clock strings ("9:00 AM"), which only hold while the helpers pin UTC — so a
+regression that reintroduced a timezone conversion fails them.
+
+`pnpm test:unit:tz` re-runs that file under five process timezones (UTC, Eastern,
+Pacific, Tokyo, Sydney) and is the sharpest version of the check: the original bug
+was precisely that the same code gave different answers in the browser and on the
+UTC email server. Verified passing in all five on 2026-08-22. **This is not wired
+into CI** — it is a command someone must run.
+
+**The gap was not theoretical — it fired (2026-08-23).** The floating-time
+migration fixed the two class pickers in `lib/enrollware-bookmarklet.ts` and
+missed `fillClassForm`, the function that writes the date and time *into
+Enrollware*. It still used `getHours()`, so an Eastern instructor submitting a
+9:00 AM class filled Enrollware with 5:00 AM, and an evening class could land on
+the wrong calendar date. Every unit test passed the whole time. Fixed by moving
+that block to the `getUTC*` getters.
+
+**Signal added for it:** `tests/unit/lib/enrollware-bookmarklet.test.ts` now runs
+the generated script against a fake Enrollware class-edit DOM and asserts the
+values that land in the form fields — an outcome assertion, not a string match.
+It is in `pnpm test:unit:tz`, so it runs under all five timezones; it fails
+against the pre-fix code (`expected '05:00' to be '09:00'`).
+
+**Honest gap:** still unit-only, and now covers exactly one call site. The unit
+tests prove the helpers are correct and that the Enrollware fill uses them;
+nothing asserts the *other* call sites do. Another one that hand-rolls
+`toLocaleTimeString` without `timeZone: "UTC"` would be wrong and silent in the
+same way. Two things that would close it:
+
+- `// TODO:` An outcome e2e test that books a session and asserts the time shown
+  on `/book`, on the confirmation page, and in the captured email body all match
+  the time the session was seeded with.
+- `// TODO:` A lint rule banning bare `toLocaleTimeString`/`toLocaleDateString`
+  on a `starts_at`/`ends_at` value outside `lib/business-time.ts`.
+
+Neither is built. Until one is, the coverage here is "the helpers are right, and
+the Enrollware fill uses them", not "the app uses them everywhere". The lint rule
+is the higher-value of the two — it is the only option that scales to call sites
+nobody thought to test.
 
 ---
 

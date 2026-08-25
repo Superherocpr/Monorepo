@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { Calendar, ChevronDown, Loader2, MapPin, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { setBookingStore } from "@/lib/booking-store";
+import { formatClassDate, formatClassTimeRange, floatingNow } from "@/lib/business-time";
 import BookingProgress from "./BookingProgress";
 import PrivateSessionCta from "./PrivateSessionCta";
 import type { ScheduleSession, ClassTypeOption } from "@/types/schedule";
@@ -28,27 +29,6 @@ interface BookSessionSelectorProps {
 /** Converts a class type name to a URL-safe slug, matching /classes page anchors. */
 function toSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-}
-
-/** Formats a start + end ISO pair to "9:00 AM – 11:00 AM". */
-function formatTimeRange(startsAt: string, endsAt: string): string {
-  const fmt = (d: string) =>
-    new Date(d).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  return `${fmt(startsAt)} – ${fmt(endsAt)}`;
-}
-
-/** Formats an ISO date to a short label, e.g. "Tuesday, Apr 22, 2025". */
-function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 /** The radius used for zip code proximity filtering, in miles. */
@@ -271,11 +251,14 @@ export default function BookSessionSelector({
   // ── Filtering ──────────────────────────────────────────────────────────────
   const filteredSessions = sessions.filter((session) => {
     const sessionDate = new Date(session.starts_at);
-    if (sessionDate < new Date()) return false;
+    // Class times are floating wall-clock values, so "has it started?" compares
+    // against the business wall clock, not the viewer's clock. The date-range
+    // bounds below are parsed as UTC for the same reason.
+    if (sessionDate < new Date(floatingNow())) return false;
     if (activeClassType && toSlug(session.class_types.name) !== activeClassType) return false;
     if (activeInstructor && `${session.profiles.first_name} ${session.profiles.last_name}` !== activeInstructor) return false;
     if (dateFrom && sessionDate < new Date(dateFrom)) return false;
-    if (dateTo && sessionDate > new Date(dateTo + "T23:59:59")) return false;
+    if (dateTo && sessionDate > new Date(dateTo + "T23:59:59Z")) return false;
 
     // Zip proximity filter — only applied after a successful zip lookup
     if (zipCoords && session.locations?.zip) {
@@ -586,8 +569,8 @@ interface BookingSessionCardProps {
 
 /** Renders a single session card with a "Select" button instead of a "Book Now" link. */
 function BookingSessionCard({ session, isSelecting, onSelect }: BookingSessionCardProps) {
-  const timeRange = formatTimeRange(session.starts_at, session.ends_at);
-  const formattedDate = formatShortDate(session.starts_at);
+  const timeRange = formatClassTimeRange(session.starts_at, session.ends_at);
+  const formattedDate = formatClassDate(session.starts_at, { month: "short" });
 
   const basePrice = session.class_types?.price ?? 0;
   const hasDiscount = session.discount_percent != null && session.discount_percent > 0;
