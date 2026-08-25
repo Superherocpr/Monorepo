@@ -635,3 +635,143 @@ describe("price survives a full page reload", () => {
     ).toBe("$75.00");
   });
 });
+
+/**
+ * "Mark class as submitted" auto-clicks Enrollware's real Import Students button.
+ *
+ * mainContent_impUploadBtn ("Import Students") is a full-page form submit —
+ * confirmed live via PageRequestManager._postBackControlIDs, which lists it
+ * (not the async list Course/Location postbacks use). So our own markSubmitted()
+ * API call must complete and sessionStorage must be cleared *before* it is
+ * clicked, since the click navigates the browser away and would otherwise abort
+ * that fetch mid-flight.
+ */
+describe("Mark class as submitted — auto-clicks Import Students", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+    sessionStorage.clear();
+  });
+
+  const session = {
+    id: "session-3",
+    starts_at: "2026-09-14T09:00:00.000Z",
+    ends_at: "2026-09-14T13:00:00.000Z",
+    max_capacity: 10,
+    enrollware_submitted: false,
+    additional_hours: 0,
+    assistant_name: null,
+    assistant_instructor: null,
+    class_type: { name: "BLS Provider", price: 65, duration_minutes: 240 },
+    location: { name: "Tampa" },
+    instructor: { first_name: "Jane", last_name: "Doe" },
+    students: [
+      { first_name: "Carla", last_name: "Ruiz", email: "c@test.com", phone: null,
+        address_1: null, address_2: null, city: null, state: null, zip: null,
+        grade: 100, ccf_compression: null, confirmed: true }
+    ],
+  };
+
+  function primeStorage() {
+    sessionStorage.clear();
+    sessionStorage.setItem("scpr_session_id", session.id);
+    sessionStorage.setItem("scpr_session_data", JSON.stringify(session));
+    const w = window as unknown as Record<string, unknown>;
+    delete w.__SCPR_LOADED;
+    delete w.__SCPR_PICK;
+    delete w.__SCPR_SHOW;
+    delete w.__SCPR_PICK_STUDENTS;
+    delete w.__SCPR_MARK_DONE;
+  }
+
+  function stubFetch(markSubmittedCalls: string[]) {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (typeof url === "string" && url.includes("student-xlsx")) {
+        return { ok: true, blob: async () => new Blob(["xlsx"]) };
+      }
+      if (typeof url === "string" && url.includes("mark-submitted")) {
+        markSubmittedCalls.push(url);
+        return { ok: true, json: async () => ({ success: true }) };
+      }
+      return { ok: true, json: async () => ({ classes: [session] }) };
+    }));
+  }
+
+  test("clicks the real Import Students button when the file was injected", async () => {
+    document.body.innerHTML = `
+      <div id="mainContent_studentPanel">
+        <input id="mainContent_impFileUpl" type="file" />
+        <input id="mainContent_impUploadBtn" type="submit" value="Import Students" />
+      </div>
+      <input id="mainContent_issueDate" type="date" />
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=12345");
+    primeStorage();
+
+    // jsdom has no DataTransfer constructor — polyfill just enough for
+    // injectStudentFile's try block to succeed instead of falling into its
+    // catch (which is what real DataTransfer-less environments would do).
+    class FakeDataTransfer {
+      items = { add: () => {} };
+      files: unknown[] = [];
+    }
+    vi.stubGlobal("DataTransfer", FakeDataTransfer);
+    const fileInput = document.getElementById("mainContent_impFileUpl") as HTMLInputElement;
+    Object.defineProperty(fileInput, "files", { value: [], writable: true, configurable: true });
+
+    let uploadClicked = false;
+    document.getElementById("mainContent_impUploadBtn")!
+      .addEventListener("click", () => { uploadClicked = true; });
+
+    const markSubmittedCalls: string[] = [];
+    stubFetch(markSubmittedCalls);
+
+    new Function(SOURCE)();
+    const w = window as unknown as Record<string, unknown>;
+    await vi.waitFor(() => {
+      expect(w.__SCPR_MARK_DONE, "Mark-done handler should be exposed once the panel renders")
+        .toBeTypeOf("function");
+    }, { timeout: 2000 });
+
+    await (w.__SCPR_MARK_DONE as (id: string) => Promise<void>)(session.id);
+
+    await vi.waitFor(() => {
+      expect(uploadClicked, "Import Students should be auto-clicked after marking submitted").toBe(true);
+    });
+    expect(markSubmittedCalls.length, "our own API must be called before the navigating click").toBe(1);
+    expect(sessionStorage.getItem("scpr_session_id"), "stored session should be cleared").toBeNull();
+  });
+
+  test("does not click Import Students when the file failed to inject", async () => {
+    // No mainContent_impFileUpl and no mainContent_importBtn — injectStudentFile
+    // has nothing to inject into, so injected stays false.
+    document.body.innerHTML = `
+      <div id="mainContent_studentPanel">
+        <input id="mainContent_impUploadBtn" type="submit" value="Import Students" />
+      </div>
+      <input id="mainContent_issueDate" type="date" />
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=12345");
+    primeStorage();
+
+    let uploadClicked = false;
+    document.getElementById("mainContent_impUploadBtn")!
+      .addEventListener("click", () => { uploadClicked = true; });
+
+    const markSubmittedCalls: string[] = [];
+    stubFetch(markSubmittedCalls);
+
+    new Function(SOURCE)();
+    const w = window as unknown as Record<string, unknown>;
+    await vi.waitFor(() => {
+      expect(w.__SCPR_MARK_DONE).toBeTypeOf("function");
+    }, { timeout: 2000 });
+
+    await (w.__SCPR_MARK_DONE as (id: string) => Promise<void>)(session.id);
+
+    await vi.waitFor(() => {
+      expect(markSubmittedCalls.length, "our own API should still be called").toBe(1);
+    });
+    expect(uploadClicked, "Import Students must not be auto-clicked without an injected file").toBe(false);
+  });
+});

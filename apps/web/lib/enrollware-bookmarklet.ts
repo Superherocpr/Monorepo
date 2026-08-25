@@ -16,8 +16,12 @@
  *      using name-based dropdown matching, injects a MutationObserver to watch
  *      for the student list panel to appear after "Update Class" is clicked.
  *   4. When the student panel appears (or on a reload with the student panel
- *      already present): generates a CSV from the roster and injects it into
- *      Enrollware's file input, ready for the instructor to click "Import Students".
+ *      already present): fetches an xlsx roster from the SuperheroCPR API and
+ *      injects it into Enrollware's file input.
+ *   5. "Mark class as submitted": records the submission via
+ *      /api/enrollware/mark-submitted, then (if the file was injected
+ *      successfully) clicks Enrollware's own "Import Students" button so the
+ *      instructor doesn't have to do it as a separate step.
  *
  * Server-side only. This file is never imported by client components.
  */
@@ -656,12 +660,35 @@ export function getBookmarkletSource(apiBase: string): string {
         URL.revokeObjectURL(url);
       };
 
+      // "Mark class as submitted" does two things: records the submission in
+      // SuperheroCPR, and — if the file was auto-injected — clicks Enrollware's
+      // own "Import Students" button so the instructor doesn't have to do it
+      // separately. mainContent_impUploadBtn is a full-page form submit (it is in
+      // PageRequestManager._postBackControlIDs, not the async list, confirmed on
+      // the live site), so the browser navigates away as soon as it's clicked —
+      // our own markSubmitted() call must finish first, or the fetch to our API
+      // can be aborted by the navigation.
       window.__SCPR_MARK_DONE = function(id) {
+        showPanel(panelHeader() +
+          '<div style="text-align:center;padding:8px 0;color:#666">Submitting&hellip;</div>'
+        );
         markSubmitted(id).then(function() {
           sessionStorage.removeItem('scpr_session_id');
           sessionStorage.removeItem('scpr_session_data');
+
+          var uploadBtn = document.getElementById('mainContent_impUploadBtn');
+          if (injected && uploadBtn) {
+            uploadBtn.click();
+            return; // page is navigating away; nothing after this runs
+          }
+
           showPanel(panelHeader() +
-            '<div style="color:#2d7a2d">&#x2713; Marked as submitted in SuperheroCPR.</div>'
+            '<div style="color:#2d7a2d">&#x2713; Marked as submitted in SuperheroCPR.</div>' +
+            (injected
+              ? ''
+              : '<div style="font-size:11px;color:#856404;margin-top:8px">' +
+                '&#9888; Could not auto-submit the import earlier — click ' +
+                '<b>Import Students</b> above to finish.</div>')
           );
         }).catch(function() {
           showError('Failed to mark as submitted. Please update manually in the SuperheroCPR admin.');

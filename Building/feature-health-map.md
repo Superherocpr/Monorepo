@@ -153,7 +153,7 @@ a product gap, not just a monitoring one.
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
-| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on added 2026-08-24; price-vs-UpdatePanel guard 2026-08-24; unit coverage for all three |
+| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on + price-vs-UpdatePanel guard + auto-submit on Mark-as-submitted, all 2026-08-24; unit coverage for all four |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
 
@@ -264,6 +264,40 @@ here observes the live site.
   at the right price. That is the outcome that matters and it is entirely
   unmonitored — the integration is a browser-side form fill against a third party
   with no API, so failure is silent until an instructor notices a $0 class.
+
+**Third change to the same file (2026-08-24): "Mark class as submitted" now
+auto-submits the roster.** Previously this button only called
+`/api/enrollware/mark-submitted` (SuperheroCPR bookkeeping) — the instructor
+still had to separately click Enrollware's own "Import Students" button to
+actually import the file. That is now automatic: `__SCPR_MARK_DONE` clicks
+`mainContent_impUploadBtn` itself once our own API call succeeds.
+
+Verified live before writing it: `mainContent_impUploadBtn` is in
+`PageRequestManager._postBackControlIDs`, not the async list — it is a full-page
+form submit, same as "Update Class". That ordering constraint is why the
+sequence is markSubmitted() first, then the click: the click navigates the
+browser away, which can abort an in-flight fetch to our own API.
+
+The auto-click is conditional on `injected` (whether the xlsx file was
+successfully attached earlier in the flow). If injection failed, the instructor
+already sees a manual-download fallback; auto-submitting an empty or missing
+file in that case would silently create a class with zero students instead of
+failing loudly, so the guard leaves it to the instructor and shows a warning
+instead.
+
+**Signal added for it:** two tests in
+`tests/unit/lib/enrollware-bookmarklet.test.ts` (`Mark class as submitted —
+auto-clicks Import Students`) — one asserts the button is clicked and the
+session is cleared when injection succeeded, the other asserts it is *not*
+clicked when injection failed. Confirmed the first fails against the pre-fix
+code (`1 failed | 23 passed`) rather than passing vacuously.
+
+**Honest gap:** same limitation as the price guard above — this proves the
+*click* happens, not that Enrollware's server accepts the import. If Enrollware
+ever renames `mainContent_impUploadBtn` or adds a confirmation step before the
+real submit, this fires a click that does nothing and the instructor would see
+no import happen with no error surfaced. Covered by the same open TODO above:
+nothing observes whether the class lands in Enrollware correctly.
 
 ---
 
