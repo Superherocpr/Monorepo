@@ -227,18 +227,33 @@ targeted code paths that cannot run: "Update Class" is a native `<input
 type="submit">` with `clientSubmit: false`, so it fully navigates and destroys
 any MutationObserver watching for the result.
 
-**Fixed** by making the price a single writer (`applyPrice`) re-invoked after
-every partial postback via the PageRequestManager's `endRequest` event, which
-fires once the replacement node is in the DOM. Verified against the live site
-before it was written: price reverted `75 → $0.00` on a postback, and held at
-`75` with the guard installed.
+**Fixed in two halves, because there are two different failure modes.** Partial
+postbacks are handled by a single writer (`applyPrice`) re-invoked via the
+PageRequestManager's `endRequest` event, which fires once the replacement node is
+in the DOM. Verified against the live site: price reverted `75 → $0.00` on a
+postback, and held with the guard installed.
 
-**Signal added for it:** two tests in
-`tests/unit/lib/enrollware-bookmarklet.test.ts` that stub `PageRequestManager`,
+That was not sufficient. "Update Class" and Enrollware's student Import are
+native form submits — the page navigates and the script is discarded, so *no*
+in-page handler can restore anything. The price is therefore also persisted to
+sessionStorage and re-applied at startup, ahead of the class-list fetch, so every
+tap of the bookmark restores it on whichever page the instructor landed on. The
+stored value is cleared for `$0` class types so a previous selection cannot leak
+into a free class.
+
+It is written as `"$75.00"`, matching what Enrollware renders into the field.
+Submitting an untouched form posts their own `$0.00` back successfully, so
+currency format is guaranteed to survive their parser. `Number().toFixed(2)` also
+normalises the numeric-as-string price Supabase returns (`"75.00"`).
+
+**Signal added for it:** five tests in
+`tests/unit/lib/enrollware-bookmarklet.test.ts`. Two stub `PageRequestManager`,
 replace the price node the way ASP.NET does, and assert the value survives —
-repeatedly, since four different controls can each fire a postback. Confirmed to
-fail without the guard (`expected 0 to be greater than 0`). A second test asserts
-a `$0` class type does *not* clobber the value Enrollware rendered.
+repeatedly, since four controls can each fire a postback. Three more rebuild the
+DOM and re-evaluate the script the way a navigation does, asserting the price is
+restored from sessionStorage. All were confirmed to fail against the pre-fix code
+rather than passing vacuously. Further tests assert a `$0` class type does *not*
+clobber the value Enrollware rendered.
 
 **Honest gap:** unit-only, against a hand-built stub of Enrollware's UpdatePanel.
 If Enrollware changes which controls trigger a refresh, or moves the price field
