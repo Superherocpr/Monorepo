@@ -10,11 +10,13 @@
 
 import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor, type AdminActor } from "@/lib/auth/effective-role";
 import { bookingCancelledEmail } from "@/lib/emails";
 import type { UserRole } from "@/types/users";
 import { floatingNow } from "@/lib/business-time";
+import { getS3BucketName, getS3Region } from "@/lib/s3";
 
 /**
  * Auth guard for these server actions. Server actions are network-invocable
@@ -545,6 +547,199 @@ export async function setSessionAddons(
       .from("session_addons")
       .insert(resolvedAddonIds.map((addon_id) => ({ session_id: sessionId, addon_id })));
     if (insertError) return insertError.message;
+  }
+
+  revalidatePath(`/admin/sessions/${sessionId}`);
+  return null;
+}
+
+/** A student document (photo/PDF) row, as returned to the client after upload. */
+export interface StudentDocumentRecord {
+  id: string;
+  file_name: string;
+  file_url: string;
+  content_type: string;
+  created_at: string;
+}
+
+/** MIME types accepted for student documents — covers phone-camera photos and scanned/signed PDFs. */
+const ALLOWED_DOCUMENT_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+] as const;
+
+/** Maximum file size in bytes (10 MB — higher than staff headshots since these are often un-resized phone photos). */
+const MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Confirms a booking or roster_record row exists and belongs to sessionId.
+ * Prevents attaching (or deleting) a document via an id that belongs to a
+ * different session.
+ */
+async function verifyStudentBelongsToSession(
+  admin: Awaited<ReturnType<typeof createAdminClient>>,
+  owner: { type: "booking" | "roster"; id: string },
+  sessionId: string
+): Promise<boolean> {
+  const table = owner.type === "booking" ? "bookings" : "roster_records";
+  const { data } = await admin
+    .from(table)
+    .select("id")
+    .eq("id", owner.id)
+    .eq("session_id", sessionId)
+    .maybeSingle();
+  return data !== null;
+}
+
+/**
+ * Uploads a student document (photo or PDF) to S3 and records it against the
+ * student's booking or roster_record row.
+ * Side effects: S3 object write under student-documents/, one student_documents insert.
+ * Auth: manager/super_admin for any session; instructors only for their own.
+ * @param sessionId - UUID of the owning class_sessions record.
+ * @param owner - Which student row the document belongs to.
+ * @param file - The uploaded file.
+ * @returns The created document record, or an error message.
+ */
+export async function uploadStudentDocument(
+  sessionId: string,
+  owner: { type: "booking" | "roster"; id: string },
+  file: File
+): Promise<{ error: string | null; document: StudentDocumentRecord | null }> {
+  const auth = await requireActionRole(["instructor", "manager", "super_admin"]);
+  if ("error" in auth) return { error: auth.error, document: null };
+  const { actor } = auth;
+
+  if (!ALLOWED_DOCUMENT_TYPES.includes(file.type as (typeof ALLOWED_DOCUMENT_TYPES)[number])) {
+    return { error: "Invalid file type. Use JPG, PNG, WEBP, or PDF.", document: null };
+  }
+  if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
+    return { error: "File too large. Maximum size is 10 MB.", document: null };
+  }
+
+  const admin = await createAdminClient();
+
+  if (actor.effectiveRole === "instructor") {
+    const { data: current } = await admin
+      .from("class_sessions")
+      .select("instructor_id")
+      .eq("id", sessionId)
+      .single();
+    if (!current || current.instructor_id !== actor.user.id) {
+      return { error: "You may only upload documents for your own sessions.", document: null };
+    }
+  }
+
+  const belongsToSession = await verifyStudentBelongsToSession(admin, owner, sessionId);
+  if (!belongsToSession) {
+    return { error: "Student not found for this session.", document: null };
+  }
+
+  const bucketName = getS3BucketName();
+  const region = getS3Region();
+
+  let url: string;
+  try {
+    const s3 = new S3Client({});
+    const safeFilename = file.name.replace(/[^a-zA-Z0-9.\-]/g, "_");
+    // owner.type/id in the key keeps every student's files grouped and browsable
+    // directly in S3, and Date.now() prevents collisions on repeat filenames.
+    const key = `student-documents/${sessionId}/${owner.type}-${owner.id}/${Date.now()}-${safeFilename}`;
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+        Body: buffer,
+        ContentType: file.type,
+      })
+    );
+
+    url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+  } catch (err) {
+    console.error("[uploadStudentDocument] S3 upload failed:", err);
+    return { error: "Upload failed. Please try again.", document: null };
+  }
+
+  const { data: inserted, error } = await admin
+    .from("student_documents")
+    .insert({
+      session_id: sessionId,
+      booking_id: owner.type === "booking" ? owner.id : null,
+      roster_record_id: owner.type === "roster" ? owner.id : null,
+      file_url: url,
+      file_name: file.name,
+      content_type: file.type,
+      size_bytes: file.size,
+      uploaded_by: actor.user.id,
+    })
+    .select("id, file_name, file_url, content_type, created_at")
+    .single();
+
+  if (error || !inserted) {
+    return { error: error?.message ?? "Failed to save document record.", document: null };
+  }
+
+  revalidatePath(`/admin/sessions/${sessionId}`);
+  return { error: null, document: inserted };
+}
+
+/**
+ * Deletes a student document: removes the S3 object (best-effort) and the DB row.
+ * Verifies the document belongs to sessionId before deleting.
+ * Auth: manager/super_admin for any session; instructors only for their own.
+ * @param documentId - UUID of the student_documents row to delete.
+ * @param sessionId - UUID of the owning class_sessions record (ownership check).
+ * @returns An error message string on failure, or null on success.
+ */
+export async function deleteStudentDocument(
+  documentId: string,
+  sessionId: string
+): Promise<string | null> {
+  const auth = await requireActionRole(["instructor", "manager", "super_admin"]);
+  if ("error" in auth) return auth.error;
+  const { actor } = auth;
+
+  const admin = await createAdminClient();
+
+  if (actor.effectiveRole === "instructor") {
+    const { data: current } = await admin
+      .from("class_sessions")
+      .select("instructor_id")
+      .eq("id", sessionId)
+      .single();
+    if (!current || current.instructor_id !== actor.user.id) {
+      return "You may only manage documents on your own sessions.";
+    }
+  }
+
+  const { data: doc } = await admin
+    .from("student_documents")
+    .select("id, file_url")
+    .eq("id", documentId)
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  if (!doc) return "Document not found for this session.";
+
+  const { error } = await admin.from("student_documents").delete().eq("id", documentId);
+  if (error) return error.message;
+
+  // Best-effort S3 cleanup — a stray object left behind is a storage cost, not
+  // a correctness issue, so it does not fail the delete if this throws.
+  try {
+    const bucketName = getS3BucketName();
+    const key = new URL(doc.file_url).pathname.replace(/^\//, "");
+    const s3 = new S3Client({});
+    await s3.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
+  } catch (err) {
+    console.error("[deleteStudentDocument] S3 cleanup failed (non-fatal):", err);
   }
 
   revalidatePath(`/admin/sessions/${sessionId}`);

@@ -154,6 +154,7 @@ a product gap, not just a monitoring one.
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
 | Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on + price-vs-UpdatePanel guard + auto-submit on Mark-as-submitted, all 2026-08-24; unit coverage for all four |
+| **Student documents / photos** | — | — | — | ✅ | — | — | ⚠️ No automated signal — see note below |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
 
@@ -298,6 +299,43 @@ ever renames `mainContent_impUploadBtn` or adds a confirmation step before the
 real submit, this fires a click that does nothing and the instructor would see
 no import happen with no error surfaced. Covered by the same open TODO above:
 nothing observes whether the class lands in Enrollware correctly.
+
+---
+
+### Student documents / photos (added 2026-08-25, migration 0062 — not yet applied)
+
+First piece of a planned larger feature: instructors/managers can upload photos
+(certification cards, etc.) per student on `/admin/sessions/[id]`, stored in S3
+under `student-documents/`. The eventual goal is for the Enrollware bookmarklet
+to inject these into Enrollware's own Documents panel — confirmed feasible via
+live-site Playwright testing (capped at 20 files per batch by Enrollware's own
+upload widget) — but that injection is not built. This piece is admin-side
+storage only.
+
+**Why no invariant is needed, not just missing:** `student_documents` requires
+exactly one of `booking_id` / `roster_record_id` via a CHECK constraint, both
+`ON DELETE CASCADE`. An orphaned or dual-owned row is not possible to write, not
+just unlikely — the same reasoning that makes `roster_record_id`/`booking_id`
+polymorphism elsewhere in this schema not warrant a data-consistency invariant
+either.
+
+**Honest gap:** no automated signal at all. Upload/delete errors surface
+directly in the modal to the person performing the action (an admin surface, not
+a silent integration — the actor is looking at the result immediately, unlike a
+webhook or cron), which is why this isn't rated ⚠️ as severely as a silent
+integration would be. But nothing tests the actual S3 round-trip, and this
+matches existing precedent: no function in `admin/sessions/[id]/actions.ts` has
+a dedicated test today (`removeBookingFromSession`, `updateSession`,
+`setSessionAddons` — none). Adding one for this feature alone without the
+others would be inconsistent rigor, not honest coverage.
+
+- `// TODO:` If this feature gets used heavily, an outcome e2e test (upload a
+  fixture file, assert the S3 object exists and the modal shows it) would be the
+  right signal — same shape as `rollcall.spec.ts`.
+
+**Not yet deployed:** migration 0062 exists locally but has not been applied to
+staging or production, and this code has not been pushed — held at the user's
+explicit request while the feature is still being decided.
 
 ---
 

@@ -56,11 +56,13 @@ export default async function SessionDetailPage({ params }: PageProps) {
       bookings (
         id, cancelled, booking_source, grade,
         profiles!bookings_customer_id_fkey ( first_name, last_name, email, phone ),
-        payments ( status, payment_type, amount )
+        payments ( status, payment_type, amount ),
+        student_documents ( id, file_name, file_url, content_type, created_at )
       ),
       roster_records (
         id, first_name, last_name, email, phone, employer, grade, confirmed,
-        address_1, address_2, city, state, zip
+        address_1, address_2, city, state, zip,
+        student_documents ( id, file_name, file_url, content_type, created_at )
       ),
       invoices (
         id, invoice_number, invoice_type, recipient_name,
