@@ -165,6 +165,59 @@ export function getBookmarkletSource(apiBase: string): string {
   // when formatting. Plain getHours() in an Eastern browser would write 5:00 AM
   // into Enrollware for a 9:00 AM class.
 
+  // ---------------------------------------------------------
+  // Price — single source of truth
+  // ---------------------------------------------------------
+  //
+  // mainContent_price lives inside mainContent_UpdatePanel2, Enrollware's only
+  // UpdatePanel. Every async postback that panel serves — Course change, Location
+  // change, the assistant BsmSelect widget, the student Import button — re-renders
+  // the panel and REPLACES the price input node with one carrying Enrollware's own
+  // catalog price ("$0.00" for most courses, since prices live in the SuperheroCPR
+  // database rather than theirs). So writing the price once is never enough: the
+  // next postback silently reverts it, and whatever is on screen when the
+  // instructor clicks "Update Class" is what gets saved.
+  //
+  // The price is therefore written by exactly one function, re-invoked after every
+  // partial postback via the PageRequestManager's endRequest event — which fires
+  // once the replacement node is already in the DOM.
+
+  /** Writes the recorded session price into Enrollware's price field. */
+  function applyPrice() {
+    var el = document.getElementById('mainContent_price');
+    if (el && window.__SCPR_PRICE > 0) {
+      el.value = String(window.__SCPR_PRICE);
+    }
+  }
+
+  /**
+   * Records this session's price, writes it immediately, and installs the guard
+   * that re-applies it after every UpdatePanel refresh. Safe to call repeatedly:
+   * the endRequest handler is registered at most once per page load.
+   *
+   * A price of 0 (a free class type, or one not priced in SuperheroCPR) records
+   * nothing and writes nothing, leaving Enrollware's own value untouched.
+   */
+  function installPriceGuard(session) {
+    var price = (session && session.class_type) ? session.class_type.price : 0;
+    window.__SCPR_PRICE = price > 0 ? price : 0;
+
+    applyPrice();
+
+    if (window.__SCPR_PRICE_GUARD) return;
+    try {
+      var prm = (window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager)
+        ? Sys.WebForms.PageRequestManager.getInstance()
+        : null;
+      if (prm) {
+        prm.add_endRequest(applyPrice);
+        window.__SCPR_PRICE_GUARD = true;
+      }
+    } catch (e) {
+      // No ASP.NET AJAX on this page — the single write above still stands.
+    }
+  }
+
   /**
    * Fills all class-detail form fields using the provided session data.
    * Returns an array of warning strings for any fields that could not be
@@ -221,12 +274,10 @@ export function getBookmarkletSource(apiBase: string): string {
         pad2(ed.getUTCHours()) + ':' + pad2(ed.getUTCMinutes());
     }
 
-    // Price — only fill if we have a positive value; writing 0 would clobber
-    // whatever the instructor already entered for a free/unpriced class type.
-    var priceEl = document.getElementById('mainContent_price');
-    if (priceEl && session.class_type && session.class_type.price > 0) {
-      priceEl.value = String(session.class_type.price);
-    }
+    // Price — written through the postback guard, not directly. See installPriceGuard.
+    // This must run before the assistant field below, whose change event triggers
+    // an UpdatePanel postback that would otherwise wipe a plain write.
+    installPriceGuard(session);
 
     // Total Hours — class type default plus any per-session additional hours
     var hoursEl = document.getElementById('mainContent_totalHours');
@@ -458,14 +509,6 @@ export function getBookmarkletSource(apiBase: string): string {
           if (storedData) {
             try {
               var session = JSON.parse(storedData);
-              // Re-fill the price after the UpdatePanel postback resets the form
-              // from the server. The postback response carries Enrollware's stored
-              // price for the course ($0 if not configured on their side), which
-              // overwrites what we set before the instructor clicked Update Class.
-              var priceEl = document.getElementById('mainContent_price');
-              if (priceEl && session.class_type && session.class_type.price > 0) {
-                priceEl.value = String(session.class_type.price);
-              }
               setTimeout(function() { showStudentFill(session); }, 400);
             } catch (e) { /* ignore parse error */ }
           }
@@ -490,14 +533,9 @@ export function getBookmarkletSource(apiBase: string): string {
   function showStudentFill(session) {
     var students = session.students || [];
 
-    // Re-fill price: "Update Class" triggers a full ASP.NET postback (not UpdatePanel),
-    // so the page fully navigates. The existing-class page loads with Enrollware's
-    // stored price for the course ($0 if not configured on their side). We write
-    // the correct price here so it's visible and included in any subsequent saves.
-    var priceEl2 = document.getElementById('mainContent_price');
-    if (priceEl2 && session.class_type && session.class_type.price > 0) {
-      priceEl2.value = String(session.class_type.price);
-    }
+    // Price — install the guard before the Import button is clicked below, since
+    // that click fires an UpdatePanel postback that replaces the price input.
+    installPriceGuard(session);
 
     // Fill "Certificate Issued On" from the session date. This field only exists
     // on existing-class pages (not new-class forms), so the null check is normal.

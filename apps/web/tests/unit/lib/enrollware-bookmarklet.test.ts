@@ -378,3 +378,177 @@ describe("showStudentFill — Import auto-click", () => {
     }, { timeout: 3000 });
   });
 });
+
+/**
+ * Price survives Enrollware's UpdatePanel postbacks.
+ *
+ * mainContent_price lives inside mainContent_UpdatePanel2. Every async postback
+ * that panel serves — Course change, Location change, the assistant BsmSelect
+ * widget, the student Import button — re-renders the panel and REPLACES the price
+ * input with one carrying Enrollware's own catalog price ("$0.00" for courses
+ * priced only in SuperheroCPR). Verified against the live site: a single write
+ * reverts on the very next postback.
+ *
+ * That made the bug expensive. fillClassForm writes the price, then dispatches a
+ * change event on the assistant widget a few lines later — so the bookmarklet was
+ * wiping its own price, and whatever showed when the instructor clicked "Update
+ * Class" is what got saved. Instructors were saving $75 classes at $0.
+ */
+describe("price survives UpdatePanel postbacks", () => {
+  /**
+   * Simulates one ASP.NET partial postback: swap in a fresh price input carrying
+   * the server's catalog value, then fire the endRequest handlers — the same
+   * order the real PageRequestManager uses.
+   */
+  function simulatePostback(handlers: Array<() => void>) {
+    const old = document.getElementById("mainContent_price") as HTMLInputElement;
+    const fresh = document.createElement("input");
+    fresh.id = "mainContent_price";
+    fresh.type = "text";
+    fresh.value = "$0.00";
+    old.replaceWith(fresh);
+    handlers.forEach((h) => h());
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  test("a postback that replaces the price input does not revert the price", async () => {
+    document.body.innerHTML = `
+      <form>
+        <select id="mainContent_Course"><option value="1">BLS Provider</option></select>
+        <select id="mainContent_Location"><option value="1">Tampa Training Center</option></select>
+        <select id="mainContent_instructorId"><option value="1">Jane Doe</option></select>
+        <input id="mainContent_startDate" type="text" />
+        <input id="mainContent_startTime" type="time" />
+        <input id="mainContent_endTime" type="time" />
+        <input id="mainContent_price" type="text" />
+        <input id="mainContent_totalHours" type="text" />
+        <input id="mainContent_maxEnrollment" type="text" />
+      </form>
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=new");
+    sessionStorage.clear();
+
+    const w = window as unknown as Record<string, unknown>;
+    delete w.__SCPR_LOADED;
+    delete w.__SCPR_PICK;
+    delete w.__SCPR_SHOW;
+    delete w.__SCPR_PRICE;
+    delete w.__SCPR_PRICE_GUARD;
+
+    // Stand in for ASP.NET AJAX, capturing whatever the script registers.
+    const endRequestHandlers: Array<() => void> = [];
+    w.Sys = {
+      WebForms: {
+        PageRequestManager: {
+          getInstance: () => ({
+            add_endRequest: (fn: () => void) => { endRequestHandlers.push(fn); },
+          }),
+        },
+      },
+    };
+
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        classes: [{
+          id: "session-1",
+          starts_at: "2026-09-14T09:00:00.000Z",
+          ends_at: "2026-09-14T13:00:00.000Z",
+          max_capacity: 12,
+          enrollware_submitted: false,
+          additional_hours: 0,
+          assistant_name: null,
+          assistant_instructor: null,
+          class_type: { name: "BLS Provider", price: 75, duration_minutes: 240 },
+          location: { name: "Tampa Training Center" },
+          instructor: { first_name: "Jane", last_name: "Doe" },
+          students: [],
+        }],
+      }),
+    })));
+
+    new Function(SOURCE)();
+    await vi.waitFor(() => {
+      expect(w.__SCPR_PICK).toBeTypeOf("function");
+    });
+    (w.__SCPR_PICK as (i: number) => void)(0);
+
+    const priceOf = () =>
+      (document.getElementById("mainContent_price") as HTMLInputElement).value;
+
+    expect(priceOf(), "price should be filled on the initial form").toBe("75");
+    expect(endRequestHandlers.length,
+      "the script must register a postback guard").toBeGreaterThan(0);
+
+    // The regression: before the guard, this left "$0.00" behind.
+    simulatePostback(endRequestHandlers);
+    expect(priceOf(), "price must survive an UpdatePanel refresh").toBe("75");
+
+    // And it must keep surviving — Course, Location, assistant and Import can
+    // each fire one, so a guard that only works once is not enough.
+    simulatePostback(endRequestHandlers);
+    simulatePostback(endRequestHandlers);
+    expect(priceOf(), "price must survive repeated refreshes").toBe("75");
+  });
+
+  test("a $0 class type leaves Enrollware's own price untouched", async () => {
+    document.body.innerHTML = `
+      <form>
+        <select id="mainContent_Course"><option value="1">Family &amp; Friends</option></select>
+        <select id="mainContent_Location"><option value="1">Tampa Training Center</option></select>
+        <select id="mainContent_instructorId"><option value="1">Jane Doe</option></select>
+        <input id="mainContent_startDate" type="text" />
+        <input id="mainContent_startTime" type="time" />
+        <input id="mainContent_endTime" type="time" />
+        <input id="mainContent_price" type="text" value="$40.00" />
+        <input id="mainContent_totalHours" type="text" />
+        <input id="mainContent_maxEnrollment" type="text" />
+      </form>
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=new");
+    sessionStorage.clear();
+
+    const w = window as unknown as Record<string, unknown>;
+    delete w.__SCPR_LOADED;
+    delete w.__SCPR_PICK;
+    delete w.__SCPR_SHOW;
+    delete w.__SCPR_PRICE;
+    delete w.__SCPR_PRICE_GUARD;
+    delete w.Sys;
+
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        classes: [{
+          id: "session-2",
+          starts_at: "2026-09-14T09:00:00.000Z",
+          ends_at: "2026-09-14T13:00:00.000Z",
+          max_capacity: 12,
+          enrollware_submitted: false,
+          additional_hours: 0,
+          assistant_name: null,
+          assistant_instructor: null,
+          class_type: { name: "Family & Friends", price: 0, duration_minutes: 240 },
+          location: { name: "Tampa Training Center" },
+          instructor: { first_name: "Jane", last_name: "Doe" },
+          students: [],
+        }],
+      }),
+    })));
+
+    new Function(SOURCE)();
+    await vi.waitFor(() => {
+      expect(w.__SCPR_PICK).toBeTypeOf("function");
+    });
+    (w.__SCPR_PICK as (i: number) => void)(0);
+
+    expect(
+      (document.getElementById("mainContent_price") as HTMLInputElement).value,
+      "a 0 price must not clobber the value Enrollware rendered"
+    ).toBe("$40.00");
+  });
+});

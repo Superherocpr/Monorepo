@@ -153,7 +153,7 @@ a product gap, not just a monitoring one.
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
-| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on added 2026-08-24; unit coverage for both |
+| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on added 2026-08-24; price-vs-UpdatePanel guard 2026-08-24; unit coverage for all three |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
 
@@ -209,6 +209,46 @@ Neither is built. Until one is, the coverage here is "the helpers are right, and
 the Enrollware fill uses them", not "the app uses them everywhere". The lint rule
 is the higher-value of the two — it is the only option that scales to call sites
 nobody thought to test.
+
+**A second one fired in the same file (2026-08-24): the price field.**
+`mainContent_price` lives inside `mainContent_UpdatePanel2`, Enrollware's only
+UpdatePanel. Every async postback that panel serves — Course change, Location
+change, the assistant BsmSelect widget, the student Import button — re-renders it
+and **replaces the price input node** with one carrying Enrollware's own catalog
+price, `$0.00` for courses priced only in SuperheroCPR. A single write is
+therefore always temporary.
+
+That made the bug expensive rather than cosmetic. `fillClassForm` wrote the
+price, then dispatched a `change` event on the assistant widget a few lines
+later — so the bookmarklet wiped its own price, and whatever was on screen when
+the instructor clicked "Update Class" is what got saved. Instructors were saving
+$75 classes at $0. It also burned three failed fix attempts, two of which
+targeted code paths that cannot run: "Update Class" is a native `<input
+type="submit">` with `clientSubmit: false`, so it fully navigates and destroys
+any MutationObserver watching for the result.
+
+**Fixed** by making the price a single writer (`applyPrice`) re-invoked after
+every partial postback via the PageRequestManager's `endRequest` event, which
+fires once the replacement node is in the DOM. Verified against the live site
+before it was written: price reverted `75 → $0.00` on a postback, and held at
+`75` with the guard installed.
+
+**Signal added for it:** two tests in
+`tests/unit/lib/enrollware-bookmarklet.test.ts` that stub `PageRequestManager`,
+replace the price node the way ASP.NET does, and assert the value survives —
+repeatedly, since four different controls can each fire a postback. Confirmed to
+fail without the guard (`expected 0 to be greater than 0`). A second test asserts
+a `$0` class type does *not* clobber the value Enrollware rendered.
+
+**Honest gap:** unit-only, against a hand-built stub of Enrollware's UpdatePanel.
+If Enrollware changes which controls trigger a refresh, or moves the price field
+out of the panel, these tests keep passing while the real page breaks. Nothing
+here observes the live site.
+
+- `// TODO:` No signal exists for whether a class actually *lands* in Enrollware
+  at the right price. That is the outcome that matters and it is entirely
+  unmonitored — the integration is a browser-side form fill against a third party
+  with no API, so failure is silent until an instructor notices a $0 class.
 
 ---
 
