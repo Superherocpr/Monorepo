@@ -480,19 +480,19 @@ describe("price survives UpdatePanel postbacks", () => {
     const priceOf = () =>
       (document.getElementById("mainContent_price") as HTMLInputElement).value;
 
-    expect(priceOf(), "price should be filled on the initial form").toBe("75");
+    expect(priceOf(), "price should be filled on the initial form").toBe("$75.00");
     expect(endRequestHandlers.length,
       "the script must register a postback guard").toBeGreaterThan(0);
 
     // The regression: before the guard, this left "$0.00" behind.
     simulatePostback(endRequestHandlers);
-    expect(priceOf(), "price must survive an UpdatePanel refresh").toBe("75");
+    expect(priceOf(), "price must survive an UpdatePanel refresh").toBe("$75.00");
 
     // And it must keep surviving — Course, Location, assistant and Import can
     // each fire one, so a guard that only works once is not enough.
     simulatePostback(endRequestHandlers);
     simulatePostback(endRequestHandlers);
-    expect(priceOf(), "price must survive repeated refreshes").toBe("75");
+    expect(priceOf(), "price must survive repeated refreshes").toBe("$75.00");
   });
 
   test("a $0 class type leaves Enrollware's own price untouched", async () => {
@@ -550,5 +550,88 @@ describe("price survives UpdatePanel postbacks", () => {
       (document.getElementById("mainContent_price") as HTMLInputElement).value,
       "a 0 price must not clobber the value Enrollware rendered"
     ).toBe("$40.00");
+  });
+});
+
+/**
+ * Price survives the full page reloads that partial-postback guards cannot.
+ *
+ * "Update Class" and Enrollware's student Import are native form submits, not
+ * UpdatePanel postbacks — the page navigates and this script is discarded, so no
+ * handler registered in the page can restore anything. The price is persisted to
+ * sessionStorage and re-applied at startup instead, which is why tapping the
+ * bookmark on the reloaded page puts the price back.
+ */
+describe("price survives a full page reload", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+    sessionStorage.clear();
+  });
+
+  /** Rebuilds the DOM and re-runs the script, the way a page navigation does. */
+  function reloadPageWithServerPrice(serverPrice: string) {
+    document.body.innerHTML = `
+      <form>
+        <input id="mainContent_price" type="text" value="${serverPrice}" />
+        <div id="mainContent_studentPanel"></div>
+      </form>
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=abc-123");
+    const w = window as unknown as Record<string, unknown>;
+    // A real reload drops every global the previous page set.
+    delete w.__SCPR_LOADED;
+    delete w.__SCPR_PICK;
+    delete w.__SCPR_SHOW;
+    delete w.__SCPR_PRICE_GUARD;
+    delete w.Sys;
+    new Function(SOURCE)();
+  }
+
+  test("re-applies the stored price on the reloaded page, in $XX.XX format", () => {
+    sessionStorage.setItem("scpr_price", "75");
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ classes: [] }),
+    })));
+
+    reloadPageWithServerPrice("$0.00");
+
+    // Startup restore is synchronous — it must not wait on the classes fetch,
+    // so the price is already right when the instructor looks at the page.
+    expect(
+      (document.getElementById("mainContent_price") as HTMLInputElement).value,
+      "the reloaded page's $0.00 must be overwritten from sessionStorage"
+    ).toBe("$75.00");
+  });
+
+  test("leaves the page alone when no price was stored", () => {
+    sessionStorage.clear();
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ classes: [] }),
+    })));
+
+    reloadPageWithServerPrice("$40.00");
+
+    expect(
+      (document.getElementById("mainContent_price") as HTMLInputElement).value,
+      "with nothing stored, Enrollware's own value must stand"
+    ).toBe("$40.00");
+  });
+
+  test("normalises a numeric-string price from Postgres", () => {
+    // Supabase serialises the numeric price column as a string like "75.00".
+    sessionStorage.setItem("scpr_price", "75.00");
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ classes: [] }),
+    })));
+
+    reloadPageWithServerPrice("$0.00");
+
+    expect(
+      (document.getElementById("mainContent_price") as HTMLInputElement).value
+    ).toBe("$75.00");
   });
 });

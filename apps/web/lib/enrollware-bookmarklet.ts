@@ -181,12 +181,36 @@ export function getBookmarkletSource(apiBase: string): string {
   // The price is therefore written by exactly one function, re-invoked after every
   // partial postback via the PageRequestManager's endRequest event — which fires
   // once the replacement node is already in the DOM.
+  //
+  // Partial postbacks are only half the problem. "Update Class" and Enrollware's
+  // student Import are full page submits: the page navigates, this script is
+  // discarded, and the guard dies with it. Nothing running in the page can survive
+  // that. So the price is also persisted to sessionStorage and re-applied at
+  // startup — every tap of the bookmark restores it, on whichever class-edit page
+  // the instructor has landed on.
+  //
+  // Format: "$75.00", matching what Enrollware renders into the field itself.
+  // Since submitting an untouched form posts Enrollware's own "$0.00" back to its
+  // server successfully, currency format is guaranteed to survive their parser.
 
-  /** Writes the recorded session price into Enrollware's price field. */
+  var PRICE_KEY = 'scpr_price';
+
+  /** Formats a price as Enrollware renders it: "$75.00". Accepts 75, "75", "75.00". */
+  function formatPrice(price) {
+    return '$' + Number(price).toFixed(2);
+  }
+
+  /**
+   * Reads the price recorded for this class and writes it into Enrollware's price
+   * field. No-ops when the field is absent or no positive price was recorded, so
+   * it is safe to call on any page at any point in the postback lifecycle.
+   */
   function applyPrice() {
     var el = document.getElementById('mainContent_price');
-    if (el && window.__SCPR_PRICE > 0) {
-      el.value = String(window.__SCPR_PRICE);
+    if (!el) return;
+    var price = Number(sessionStorage.getItem(PRICE_KEY));
+    if (price > 0) {
+      el.value = formatPrice(price);
     }
   }
 
@@ -197,13 +221,28 @@ export function getBookmarkletSource(apiBase: string): string {
    *
    * A price of 0 (a free class type, or one not priced in SuperheroCPR) records
    * nothing and writes nothing, leaving Enrollware's own value untouched.
+   *
+   * Side effect: writes the price to sessionStorage so it outlives the full page
+   * reloads that "Update Class" and the student Import trigger.
    */
   function installPriceGuard(session) {
-    var price = (session && session.class_type) ? session.class_type.price : 0;
-    window.__SCPR_PRICE = price > 0 ? price : 0;
-
+    var price = Number((session && session.class_type) ? session.class_type.price : 0);
+    if (price > 0) {
+      sessionStorage.setItem(PRICE_KEY, String(price));
+    } else {
+      // Clear it — otherwise switching to a free class type would keep applying
+      // the previously selected class's price.
+      sessionStorage.removeItem(PRICE_KEY);
+    }
+    installPriceWatcher();
     applyPrice();
+  }
 
+  /**
+   * Registers applyPrice to run after every partial postback. Idempotent — the
+   * handler is added at most once per page load.
+   */
+  function installPriceWatcher() {
     if (window.__SCPR_PRICE_GUARD) return;
     try {
       var prm = (window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager)
@@ -214,7 +253,7 @@ export function getBookmarkletSource(apiBase: string): string {
         window.__SCPR_PRICE_GUARD = true;
       }
     } catch (e) {
-      // No ASP.NET AJAX on this page — the single write above still stands.
+      // No ASP.NET AJAX on this page — the direct writes still stand.
     }
   }
 
@@ -646,6 +685,15 @@ export function getBookmarkletSource(apiBase: string): string {
       window.__SCPR_LOADED = false;
       return;
     }
+
+    // Restore the price before anything else. "Update Class" and the student
+    // Import are full page submits that discard this script, and the page comes
+    // back carrying Enrollware's own "$0.00". Re-applying here means the price is
+    // already correct by the time the instructor looks at the reloaded page —
+    // no waiting on the class list to load, and no dependency on which mode we
+    // end up in below.
+    installPriceWatcher();
+    applyPrice();
 
     showLoading();
 
