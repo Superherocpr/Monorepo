@@ -414,6 +414,86 @@ export function getBookmarkletSource(apiBase: string): string {
     return true;
   }
 
+  /**
+   * Fetches merged per-student PDFs from the SuperheroCPR API for the given
+   * session. Returns a Promise resolving to { documents: [{ studentName,
+   * fileName, pdf }] } where pdf is a base64-encoded PDF string. Returns
+   * { documents: [] } on any failure so callers can degrade gracefully.
+   */
+  function fetchSessionDocuments(sessionId) {
+    return fetch(
+      API_BASE + '/api/enrollware/session-documents?sessionId=' + encodeURIComponent(sessionId),
+      { headers: { 'Authorization': 'Bearer ' + __k } }
+    ).then(function(r) {
+      if (!r.ok) return { documents: [] };
+      return r.json();
+    }).catch(function() { return { documents: [] }; });
+  }
+
+  /**
+   * Injects per-student merged PDFs into Enrollware's Documents upload widget.
+   * Reconstructs each base64 PDF as a File object, adds it to a DataTransfer,
+   * assigns it to the file input, then dispatches 'change' so the AsyncFileUpload
+   * widget queues the files. Returns the number of documents injected, or 0 on failure.
+   */
+  function injectDocuments(docs) {
+    if (!docs || docs.length === 0) return 0;
+    var input = document.getElementById('mainContent_AjaxUpload1_Html5InputFile');
+    if (!input) return 0;
+    try {
+      var dt = new DataTransfer();
+      for (var i = 0; i < docs.length; i++) {
+        var doc = docs[i];
+        var binaryStr = atob(doc.pdf);
+        var arr = new Uint8Array(binaryStr.length);
+        for (var j = 0; j < binaryStr.length; j++) arr[j] = binaryStr.charCodeAt(j);
+        var blob = new Blob([arr], { type: 'application/pdf' });
+        dt.items.add(new File([blob], doc.fileName, { type: 'application/pdf' }));
+      }
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return docs.length;
+    } catch (e) { return 0; }
+  }
+
+  /**
+   * Clicks Enrollware's Documents "Upload" button to start the queued XHR uploads.
+   * Must be called after injectDocuments() has queued the files.
+   */
+  function clickDocumentUpload() {
+    var btn = document.getElementById('mainContent_AjaxUpload1_UploadOrCancelButton');
+    if (btn) btn.click();
+  }
+
+  /**
+   * Watches the Enrollware Documents queue for all pending uploads to finish.
+   * Waits for at least one pendingState element to appear (confirming upload started),
+   * then waits for them all to disappear (confirming completion). Calls callback(true)
+   * on success or callback(false) after a 45-second timeout.
+   */
+  function waitForDocumentUploads(callback) {
+    var queue = document.getElementById('mainContent_AjaxUpload1_QueueContainer');
+    if (!queue) { callback(false); return; }
+    var completed = false;
+    var sawPending = false;
+    // var is hoisted — observer is defined below and assigned before the 45s timeout fires
+    var timeoutId = setTimeout(function() {
+      if (!completed) { completed = true; observer.disconnect(); callback(false); }
+    }, 45000);
+    var observer = new MutationObserver(function() {
+      if (completed) return;
+      var pending = queue.querySelectorAll('.pendingState').length;
+      if (pending > 0) sawPending = true;
+      if (sawPending && pending === 0) {
+        completed = true;
+        clearTimeout(timeoutId);
+        observer.disconnect();
+        callback(true);
+      }
+    });
+    observer.observe(queue, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+
   // =========================================================
   // Floating panel UI
   // =========================================================
@@ -610,6 +690,8 @@ export function getBookmarkletSource(apiBase: string): string {
     // (the file input) without a full page reload. We click it and wait for the
     // element to appear via MutationObserver rather than polling.
     var blobPromise = fetchStudentXLSX(session.id);
+    // Fetch per-student merged PDFs in parallel with the XLSX and import panel open
+    var docsPromise = fetchSessionDocuments(session.id);
 
     var fileReadyPromise = new Promise(function(resolve) {
       if (document.getElementById('mainContent_impFileUpl')) { resolve(true); return; }
@@ -631,16 +713,24 @@ export function getBookmarkletSource(apiBase: string): string {
       importBtn.click();
     });
 
-    Promise.all([blobPromise, fileReadyPromise]).then(function(results) {
+    // Fetch the XLSX, open the import panel, and fetch per-student merged PDFs in
+    // parallel. Documents are injected into Enrollware's AsyncFileUpload widget
+    // immediately after they arrive; the XLSX waits for the import panel to open.
+    Promise.all([blobPromise, fileReadyPromise, docsPromise]).then(function(results) {
       var blob = results[0];
+      var docs = (results[2] && results[2].documents) ? results[2].documents : [];
       var injected = injectStudentFile(blob);
 
-      showPanel(panelHeader() +
-        (injected
-          ? '<div style="color:#2d7a2d;margin-bottom:6px">&#x2713; ' + count + ' student' + (count !== 1 ? 's' : '') + ' loaded into the import file!</div>' +
-            '<div style="font-size:12px;color:#555;margin-bottom:10px">Click <b>Import Students</b> to add them to this class.</div>'
-          : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not inject file automatically. Use the download button below.</div>'
-        ) +
+      // Inject documents and start upload immediately if any were fetched
+      var docInjected = injectDocuments(docs);
+      if (docInjected > 0) clickDocumentUpload();
+
+      var xlsxHtml = injected
+        ? '<div style="color:#2d7a2d;margin-bottom:6px">&#x2713; ' + count + ' student' + (count !== 1 ? 's' : '') + ' loaded into the import file!</div>' +
+          '<div style="font-size:12px;color:#555;margin-bottom:10px">Click <b>Import Students</b> to add them to this class.</div>'
+        : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not inject file automatically. Use the download button below.</div>';
+
+      var btnHtml =
         '<button onclick="window.__SCPR_DOWNLOAD()" ' +
         'style="width:100%;padding:6px;background:#444;color:#fff;border:none;' +
         'border-radius:4px;cursor:pointer;font-size:12px;margin-bottom:6px">' +
@@ -650,8 +740,38 @@ export function getBookmarkletSource(apiBase: string): string {
         'style="width:100%;padding:6px;background:#c8102e;color:#fff;border:none;' +
         'border-radius:4px;cursor:pointer;font-size:12px">' +
         '&#x2713; Mark class as submitted' +
-        '</button>'
-      );
+        '</button>';
+
+      function renderPanel(docsHtml) {
+        showPanel(panelHeader() + xlsxHtml + docsHtml + btnHtml);
+      }
+
+      if (docInjected > 0) {
+        // Documents queued — show "uploading" status and watch for completion
+        renderPanel(
+          '<div style="color:#666;margin-bottom:8px">&#x1F4C4; Uploading ' +
+          docInjected + ' document' + (docInjected !== 1 ? 's' : '') +
+          ' to Enrollware&hellip;</div>'
+        );
+        waitForDocumentUploads(function(ok) {
+          renderPanel(ok
+            ? '<div style="color:#2d7a2d;margin-bottom:8px">&#x2713; ' +
+              docInjected + ' document' + (docInjected !== 1 ? 's' : '') +
+              ' uploaded to Enrollware.</div>'
+            : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Document upload timed out. ' +
+              'Verify in Enrollware\'s Documents section.</div>'
+          );
+        });
+      } else if (docs.length > 0) {
+        // Had documents but couldn't inject them
+        renderPanel(
+          '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not queue documents. ' +
+          'Upload manually via the Documents section.</div>'
+        );
+      } else {
+        // No documents for this session — show only XLSX section
+        renderPanel('');
+      }
 
       window.__SCPR_DOWNLOAD = function() {
         var url = URL.createObjectURL(blob);
@@ -696,7 +816,7 @@ export function getBookmarkletSource(apiBase: string): string {
       };
 
     }).catch(function(err) {
-      showError('Failed to prepare student file: ' + (err.message || 'Unknown error'));
+      showError('Failed to prepare student data: ' + (err.message || 'Unknown error'));
     });
   }
 

@@ -3382,7 +3382,7 @@ export default function SessionDetailClient({
                   )}
                 </div>
                 <a
-                  href="https://www.enrollware.com"
+                  href="https://www.enrollware.com/admin/class-edit.aspx?ret=class-list.aspx&id=new"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block text-center px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-md hover:bg-gray-50 transition-colors"

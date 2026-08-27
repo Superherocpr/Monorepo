@@ -154,7 +154,7 @@ a product gap, not just a monitoring one.
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
 | Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on + price-vs-UpdatePanel guard + auto-submit on Mark-as-submitted, all 2026-08-24; unit coverage for all four |
-| **Student documents / photos** | — | — | ✅ | ✅ | — | — | Cron purges DB rows at 30 days; S3 lifecycle rule is separate infra; upload errors surface in UI |
+| **Student documents / photos** | — | — | ✅ | ✅ | — | — | Bookmarklet injects merged PDFs into Enrollware via AjaxUpload1; cron purges DB rows at 30 days; S3 lifecycle rule handles file expiry |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
 
@@ -305,12 +305,13 @@ nothing observes whether the class lands in Enrollware correctly.
 ### Student documents / photos (migration 0062 + 0063)
 
 Instructors/managers upload photos (certification cards, etc.) per student on
-`/admin/sessions/[id]`, stored in S3 under `student-documents/`. The eventual
-goal is for the Enrollware bookmarklet to inject these into Enrollware's own
-Documents panel as one merged PDF per student — confirmed feasible via live-site
-Playwright testing (capped at 20 files per batch), with HEIC converted to JPEG
-at upload time so all stored files are PDF-embeddable. That injection is not
-built yet; this piece is admin-side storage only.
+`/admin/sessions/[id]`, stored in S3 under `student-documents/`. The Enrollware
+bookmarklet fetches a per-student merged PDF from `/api/enrollware/session-documents`,
+injects all files into Enrollware's AsyncFileUpload widget (`AjaxUpload1`), auto-clicks
+Upload, and watches the queue's `pendingState` elements to confirm completion — then
+updates the panel status accordingly. HEIC is converted to JPEG at upload time;
+WebP is converted at merge time. Documents are fetched in parallel with the XLSX
+so no extra wall-clock time is added to the existing bookmarklet flow.
 
 **Storage lifecycle:** 30-day S3 lifecycle rules are set on both
 `superherocpr-assets-prod` and `superherocpr-assets-staging` (prefix
