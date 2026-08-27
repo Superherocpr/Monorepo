@@ -759,7 +759,7 @@ export function getBookmarkletSource(apiBase: string): string {
               docInjected + ' document' + (docInjected !== 1 ? 's' : '') +
               ' uploaded to Enrollware.</div>'
             : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Document upload timed out. ' +
-              'Verify in Enrollware\'s Documents section.</div>'
+              'Verify in Enrollware\\'s Documents section.</div>'
           );
         });
       } else if (docs.length > 0) {
