@@ -154,6 +154,7 @@ a product gap, not just a monitoring one.
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
 | Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on + price-vs-UpdatePanel guard + auto-submit on Mark-as-submitted, all 2026-08-24; unit coverage for all four |
+| **Student documents / photos** | — | — | ✅ | ✅ | — | — | Cron purges DB rows at 30 days; S3 lifecycle rule is separate infra; upload errors surface in UI |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
 
@@ -298,6 +299,39 @@ ever renames `mainContent_impUploadBtn` or adds a confirmation step before the
 real submit, this fires a click that does nothing and the instructor would see
 no import happen with no error surfaced. Covered by the same open TODO above:
 nothing observes whether the class lands in Enrollware correctly.
+
+---
+
+### Student documents / photos (migration 0062 + 0063)
+
+Instructors/managers upload photos (certification cards, etc.) per student on
+`/admin/sessions/[id]`, stored in S3 under `student-documents/`. The eventual
+goal is for the Enrollware bookmarklet to inject these into Enrollware's own
+Documents panel as one merged PDF per student — confirmed feasible via live-site
+Playwright testing (capped at 20 files per batch), with HEIC converted to JPEG
+at upload time so all stored files are PDF-embeddable. That injection is not
+built yet; this piece is admin-side storage only.
+
+**Storage lifecycle:** 30-day S3 lifecycle rules are set on both
+`superherocpr-assets-prod` and `superherocpr-assets-staging` (prefix
+`student-documents/`) — objects expire automatically at day 30 with no code
+involved. Migration 0063 adds a matching daily cron (`purge-expired-student-documents`,
+02:00 UTC) that deletes DB rows older than 30 days, reporting to `cron_run_log`
+so it appears in `cron_health()`.
+
+**Why no invariant is needed, not just missing:** `student_documents` requires
+exactly one of `booking_id` / `roster_record_id` via a CHECK constraint, both
+`ON DELETE CASCADE`. An orphaned or dual-owned row is not possible to write, not
+just unlikely.
+
+**Honest gap:** Upload/delete errors surface directly in the modal to the actor.
+No automated test of the S3 round-trip exists, matching precedent in this file
+(`removeBookingFromSession`, `updateSession`, `setSessionAddons` — none tested
+today). The cron provides a health signal for the cleanup path but not for upload.
+
+- `// TODO:` If this feature gets used heavily, an outcome e2e test (upload a
+  fixture file, assert the S3 object exists and the modal shows it) would be the
+  right signal — same shape as `rollcall.spec.ts`.
 
 ---
 

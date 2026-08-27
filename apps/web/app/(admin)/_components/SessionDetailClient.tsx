@@ -6,7 +6,7 @@
  * Used by: app/(admin)/admin/sessions/[id]/page.tsx
  */
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { UserRole } from "@/types/users";
@@ -31,7 +31,10 @@ import {
   setSessionAddons,
   removeBookingFromSession,
   removeRosterRecordFromSession,
+  uploadStudentDocument,
+  deleteStudentDocument,
   type SessionEditFields,
+  type StudentDocumentRecord,
 } from "@/app/(admin)/admin/sessions/[id]/actions";
 import { PayPalProvider } from "@paypal/react-paypal-js/sdk-v6";
 import { CardPaymentSection } from "@/app/_components/PayPalCardPaymentSection";
@@ -52,6 +55,7 @@ export interface SessionBooking {
     phone: string | null;
   } | null;
   payments: Array<{ status: string; payment_type: string; amount: number }>;
+  student_documents: StudentDocumentRecord[];
 }
 
 /** A roster record row from the session query. */
@@ -69,6 +73,7 @@ export interface SessionRosterRecord {
   city: string | null;
   state: string | null;
   zip: string | null;
+  student_documents: StudentDocumentRecord[];
 }
 
 /** Editable contact fields for the customer-info modal. */
@@ -415,6 +420,10 @@ export default function SessionDetailClient({
   // Who may open the "Add Student to Class" modal at all.
   const canAddStudents = isManager || (isInstructor && isOwnSession);
 
+  // Who may upload/delete student photos — matches the server-side check in
+  // uploadStudentDocument/deleteStudentDocument (any manager, or the owning instructor).
+  const canManagePhotos = isManager || (isInstructor && isOwnSession);
+
   /**
    * Whether a booking can be created WITHOUT taking payment.
    *
@@ -513,6 +522,20 @@ export default function SessionDetailClient({
   const [contactError, setContactError] = useState<string | null>(null);
   /** Local overrides keyed by the same `key` used in editingCustomer, applied after a successful save. */
   const [contactOverrides, setContactOverrides] = useState<Record<string, ContactFormValues>>({});
+
+  // ── Student documents (photos) modal state ────────────────────────────────
+  // No local override list — the document list always reads from session.bookings /
+  // session.roster_records, so a router.refresh() after upload/delete is enough
+  // (same approach handleRemoveStudent already uses for roster/booking rows).
+  const [photosModalTarget, setPhotosModalTarget] = useState<{
+    type: "booking" | "roster";
+    id: string;
+    name: string;
+  } | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
+  const [deletingPhotoIds, setDeletingPhotoIds] = useState<Set<string>>(new Set());
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
 
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
@@ -618,6 +641,63 @@ export default function SessionDetailClient({
       router.refresh();
     }
   }
+
+  // ── Student documents (photos) handlers ───────────────────────────────────
+
+  /**
+   * Uploads a photo/PDF for the student currently open in the photos modal.
+   * Side effect: S3 write + student_documents insert via uploadStudentDocument.
+   */
+  async function handleUploadPhoto(file: File): Promise<void> {
+    if (!photosModalTarget) return;
+    setIsUploadingPhoto(true);
+    setPhotoUploadError(null);
+
+    const result = await uploadStudentDocument(
+      session.id,
+      { type: photosModalTarget.type, id: photosModalTarget.id },
+      file
+    );
+
+    setIsUploadingPhoto(false);
+    if (result.error) {
+      setPhotoUploadError(result.error);
+    } else {
+      router.refresh();
+    }
+  }
+
+  /**
+   * Deletes a student document. Side effect: S3 delete (best-effort) + row delete
+   * via deleteStudentDocument.
+   */
+  async function handleDeletePhoto(documentId: string): Promise<void> {
+    setDeletingPhotoIds((prev) => new Set(prev).add(documentId));
+    const result = await deleteStudentDocument(documentId, session.id);
+    setDeletingPhotoIds((prev) => {
+      const next = new Set(prev);
+      next.delete(documentId);
+      return next;
+    });
+    if (result) {
+      setPhotoUploadError(result);
+    } else {
+      router.refresh();
+    }
+  }
+
+  /** Resolves the current document list for whichever student has the photos modal open. */
+  const photosModalDocuments = useMemo((): StudentDocumentRecord[] => {
+    if (!photosModalTarget) return [];
+    if (photosModalTarget.type === "booking") {
+      return (
+        session.bookings.find((b) => b.id === photosModalTarget.id)?.student_documents ?? []
+      );
+    }
+    return (
+      session.roster_records.find((r) => r.id === photosModalTarget.id)?.student_documents ?? []
+    );
+  }, [photosModalTarget, session.bookings, session.roster_records]);
 
   // ── Derived values ────────────────────────────────────────────────────────
 
@@ -1709,6 +1789,96 @@ export default function SessionDetailClient({
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Student photos modal ── */}
+      {photosModalTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Photos</h2>
+              <p className="text-sm text-gray-500">{photosModalTarget.name}</p>
+            </div>
+
+            {photoUploadError && (
+              <p className="text-xs text-red-700 font-medium">{photoUploadError}</p>
+            )}
+
+            {photosModalDocuments.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">No photos yet.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {photosModalDocuments.map((doc) => (
+                  <div key={doc.id} className="relative group">
+                    <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
+                      {doc.content_type === "application/pdf" ? (
+                        <div className="w-full aspect-square rounded-md border border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-1 text-gray-500">
+                          <span className="text-xl">📄</span>
+                          <span className="text-[10px] px-1 truncate w-full text-center">
+                            {doc.file_name}
+                          </span>
+                        </div>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={doc.file_url}
+                          alt={doc.file_name}
+                          className="w-full aspect-square object-cover rounded-md border border-gray-200"
+                        />
+                      )}
+                    </a>
+                    {canManagePhotos && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeletePhoto(doc.id)}
+                        disabled={deletingPhotoIds.has(doc.id)}
+                        title="Delete photo"
+                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-white/90 text-red-600 text-xs font-bold shadow hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {deletingPhotoIds.has(doc.id) ? "…" : "×"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {canManagePhotos && (
+              <>
+                <input
+                  ref={photoFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = ""; // allow re-selecting the same file next time
+                    if (file) void handleUploadPhoto(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => photoFileInputRef.current?.click()}
+                  disabled={isUploadingPhoto}
+                  className="w-full px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {isUploadingPhoto ? "Uploading…" : "+ Upload Photo"}
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setPhotosModalTarget(null);
+                setPhotoUploadError(null);
+              }}
+              className="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
@@ -2953,7 +3123,7 @@ export default function SessionDetailClient({
                         Name
                       </th>
                       <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Email
+                        Photos
                       </th>
                       <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Verified
@@ -2990,16 +3160,23 @@ export default function SessionDetailClient({
                               "-"
                             )}
                           </td>
-                          <td className="px-4 py-2.5 text-gray-600">
-                            {(() => {
-                              const emailKeyForContact = b.profiles?.email?.toLowerCase() ?? "";
-                              const rosterRecordForContact = rosterRecordByEmail.get(emailKeyForContact);
-                              const contactKey = rosterRecordForContact
-                                ? rosterRecordForContact.id
-                                : `booking-${b.id}`;
-                              const override = contactOverrides[contactKey];
-                              return override?.email || rosterRecordForContact?.email || b.profiles?.email || "-";
-                            })()}
+                          <td className="px-4 py-2.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPhotosModalTarget({
+                                  type: "booking",
+                                  id: b.id,
+                                  name: b.profiles
+                                    ? `${b.profiles.first_name} ${b.profiles.last_name}`
+                                    : "Student",
+                                })
+                              }
+                              title="View or upload photos"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                            >
+                              📷 {b.student_documents.length}
+                            </button>
                           </td>
                           <td className="px-4 py-2.5">
                             {(() => {
@@ -3080,8 +3257,21 @@ export default function SessionDetailClient({
                             `${r.first_name} ${r.last_name}`
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-gray-600">
-                          {contactOverrides[r.id]?.email || r.email || "-"}
+                        <td className="px-4 py-2.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPhotosModalTarget({
+                                type: "roster",
+                                id: r.id,
+                                name: `${r.first_name} ${r.last_name}`,
+                              })
+                            }
+                            title="View or upload photos"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                          >
+                            📷 {r.student_documents.length}
+                          </button>
                         </td>
                         <td className="px-4 py-2.5">
                           {(() => {
