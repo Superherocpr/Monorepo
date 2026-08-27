@@ -153,7 +153,7 @@ a product gap, not just a monitoring one.
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
-| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on added 2026-08-24; unit coverage for both |
+| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on + price-vs-UpdatePanel guard + auto-submit on Mark-as-submitted, all 2026-08-24; unit coverage for all four |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
 
@@ -209,6 +209,95 @@ Neither is built. Until one is, the coverage here is "the helpers are right, and
 the Enrollware fill uses them", not "the app uses them everywhere". The lint rule
 is the higher-value of the two — it is the only option that scales to call sites
 nobody thought to test.
+
+**A second one fired in the same file (2026-08-24): the price field.**
+`mainContent_price` lives inside `mainContent_UpdatePanel2`, Enrollware's only
+UpdatePanel. Every async postback that panel serves — Course change, Location
+change, the assistant BsmSelect widget, the student Import button — re-renders it
+and **replaces the price input node** with one carrying Enrollware's own catalog
+price, `$0.00` for courses priced only in SuperheroCPR. A single write is
+therefore always temporary.
+
+That made the bug expensive rather than cosmetic. `fillClassForm` wrote the
+price, then dispatched a `change` event on the assistant widget a few lines
+later — so the bookmarklet wiped its own price, and whatever was on screen when
+the instructor clicked "Update Class" is what got saved. Instructors were saving
+$75 classes at $0. It also burned three failed fix attempts, two of which
+targeted code paths that cannot run: "Update Class" is a native `<input
+type="submit">` with `clientSubmit: false`, so it fully navigates and destroys
+any MutationObserver watching for the result.
+
+**Fixed in two halves, because there are two different failure modes.** Partial
+postbacks are handled by a single writer (`applyPrice`) re-invoked via the
+PageRequestManager's `endRequest` event, which fires once the replacement node is
+in the DOM. Verified against the live site: price reverted `75 → $0.00` on a
+postback, and held with the guard installed.
+
+That was not sufficient. "Update Class" and Enrollware's student Import are
+native form submits — the page navigates and the script is discarded, so *no*
+in-page handler can restore anything. The price is therefore also persisted to
+sessionStorage and re-applied at startup, ahead of the class-list fetch, so every
+tap of the bookmark restores it on whichever page the instructor landed on. The
+stored value is cleared for `$0` class types so a previous selection cannot leak
+into a free class.
+
+It is written as `"$75.00"`, matching what Enrollware renders into the field.
+Submitting an untouched form posts their own `$0.00` back successfully, so
+currency format is guaranteed to survive their parser. `Number().toFixed(2)` also
+normalises the numeric-as-string price Supabase returns (`"75.00"`).
+
+**Signal added for it:** five tests in
+`tests/unit/lib/enrollware-bookmarklet.test.ts`. Two stub `PageRequestManager`,
+replace the price node the way ASP.NET does, and assert the value survives —
+repeatedly, since four controls can each fire a postback. Three more rebuild the
+DOM and re-evaluate the script the way a navigation does, asserting the price is
+restored from sessionStorage. All were confirmed to fail against the pre-fix code
+rather than passing vacuously. Further tests assert a `$0` class type does *not*
+clobber the value Enrollware rendered.
+
+**Honest gap:** unit-only, against a hand-built stub of Enrollware's UpdatePanel.
+If Enrollware changes which controls trigger a refresh, or moves the price field
+out of the panel, these tests keep passing while the real page breaks. Nothing
+here observes the live site.
+
+- `// TODO:` No signal exists for whether a class actually *lands* in Enrollware
+  at the right price. That is the outcome that matters and it is entirely
+  unmonitored — the integration is a browser-side form fill against a third party
+  with no API, so failure is silent until an instructor notices a $0 class.
+
+**Third change to the same file (2026-08-24): "Mark class as submitted" now
+auto-submits the roster.** Previously this button only called
+`/api/enrollware/mark-submitted` (SuperheroCPR bookkeeping) — the instructor
+still had to separately click Enrollware's own "Import Students" button to
+actually import the file. That is now automatic: `__SCPR_MARK_DONE` clicks
+`mainContent_impUploadBtn` itself once our own API call succeeds.
+
+Verified live before writing it: `mainContent_impUploadBtn` is in
+`PageRequestManager._postBackControlIDs`, not the async list — it is a full-page
+form submit, same as "Update Class". That ordering constraint is why the
+sequence is markSubmitted() first, then the click: the click navigates the
+browser away, which can abort an in-flight fetch to our own API.
+
+The auto-click is conditional on `injected` (whether the xlsx file was
+successfully attached earlier in the flow). If injection failed, the instructor
+already sees a manual-download fallback; auto-submitting an empty or missing
+file in that case would silently create a class with zero students instead of
+failing loudly, so the guard leaves it to the instructor and shows a warning
+instead.
+
+**Signal added for it:** two tests in
+`tests/unit/lib/enrollware-bookmarklet.test.ts` (`Mark class as submitted —
+auto-clicks Import Students`) — one asserts the button is clicked and the
+session is cleared when injection succeeded, the other asserts it is *not*
+clicked when injection failed. Confirmed the first fails against the pre-fix
+code (`1 failed | 23 passed`) rather than passing vacuously.
+
+**Honest gap:** same limitation as the price guard above — this proves the
+*click* happens, not that Enrollware's server accepts the import. If Enrollware
+ever renames `mainContent_impUploadBtn` or adds a confirmation step before the
+real submit, this fires a click that does nothing and the instructor would see
+no import happen with no error surfaced. Covered by the same open TODO above:
+nothing observes whether the class lands in Enrollware correctly.
 
 ---
 

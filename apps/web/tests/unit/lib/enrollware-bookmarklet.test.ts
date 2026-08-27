@@ -378,3 +378,400 @@ describe("showStudentFill — Import auto-click", () => {
     }, { timeout: 3000 });
   });
 });
+
+/**
+ * Price survives Enrollware's UpdatePanel postbacks.
+ *
+ * mainContent_price lives inside mainContent_UpdatePanel2. Every async postback
+ * that panel serves — Course change, Location change, the assistant BsmSelect
+ * widget, the student Import button — re-renders the panel and REPLACES the price
+ * input with one carrying Enrollware's own catalog price ("$0.00" for courses
+ * priced only in SuperheroCPR). Verified against the live site: a single write
+ * reverts on the very next postback.
+ *
+ * That made the bug expensive. fillClassForm writes the price, then dispatches a
+ * change event on the assistant widget a few lines later — so the bookmarklet was
+ * wiping its own price, and whatever showed when the instructor clicked "Update
+ * Class" is what got saved. Instructors were saving $75 classes at $0.
+ */
+describe("price survives UpdatePanel postbacks", () => {
+  /**
+   * Simulates one ASP.NET partial postback: swap in a fresh price input carrying
+   * the server's catalog value, then fire the endRequest handlers — the same
+   * order the real PageRequestManager uses.
+   */
+  function simulatePostback(handlers: Array<() => void>) {
+    const old = document.getElementById("mainContent_price") as HTMLInputElement;
+    const fresh = document.createElement("input");
+    fresh.id = "mainContent_price";
+    fresh.type = "text";
+    fresh.value = "$0.00";
+    old.replaceWith(fresh);
+    handlers.forEach((h) => h());
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  test("a postback that replaces the price input does not revert the price", async () => {
+    document.body.innerHTML = `
+      <form>
+        <select id="mainContent_Course"><option value="1">BLS Provider</option></select>
+        <select id="mainContent_Location"><option value="1">Tampa Training Center</option></select>
+        <select id="mainContent_instructorId"><option value="1">Jane Doe</option></select>
+        <input id="mainContent_startDate" type="text" />
+        <input id="mainContent_startTime" type="time" />
+        <input id="mainContent_endTime" type="time" />
+        <input id="mainContent_price" type="text" />
+        <input id="mainContent_totalHours" type="text" />
+        <input id="mainContent_maxEnrollment" type="text" />
+      </form>
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=new");
+    sessionStorage.clear();
+
+    const w = window as unknown as Record<string, unknown>;
+    delete w.__SCPR_LOADED;
+    delete w.__SCPR_PICK;
+    delete w.__SCPR_SHOW;
+    delete w.__SCPR_PRICE;
+    delete w.__SCPR_PRICE_GUARD;
+
+    // Stand in for ASP.NET AJAX, capturing whatever the script registers.
+    const endRequestHandlers: Array<() => void> = [];
+    w.Sys = {
+      WebForms: {
+        PageRequestManager: {
+          getInstance: () => ({
+            add_endRequest: (fn: () => void) => { endRequestHandlers.push(fn); },
+          }),
+        },
+      },
+    };
+
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        classes: [{
+          id: "session-1",
+          starts_at: "2026-09-14T09:00:00.000Z",
+          ends_at: "2026-09-14T13:00:00.000Z",
+          max_capacity: 12,
+          enrollware_submitted: false,
+          additional_hours: 0,
+          assistant_name: null,
+          assistant_instructor: null,
+          class_type: { name: "BLS Provider", price: 75, duration_minutes: 240 },
+          location: { name: "Tampa Training Center" },
+          instructor: { first_name: "Jane", last_name: "Doe" },
+          students: [],
+        }],
+      }),
+    })));
+
+    new Function(SOURCE)();
+    await vi.waitFor(() => {
+      expect(w.__SCPR_PICK).toBeTypeOf("function");
+    });
+    (w.__SCPR_PICK as (i: number) => void)(0);
+
+    const priceOf = () =>
+      (document.getElementById("mainContent_price") as HTMLInputElement).value;
+
+    expect(priceOf(), "price should be filled on the initial form").toBe("$75.00");
+    expect(endRequestHandlers.length,
+      "the script must register a postback guard").toBeGreaterThan(0);
+
+    // The regression: before the guard, this left "$0.00" behind.
+    simulatePostback(endRequestHandlers);
+    expect(priceOf(), "price must survive an UpdatePanel refresh").toBe("$75.00");
+
+    // And it must keep surviving — Course, Location, assistant and Import can
+    // each fire one, so a guard that only works once is not enough.
+    simulatePostback(endRequestHandlers);
+    simulatePostback(endRequestHandlers);
+    expect(priceOf(), "price must survive repeated refreshes").toBe("$75.00");
+  });
+
+  test("a $0 class type leaves Enrollware's own price untouched", async () => {
+    document.body.innerHTML = `
+      <form>
+        <select id="mainContent_Course"><option value="1">Family &amp; Friends</option></select>
+        <select id="mainContent_Location"><option value="1">Tampa Training Center</option></select>
+        <select id="mainContent_instructorId"><option value="1">Jane Doe</option></select>
+        <input id="mainContent_startDate" type="text" />
+        <input id="mainContent_startTime" type="time" />
+        <input id="mainContent_endTime" type="time" />
+        <input id="mainContent_price" type="text" value="$40.00" />
+        <input id="mainContent_totalHours" type="text" />
+        <input id="mainContent_maxEnrollment" type="text" />
+      </form>
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=new");
+    sessionStorage.clear();
+
+    const w = window as unknown as Record<string, unknown>;
+    delete w.__SCPR_LOADED;
+    delete w.__SCPR_PICK;
+    delete w.__SCPR_SHOW;
+    delete w.__SCPR_PRICE;
+    delete w.__SCPR_PRICE_GUARD;
+    delete w.Sys;
+
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        classes: [{
+          id: "session-2",
+          starts_at: "2026-09-14T09:00:00.000Z",
+          ends_at: "2026-09-14T13:00:00.000Z",
+          max_capacity: 12,
+          enrollware_submitted: false,
+          additional_hours: 0,
+          assistant_name: null,
+          assistant_instructor: null,
+          class_type: { name: "Family & Friends", price: 0, duration_minutes: 240 },
+          location: { name: "Tampa Training Center" },
+          instructor: { first_name: "Jane", last_name: "Doe" },
+          students: [],
+        }],
+      }),
+    })));
+
+    new Function(SOURCE)();
+    await vi.waitFor(() => {
+      expect(w.__SCPR_PICK).toBeTypeOf("function");
+    });
+    (w.__SCPR_PICK as (i: number) => void)(0);
+
+    expect(
+      (document.getElementById("mainContent_price") as HTMLInputElement).value,
+      "a 0 price must not clobber the value Enrollware rendered"
+    ).toBe("$40.00");
+  });
+});
+
+/**
+ * Price survives the full page reloads that partial-postback guards cannot.
+ *
+ * "Update Class" and Enrollware's student Import are native form submits, not
+ * UpdatePanel postbacks — the page navigates and this script is discarded, so no
+ * handler registered in the page can restore anything. The price is persisted to
+ * sessionStorage and re-applied at startup instead, which is why tapping the
+ * bookmark on the reloaded page puts the price back.
+ */
+describe("price survives a full page reload", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+    sessionStorage.clear();
+  });
+
+  /** Rebuilds the DOM and re-runs the script, the way a page navigation does. */
+  function reloadPageWithServerPrice(serverPrice: string) {
+    document.body.innerHTML = `
+      <form>
+        <input id="mainContent_price" type="text" value="${serverPrice}" />
+        <div id="mainContent_studentPanel"></div>
+      </form>
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=abc-123");
+    const w = window as unknown as Record<string, unknown>;
+    // A real reload drops every global the previous page set.
+    delete w.__SCPR_LOADED;
+    delete w.__SCPR_PICK;
+    delete w.__SCPR_SHOW;
+    delete w.__SCPR_PRICE_GUARD;
+    delete w.Sys;
+    new Function(SOURCE)();
+  }
+
+  test("re-applies the stored price on the reloaded page, in $XX.XX format", () => {
+    sessionStorage.setItem("scpr_price", "75");
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ classes: [] }),
+    })));
+
+    reloadPageWithServerPrice("$0.00");
+
+    // Startup restore is synchronous — it must not wait on the classes fetch,
+    // so the price is already right when the instructor looks at the page.
+    expect(
+      (document.getElementById("mainContent_price") as HTMLInputElement).value,
+      "the reloaded page's $0.00 must be overwritten from sessionStorage"
+    ).toBe("$75.00");
+  });
+
+  test("leaves the page alone when no price was stored", () => {
+    sessionStorage.clear();
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ classes: [] }),
+    })));
+
+    reloadPageWithServerPrice("$40.00");
+
+    expect(
+      (document.getElementById("mainContent_price") as HTMLInputElement).value,
+      "with nothing stored, Enrollware's own value must stand"
+    ).toBe("$40.00");
+  });
+
+  test("normalises a numeric-string price from Postgres", () => {
+    // Supabase serialises the numeric price column as a string like "75.00".
+    sessionStorage.setItem("scpr_price", "75.00");
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ classes: [] }),
+    })));
+
+    reloadPageWithServerPrice("$0.00");
+
+    expect(
+      (document.getElementById("mainContent_price") as HTMLInputElement).value
+    ).toBe("$75.00");
+  });
+});
+
+/**
+ * "Mark class as submitted" auto-clicks Enrollware's real Import Students button.
+ *
+ * mainContent_impUploadBtn ("Import Students") is a full-page form submit —
+ * confirmed live via PageRequestManager._postBackControlIDs, which lists it
+ * (not the async list Course/Location postbacks use). So our own markSubmitted()
+ * API call must complete and sessionStorage must be cleared *before* it is
+ * clicked, since the click navigates the browser away and would otherwise abort
+ * that fetch mid-flight.
+ */
+describe("Mark class as submitted — auto-clicks Import Students", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+    sessionStorage.clear();
+  });
+
+  const session = {
+    id: "session-3",
+    starts_at: "2026-09-14T09:00:00.000Z",
+    ends_at: "2026-09-14T13:00:00.000Z",
+    max_capacity: 10,
+    enrollware_submitted: false,
+    additional_hours: 0,
+    assistant_name: null,
+    assistant_instructor: null,
+    class_type: { name: "BLS Provider", price: 65, duration_minutes: 240 },
+    location: { name: "Tampa" },
+    instructor: { first_name: "Jane", last_name: "Doe" },
+    students: [
+      { first_name: "Carla", last_name: "Ruiz", email: "c@test.com", phone: null,
+        address_1: null, address_2: null, city: null, state: null, zip: null,
+        grade: 100, ccf_compression: null, confirmed: true }
+    ],
+  };
+
+  function primeStorage() {
+    sessionStorage.clear();
+    sessionStorage.setItem("scpr_session_id", session.id);
+    sessionStorage.setItem("scpr_session_data", JSON.stringify(session));
+    const w = window as unknown as Record<string, unknown>;
+    delete w.__SCPR_LOADED;
+    delete w.__SCPR_PICK;
+    delete w.__SCPR_SHOW;
+    delete w.__SCPR_PICK_STUDENTS;
+    delete w.__SCPR_MARK_DONE;
+  }
+
+  function stubFetch(markSubmittedCalls: string[]) {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (typeof url === "string" && url.includes("student-xlsx")) {
+        return { ok: true, blob: async () => new Blob(["xlsx"]) };
+      }
+      if (typeof url === "string" && url.includes("mark-submitted")) {
+        markSubmittedCalls.push(url);
+        return { ok: true, json: async () => ({ success: true }) };
+      }
+      return { ok: true, json: async () => ({ classes: [session] }) };
+    }));
+  }
+
+  test("clicks the real Import Students button when the file was injected", async () => {
+    document.body.innerHTML = `
+      <div id="mainContent_studentPanel">
+        <input id="mainContent_impFileUpl" type="file" />
+        <input id="mainContent_impUploadBtn" type="submit" value="Import Students" />
+      </div>
+      <input id="mainContent_issueDate" type="date" />
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=12345");
+    primeStorage();
+
+    // jsdom has no DataTransfer constructor — polyfill just enough for
+    // injectStudentFile's try block to succeed instead of falling into its
+    // catch (which is what real DataTransfer-less environments would do).
+    class FakeDataTransfer {
+      items = { add: () => {} };
+      files: unknown[] = [];
+    }
+    vi.stubGlobal("DataTransfer", FakeDataTransfer);
+    const fileInput = document.getElementById("mainContent_impFileUpl") as HTMLInputElement;
+    Object.defineProperty(fileInput, "files", { value: [], writable: true, configurable: true });
+
+    let uploadClicked = false;
+    document.getElementById("mainContent_impUploadBtn")!
+      .addEventListener("click", () => { uploadClicked = true; });
+
+    const markSubmittedCalls: string[] = [];
+    stubFetch(markSubmittedCalls);
+
+    new Function(SOURCE)();
+    const w = window as unknown as Record<string, unknown>;
+    await vi.waitFor(() => {
+      expect(w.__SCPR_MARK_DONE, "Mark-done handler should be exposed once the panel renders")
+        .toBeTypeOf("function");
+    }, { timeout: 2000 });
+
+    await (w.__SCPR_MARK_DONE as (id: string) => Promise<void>)(session.id);
+
+    await vi.waitFor(() => {
+      expect(uploadClicked, "Import Students should be auto-clicked after marking submitted").toBe(true);
+    });
+    expect(markSubmittedCalls.length, "our own API must be called before the navigating click").toBe(1);
+    expect(sessionStorage.getItem("scpr_session_id"), "stored session should be cleared").toBeNull();
+  });
+
+  test("does not click Import Students when the file failed to inject", async () => {
+    // No mainContent_impFileUpl and no mainContent_importBtn — injectStudentFile
+    // has nothing to inject into, so injected stays false.
+    document.body.innerHTML = `
+      <div id="mainContent_studentPanel">
+        <input id="mainContent_impUploadBtn" type="submit" value="Import Students" />
+      </div>
+      <input id="mainContent_issueDate" type="date" />
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=12345");
+    primeStorage();
+
+    let uploadClicked = false;
+    document.getElementById("mainContent_impUploadBtn")!
+      .addEventListener("click", () => { uploadClicked = true; });
+
+    const markSubmittedCalls: string[] = [];
+    stubFetch(markSubmittedCalls);
+
+    new Function(SOURCE)();
+    const w = window as unknown as Record<string, unknown>;
+    await vi.waitFor(() => {
+      expect(w.__SCPR_MARK_DONE).toBeTypeOf("function");
+    }, { timeout: 2000 });
+
+    await (w.__SCPR_MARK_DONE as (id: string) => Promise<void>)(session.id);
+
+    await vi.waitFor(() => {
+      expect(markSubmittedCalls.length, "our own API should still be called").toBe(1);
+    });
+    expect(uploadClicked, "Import Students must not be auto-clicked without an injected file").toBe(false);
+  });
+});

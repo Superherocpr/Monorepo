@@ -16,8 +16,12 @@
  *      using name-based dropdown matching, injects a MutationObserver to watch
  *      for the student list panel to appear after "Update Class" is clicked.
  *   4. When the student panel appears (or on a reload with the student panel
- *      already present): generates a CSV from the roster and injects it into
- *      Enrollware's file input, ready for the instructor to click "Import Students".
+ *      already present): fetches an xlsx roster from the SuperheroCPR API and
+ *      injects it into Enrollware's file input.
+ *   5. "Mark class as submitted": records the submission via
+ *      /api/enrollware/mark-submitted, then (if the file was injected
+ *      successfully) clicks Enrollware's own "Import Students" button so the
+ *      instructor doesn't have to do it as a separate step.
  *
  * Server-side only. This file is never imported by client components.
  */
@@ -165,6 +169,98 @@ export function getBookmarkletSource(apiBase: string): string {
   // when formatting. Plain getHours() in an Eastern browser would write 5:00 AM
   // into Enrollware for a 9:00 AM class.
 
+  // ---------------------------------------------------------
+  // Price — single source of truth
+  // ---------------------------------------------------------
+  //
+  // mainContent_price lives inside mainContent_UpdatePanel2, Enrollware's only
+  // UpdatePanel. Every async postback that panel serves — Course change, Location
+  // change, the assistant BsmSelect widget, the student Import button — re-renders
+  // the panel and REPLACES the price input node with one carrying Enrollware's own
+  // catalog price ("$0.00" for most courses, since prices live in the SuperheroCPR
+  // database rather than theirs). So writing the price once is never enough: the
+  // next postback silently reverts it, and whatever is on screen when the
+  // instructor clicks "Update Class" is what gets saved.
+  //
+  // The price is therefore written by exactly one function, re-invoked after every
+  // partial postback via the PageRequestManager's endRequest event — which fires
+  // once the replacement node is already in the DOM.
+  //
+  // Partial postbacks are only half the problem. "Update Class" and Enrollware's
+  // student Import are full page submits: the page navigates, this script is
+  // discarded, and the guard dies with it. Nothing running in the page can survive
+  // that. So the price is also persisted to sessionStorage and re-applied at
+  // startup — every tap of the bookmark restores it, on whichever class-edit page
+  // the instructor has landed on.
+  //
+  // Format: "$75.00", matching what Enrollware renders into the field itself.
+  // Since submitting an untouched form posts Enrollware's own "$0.00" back to its
+  // server successfully, currency format is guaranteed to survive their parser.
+
+  var PRICE_KEY = 'scpr_price';
+
+  /** Formats a price as Enrollware renders it: "$75.00". Accepts 75, "75", "75.00". */
+  function formatPrice(price) {
+    return '$' + Number(price).toFixed(2);
+  }
+
+  /**
+   * Reads the price recorded for this class and writes it into Enrollware's price
+   * field. No-ops when the field is absent or no positive price was recorded, so
+   * it is safe to call on any page at any point in the postback lifecycle.
+   */
+  function applyPrice() {
+    var el = document.getElementById('mainContent_price');
+    if (!el) return;
+    var price = Number(sessionStorage.getItem(PRICE_KEY));
+    if (price > 0) {
+      el.value = formatPrice(price);
+    }
+  }
+
+  /**
+   * Records this session's price, writes it immediately, and installs the guard
+   * that re-applies it after every UpdatePanel refresh. Safe to call repeatedly:
+   * the endRequest handler is registered at most once per page load.
+   *
+   * A price of 0 (a free class type, or one not priced in SuperheroCPR) records
+   * nothing and writes nothing, leaving Enrollware's own value untouched.
+   *
+   * Side effect: writes the price to sessionStorage so it outlives the full page
+   * reloads that "Update Class" and the student Import trigger.
+   */
+  function installPriceGuard(session) {
+    var price = Number((session && session.class_type) ? session.class_type.price : 0);
+    if (price > 0) {
+      sessionStorage.setItem(PRICE_KEY, String(price));
+    } else {
+      // Clear it — otherwise switching to a free class type would keep applying
+      // the previously selected class's price.
+      sessionStorage.removeItem(PRICE_KEY);
+    }
+    installPriceWatcher();
+    applyPrice();
+  }
+
+  /**
+   * Registers applyPrice to run after every partial postback. Idempotent — the
+   * handler is added at most once per page load.
+   */
+  function installPriceWatcher() {
+    if (window.__SCPR_PRICE_GUARD) return;
+    try {
+      var prm = (window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager)
+        ? Sys.WebForms.PageRequestManager.getInstance()
+        : null;
+      if (prm) {
+        prm.add_endRequest(applyPrice);
+        window.__SCPR_PRICE_GUARD = true;
+      }
+    } catch (e) {
+      // No ASP.NET AJAX on this page — the direct writes still stand.
+    }
+  }
+
   /**
    * Fills all class-detail form fields using the provided session data.
    * Returns an array of warning strings for any fields that could not be
@@ -221,12 +317,10 @@ export function getBookmarkletSource(apiBase: string): string {
         pad2(ed.getUTCHours()) + ':' + pad2(ed.getUTCMinutes());
     }
 
-    // Price — only fill if we have a positive value; writing 0 would clobber
-    // whatever the instructor already entered for a free/unpriced class type.
-    var priceEl = document.getElementById('mainContent_price');
-    if (priceEl && session.class_type && session.class_type.price > 0) {
-      priceEl.value = String(session.class_type.price);
-    }
+    // Price — written through the postback guard, not directly. See installPriceGuard.
+    // This must run before the assistant field below, whose change event triggers
+    // an UpdatePanel postback that would otherwise wipe a plain write.
+    installPriceGuard(session);
 
     // Total Hours — class type default plus any per-session additional hours
     var hoursEl = document.getElementById('mainContent_totalHours');
@@ -482,6 +576,10 @@ export function getBookmarkletSource(apiBase: string): string {
   function showStudentFill(session) {
     var students = session.students || [];
 
+    // Price — install the guard before the Import button is clicked below, since
+    // that click fires an UpdatePanel postback that replaces the price input.
+    installPriceGuard(session);
+
     // Fill "Certificate Issued On" from the session date. This field only exists
     // on existing-class pages (not new-class forms), so the null check is normal.
     // starts_at is a floating wall-clock value — slice(0,10) gives YYYY-MM-DD
@@ -562,12 +660,35 @@ export function getBookmarkletSource(apiBase: string): string {
         URL.revokeObjectURL(url);
       };
 
+      // "Mark class as submitted" does two things: records the submission in
+      // SuperheroCPR, and — if the file was auto-injected — clicks Enrollware's
+      // own "Import Students" button so the instructor doesn't have to do it
+      // separately. mainContent_impUploadBtn is a full-page form submit (it is in
+      // PageRequestManager._postBackControlIDs, not the async list, confirmed on
+      // the live site), so the browser navigates away as soon as it's clicked —
+      // our own markSubmitted() call must finish first, or the fetch to our API
+      // can be aborted by the navigation.
       window.__SCPR_MARK_DONE = function(id) {
+        showPanel(panelHeader() +
+          '<div style="text-align:center;padding:8px 0;color:#666">Submitting&hellip;</div>'
+        );
         markSubmitted(id).then(function() {
           sessionStorage.removeItem('scpr_session_id');
           sessionStorage.removeItem('scpr_session_data');
+
+          var uploadBtn = document.getElementById('mainContent_impUploadBtn');
+          if (injected && uploadBtn) {
+            uploadBtn.click();
+            return; // page is navigating away; nothing after this runs
+          }
+
           showPanel(panelHeader() +
-            '<div style="color:#2d7a2d">&#x2713; Marked as submitted in SuperheroCPR.</div>'
+            '<div style="color:#2d7a2d">&#x2713; Marked as submitted in SuperheroCPR.</div>' +
+            (injected
+              ? ''
+              : '<div style="font-size:11px;color:#856404;margin-top:8px">' +
+                '&#9888; Could not auto-submit the import earlier — click ' +
+                '<b>Import Students</b> above to finish.</div>')
           );
         }).catch(function() {
           showError('Failed to mark as submitted. Please update manually in the SuperheroCPR admin.');
@@ -591,6 +712,15 @@ export function getBookmarkletSource(apiBase: string): string {
       window.__SCPR_LOADED = false;
       return;
     }
+
+    // Restore the price before anything else. "Update Class" and the student
+    // Import are full page submits that discard this script, and the page comes
+    // back carrying Enrollware's own "$0.00". Re-applying here means the price is
+    // already correct by the time the instructor looks at the reloaded page —
+    // no waiting on the class list to load, and no dependency on which mode we
+    // end up in below.
+    installPriceWatcher();
+    applyPrice();
 
     showLoading();
 
