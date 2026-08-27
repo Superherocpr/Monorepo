@@ -10,6 +10,7 @@
 
 import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
+import sharp from "sharp";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor, type AdminActor } from "@/lib/auth/effective-role";
@@ -622,6 +623,26 @@ export async function uploadStudentDocument(
     return { error: "File too large. Maximum size is 10 MB.", document: null };
   }
 
+  // Convert HEIC/HEIF to JPEG before storing — these formats cannot be embedded
+  // in PDFs and most browsers cannot display them. Sharp runs server-side so only
+  // JPEG, PNG, WEBP, and PDF ever land in S3.
+  let uploadBuffer: Buffer;
+  let uploadContentType = file.type;
+  let uploadFileName = file.name;
+  if (file.type === "image/heic" || file.type === "image/heif") {
+    try {
+      const raw = Buffer.from(await file.arrayBuffer());
+      uploadBuffer = await sharp(raw).jpeg({ quality: 90 }).toBuffer();
+      uploadContentType = "image/jpeg";
+      uploadFileName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+    } catch (convErr) {
+      console.error("[uploadStudentDocument] HEIC conversion failed:", convErr);
+      return { error: "Could not convert HEIC image. Please export as JPEG first.", document: null };
+    }
+  } else {
+    uploadBuffer = Buffer.from(await file.arrayBuffer());
+  }
+
   const admin = await createAdminClient();
 
   if (actor.effectiveRole === "instructor") {
@@ -646,18 +667,17 @@ export async function uploadStudentDocument(
   let url: string;
   try {
     const s3 = new S3Client({});
-    const safeFilename = file.name.replace(/[^a-zA-Z0-9.\-]/g, "_");
+    const safeFilename = uploadFileName.replace(/[^a-zA-Z0-9.\-]/g, "_");
     // owner.type/id in the key keeps every student's files grouped and browsable
     // directly in S3, and Date.now() prevents collisions on repeat filenames.
     const key = `student-documents/${sessionId}/${owner.type}-${owner.id}/${Date.now()}-${safeFilename}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
 
     await s3.send(
       new PutObjectCommand({
         Bucket: bucketName,
         Key: key,
-        Body: buffer,
-        ContentType: file.type,
+        Body: uploadBuffer,
+        ContentType: uploadContentType,
       })
     );
 
@@ -674,9 +694,9 @@ export async function uploadStudentDocument(
       booking_id: owner.type === "booking" ? owner.id : null,
       roster_record_id: owner.type === "roster" ? owner.id : null,
       file_url: url,
-      file_name: file.name,
-      content_type: file.type,
-      size_bytes: file.size,
+      file_name: uploadFileName,
+      content_type: uploadContentType,
+      size_bytes: uploadBuffer.length,
       uploaded_by: actor.user.id,
     })
     .select("id, file_name, file_url, content_type, created_at")
