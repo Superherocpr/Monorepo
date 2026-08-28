@@ -50,18 +50,16 @@ export async function POST(request: Request) {
   if (
     typeof firstName !== "string" || firstName.trim().length === 0 ||
     typeof lastName !== "string" || lastName.trim().length === 0 ||
-    typeof email !== "string" || !EMAIL_REGEX.test(email)
+    typeof email !== "string" || !EMAIL_REGEX.test(email) ||
+    typeof phone !== "string" || phone.trim().length === 0
   ) {
     return Response.json(
-      { success: false, error: "First name, last name, and a valid email are required." },
+      { success: false, error: "First name, last name, a valid email, and a phone number are required." },
       { status: 400 }
     );
   }
 
-  const cleanPhone =
-    typeof phone === "string" && phone.trim().length > 0
-      ? phone.trim()
-      : null;
+  const cleanPhone = phone.trim();
 
   // ── 1. Duplicate email check ───────────────────────────────────────────────
   const { data: existing } = await supabase

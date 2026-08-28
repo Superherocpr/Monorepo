@@ -905,6 +905,10 @@ export default function SessionDetailClient({
    */
   async function handleSaveContactInfo(): Promise<void> {
     if (!editingCustomer) return;
+    if (!contactForm.phone?.trim()) {
+      setContactError("Phone number is required.");
+      return;
+    }
     setIsSavingContact(true);
     setContactError(null);
 
@@ -995,6 +999,11 @@ export default function SessionDetailClient({
       return;
     }
 
+    if (!phone.trim()) {
+      setNewCustomerError("Phone number is required.");
+      return;
+    }
+
     setIsCreatingCustomer(true);
     setNewCustomerError(null);
 
@@ -1006,7 +1015,7 @@ export default function SessionDetailClient({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim(),
-          phone: phone.trim() || undefined,
+          phone: phone.trim(),
         }),
       });
 
@@ -1712,9 +1721,10 @@ export default function SessionDetailClient({
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Phone <span className="text-red-500">*</span></label>
                 <input
                   type="tel"
+                  required
                   value={contactForm.phone}
                   onChange={(e) => setContactForm((prev) => ({ ...prev, phone: e.target.value }))}
                   className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -1966,11 +1976,12 @@ export default function SessionDetailClient({
                       />
                       <input
                         type="tel"
+                        required
                         value={newCustomerForm.phone}
                         onChange={(e) =>
                           setNewCustomerForm((f) => ({ ...f, phone: e.target.value }))
                         }
-                        placeholder="Phone (optional)"
+                        placeholder="Phone *"
                         className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </div>

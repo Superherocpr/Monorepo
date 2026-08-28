@@ -170,6 +170,11 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
       setBusy(false);
       return;
     }
+    if (!phone.trim()) {
+      setError("Phone number is required.");
+      setBusy(false);
+      return;
+    }
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
       setBusy(false);
@@ -193,7 +198,7 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       email: email.trim(),
-      phone: phone.trim() || null,
+      phone: phone.trim(),
       role: "customer",
     });
 
@@ -550,11 +555,12 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="ts-phone" className="text-sm font-medium text-gray-700">
-                    Phone <span className="text-gray-400 font-normal">(optional)</span>
+                    Phone <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="ts-phone"
                     type="tel"
+                    required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     autoComplete="tel"

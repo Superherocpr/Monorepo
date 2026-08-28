@@ -44,16 +44,16 @@ export async function POST(request: Request): Promise<Response> {
     typeof firstName !== "string" || firstName.trim().length === 0 ||
     typeof lastName !== "string" || lastName.trim().length === 0 ||
     typeof email !== "string" || !EMAIL_REGEX.test(email) ||
-    typeof password !== "string" || password.length < 8
+    typeof password !== "string" || password.length < 8 ||
+    typeof phone !== "string" || phone.trim().length === 0
   ) {
     return NextResponse.json(
-      { success: false, error: "First name, last name, a valid email, and a password of at least 8 characters are required." },
+      { success: false, error: "First name, last name, a valid email, a phone number, and a password of at least 8 characters are required." },
       { status: 400 }
     );
   }
 
-  const cleanPhone =
-    typeof phone === "string" && phone.trim().length > 0 ? phone.trim() : null;
+  const cleanPhone = phone.trim();
 
   const admin = await createAdminClient();
 

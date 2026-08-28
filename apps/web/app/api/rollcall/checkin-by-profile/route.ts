@@ -27,7 +27,7 @@ interface ProfileUpdates {
   firstName: string;
   lastName: string;
   email: string;
-  phone: string | null;
+  phone: string;
   address: string | null;
   city: string | null;
   state: string | null;
@@ -155,9 +155,9 @@ export async function POST(request: Request) {
     }
 
     // Validate the submitted update values at the server boundary
-    if (!updates.firstName?.trim() || !updates.lastName?.trim()) {
+    if (!updates.firstName?.trim() || !updates.lastName?.trim() || !updates.phone?.trim()) {
       return Response.json(
-        { success: false, error: "First and last name are required." },
+        { success: false, error: "First name, last name, and phone number are required." },
         { status: 400 }
       );
     }
@@ -223,7 +223,7 @@ export async function POST(request: Request) {
         first_name: updates.firstName.trim(),
         last_name: updates.lastName.trim(),
         email: updates.email.trim().toLowerCase(),
-        phone: updates.phone?.trim() || null,
+        phone: updates.phone.trim(),
         address: updates.address?.trim() || null,
         city: updates.city?.trim() || null,
         state: updates.state?.trim() || null,
@@ -258,7 +258,7 @@ export async function POST(request: Request) {
       first_name: updates.firstName.trim(),
       last_name: updates.lastName.trim(),
       email: updates.email.trim().toLowerCase(),
-      phone: updates.phone?.trim() || null,
+      phone: updates.phone.trim(),
       address_1: updates.address?.trim() || null,
       city: updates.city?.trim() || null,
       state: updates.state?.trim() || null,

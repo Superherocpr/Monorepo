@@ -19,7 +19,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Registers a new student for a session identified by the rollcall code flow.
- * @param request - POST body: { sessionId, firstName, lastName, email, phone?, password }
+ * @param request - POST body: { sessionId, firstName, lastName, email, phone, password }
  */
 export async function POST(request: Request) {
   const body = await request.json();
@@ -28,12 +28,12 @@ export async function POST(request: Request) {
     firstName: string;
     lastName: string;
     email: string;
-    phone?: string;
+    phone: string;
     password: string;
   };
 
   // ── Input validation ───────────────────────────────────────────────────────
-  if (!sessionId || !firstName?.trim() || !lastName?.trim() || !email?.trim() || !password) {
+  if (!sessionId || !firstName?.trim() || !lastName?.trim() || !email?.trim() || !phone?.trim() || !password) {
     return Response.json({ error: "All required fields must be filled in." }, { status: 400 });
   }
 
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       email: normalizedEmail,
-      phone: phone?.trim() || null,
+      phone: phone.trim(),
       // Explicitly set role — the DB default is 'customer' but Supabase inserts
       // can bypass column defaults when the column is NOT NULL without a trigger.
       role: "customer",
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       email: normalizedEmail,
-      phone: phone?.trim() || null,
+      phone: phone.trim(),
       // confirmed=true because the student is physically present and self-registering
       confirmed: true,
       corrected: false,

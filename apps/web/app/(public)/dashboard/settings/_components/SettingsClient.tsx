@@ -233,6 +233,10 @@ export default function SettingsClient({
     setSuccess(null);
 
     try {
+      if (!form.phone.trim()) {
+        throw new Error("Phone number is required.");
+      }
+
       // Validate password section — if any password field is filled, all three are required
       const isChangingPassword =
         form.newPassword || form.confirmPassword || form.currentPassword;
@@ -396,12 +400,13 @@ export default function SettingsClient({
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="phone" className={labelClass}>
-              Phone
+              Phone <span className="text-red-500">*</span>
             </label>
             <input
               id="phone"
               name="phone"
               type="tel"
+              required
               value={form.phone}
               onChange={handleChange}
               autoComplete="tel"
