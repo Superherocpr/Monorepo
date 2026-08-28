@@ -119,6 +119,14 @@ export const GROUPS: GroupDef[] = [
           "Export student list as a CSV file",
           "View a combined student table of all bookings and imported roster records, deduplicated by email",
           "Edit customer contact info directly from this page via a modal",
+          {
+            text: "Upload, view, and delete per-student photos/documents (e.g. certification cards) via the Photos button on each student row",
+            role: "manager",
+          },
+          {
+            text: "Upload, view, and delete per-student photos/documents for your own sessions via the Photos button on each student row",
+            role: "instructor",
+          },
           "Send Invoice — opens the invoice creation form pre-filled with this session",
           "Log a payment for a student manually",
           "Add Student — search customers by name, email, or phone, or create an account on the spot for a walk-in who isn't in the system yet",

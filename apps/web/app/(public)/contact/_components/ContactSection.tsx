@@ -8,7 +8,7 @@
  */
 
 import { useState } from "react";
-import { Phone, Mail, MapPin } from "lucide-react";
+import { Phone, Mail, MapPin, MessageSquare } from "lucide-react";
 import CaptchaCheckbox from "@/components/CaptchaCheckbox";
 import TurnstileWidget from "@/components/TurnstileWidget";
 import { CONTACT_INQUIRY_TYPES } from "@/lib/contact-constants";
@@ -125,19 +125,20 @@ export default function ContactSection() {
             </a>
           </ContactInfoRow>
 
+          {/* Form CTA — sends users straight to the form, especially useful on mobile where the form is below */}
           <ContactInfoRow
-            icon={<Mail className="text-red-600 shrink-0" size={22} aria-hidden="true" />}
-            label="Email Us"
+            icon={<MessageSquare className="text-red-600 shrink-0" size={22} aria-hidden="true" />}
+            label="Send a Message"
           >
-            <a
-              href="mailto:contact@superherocpr.com"
-              className="text-gray-700 hover:text-red-600 transition-colors duration-150 font-medium break-all"
-            >
-              contact@superherocpr.com
-            </a>
-            <p className="text-sm text-gray-500 mt-1">
-              We typically respond within 1 business day.
+            <p className="text-gray-700 leading-relaxed">
+              The BEST way to reach us. We&apos;ll reply within 1 business day.
             </p>
+            <a
+              href="#contact-form"
+              className="inline-block mt-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors duration-150 px-4 py-2 rounded-lg"
+            >
+              Use the contact form →
+            </a>
           </ContactInfoRow>
 
           <ContactInfoRow
@@ -149,10 +150,11 @@ export default function ContactSection() {
               Florida&apos;s Gulf Coast.
             </p>
           </ContactInfoRow>
+
         </div>
 
         {/* ---- Contact form / success state ---- */}
-        <div>
+        <div id="contact-form">
           {submitted ? (
             <div className="flex flex-col gap-3 py-8">
               <h2 className="text-xl font-bold text-gray-900">Message sent!</h2>
@@ -271,6 +273,16 @@ export default function ContactSection() {
             </form>
           )}
         </div>
+      </div>
+
+      {/* Email — kept public but placed below the form to discourage direct email in favour of the form */}
+      <div className="max-w-7xl mx-auto mt-10 pt-8 border-t border-gray-100 flex items-center gap-2 text-sm text-gray-400">
+        <Mail size={15} aria-hidden="true" className="shrink-0" />
+        <span>
+          Or reach us by email at{" "}
+          <span className="font-medium text-gray-500 select-all">SuperHeroCPR@gmail.com</span>
+          {" "}and include your phone number. Though the form above gets a faster reply.
+        </span>
       </div>
     </section>
   );

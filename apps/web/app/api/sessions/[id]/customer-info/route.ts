@@ -93,6 +93,10 @@ export async function PATCH(
     zip: normalizeField(body.zip),
   };
 
+  if (!fields.phone) {
+    return NextResponse.json({ error: "Phone number is required." }, { status: 400 });
+  }
+
   if (fields.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email)) {
     return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
   }
