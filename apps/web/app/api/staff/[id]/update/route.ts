@@ -15,7 +15,7 @@ import { OWNER_EMAILS } from "@/lib/constants";
 
 /**
  * Updates a staff member's first name, last name, email, and/or phone.
- * @param request - PATCH body: { first_name?: string; last_name?: string; email?: string; phone?: string | null }
+ * @param request - PATCH body: { first_name?: string; last_name?: string; email?: string; phone?: string }
  * @param params - Route params containing the target staff member's profile ID.
  */
 export async function PATCH(
@@ -87,7 +87,6 @@ export async function PATCH(
       ? body.email.trim().toLowerCase()
       : null;
 
-  // Phone may be explicitly cleared (null/empty) to remove it
   const phoneValue =
     typeof body.phone === "string" && body.phone.trim().length > 0
       ? body.phone.trim()
@@ -116,6 +115,13 @@ export async function PATCH(
   if (body.last_name !== undefined && !lastNameValue) {
     return Response.json(
       { success: false, error: "Last name cannot be empty." },
+      { status: 400 }
+    );
+  }
+
+  if (body.phone !== undefined && !phoneValue) {
+    return Response.json(
+      { success: false, error: "Phone number cannot be empty." },
       { status: 400 }
     );
   }

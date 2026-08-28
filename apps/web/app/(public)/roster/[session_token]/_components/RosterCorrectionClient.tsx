@@ -220,6 +220,10 @@ export default function RosterCorrectionClient({
    */
   async function handleConfirm(fields: EditFields) {
     if (!selectedRecord) return;
+    if (!fields.phone.trim()) {
+      setSaveError("Phone number is required.");
+      return;
+    }
     setSaving(true);
     setSaveError(null);
 
@@ -236,7 +240,7 @@ export default function RosterCorrectionClient({
             firstName: fields.firstName.trim(),
             lastName: fields.lastName.trim(),
             email: fields.email.trim().toLowerCase(),
-            phone: fields.phone.trim() || null,
+            phone: fields.phone.trim(),
             employer: fields.employer.trim() || null,
           },
         }),
@@ -401,6 +405,7 @@ export default function RosterCorrectionClient({
                   value={editFields.phone}
                   onChange={(v) => setEditFields((f) => ({ ...f, phone: v }))}
                   type="tel"
+                  required
                 />
                 <EditField
                   label="Employer"

@@ -71,10 +71,11 @@ export async function POST(request: Request): Promise<Response> {
   const companyName = requiredString(body.company_name);
   const contactName = requiredString(body.contact_name);
   const contactEmail = requiredString(body.contact_email);
+  const contactPhone = requiredString(body.contact_phone);
 
-  if (!companyName || !contactName || !contactEmail) {
+  if (!companyName || !contactName || !contactEmail || !contactPhone) {
     return NextResponse.json(
-      { error: "Company name, contact name, and contact email are required." },
+      { error: "Company name, contact name, contact email, and contact phone are required." },
       { status: 400 }
     );
   }
@@ -107,7 +108,7 @@ export async function POST(request: Request): Promise<Response> {
     companyName,
     contactName,
     contactEmail,
-    contactPhone: typeof body.contact_phone === "string" ? body.contact_phone : null,
+    contactPhone,
     paymentMode: paymentMode as TeamPaymentMode,
     pricePerSeat: (pricePerSeat as number | null | undefined) ?? null,
     totalPrice: (totalPrice as number | null | undefined) ?? null,

@@ -372,6 +372,10 @@ export default function CreateSessionClient({
         setError("Please enter a valid contact email.");
         return;
       }
+      if (!teamForm.contact_phone.trim()) {
+        setError("Please enter the contact's phone number.");
+        return;
+      }
       teamPrice = parseFloat(teamForm.price);
       if (teamForm.price === "" || isNaN(teamPrice) || teamPrice < 0) {
         setError(
@@ -414,7 +418,7 @@ export default function CreateSessionClient({
       payload.company_name = teamForm.company_name.trim();
       payload.contact_name = teamForm.contact_name.trim();
       payload.contact_email = teamForm.contact_email.trim();
-      payload.contact_phone = teamForm.contact_phone.trim() || null;
+      payload.contact_phone = teamForm.contact_phone.trim();
       payload.payment_mode = teamForm.payment_mode;
       if (teamForm.payment_mode === "company") {
         payload.total_price = teamPrice;
@@ -777,11 +781,12 @@ export default function CreateSessionClient({
 
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="cs-contact-phone" className="text-sm font-medium text-gray-700">
-                  Contact Phone <span className="text-gray-400 font-normal">(optional)</span>
+                  Contact Phone <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="cs-contact-phone"
                   type="tel"
+                  required
                   value={teamForm.contact_phone}
                   onChange={(e) => setTeamField("contact_phone", e.target.value)}
                   className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"

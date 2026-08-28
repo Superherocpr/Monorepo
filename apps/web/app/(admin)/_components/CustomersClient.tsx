@@ -204,6 +204,10 @@ export default function CustomersClient({
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setCreateError(null);
+    if (!phone.trim()) {
+      setCreateError("Phone number is required.");
+      return;
+    }
     setIsCreating(true);
 
     try {
@@ -595,12 +599,12 @@ export default function CustomersClient({
                   htmlFor="phone"
                   className="mb-1 block text-sm font-medium text-gray-700"
                 >
-                  Phone{" "}
-                  <span className="text-xs text-gray-400">(optional)</span>
+                  Phone <span className="text-red-600">*</span>
                 </label>
                 <input
                   id="phone"
                   type="tel"
+                  required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"

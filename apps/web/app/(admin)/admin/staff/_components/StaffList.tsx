@@ -359,7 +359,7 @@ const StaffList: React.FC<StaffListProps> = ({
           first_name: firstNameDraft.trim(),
           last_name: lastNameDraft.trim(),
           email: emailDraft.trim().toLowerCase(),
-          phone: phoneDraft.trim() || null,
+          phone: phoneDraft.trim(),
         }),
       });
       const data: { success: boolean; error?: string } = await res.json();
@@ -521,13 +521,14 @@ const StaffList: React.FC<StaffListProps> = ({
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-0.5">
-              Phone
+              Phone <span className="text-red-500">*</span>
             </label>
             <input
               type="tel"
+              required
               value={phoneDraft}
               onChange={(e) => setPhoneDraft(e.target.value)}
-              placeholder="Optional"
+              placeholder="(555) 555-5555"
               disabled={isLoading}
               className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
             />
@@ -535,7 +536,7 @@ const StaffList: React.FC<StaffListProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleUpdateContact(member.id, fullName)}
-              disabled={isLoading || !firstNameDraft.trim() || !lastNameDraft.trim() || !emailDraft.trim()}
+              disabled={isLoading || !firstNameDraft.trim() || !lastNameDraft.trim() || !emailDraft.trim() || !phoneDraft.trim()}
               className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-2.5 py-1 rounded-lg disabled:opacity-50 transition-colors"
             >
               {isLoading ? "Saving…" : "Save"}
