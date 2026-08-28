@@ -153,7 +153,8 @@ a product gap, not just a monitoring one.
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
-| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on added 2026-08-24; unit coverage for both |
+| Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on + price-vs-UpdatePanel guard + auto-submit on Mark-as-submitted, all 2026-08-24; unit coverage for all four |
+| **Student documents / photos** | — | — | ✅ | ✅ | — | — | Bookmarklet injects merged PDFs into Enrollware via AjaxUpload1; cron purges DB rows at 30 days; S3 lifecycle rule handles file expiry |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
 
@@ -209,6 +210,161 @@ Neither is built. Until one is, the coverage here is "the helpers are right, and
 the Enrollware fill uses them", not "the app uses them everywhere". The lint rule
 is the higher-value of the two — it is the only option that scales to call sites
 nobody thought to test.
+
+**A second one fired in the same file (2026-08-24): the price field.**
+`mainContent_price` lives inside `mainContent_UpdatePanel2`, Enrollware's only
+UpdatePanel. Every async postback that panel serves — Course change, Location
+change, the assistant BsmSelect widget, the student Import button — re-renders it
+and **replaces the price input node** with one carrying Enrollware's own catalog
+price, `$0.00` for courses priced only in SuperheroCPR. A single write is
+therefore always temporary.
+
+That made the bug expensive rather than cosmetic. `fillClassForm` wrote the
+price, then dispatched a `change` event on the assistant widget a few lines
+later — so the bookmarklet wiped its own price, and whatever was on screen when
+the instructor clicked "Update Class" is what got saved. Instructors were saving
+$75 classes at $0. It also burned three failed fix attempts, two of which
+targeted code paths that cannot run: "Update Class" is a native `<input
+type="submit">` with `clientSubmit: false`, so it fully navigates and destroys
+any MutationObserver watching for the result.
+
+**Fixed in two halves, because there are two different failure modes.** Partial
+postbacks are handled by a single writer (`applyPrice`) re-invoked via the
+PageRequestManager's `endRequest` event, which fires once the replacement node is
+in the DOM. Verified against the live site: price reverted `75 → $0.00` on a
+postback, and held with the guard installed.
+
+That was not sufficient. "Update Class" and Enrollware's student Import are
+native form submits — the page navigates and the script is discarded, so *no*
+in-page handler can restore anything. The price is therefore also persisted to
+sessionStorage and re-applied at startup, ahead of the class-list fetch, so every
+tap of the bookmark restores it on whichever page the instructor landed on. The
+stored value is cleared for `$0` class types so a previous selection cannot leak
+into a free class.
+
+It is written as `"$75.00"`, matching what Enrollware renders into the field.
+Submitting an untouched form posts their own `$0.00` back successfully, so
+currency format is guaranteed to survive their parser. `Number().toFixed(2)` also
+normalises the numeric-as-string price Supabase returns (`"75.00"`).
+
+**Signal added for it:** five tests in
+`tests/unit/lib/enrollware-bookmarklet.test.ts`. Two stub `PageRequestManager`,
+replace the price node the way ASP.NET does, and assert the value survives —
+repeatedly, since four controls can each fire a postback. Three more rebuild the
+DOM and re-evaluate the script the way a navigation does, asserting the price is
+restored from sessionStorage. All were confirmed to fail against the pre-fix code
+rather than passing vacuously. Further tests assert a `$0` class type does *not*
+clobber the value Enrollware rendered.
+
+**Honest gap:** unit-only, against a hand-built stub of Enrollware's UpdatePanel.
+If Enrollware changes which controls trigger a refresh, or moves the price field
+out of the panel, these tests keep passing while the real page breaks. Nothing
+here observes the live site.
+
+- `// TODO:` No signal exists for whether a class actually *lands* in Enrollware
+  at the right price. That is the outcome that matters and it is entirely
+  unmonitored — the integration is a browser-side form fill against a third party
+  with no API, so failure is silent until an instructor notices a $0 class.
+
+**Third change to the same file (2026-08-24): "Mark class as submitted" now
+auto-submits the roster.** Previously this button only called
+`/api/enrollware/mark-submitted` (SuperheroCPR bookkeeping) — the instructor
+still had to separately click Enrollware's own "Import Students" button to
+actually import the file. That is now automatic: `__SCPR_MARK_DONE` clicks
+`mainContent_impUploadBtn` itself once our own API call succeeds.
+
+Verified live before writing it: `mainContent_impUploadBtn` is in
+`PageRequestManager._postBackControlIDs`, not the async list — it is a full-page
+form submit, same as "Update Class". That ordering constraint is why the
+sequence is markSubmitted() first, then the click: the click navigates the
+browser away, which can abort an in-flight fetch to our own API.
+
+The auto-click is conditional on `injected` (whether the xlsx file was
+successfully attached earlier in the flow). If injection failed, the instructor
+already sees a manual-download fallback; auto-submitting an empty or missing
+file in that case would silently create a class with zero students instead of
+failing loudly, so the guard leaves it to the instructor and shows a warning
+instead.
+
+**Signal added for it:** two tests in
+`tests/unit/lib/enrollware-bookmarklet.test.ts` (`Mark class as submitted —
+auto-clicks Import Students`) — one asserts the button is clicked and the
+session is cleared when injection succeeded, the other asserts it is *not*
+clicked when injection failed. Confirmed the first fails against the pre-fix
+code (`1 failed | 23 passed`) rather than passing vacuously.
+
+**Honest gap:** same limitation as the price guard above — this proves the
+*click* happens, not that Enrollware's server accepts the import. If Enrollware
+ever renames `mainContent_impUploadBtn` or adds a confirmation step before the
+real submit, this fires a click that does nothing and the instructor would see
+no import happen with no error surfaced. Covered by the same open TODO above:
+nothing observes whether the class lands in Enrollware correctly.
+
+---
+
+### Student documents / photos (migration 0062 + 0063)
+
+Instructors/managers upload photos (certification cards, etc.) per student on
+`/admin/sessions/[id]`, stored in S3 under `student-documents/`. The Enrollware
+bookmarklet fetches a per-student merged PDF from `/api/enrollware/session-documents`
+and uploads them into Enrollware's Documents widget, then injects the student XLSX.
+HEIC is converted to JPEG at upload time; WebP is converted at merge time. Both
+fetches run in parallel, so no extra wall-clock time is added.
+
+**Ordering is load-bearing, and cost three failed attempts to get right.** Measured
+on the live site with the widget instrumented:
+
+```
+uploadStart        pending 2→1   ← 'pendingState' means QUEUED, clears as each file starts
+uploadComplete ×2
+PRM beginRequest   t=9911ms      ← the widget's own postback opens
+uploadCompleteAll  t=9912ms      ← fires INSIDE that postback
+PRM endRequest     t=10157ms     ← postback closes, UpdatePanel re-renders
+(16s later)        QueueContainer still holds all items — it is never emptied
+```
+
+Two consequences, each of which shipped as a bug first:
+
+1. Writing the XLSX on `uploadCompleteAll` loses it — the re-render ~250ms later
+   discards it. This was the "student import is being cleared" report.
+2. Waiting on the queue DOM never completes. `pendingState` is already 0 before the
+   batch finishes, and `QueueContainer` is never emptied (`clearFileListAfterUpload`
+   is false), so a DOM wait hangs to its timeout. This was the "documents are not
+   being uploaded" report.
+
+The working approach drives `Sys.Extended.UI.AjaxFileUpload.Control` through its own
+API — `startUpload()` plus `add_uploadCompleteAll` — and then waits for
+`PageRequestManager.get_isInAsyncPostBack()` to go quiet before touching the DOM.
+Verified end to end against live Enrollware: 2 documents uploaded, XLSX injected,
+still present 4s later.
+
+**Signals added:** `tests/unit/lib/enrollware-bookmarklet.test.ts` gains a fake
+AjaxFileUpload control replaying that exact timeline and asserting the XLSX is never
+written while a postback is open — confirmed to fail when `settleThen` is removed.
+Plus a `new Function(SOURCE)` parse test: the script is built from one large template
+literal, and a stray `\'` once emitted a bare apostrophe that killed the whole IIFE
+with a SyntaxError, taking the bookmarklet down entirely with no visible clue.
+
+**Storage lifecycle:** 30-day S3 lifecycle rules are set on both
+`superherocpr-assets-prod` and `superherocpr-assets-staging` (prefix
+`student-documents/`) — objects expire automatically at day 30 with no code
+involved. Migration 0063 adds a matching daily cron (`purge-expired-student-documents`,
+02:00 UTC) that deletes DB rows older than 30 days, reporting to `cron_run_log`
+so it appears in `cron_health()`.
+
+**Why no invariant is needed, not just missing:** `student_documents` requires
+exactly one of `booking_id` / `roster_record_id` via a CHECK constraint, both
+`ON DELETE CASCADE`. An orphaned or dual-owned row is not possible to write, not
+just unlikely.
+
+**Honest gap:** Upload/delete errors surface directly in the modal to the actor.
+No automated test of the S3 round-trip exists, matching precedent in this file
+(`removeBookingFromSession`, `updateSession`, `setSessionAddons` — none tested
+today). The cron provides a health signal for the cleanup path but not for upload.
+
+- `// TODO:` If this feature gets used heavily, an outcome e2e test (upload a
+  fixture file, assert the S3 object exists and the modal shows it) would be the
+  right signal — same shape as `rollcall.spec.ts`.
 
 ---
 

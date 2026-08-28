@@ -16,8 +16,12 @@
  *      using name-based dropdown matching, injects a MutationObserver to watch
  *      for the student list panel to appear after "Update Class" is clicked.
  *   4. When the student panel appears (or on a reload with the student panel
- *      already present): generates a CSV from the roster and injects it into
- *      Enrollware's file input, ready for the instructor to click "Import Students".
+ *      already present): fetches an xlsx roster from the SuperheroCPR API and
+ *      injects it into Enrollware's file input.
+ *   5. "Mark class as submitted": records the submission via
+ *      /api/enrollware/mark-submitted, then (if the file was injected
+ *      successfully) clicks Enrollware's own "Import Students" button so the
+ *      instructor doesn't have to do it as a separate step.
  *
  * Server-side only. This file is never imported by client components.
  */
@@ -165,6 +169,98 @@ export function getBookmarkletSource(apiBase: string): string {
   // when formatting. Plain getHours() in an Eastern browser would write 5:00 AM
   // into Enrollware for a 9:00 AM class.
 
+  // ---------------------------------------------------------
+  // Price — single source of truth
+  // ---------------------------------------------------------
+  //
+  // mainContent_price lives inside mainContent_UpdatePanel2, Enrollware's only
+  // UpdatePanel. Every async postback that panel serves — Course change, Location
+  // change, the assistant BsmSelect widget, the student Import button — re-renders
+  // the panel and REPLACES the price input node with one carrying Enrollware's own
+  // catalog price ("$0.00" for most courses, since prices live in the SuperheroCPR
+  // database rather than theirs). So writing the price once is never enough: the
+  // next postback silently reverts it, and whatever is on screen when the
+  // instructor clicks "Update Class" is what gets saved.
+  //
+  // The price is therefore written by exactly one function, re-invoked after every
+  // partial postback via the PageRequestManager's endRequest event — which fires
+  // once the replacement node is already in the DOM.
+  //
+  // Partial postbacks are only half the problem. "Update Class" and Enrollware's
+  // student Import are full page submits: the page navigates, this script is
+  // discarded, and the guard dies with it. Nothing running in the page can survive
+  // that. So the price is also persisted to sessionStorage and re-applied at
+  // startup — every tap of the bookmark restores it, on whichever class-edit page
+  // the instructor has landed on.
+  //
+  // Format: "$75.00", matching what Enrollware renders into the field itself.
+  // Since submitting an untouched form posts Enrollware's own "$0.00" back to its
+  // server successfully, currency format is guaranteed to survive their parser.
+
+  var PRICE_KEY = 'scpr_price';
+
+  /** Formats a price as Enrollware renders it: "$75.00". Accepts 75, "75", "75.00". */
+  function formatPrice(price) {
+    return '$' + Number(price).toFixed(2);
+  }
+
+  /**
+   * Reads the price recorded for this class and writes it into Enrollware's price
+   * field. No-ops when the field is absent or no positive price was recorded, so
+   * it is safe to call on any page at any point in the postback lifecycle.
+   */
+  function applyPrice() {
+    var el = document.getElementById('mainContent_price');
+    if (!el) return;
+    var price = Number(sessionStorage.getItem(PRICE_KEY));
+    if (price > 0) {
+      el.value = formatPrice(price);
+    }
+  }
+
+  /**
+   * Records this session's price, writes it immediately, and installs the guard
+   * that re-applies it after every UpdatePanel refresh. Safe to call repeatedly:
+   * the endRequest handler is registered at most once per page load.
+   *
+   * A price of 0 (a free class type, or one not priced in SuperheroCPR) records
+   * nothing and writes nothing, leaving Enrollware's own value untouched.
+   *
+   * Side effect: writes the price to sessionStorage so it outlives the full page
+   * reloads that "Update Class" and the student Import trigger.
+   */
+  function installPriceGuard(session) {
+    var price = Number((session && session.class_type) ? session.class_type.price : 0);
+    if (price > 0) {
+      sessionStorage.setItem(PRICE_KEY, String(price));
+    } else {
+      // Clear it — otherwise switching to a free class type would keep applying
+      // the previously selected class's price.
+      sessionStorage.removeItem(PRICE_KEY);
+    }
+    installPriceWatcher();
+    applyPrice();
+  }
+
+  /**
+   * Registers applyPrice to run after every partial postback. Idempotent — the
+   * handler is added at most once per page load.
+   */
+  function installPriceWatcher() {
+    if (window.__SCPR_PRICE_GUARD) return;
+    try {
+      var prm = (window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager)
+        ? Sys.WebForms.PageRequestManager.getInstance()
+        : null;
+      if (prm) {
+        prm.add_endRequest(applyPrice);
+        window.__SCPR_PRICE_GUARD = true;
+      }
+    } catch (e) {
+      // No ASP.NET AJAX on this page — the direct writes still stand.
+    }
+  }
+
   /**
    * Fills all class-detail form fields using the provided session data.
    * Returns an array of warning strings for any fields that could not be
@@ -221,12 +317,10 @@ export function getBookmarkletSource(apiBase: string): string {
         pad2(ed.getUTCHours()) + ':' + pad2(ed.getUTCMinutes());
     }
 
-    // Price — only fill if we have a positive value; writing 0 would clobber
-    // whatever the instructor already entered for a free/unpriced class type.
-    var priceEl = document.getElementById('mainContent_price');
-    if (priceEl && session.class_type && session.class_type.price > 0) {
-      priceEl.value = String(session.class_type.price);
-    }
+    // Price — written through the postback guard, not directly. See installPriceGuard.
+    // This must run before the assistant field below, whose change event triggers
+    // an UpdatePanel postback that would otherwise wipe a plain write.
+    installPriceGuard(session);
 
     // Total Hours — class type default plus any per-session additional hours
     var hoursEl = document.getElementById('mainContent_totalHours');
@@ -318,6 +412,149 @@ export function getBookmarkletSource(apiBase: string): string {
     if (importPanel) importPanel.style.display = 'block';
 
     return true;
+  }
+
+  /**
+   * Fetches merged per-student PDFs from the SuperheroCPR API for the given
+   * session. Returns a Promise resolving to { documents: [{ studentName,
+   * fileName, pdf }] } where pdf is a base64-encoded PDF string. Returns
+   * { documents: [] } on any failure so callers can degrade gracefully.
+   */
+  function fetchSessionDocuments(sessionId) {
+    return fetch(
+      API_BASE + '/api/enrollware/session-documents?sessionId=' + encodeURIComponent(sessionId),
+      { headers: { 'Authorization': 'Bearer ' + __k } }
+    ).then(function(r) {
+      if (!r.ok) return { documents: [] };
+      return r.json();
+    }).catch(function() { return { documents: [] }; });
+  }
+
+  /**
+   * Waits until no ASP.NET partial postback is in flight, then invokes cb.
+   *
+   * Needed because the Documents widget's uploadCompleteAll event fires while its
+   * own postback is still running (measured on the live site: beginRequest at
+   * t=9911ms, uploadCompleteAll at t=9912ms, endRequest at t=10157ms). Anything
+   * written to the DOM in that window — notably the student import file — is
+   * discarded when the UpdatePanel re-renders ~250ms later.
+   *
+   * Re-checks after each endRequest because one postback can trigger another.
+   * The leading 150ms delay covers the case where the postback has been queued
+   * but has not yet flipped isInAsyncPostBack to true.
+   */
+  function settleThen(cb) {
+    var prm = null;
+    try {
+      prm = (window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager)
+        ? Sys.WebForms.PageRequestManager.getInstance()
+        : null;
+    } catch (e) {}
+    if (!prm || typeof prm.get_isInAsyncPostBack !== 'function') {
+      setTimeout(cb, 300);
+      return;
+    }
+    function attempt() {
+      if (prm.get_isInAsyncPostBack()) {
+        var h = function() { prm.remove_endRequest(h); setTimeout(attempt, 50); };
+        prm.add_endRequest(h);
+      } else {
+        cb();
+      }
+    }
+    setTimeout(attempt, 150);
+  }
+
+  /**
+   * Uploads per-student merged PDFs into Enrollware's Documents widget, then calls
+   * callback({ uploaded, errors, reason }) once every upload has finished AND the
+   * postback it triggers has settled — so the caller can safely touch the DOM after.
+   *
+   * Drives Sys.Extended.UI.AjaxFileUpload.Control directly (startUpload() plus its
+   * uploadStart / uploadComplete / uploadCompleteAll / uploadError events) rather
+   * than clicking the Upload button and watching the queue DOM. The DOM is not a
+   * usable signal here, confirmed by measurement on the live site:
+   *   - 'pendingState' marks a file as QUEUED, not uploading — it clears as each
+   *     file starts, so it is already 0 before the batch is done.
+   *   - QueueContainer is never emptied (clearFileListAfterUpload is false), so
+   *     waiting for it to empty waits forever.
+   *
+   * The watchdog resets on every per-file event, so a large batch of photo-heavy
+   * PDFs cannot trip it just by being slow; it only fires on genuine stalls.
+   * Degrades gracefully: any failure calls back with uploaded:0 and a reason, and
+   * the caller still proceeds with the student import.
+   */
+  function uploadDocuments(docs, callback) {
+    if (!docs || docs.length === 0) { callback({ uploaded: 0, errors: 0, reason: 'none' }); return; }
+
+    var input = document.getElementById('mainContent_AjaxUpload1_Html5InputFile');
+    var ctl = null;
+    try { ctl = Sys.Application.findComponent('mainContent_AjaxUpload1'); } catch (e) {}
+    if (!input || !ctl || typeof ctl.startUpload !== 'function') {
+      callback({ uploaded: 0, errors: 0, reason: 'widget-unavailable' });
+      return;
+    }
+
+    // Respect the widget's own cap (20 on the live site) rather than assuming it.
+    var max = 20;
+    try { if (ctl.get_maximumNumberOfFiles) max = ctl.get_maximumNumberOfFiles() || 20; } catch (e) {}
+    var batch = docs.slice(0, max);
+
+    try {
+      var dt = new DataTransfer();
+      for (var i = 0; i < batch.length; i++) {
+        var binaryStr = atob(batch[i].pdf);
+        var arr = new Uint8Array(binaryStr.length);
+        for (var j = 0; j < binaryStr.length; j++) arr[j] = binaryStr.charCodeAt(j);
+        dt.items.add(new File(
+          [new Blob([arr], { type: 'application/pdf' })],
+          batch[i].fileName,
+          { type: 'application/pdf' }
+        ));
+      }
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) {
+      callback({ uploaded: 0, errors: 0, reason: 'inject-failed' });
+      return;
+    }
+
+    var finished = false;
+    var errors = 0;
+    var watchdog = null;
+
+    function done(reason) {
+      if (finished) return;
+      finished = true;
+      if (watchdog) clearTimeout(watchdog);
+      // Wait out the widget's own postback before handing control back.
+      settleThen(function() {
+        callback({ uploaded: batch.length - errors, errors: errors, reason: reason });
+      });
+    }
+
+    // 60s without any per-file progress counts as a stall, not slowness.
+    function bump() {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = setTimeout(function() { done('timeout'); }, 60000);
+    }
+
+    try {
+      ctl.add_uploadStart(bump);
+      ctl.add_uploadComplete(bump);
+      ctl.add_uploadError(function() { errors++; bump(); });
+      ctl.add_uploadCompleteAll(function() { done('complete'); });
+    } catch (e) {
+      callback({ uploaded: 0, errors: 0, reason: 'events-unavailable' });
+      return;
+    }
+
+    bump();
+    try {
+      ctl.startUpload();
+    } catch (e) {
+      done('start-failed');
+    }
   }
 
   // =========================================================
@@ -482,6 +719,10 @@ export function getBookmarkletSource(apiBase: string): string {
   function showStudentFill(session) {
     var students = session.students || [];
 
+    // Price — install the guard before the Import button is clicked below, since
+    // that click fires an UpdatePanel postback that replaces the price input.
+    installPriceGuard(session);
+
     // Fill "Certificate Issued On" from the session date. This field only exists
     // on existing-class pages (not new-class forms), so the null check is normal.
     // starts_at is a floating wall-clock value — slice(0,10) gives YYYY-MM-DD
@@ -512,70 +753,143 @@ export function getBookmarkletSource(apiBase: string): string {
     // (the file input) without a full page reload. We click it and wait for the
     // element to appear via MutationObserver rather than polling.
     var blobPromise = fetchStudentXLSX(session.id);
+    // Fetch per-student merged PDFs in parallel with the XLSX blob
+    var docsPromise = fetchSessionDocuments(session.id);
 
-    var fileReadyPromise = new Promise(function(resolve) {
-      if (document.getElementById('mainContent_impFileUpl')) { resolve(true); return; }
-      var importBtn = document.getElementById('mainContent_importBtn');
-      if (!importBtn) { resolve(false); return; }
-      var done = false;
-      var observer = new MutationObserver(function() {
-        if (done) return;
-        if (document.getElementById('mainContent_impFileUpl')) {
-          done = true;
-          observer.disconnect();
-          resolve(true);
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-      setTimeout(function() {
-        if (!done) { done = true; observer.disconnect(); resolve(false); }
-      }, 10000);
-      importBtn.click();
-    });
-
-    Promise.all([blobPromise, fileReadyPromise]).then(function(results) {
+    // Documents are uploaded BEFORE the XLSX is injected. The AjaxUpload1 XHR
+    // upload can trigger UpdatePanel postbacks that reset the student import panel,
+    // clearing any file that was already queued there. Sequencing ensures the
+    // import field is only written once everything else is settled.
+    Promise.all([blobPromise, docsPromise]).then(function(results) {
       var blob = results[0];
-      var injected = injectStudentFile(blob);
+      var docs = (results[1] && results[1].documents) ? results[1].documents : [];
+
+      var docCount = docs.length;
+
+      // Opens the Enrollware student import panel and injects the XLSX, then
+      // renders the final panel state. Called after documents finish uploading
+      // (or immediately when there are no documents to upload).
+      function finishWithXlsx(docsLine) {
+        var fileReadyPromise = new Promise(function(resolve) {
+          if (document.getElementById('mainContent_impFileUpl')) { resolve(true); return; }
+          var importBtn = document.getElementById('mainContent_importBtn');
+          if (!importBtn) { resolve(false); return; }
+          var done = false;
+          var obs = new MutationObserver(function() {
+            if (done) return;
+            if (document.getElementById('mainContent_impFileUpl')) {
+              done = true; obs.disconnect(); resolve(true);
+            }
+          });
+          obs.observe(document.body, { childList: true, subtree: true });
+          setTimeout(function() {
+            if (!done) { done = true; obs.disconnect(); resolve(false); }
+          }, 10000);
+          importBtn.click();
+        });
+
+        fileReadyPromise.then(function() {
+          var injected = injectStudentFile(blob);
+
+          var xlsxHtml = injected
+            ? '<div style="color:#2d7a2d;margin-bottom:6px">&#x2713; ' + count + ' student' + (count !== 1 ? 's' : '') + ' loaded into the import file!</div>' +
+              '<div style="font-size:12px;color:#555;margin-bottom:10px">Click <b>Import Students</b> to add them to this class.</div>'
+            : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not inject file automatically. Use the download button below.</div>';
+
+          var btnHtml =
+            '<button onclick="window.__SCPR_DOWNLOAD()" ' +
+            'style="width:100%;padding:6px;background:#444;color:#fff;border:none;' +
+            'border-radius:4px;cursor:pointer;font-size:12px;margin-bottom:6px">' +
+            '&#x2193; Download student file (.xlsx)' +
+            '</button>' +
+            '<button onclick="window.__SCPR_MARK_DONE(\\\'' + session.id + '\\\')" ' +
+            'style="width:100%;padding:6px;background:#c8102e;color:#fff;border:none;' +
+            'border-radius:4px;cursor:pointer;font-size:12px">' +
+            '&#x2713; Mark class as submitted' +
+            '</button>';
+
+          showPanel(panelHeader() + xlsxHtml + docsLine + btnHtml);
+
+          window.__SCPR_DOWNLOAD = function() {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = 'students.xlsx'; a.click();
+            URL.revokeObjectURL(url);
+          };
+
+          // "Mark class as submitted" does two things: records the submission in
+          // SuperheroCPR, and — if the file was auto-injected — clicks Enrollware's
+          // own "Import Students" button so the instructor doesn't have to do it
+          // separately. mainContent_impUploadBtn is a full-page form submit (it is in
+          // PageRequestManager._postBackControlIDs, not the async list, confirmed on
+          // the live site), so the browser navigates away as soon as it's clicked —
+          // our own markSubmitted() call must finish first, or the fetch to our API
+          // can be aborted by the navigation.
+          window.__SCPR_MARK_DONE = function(id) {
+            showPanel(panelHeader() +
+              '<div style="text-align:center;padding:8px 0;color:#666">Submitting&hellip;</div>'
+            );
+            markSubmitted(id).then(function() {
+              sessionStorage.removeItem('scpr_session_id');
+              sessionStorage.removeItem('scpr_session_data');
+
+              var uploadBtn = document.getElementById('mainContent_impUploadBtn');
+              if (injected && uploadBtn) {
+                uploadBtn.click();
+                return; // page is navigating away; nothing after this runs
+              }
+
+              showPanel(panelHeader() +
+                '<div style="color:#2d7a2d">&#x2713; Marked as submitted in SuperheroCPR.</div>' +
+                (injected
+                  ? ''
+                  : '<div style="font-size:11px;color:#856404;margin-top:8px">' +
+                    '&#9888; Could not auto-submit the import earlier — click ' +
+                    '<b>Import Students</b> above to finish.</div>')
+              );
+            }).catch(function() {
+              showError('Failed to mark as submitted. Please update manually in the SuperheroCPR admin.');
+            });
+          };
+        });
+      }
+
+      if (docCount === 0) {
+        // Nothing to upload — go straight to the student import.
+        finishWithXlsx('');
+        return;
+      }
 
       showPanel(panelHeader() +
-        (injected
-          ? '<div style="color:#2d7a2d;margin-bottom:6px">&#x2713; ' + count + ' student' + (count !== 1 ? 's' : '') + ' loaded into the import file!</div>' +
-            '<div style="font-size:12px;color:#555;margin-bottom:10px">Click <b>Import Students</b> to add them to this class.</div>'
-          : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not inject file automatically. Use the download button below.</div>'
-        ) +
-        '<button onclick="window.__SCPR_DOWNLOAD()" ' +
-        'style="width:100%;padding:6px;background:#444;color:#fff;border:none;' +
-        'border-radius:4px;cursor:pointer;font-size:12px;margin-bottom:6px">' +
-        '&#x2193; Download student file (.xlsx)' +
-        '</button>' +
-        '<button onclick="window.__SCPR_MARK_DONE(\\\'' + session.id + '\\\')" ' +
-        'style="width:100%;padding:6px;background:#c8102e;color:#fff;border:none;' +
-        'border-radius:4px;cursor:pointer;font-size:12px">' +
-        '&#x2713; Mark class as submitted' +
-        '</button>'
+        '<div style="color:#666;margin-bottom:8px">&#x1F4C4; Uploading ' +
+        docCount + ' document' + (docCount !== 1 ? 's' : '') +
+        ' to Enrollware&hellip;</div>'
       );
 
-      window.__SCPR_DOWNLOAD = function() {
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url; a.download = 'students.xlsx'; a.click();
-        URL.revokeObjectURL(url);
-      };
-
-      window.__SCPR_MARK_DONE = function(id) {
-        markSubmitted(id).then(function() {
-          sessionStorage.removeItem('scpr_session_id');
-          sessionStorage.removeItem('scpr_session_data');
-          showPanel(panelHeader() +
-            '<div style="color:#2d7a2d">&#x2713; Marked as submitted in SuperheroCPR.</div>'
-          );
-        }).catch(function() {
-          showError('Failed to mark as submitted. Please update manually in the SuperheroCPR admin.');
-        });
-      };
+      // uploadDocuments calls back only once every upload has finished AND the
+      // postback it triggers has settled, so injecting the XLSX here is safe.
+      uploadDocuments(docs, function(res) {
+        var line;
+        if (res.reason === 'complete' && res.errors === 0) {
+          line = '<div style="color:#2d7a2d;margin-bottom:8px">&#x2713; ' +
+                 res.uploaded + ' document' + (res.uploaded !== 1 ? 's' : '') +
+                 ' uploaded to Enrollware.</div>';
+        } else if (res.reason === 'complete') {
+          line = '<div style="color:#856404;margin-bottom:8px">&#9888; ' +
+                 res.uploaded + ' of ' + docCount + ' documents uploaded; ' +
+                 res.errors + ' failed. Check Enrollware\\'s Documents section.</div>';
+        } else if (res.reason === 'timeout') {
+          line = '<div style="color:#c8102e;margin-bottom:8px">&#9888; Document upload stalled. ' +
+                 'Check Enrollware\\'s Documents section.</div>';
+        } else {
+          line = '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not upload documents ' +
+                 'automatically. Add them via the Documents section.</div>';
+        }
+        finishWithXlsx(line);
+      });
 
     }).catch(function(err) {
-      showError('Failed to prepare student file: ' + (err.message || 'Unknown error'));
+      showError('Failed to prepare student data: ' + (err.message || 'Unknown error'));
     });
   }
 
@@ -591,6 +905,15 @@ export function getBookmarkletSource(apiBase: string): string {
       window.__SCPR_LOADED = false;
       return;
     }
+
+    // Restore the price before anything else. "Update Class" and the student
+    // Import are full page submits that discard this script, and the page comes
+    // back carrying Enrollware's own "$0.00". Re-applying here means the price is
+    // already correct by the time the instructor looks at the reloaded page —
+    // no waiting on the class list to load, and no dependency on which mode we
+    // end up in below.
+    installPriceWatcher();
+    applyPrice();
 
     showLoading();
 
