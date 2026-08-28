@@ -690,71 +690,118 @@ export function getBookmarkletSource(apiBase: string): string {
     // (the file input) without a full page reload. We click it and wait for the
     // element to appear via MutationObserver rather than polling.
     var blobPromise = fetchStudentXLSX(session.id);
-    // Fetch per-student merged PDFs in parallel with the XLSX and import panel open
+    // Fetch per-student merged PDFs in parallel with the XLSX blob
     var docsPromise = fetchSessionDocuments(session.id);
 
-    var fileReadyPromise = new Promise(function(resolve) {
-      if (document.getElementById('mainContent_impFileUpl')) { resolve(true); return; }
-      var importBtn = document.getElementById('mainContent_importBtn');
-      if (!importBtn) { resolve(false); return; }
-      var done = false;
-      var observer = new MutationObserver(function() {
-        if (done) return;
-        if (document.getElementById('mainContent_impFileUpl')) {
-          done = true;
-          observer.disconnect();
-          resolve(true);
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-      setTimeout(function() {
-        if (!done) { done = true; observer.disconnect(); resolve(false); }
-      }, 10000);
-      importBtn.click();
-    });
-
-    // Fetch the XLSX, open the import panel, and fetch per-student merged PDFs in
-    // parallel. Documents are injected into Enrollware's AsyncFileUpload widget
-    // immediately after they arrive; the XLSX waits for the import panel to open.
-    Promise.all([blobPromise, fileReadyPromise, docsPromise]).then(function(results) {
+    // Documents are uploaded BEFORE the XLSX is injected. The AjaxUpload1 XHR
+    // upload can trigger UpdatePanel postbacks that reset the student import panel,
+    // clearing any file that was already queued there. Sequencing ensures the
+    // import field is only written once everything else is settled.
+    Promise.all([blobPromise, docsPromise]).then(function(results) {
       var blob = results[0];
-      var docs = (results[2] && results[2].documents) ? results[2].documents : [];
-      var injected = injectStudentFile(blob);
+      var docs = (results[1] && results[1].documents) ? results[1].documents : [];
 
-      // Inject documents and start upload immediately if any were fetched
+      // Inject and start the document upload immediately
       var docInjected = injectDocuments(docs);
       if (docInjected > 0) clickDocumentUpload();
 
-      var xlsxHtml = injected
-        ? '<div style="color:#2d7a2d;margin-bottom:6px">&#x2713; ' + count + ' student' + (count !== 1 ? 's' : '') + ' loaded into the import file!</div>' +
-          '<div style="font-size:12px;color:#555;margin-bottom:10px">Click <b>Import Students</b> to add them to this class.</div>'
-        : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not inject file automatically. Use the download button below.</div>';
+      // Opens the Enrollware student import panel and injects the XLSX, then
+      // renders the final panel state. Called after documents finish uploading
+      // (or immediately when there are no documents to upload).
+      function finishWithXlsx(docsLine) {
+        var fileReadyPromise = new Promise(function(resolve) {
+          if (document.getElementById('mainContent_impFileUpl')) { resolve(true); return; }
+          var importBtn = document.getElementById('mainContent_importBtn');
+          if (!importBtn) { resolve(false); return; }
+          var done = false;
+          var obs = new MutationObserver(function() {
+            if (done) return;
+            if (document.getElementById('mainContent_impFileUpl')) {
+              done = true; obs.disconnect(); resolve(true);
+            }
+          });
+          obs.observe(document.body, { childList: true, subtree: true });
+          setTimeout(function() {
+            if (!done) { done = true; obs.disconnect(); resolve(false); }
+          }, 10000);
+          importBtn.click();
+        });
 
-      var btnHtml =
-        '<button onclick="window.__SCPR_DOWNLOAD()" ' +
-        'style="width:100%;padding:6px;background:#444;color:#fff;border:none;' +
-        'border-radius:4px;cursor:pointer;font-size:12px;margin-bottom:6px">' +
-        '&#x2193; Download student file (.xlsx)' +
-        '</button>' +
-        '<button onclick="window.__SCPR_MARK_DONE(\\\'' + session.id + '\\\')" ' +
-        'style="width:100%;padding:6px;background:#c8102e;color:#fff;border:none;' +
-        'border-radius:4px;cursor:pointer;font-size:12px">' +
-        '&#x2713; Mark class as submitted' +
-        '</button>';
+        fileReadyPromise.then(function() {
+          var injected = injectStudentFile(blob);
 
-      function renderPanel(docsHtml) {
-        showPanel(panelHeader() + xlsxHtml + docsHtml + btnHtml);
+          var xlsxHtml = injected
+            ? '<div style="color:#2d7a2d;margin-bottom:6px">&#x2713; ' + count + ' student' + (count !== 1 ? 's' : '') + ' loaded into the import file!</div>' +
+              '<div style="font-size:12px;color:#555;margin-bottom:10px">Click <b>Import Students</b> to add them to this class.</div>'
+            : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not inject file automatically. Use the download button below.</div>';
+
+          var btnHtml =
+            '<button onclick="window.__SCPR_DOWNLOAD()" ' +
+            'style="width:100%;padding:6px;background:#444;color:#fff;border:none;' +
+            'border-radius:4px;cursor:pointer;font-size:12px;margin-bottom:6px">' +
+            '&#x2193; Download student file (.xlsx)' +
+            '</button>' +
+            '<button onclick="window.__SCPR_MARK_DONE(\\\'' + session.id + '\\\')" ' +
+            'style="width:100%;padding:6px;background:#c8102e;color:#fff;border:none;' +
+            'border-radius:4px;cursor:pointer;font-size:12px">' +
+            '&#x2713; Mark class as submitted' +
+            '</button>';
+
+          showPanel(panelHeader() + xlsxHtml + docsLine + btnHtml);
+
+          window.__SCPR_DOWNLOAD = function() {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = 'students.xlsx'; a.click();
+            URL.revokeObjectURL(url);
+          };
+
+          // "Mark class as submitted" does two things: records the submission in
+          // SuperheroCPR, and — if the file was auto-injected — clicks Enrollware's
+          // own "Import Students" button so the instructor doesn't have to do it
+          // separately. mainContent_impUploadBtn is a full-page form submit (it is in
+          // PageRequestManager._postBackControlIDs, not the async list, confirmed on
+          // the live site), so the browser navigates away as soon as it's clicked —
+          // our own markSubmitted() call must finish first, or the fetch to our API
+          // can be aborted by the navigation.
+          window.__SCPR_MARK_DONE = function(id) {
+            showPanel(panelHeader() +
+              '<div style="text-align:center;padding:8px 0;color:#666">Submitting&hellip;</div>'
+            );
+            markSubmitted(id).then(function() {
+              sessionStorage.removeItem('scpr_session_id');
+              sessionStorage.removeItem('scpr_session_data');
+
+              var uploadBtn = document.getElementById('mainContent_impUploadBtn');
+              if (injected && uploadBtn) {
+                uploadBtn.click();
+                return; // page is navigating away; nothing after this runs
+              }
+
+              showPanel(panelHeader() +
+                '<div style="color:#2d7a2d">&#x2713; Marked as submitted in SuperheroCPR.</div>' +
+                (injected
+                  ? ''
+                  : '<div style="font-size:11px;color:#856404;margin-top:8px">' +
+                    '&#9888; Could not auto-submit the import earlier — click ' +
+                    '<b>Import Students</b> above to finish.</div>')
+              );
+            }).catch(function() {
+              showError('Failed to mark as submitted. Please update manually in the SuperheroCPR admin.');
+            });
+          };
+        });
       }
 
       if (docInjected > 0) {
-        // Documents queued — show "uploading" status and watch for completion
-        renderPanel(
+        // Show "uploading" status while waiting for docs, then inject XLSX
+        showPanel(panelHeader() +
           '<div style="color:#666;margin-bottom:8px">&#x1F4C4; Uploading ' +
           docInjected + ' document' + (docInjected !== 1 ? 's' : '') +
           ' to Enrollware&hellip;</div>'
         );
         waitForDocumentUploads(function(ok) {
-          renderPanel(ok
+          finishWithXlsx(ok
             ? '<div style="color:#2d7a2d;margin-bottom:8px">&#x2713; ' +
               docInjected + ' document' + (docInjected !== 1 ? 's' : '') +
               ' uploaded to Enrollware.</div>'
@@ -762,58 +809,14 @@ export function getBookmarkletSource(apiBase: string): string {
               'Verify in Enrollware\\'s Documents section.</div>'
           );
         });
-      } else if (docs.length > 0) {
-        // Had documents but couldn't inject them
-        renderPanel(
-          '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not queue documents. ' +
-          'Upload manually via the Documents section.</div>'
-        );
       } else {
-        // No documents for this session — show only XLSX section
-        renderPanel('');
-      }
-
-      window.__SCPR_DOWNLOAD = function() {
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url; a.download = 'students.xlsx'; a.click();
-        URL.revokeObjectURL(url);
-      };
-
-      // "Mark class as submitted" does two things: records the submission in
-      // SuperheroCPR, and — if the file was auto-injected — clicks Enrollware's
-      // own "Import Students" button so the instructor doesn't have to do it
-      // separately. mainContent_impUploadBtn is a full-page form submit (it is in
-      // PageRequestManager._postBackControlIDs, not the async list, confirmed on
-      // the live site), so the browser navigates away as soon as it's clicked —
-      // our own markSubmitted() call must finish first, or the fetch to our API
-      // can be aborted by the navigation.
-      window.__SCPR_MARK_DONE = function(id) {
-        showPanel(panelHeader() +
-          '<div style="text-align:center;padding:8px 0;color:#666">Submitting&hellip;</div>'
+        // No documents (or injection failed) — inject XLSX immediately
+        finishWithXlsx(docs.length > 0
+          ? '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not queue documents. ' +
+            'Upload manually via the Documents section.</div>'
+          : ''
         );
-        markSubmitted(id).then(function() {
-          sessionStorage.removeItem('scpr_session_id');
-          sessionStorage.removeItem('scpr_session_data');
-
-          var uploadBtn = document.getElementById('mainContent_impUploadBtn');
-          if (injected && uploadBtn) {
-            uploadBtn.click();
-            return; // page is navigating away; nothing after this runs
-          }
-
-          showPanel(panelHeader() +
-            '<div style="color:#2d7a2d">&#x2713; Marked as submitted in SuperheroCPR.</div>' +
-            (injected
-              ? ''
-              : '<div style="font-size:11px;color:#856404;margin-top:8px">' +
-                '&#9888; Could not auto-submit the import earlier — click ' +
-                '<b>Import Students</b> above to finish.</div>')
-          );
-        }).catch(function() {
-          showError('Failed to mark as submitted. Please update manually in the SuperheroCPR admin.');
-        });
-      };
+      }
 
     }).catch(function(err) {
       showError('Failed to prepare student data: ' + (err.message || 'Unknown error'));
