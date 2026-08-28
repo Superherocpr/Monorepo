@@ -108,6 +108,7 @@ export async function seedRollcallScenario(): Promise<SeededRollcall> {
     first_name: "E2E-Instructor",
     last_name: `Rollcall-${run}`,
     email: `e2e-rollcall-instructor-${run}@test.superherocpr.com`,
+    phone: "5550000001",
     deactivated: false,
     daily_access_code: code,
     access_code_generated_at: now.toISOString(),
@@ -128,6 +129,7 @@ export async function seedRollcallScenario(): Promise<SeededRollcall> {
     first_name: student.firstName,
     last_name: student.lastName,
     email: student.email,
+    phone: "5550000002",
     deactivated: false,
   });
   if (studentError) {
