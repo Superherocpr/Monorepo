@@ -306,12 +306,44 @@ nothing observes whether the class lands in Enrollware correctly.
 
 Instructors/managers upload photos (certification cards, etc.) per student on
 `/admin/sessions/[id]`, stored in S3 under `student-documents/`. The Enrollware
-bookmarklet fetches a per-student merged PDF from `/api/enrollware/session-documents`,
-injects all files into Enrollware's AsyncFileUpload widget (`AjaxUpload1`), auto-clicks
-Upload, and watches the queue's `pendingState` elements to confirm completion — then
-updates the panel status accordingly. HEIC is converted to JPEG at upload time;
-WebP is converted at merge time. Documents are fetched in parallel with the XLSX
-so no extra wall-clock time is added to the existing bookmarklet flow.
+bookmarklet fetches a per-student merged PDF from `/api/enrollware/session-documents`
+and uploads them into Enrollware's Documents widget, then injects the student XLSX.
+HEIC is converted to JPEG at upload time; WebP is converted at merge time. Both
+fetches run in parallel, so no extra wall-clock time is added.
+
+**Ordering is load-bearing, and cost three failed attempts to get right.** Measured
+on the live site with the widget instrumented:
+
+```
+uploadStart        pending 2→1   ← 'pendingState' means QUEUED, clears as each file starts
+uploadComplete ×2
+PRM beginRequest   t=9911ms      ← the widget's own postback opens
+uploadCompleteAll  t=9912ms      ← fires INSIDE that postback
+PRM endRequest     t=10157ms     ← postback closes, UpdatePanel re-renders
+(16s later)        QueueContainer still holds all items — it is never emptied
+```
+
+Two consequences, each of which shipped as a bug first:
+
+1. Writing the XLSX on `uploadCompleteAll` loses it — the re-render ~250ms later
+   discards it. This was the "student import is being cleared" report.
+2. Waiting on the queue DOM never completes. `pendingState` is already 0 before the
+   batch finishes, and `QueueContainer` is never emptied (`clearFileListAfterUpload`
+   is false), so a DOM wait hangs to its timeout. This was the "documents are not
+   being uploaded" report.
+
+The working approach drives `Sys.Extended.UI.AjaxFileUpload.Control` through its own
+API — `startUpload()` plus `add_uploadCompleteAll` — and then waits for
+`PageRequestManager.get_isInAsyncPostBack()` to go quiet before touching the DOM.
+Verified end to end against live Enrollware: 2 documents uploaded, XLSX injected,
+still present 4s later.
+
+**Signals added:** `tests/unit/lib/enrollware-bookmarklet.test.ts` gains a fake
+AjaxFileUpload control replaying that exact timeline and asserting the XLSX is never
+written while a postback is open — confirmed to fail when `settleThen` is removed.
+Plus a `new Function(SOURCE)` parse test: the script is built from one large template
+literal, and a stray `\'` once emitted a bare apostrophe that killed the whole IIFE
+with a SyntaxError, taking the bookmarklet down entirely with no visible clue.
 
 **Storage lifecycle:** 30-day S3 lifecycle rules are set on both
 `superherocpr-assets-prod` and `superherocpr-assets-staging` (prefix

@@ -431,71 +431,130 @@ export function getBookmarkletSource(apiBase: string): string {
   }
 
   /**
-   * Injects per-student merged PDFs into Enrollware's Documents upload widget.
-   * Reconstructs each base64 PDF as a File object, adds it to a DataTransfer,
-   * assigns it to the file input, then dispatches 'change' so the AsyncFileUpload
-   * widget queues the files. Returns the number of documents injected, or 0 on failure.
+   * Waits until no ASP.NET partial postback is in flight, then invokes cb.
+   *
+   * Needed because the Documents widget's uploadCompleteAll event fires while its
+   * own postback is still running (measured on the live site: beginRequest at
+   * t=9911ms, uploadCompleteAll at t=9912ms, endRequest at t=10157ms). Anything
+   * written to the DOM in that window — notably the student import file — is
+   * discarded when the UpdatePanel re-renders ~250ms later.
+   *
+   * Re-checks after each endRequest because one postback can trigger another.
+   * The leading 150ms delay covers the case where the postback has been queued
+   * but has not yet flipped isInAsyncPostBack to true.
    */
-  function injectDocuments(docs) {
-    if (!docs || docs.length === 0) return 0;
+  function settleThen(cb) {
+    var prm = null;
+    try {
+      prm = (window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager)
+        ? Sys.WebForms.PageRequestManager.getInstance()
+        : null;
+    } catch (e) {}
+    if (!prm || typeof prm.get_isInAsyncPostBack !== 'function') {
+      setTimeout(cb, 300);
+      return;
+    }
+    function attempt() {
+      if (prm.get_isInAsyncPostBack()) {
+        var h = function() { prm.remove_endRequest(h); setTimeout(attempt, 50); };
+        prm.add_endRequest(h);
+      } else {
+        cb();
+      }
+    }
+    setTimeout(attempt, 150);
+  }
+
+  /**
+   * Uploads per-student merged PDFs into Enrollware's Documents widget, then calls
+   * callback({ uploaded, errors, reason }) once every upload has finished AND the
+   * postback it triggers has settled — so the caller can safely touch the DOM after.
+   *
+   * Drives Sys.Extended.UI.AjaxFileUpload.Control directly (startUpload() plus its
+   * uploadStart / uploadComplete / uploadCompleteAll / uploadError events) rather
+   * than clicking the Upload button and watching the queue DOM. The DOM is not a
+   * usable signal here, confirmed by measurement on the live site:
+   *   - 'pendingState' marks a file as QUEUED, not uploading — it clears as each
+   *     file starts, so it is already 0 before the batch is done.
+   *   - QueueContainer is never emptied (clearFileListAfterUpload is false), so
+   *     waiting for it to empty waits forever.
+   *
+   * The watchdog resets on every per-file event, so a large batch of photo-heavy
+   * PDFs cannot trip it just by being slow; it only fires on genuine stalls.
+   * Degrades gracefully: any failure calls back with uploaded:0 and a reason, and
+   * the caller still proceeds with the student import.
+   */
+  function uploadDocuments(docs, callback) {
+    if (!docs || docs.length === 0) { callback({ uploaded: 0, errors: 0, reason: 'none' }); return; }
+
     var input = document.getElementById('mainContent_AjaxUpload1_Html5InputFile');
-    if (!input) return 0;
+    var ctl = null;
+    try { ctl = Sys.Application.findComponent('mainContent_AjaxUpload1'); } catch (e) {}
+    if (!input || !ctl || typeof ctl.startUpload !== 'function') {
+      callback({ uploaded: 0, errors: 0, reason: 'widget-unavailable' });
+      return;
+    }
+
+    // Respect the widget's own cap (20 on the live site) rather than assuming it.
+    var max = 20;
+    try { if (ctl.get_maximumNumberOfFiles) max = ctl.get_maximumNumberOfFiles() || 20; } catch (e) {}
+    var batch = docs.slice(0, max);
+
     try {
       var dt = new DataTransfer();
-      for (var i = 0; i < docs.length; i++) {
-        var doc = docs[i];
-        var binaryStr = atob(doc.pdf);
+      for (var i = 0; i < batch.length; i++) {
+        var binaryStr = atob(batch[i].pdf);
         var arr = new Uint8Array(binaryStr.length);
         for (var j = 0; j < binaryStr.length; j++) arr[j] = binaryStr.charCodeAt(j);
-        var blob = new Blob([arr], { type: 'application/pdf' });
-        dt.items.add(new File([blob], doc.fileName, { type: 'application/pdf' }));
+        dt.items.add(new File(
+          [new Blob([arr], { type: 'application/pdf' })],
+          batch[i].fileName,
+          { type: 'application/pdf' }
+        ));
       }
       input.files = dt.files;
       input.dispatchEvent(new Event('change', { bubbles: true }));
-      return docs.length;
-    } catch (e) { return 0; }
-  }
-
-  /**
-   * Clicks Enrollware's Documents "Upload" button to start the queued XHR uploads.
-   * Must be called after injectDocuments() has queued the files.
-   */
-  function clickDocumentUpload() {
-    var btn = document.getElementById('mainContent_AjaxUpload1_UploadOrCancelButton');
-    if (btn) btn.click();
-  }
-
-  /**
-   * Watches the Enrollware Documents queue for all uploads to finish.
-   * Calls callback(true) when the queue empties (items are removed after each XHR
-   * upload completes). Calls callback(false) after a 45-second timeout.
-   *
-   * NOTE: pendingState is removed synchronously inside the widget's click handler,
-   * before any MutationObserver callback fires, so it cannot be used as the
-   * "upload started" signal. Watching for queue.children.length === 0 is reliable
-   * because items are only removed after the XHR upload succeeds.
-   */
-  function waitForDocumentUploads(callback) {
-    var queue = document.getElementById('mainContent_AjaxUpload1_QueueContainer');
-    if (!queue) { callback(false); return; }
-    var completed = false;
-    // var is hoisted — observer is defined below and assigned before the 45s timeout fires
-    var timeoutId = setTimeout(function() {
-      if (!completed) { completed = true; observer.disconnect(); callback(false); }
-    }, 45000);
-    function checkDone() {
-      if (completed) return;
-      if (queue.children.length === 0) {
-        completed = true;
-        clearTimeout(timeoutId);
-        observer.disconnect();
-        callback(true);
-      }
+    } catch (e) {
+      callback({ uploaded: 0, errors: 0, reason: 'inject-failed' });
+      return;
     }
-    var observer = new MutationObserver(checkDone);
-    observer.observe(queue, { childList: true, subtree: true });
-    // Check immediately in case uploads already completed before observer was set up
-    checkDone();
+
+    var finished = false;
+    var errors = 0;
+    var watchdog = null;
+
+    function done(reason) {
+      if (finished) return;
+      finished = true;
+      if (watchdog) clearTimeout(watchdog);
+      // Wait out the widget's own postback before handing control back.
+      settleThen(function() {
+        callback({ uploaded: batch.length - errors, errors: errors, reason: reason });
+      });
+    }
+
+    // 60s without any per-file progress counts as a stall, not slowness.
+    function bump() {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = setTimeout(function() { done('timeout'); }, 60000);
+    }
+
+    try {
+      ctl.add_uploadStart(bump);
+      ctl.add_uploadComplete(bump);
+      ctl.add_uploadError(function() { errors++; bump(); });
+      ctl.add_uploadCompleteAll(function() { done('complete'); });
+    } catch (e) {
+      callback({ uploaded: 0, errors: 0, reason: 'events-unavailable' });
+      return;
+    }
+
+    bump();
+    try {
+      ctl.startUpload();
+    } catch (e) {
+      done('start-failed');
+    }
   }
 
   // =========================================================
@@ -705,9 +764,7 @@ export function getBookmarkletSource(apiBase: string): string {
       var blob = results[0];
       var docs = (results[1] && results[1].documents) ? results[1].documents : [];
 
-      // Inject and start the document upload immediately
-      var docInjected = injectDocuments(docs);
-      if (docInjected > 0) clickDocumentUpload();
+      var docCount = docs.length;
 
       // Opens the Enrollware student import panel and injects the XLSX, then
       // renders the final panel state. Called after documents finish uploading
@@ -797,30 +854,39 @@ export function getBookmarkletSource(apiBase: string): string {
         });
       }
 
-      if (docInjected > 0) {
-        // Show "uploading" status while waiting for docs, then inject XLSX
-        showPanel(panelHeader() +
-          '<div style="color:#666;margin-bottom:8px">&#x1F4C4; Uploading ' +
-          docInjected + ' document' + (docInjected !== 1 ? 's' : '') +
-          ' to Enrollware&hellip;</div>'
-        );
-        waitForDocumentUploads(function(ok) {
-          finishWithXlsx(ok
-            ? '<div style="color:#2d7a2d;margin-bottom:8px">&#x2713; ' +
-              docInjected + ' document' + (docInjected !== 1 ? 's' : '') +
-              ' uploaded to Enrollware.</div>'
-            : '<div style="color:#c8102e;margin-bottom:8px">&#9888; Document upload timed out. ' +
-              'Verify in Enrollware\\'s Documents section.</div>'
-          );
-        });
-      } else {
-        // No documents (or injection failed) — inject XLSX immediately
-        finishWithXlsx(docs.length > 0
-          ? '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not queue documents. ' +
-            'Upload manually via the Documents section.</div>'
-          : ''
-        );
+      if (docCount === 0) {
+        // Nothing to upload — go straight to the student import.
+        finishWithXlsx('');
+        return;
       }
+
+      showPanel(panelHeader() +
+        '<div style="color:#666;margin-bottom:8px">&#x1F4C4; Uploading ' +
+        docCount + ' document' + (docCount !== 1 ? 's' : '') +
+        ' to Enrollware&hellip;</div>'
+      );
+
+      // uploadDocuments calls back only once every upload has finished AND the
+      // postback it triggers has settled, so injecting the XLSX here is safe.
+      uploadDocuments(docs, function(res) {
+        var line;
+        if (res.reason === 'complete' && res.errors === 0) {
+          line = '<div style="color:#2d7a2d;margin-bottom:8px">&#x2713; ' +
+                 res.uploaded + ' document' + (res.uploaded !== 1 ? 's' : '') +
+                 ' uploaded to Enrollware.</div>';
+        } else if (res.reason === 'complete') {
+          line = '<div style="color:#856404;margin-bottom:8px">&#9888; ' +
+                 res.uploaded + ' of ' + docCount + ' documents uploaded; ' +
+                 res.errors + ' failed. Check Enrollware\\'s Documents section.</div>';
+        } else if (res.reason === 'timeout') {
+          line = '<div style="color:#c8102e;margin-bottom:8px">&#9888; Document upload stalled. ' +
+                 'Check Enrollware\\'s Documents section.</div>';
+        } else {
+          line = '<div style="color:#c8102e;margin-bottom:8px">&#9888; Could not upload documents ' +
+                 'automatically. Add them via the Documents section.</div>';
+        }
+        finishWithXlsx(line);
+      });
 
     }).catch(function(err) {
       showError('Failed to prepare student data: ' + (err.message || 'Unknown error'));
