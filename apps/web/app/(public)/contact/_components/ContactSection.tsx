@@ -8,7 +8,7 @@
  */
 
 import { useState } from "react";
-import { Phone, Mail, MapPin } from "lucide-react";
+import { Phone, Mail, MapPin, MessageSquare } from "lucide-react";
 import CaptchaCheckbox from "@/components/CaptchaCheckbox";
 import TurnstileWidget from "@/components/TurnstileWidget";
 import { CONTACT_INQUIRY_TYPES } from "@/lib/contact-constants";
@@ -125,19 +125,20 @@ export default function ContactSection() {
             </a>
           </ContactInfoRow>
 
+          {/* Form CTA — sends users straight to the form, especially useful on mobile where the form is below */}
           <ContactInfoRow
-            icon={<Mail className="text-red-600 shrink-0" size={22} aria-hidden="true" />}
-            label="Email Us"
+            icon={<MessageSquare className="text-red-600 shrink-0" size={22} aria-hidden="true" />}
+            label="Send a Message"
           >
-            <a
-              href="mailto:contact@superherocpr.com"
-              className="text-gray-700 hover:text-red-600 transition-colors duration-150 font-medium break-all"
-            >
-              contact@superherocpr.com
-            </a>
-            <p className="text-sm text-gray-500 mt-1">
-              We typically respond within 1 business day.
+            <p className="text-gray-700 leading-relaxed">
+              The fastest way to reach us. We&apos;ll reply within 1 business day.
             </p>
+            <a
+              href="#contact-form"
+              className="inline-block mt-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors duration-150 px-4 py-2 rounded-lg"
+            >
+              Use the contact form →
+            </a>
           </ContactInfoRow>
 
           <ContactInfoRow
@@ -149,10 +150,23 @@ export default function ContactSection() {
               Florida&apos;s Gulf Coast.
             </p>
           </ContactInfoRow>
+
+          {/* Email — kept public but demoted; no mailto link to avoid bypassing the form */}
+          <ContactInfoRow
+            icon={<Mail className="text-red-500 shrink-0" size={20} aria-hidden="true" />}
+            label="Email Address"
+          >
+            <span className="text-gray-500 text-sm font-medium break-all select-all">
+              contact@superherocpr.com
+            </span>
+            <p className="text-xs text-gray-400 mt-1">
+              For faster responses, please use the contact form above.
+            </p>
+          </ContactInfoRow>
         </div>
 
         {/* ---- Contact form / success state ---- */}
-        <div>
+        <div id="contact-form">
           {submitted ? (
             <div className="flex flex-col gap-3 py-8">
               <h2 className="text-xl font-bold text-gray-900">Message sent!</h2>

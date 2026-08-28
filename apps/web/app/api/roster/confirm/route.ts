@@ -21,7 +21,7 @@ interface UpdateFields {
   firstName: string;
   lastName: string;
   email: string;
-  phone: string | null;
+  phone: string;
   employer: string | null;
 }
 
@@ -47,7 +47,8 @@ export async function PATCH(request: Request) {
     !recordId ||
     !updates?.firstName?.trim() ||
     !updates?.lastName?.trim() ||
-    !updates?.email?.trim()
+    !updates?.email?.trim() ||
+    !updates?.phone?.trim()
   ) {
     return Response.json(
       { success: false, error: "Missing required fields." },
@@ -113,7 +114,7 @@ export async function PATCH(request: Request) {
     updates.firstName.trim() !== record.first_name ||
     updates.lastName.trim() !== record.last_name ||
     normalizedEmail !== (record.email ?? "") ||
-    (updates.phone?.trim() || null) !== (record.phone ?? null) ||
+    updates.phone.trim() !== (record.phone ?? "") ||
     (updates.employer?.trim() || null) !== (record.employer ?? null);
 
   // ── 5. Update the roster record ───────────────────────────────────────────
@@ -123,7 +124,7 @@ export async function PATCH(request: Request) {
       first_name: updates.firstName.trim(),
       last_name: updates.lastName.trim(),
       email: normalizedEmail,
-      phone: updates.phone?.trim() || null,
+      phone: updates.phone.trim(),
       employer: updates.employer?.trim() || null,
       confirmed: true,
       corrected: hasChanges,

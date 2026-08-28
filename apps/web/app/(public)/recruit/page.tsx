@@ -244,6 +244,11 @@ export default function RecruitPage() {
       return;
     }
 
+    if (!phone.trim()) {
+      setError("Phone number is required.");
+      return;
+    }
+
     if (!email.trim() || !emailPattern.test(email.trim())) {
       setError("Please enter a valid email address.");
       return;
@@ -402,6 +407,7 @@ export default function RecruitPage() {
             onChange={setPhone}
             placeholder="(555) 555-5555"
             autoComplete="tel"
+            required
           />
 
           <FormField

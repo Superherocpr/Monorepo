@@ -442,8 +442,8 @@ export default function RollcallPage() {
   async function handleEditAndCheckin() {
     if (!selectedStudent || !selectedSession) return;
 
-    if (!editFirstName.trim() || !editLastName.trim() || !editEmail.trim()) {
-      setError("First name, last name, and email are required.");
+    if (!editFirstName.trim() || !editLastName.trim() || !editEmail.trim() || !editPhone.trim()) {
+      setError("First name, last name, email, and phone number are required.");
       return;
     }
 
@@ -472,7 +472,7 @@ export default function RollcallPage() {
             firstName: editFirstName.trim(),
             lastName: editLastName.trim(),
             email: editEmail.trim().toLowerCase(),
-            phone: editPhone.trim() || null,
+            phone: editPhone.trim(),
             address: editAddress.trim() || null,
             city: editCity.trim() || null,
             state: editState.trim() || null,
@@ -730,14 +730,15 @@ export default function RollcallPage() {
 
           <div>
             <label htmlFor="edit-phone" className="sr-only">
-              Phone number (optional)
+              Phone number
             </label>
             <input
               id="edit-phone"
               type="tel"
+              required
               value={editPhone}
               onChange={(e) => setEditPhone(e.target.value)}
-              placeholder="Phone (optional)"
+              placeholder="Phone number"
               className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-red-500 text-gray-900 bg-white"
               autoComplete="tel"
             />
