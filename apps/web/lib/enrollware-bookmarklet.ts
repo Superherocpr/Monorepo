@@ -466,32 +466,36 @@ export function getBookmarkletSource(apiBase: string): string {
   }
 
   /**
-   * Watches the Enrollware Documents queue for all pending uploads to finish.
-   * Waits for at least one pendingState element to appear (confirming upload started),
-   * then waits for them all to disappear (confirming completion). Calls callback(true)
-   * on success or callback(false) after a 45-second timeout.
+   * Watches the Enrollware Documents queue for all uploads to finish.
+   * Calls callback(true) when the queue empties (items are removed after each XHR
+   * upload completes). Calls callback(false) after a 45-second timeout.
+   *
+   * NOTE: pendingState is removed synchronously inside the widget's click handler,
+   * before any MutationObserver callback fires, so it cannot be used as the
+   * "upload started" signal. Watching for queue.children.length === 0 is reliable
+   * because items are only removed after the XHR upload succeeds.
    */
   function waitForDocumentUploads(callback) {
     var queue = document.getElementById('mainContent_AjaxUpload1_QueueContainer');
     if (!queue) { callback(false); return; }
     var completed = false;
-    var sawPending = false;
     // var is hoisted — observer is defined below and assigned before the 45s timeout fires
     var timeoutId = setTimeout(function() {
       if (!completed) { completed = true; observer.disconnect(); callback(false); }
     }, 45000);
-    var observer = new MutationObserver(function() {
+    function checkDone() {
       if (completed) return;
-      var pending = queue.querySelectorAll('.pendingState').length;
-      if (pending > 0) sawPending = true;
-      if (sawPending && pending === 0) {
+      if (queue.children.length === 0) {
         completed = true;
         clearTimeout(timeoutId);
         observer.disconnect();
         callback(true);
       }
-    });
-    observer.observe(queue, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    }
+    var observer = new MutationObserver(checkDone);
+    observer.observe(queue, { childList: true, subtree: true });
+    // Check immediately in case uploads already completed before observer was set up
+    checkDone();
   }
 
   // =========================================================
