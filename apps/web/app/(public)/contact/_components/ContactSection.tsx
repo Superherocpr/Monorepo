@@ -281,7 +281,7 @@ export default function ContactSection() {
         <span>
           Or reach us by email at{" "}
           <span className="font-medium text-gray-500 select-all">SuperHeroCPR@gmail.com</span>
-          {" "}— though the form above gets a faster reply.
+          {" "}and include your phone number. Though the form above gets a faster reply.
         </span>
       </div>
     </section>
