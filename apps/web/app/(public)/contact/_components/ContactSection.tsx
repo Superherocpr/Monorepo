@@ -131,7 +131,7 @@ export default function ContactSection() {
             label="Send a Message"
           >
             <p className="text-gray-700 leading-relaxed">
-              The fastest way to reach us. We&apos;ll reply within 1 business day.
+              The BEST way to reach us. We&apos;ll reply within 1 business day.
             </p>
             <a
               href="#contact-form"
@@ -151,18 +151,6 @@ export default function ContactSection() {
             </p>
           </ContactInfoRow>
 
-          {/* Email — kept public but demoted; no mailto link to avoid bypassing the form */}
-          <ContactInfoRow
-            icon={<Mail className="text-red-500 shrink-0" size={20} aria-hidden="true" />}
-            label="Email Address"
-          >
-            <span className="text-gray-500 text-sm font-medium break-all select-all">
-              contact@superherocpr.com
-            </span>
-            <p className="text-xs text-gray-400 mt-1">
-              For faster responses, please use the contact form above.
-            </p>
-          </ContactInfoRow>
         </div>
 
         {/* ---- Contact form / success state ---- */}
@@ -285,6 +273,16 @@ export default function ContactSection() {
             </form>
           )}
         </div>
+      </div>
+
+      {/* Email — kept public but placed below the form to discourage direct email in favour of the form */}
+      <div className="max-w-7xl mx-auto mt-10 pt-8 border-t border-gray-100 flex items-center gap-2 text-sm text-gray-400">
+        <Mail size={15} aria-hidden="true" className="shrink-0" />
+        <span>
+          Or reach us by email at{" "}
+          <span className="font-medium text-gray-500 select-all">SuperHeroCPR@gmail.com</span>
+          {" "}— though the form above gets a faster reply.
+        </span>
       </div>
     </section>
   );
