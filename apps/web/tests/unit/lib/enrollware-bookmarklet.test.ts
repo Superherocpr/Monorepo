@@ -72,6 +72,38 @@ describe("getBookmarkletSource", () => {
     expect(SOURCE).not.toContain("SERVICE_ROLE");
     expect(SOURCE).not.toContain("supabase");
   });
+
+  /**
+   * The generated script is assembled as one big template literal, so an escaping
+   * slip produces a SyntaxError that kills the entire IIFE — the bookmarklet then
+   * does nothing at all, with no clue in the panel. This shipped once: a message
+   * written as 'Enrollware\'s Documents' emitted a bare apostrophe into the
+   * generated JS, terminating the string early and taking the whole tool down.
+   *
+   * Parsing the output is the only check that catches that class of bug, and it
+   * catches all of them, not just apostrophes.
+   */
+  test("generated source parses as valid JavaScript", () => {
+    expect(() => new Function("__k", SOURCE)).not.toThrow();
+  });
+
+  test("generated source parses for every apiBase it can be served with", () => {
+    for (const base of ["https://superherocpr.com", "https://staging.superherocpr.com", "http://localhost:3000"]) {
+      expect(() => new Function("__k", getBookmarkletSource(base)), `apiBase ${base}`).not.toThrow();
+    }
+  });
+
+  test("drives the upload widget through its API, not its DOM", () => {
+    // The queue DOM is not a usable completion signal — 'pendingState' marks a
+    // file as queued (it clears as each upload starts) and QueueContainer is
+    // never emptied because clearFileListAfterUpload is false. Both were tried
+    // and both failed on the live site; the control's own events are the contract.
+    expect(SOURCE).toContain("add_uploadCompleteAll");
+    expect(SOURCE).toContain("startUpload");
+    // Named only in explanatory comments — never queried, which is the point.
+    expect(SOURCE).not.toMatch(/querySelector\w*\([^)]*pendingState/);
+    expect(SOURCE).not.toMatch(/getElementById\([^)]*QueueContainer/);
+  });
 });
 
 /**
@@ -773,5 +805,229 @@ describe("Mark class as submitted — auto-clicks Import Students", () => {
       expect(markSubmittedCalls.length, "our own API should still be called").toBe(1);
     });
     expect(uploadClicked, "Import Students must not be auto-clicked without an injected file").toBe(false);
+  });
+});
+
+/**
+ * Document upload must complete AND its postback must settle before the student
+ * import file is written.
+ *
+ * Both failure modes this guards were observed on the live site:
+ *
+ *  - Injecting the XLSX while the widget's postback is in flight loses it. The
+ *    widget fires uploadCompleteAll *during* its own postback (measured:
+ *    beginRequest t=9911ms, uploadCompleteAll t=9912ms, endRequest t=10157ms),
+ *    so "wait for uploadCompleteAll" alone is not enough — the UpdatePanel
+ *    re-render ~250ms later discards whatever was queued.
+ *
+ *  - Waiting on the queue DOM never fires. 'pendingState' means queued, not
+ *    uploading, and QueueContainer is never emptied (clearFileListAfterUpload
+ *    is false), so a DOM-based wait hangs until its timeout and the documents
+ *    appear never to upload.
+ *
+ * The fake control below reproduces that exact ordering.
+ */
+describe("document upload sequencing", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+    sessionStorage.clear();
+    const w = window as unknown as Record<string, unknown>;
+    delete w.__SCPR_LOADED;
+    delete w.__SCPR_SHOW;
+    delete w.__SCPR_PICK;
+    delete w.__SCPR_PICK_STUDENTS;
+    delete w.__SCPR_PRICE_GUARD;
+    delete w.Sys;
+  });
+
+  const session = {
+    id: "session-doc-1",
+    starts_at: "2026-09-14T09:00:00.000Z",
+    ends_at: "2026-09-14T13:00:00.000Z",
+    max_capacity: 12,
+    enrollware_submitted: false,
+    additional_hours: 0,
+    assistant_name: null,
+    assistant_instructor: null,
+    class_type: { name: "BLS Provider", price: 65, duration_minutes: 240 },
+    location: { name: "Tampa Training Center" },
+    instructor: { first_name: "Jane", last_name: "Doe" },
+    students: [{ first_name: "Sam", last_name: "Smith" }],
+  };
+
+  /**
+   * Stands in for Sys.Extended.UI.AjaxFileUpload.Control plus the
+   * PageRequestManager, replaying the timing measured on enrollware.com:
+   * the postback opens one tick BEFORE uploadCompleteAll fires and closes
+   * a few ticks after.
+   */
+  function installFakeWidget() {
+    const handlers: Record<string, (() => void)[]> = {
+      uploadStart: [], uploadComplete: [], uploadCompleteAll: [], uploadError: [],
+    };
+    const endRequestHandlers: (() => void)[] = [];
+    const state = { inPostBack: false, started: false, queueEmptied: false };
+
+    const control = {
+      get_maximumNumberOfFiles: () => 20,
+      add_uploadStart: (f: () => void) => handlers.uploadStart.push(f),
+      add_uploadComplete: (f: () => void) => handlers.uploadComplete.push(f),
+      add_uploadCompleteAll: (f: () => void) => handlers.uploadCompleteAll.push(f),
+      add_uploadError: (f: () => void) => handlers.uploadError.push(f),
+      startUpload: () => {
+        state.started = true;
+        setTimeout(() => {
+          handlers.uploadStart.forEach((f) => f());
+          handlers.uploadComplete.forEach((f) => f());
+          // Postback opens first, then uploadCompleteAll fires inside it.
+          state.inPostBack = true;
+          handlers.uploadCompleteAll.forEach((f) => f());
+          setTimeout(() => {
+            state.inPostBack = false;
+            endRequestHandlers.slice().forEach((f) => f());
+          }, 20);
+        }, 0);
+      },
+    };
+
+    const w = window as unknown as Record<string, unknown>;
+    w.Sys = {
+      Application: { findComponent: (id: string) => (id === "mainContent_AjaxUpload1" ? control : null) },
+      WebForms: {
+        PageRequestManager: {
+          getInstance: () => ({
+            get_isInAsyncPostBack: () => state.inPostBack,
+            add_endRequest: (f: () => void) => endRequestHandlers.push(f),
+            remove_endRequest: (f: () => void) => {
+              const i = endRequestHandlers.indexOf(f);
+              if (i >= 0) endRequestHandlers.splice(i, 1);
+            },
+          }),
+        },
+      },
+    };
+    return state;
+  }
+
+  /** Minimal existing-class DOM with both the Documents widget and the import panel. */
+  function buildDom() {
+    document.body.innerHTML = `
+      <form>
+        <div id="mainContent_studentPanel">
+          <input id="mainContent_AjaxUpload1_Html5InputFile" type="file" multiple />
+          <input id="mainContent_impFileUpl" type="file" />
+          <input id="mainContent_price" type="text" />
+        </div>
+        <input id="mainContent_issueDate" type="date" />
+      </form>
+    `;
+    window.history.replaceState({}, "", "/class-edit.aspx?id=abc-123");
+
+    // jsdom's input.files is read-only; the real browser lets a DataTransfer be
+    // assigned to it, which is how both injections work. Make it writable or the
+    // script's assignment throws and every upload reports 'inject-failed'.
+    const widgetInput = document.getElementById("mainContent_AjaxUpload1_Html5InputFile") as HTMLInputElement;
+    let widgetFiles: File[] = [];
+    Object.defineProperty(widgetInput, "files", {
+      get: () => widgetFiles,
+      set: (v: File[]) => { widgetFiles = v; },
+      configurable: true,
+    });
+  }
+
+  test("XLSX is injected only after the upload postback settles", async () => {
+    buildDom();
+    const state = installFakeWidget();
+
+    class FakeDataTransfer {
+      files: File[] = [];
+      items = { add: (f: File) => { this.files.push(f); } };
+    }
+    vi.stubGlobal("DataTransfer", FakeDataTransfer);
+
+    // Record whether a postback was open at the moment the XLSX was written.
+    const injectionEvents: { inPostBack: boolean }[] = [];
+    const imp = document.getElementById("mainContent_impFileUpl") as HTMLInputElement;
+    let stored: File[] = [];
+    Object.defineProperty(imp, "files", {
+      get: () => stored,
+      set: (v: File[]) => { stored = v; injectionEvents.push({ inPostBack: state.inPostBack }); },
+      configurable: true,
+    });
+
+    const pdfB64 = btoa("%PDF-1.4 fake");
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("/api/enrollware/today-classes")) {
+        return { ok: true, json: async () => ({ classes: [session] }) };
+      }
+      if (url.includes("/api/enrollware/session-documents")) {
+        return { ok: true, json: async () => ({ documents: [{ studentName: "Sam Smith", fileName: "Sam Smith - Documents.pdf", pdf: pdfB64 }] }) };
+      }
+      if (url.includes("/api/enrollware/student-xlsx")) {
+        return { ok: true, blob: async () => new Blob(["xlsx"]) };
+      }
+      return { ok: true, json: async () => ({}) };
+    }));
+
+    sessionStorage.setItem("scpr_session_id", session.id);
+    sessionStorage.setItem("scpr_session_data", JSON.stringify(session));
+
+    new Function(SOURCE)();
+
+    await vi.waitFor(() => {
+      expect(state.started, "the widget's startUpload() should be invoked").toBe(true);
+    }, { timeout: 3000 });
+
+    await vi.waitFor(() => {
+      expect(injectionEvents.length, "the XLSX should eventually be injected").toBeGreaterThan(0);
+    }, { timeout: 3000 });
+
+    // The regression: any injection recorded while a postback was open is lost.
+    expect(
+      injectionEvents.filter((e) => e.inPostBack),
+      "XLSX must never be written while an UpdatePanel postback is in flight",
+    ).toEqual([]);
+  });
+
+  test("no documents means the import is not gated on an upload", async () => {
+    buildDom();
+    const state = installFakeWidget();
+
+    class FakeDataTransfer {
+      files: File[] = [];
+      items = { add: (f: File) => { this.files.push(f); } };
+    }
+    vi.stubGlobal("DataTransfer", FakeDataTransfer);
+
+    const imp = document.getElementById("mainContent_impFileUpl") as HTMLInputElement;
+    let stored: File[] = [];
+    Object.defineProperty(imp, "files", {
+      get: () => stored, set: (v: File[]) => { stored = v; }, configurable: true,
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("/api/enrollware/today-classes")) {
+        return { ok: true, json: async () => ({ classes: [session] }) };
+      }
+      if (url.includes("/api/enrollware/session-documents")) {
+        return { ok: true, json: async () => ({ documents: [] }) };
+      }
+      if (url.includes("/api/enrollware/student-xlsx")) {
+        return { ok: true, blob: async () => new Blob(["xlsx"]) };
+      }
+      return { ok: true, json: async () => ({}) };
+    }));
+
+    sessionStorage.setItem("scpr_session_id", session.id);
+    sessionStorage.setItem("scpr_session_data", JSON.stringify(session));
+
+    new Function(SOURCE)();
+
+    await vi.waitFor(() => {
+      expect(stored.length, "XLSX should be injected even with no documents").toBe(1);
+    }, { timeout: 3000 });
+
+    expect(state.started, "no upload should be started when there are no documents").toBe(false);
   });
 });
