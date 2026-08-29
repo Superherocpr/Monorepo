@@ -4,7 +4,8 @@
  * Called by: Admin sidebar nav
  * Auth:
  *   - super_admin — full settings panel (class types, grades, Zoho, locations, etc.)
- *   - instructor  — Enrollware bookmarklet section only
+ *   - manager     — locations panel only
+ *   - instructor  — Account (own name/phone/email/password), Enrollware, About Page
  * All other roles are redirected to /admin.
  * Fetches class types and preset grades server-side, then passes them to
  * SettingsClient which owns all interactive state and mutations.
@@ -22,6 +23,7 @@ import LocationsClient, {
   type LocationWithCount,
 } from "@/app/(admin)/_components/LocationsClient";
 import type { UserRole } from "@/types/users";
+import { OWNER_EMAILS } from "@/lib/constants";
 import type { PayoutTrigger, PayoutSchedule } from "@/app/api/settings/payouts/route";
 import { getPayoutHistory, getUpcomingPayoutsData } from "@/lib/payout-dashboard";
 import type { PayoutHistoryBatch, UpcomingPayoutsData } from "@/types/payouts";
@@ -97,11 +99,11 @@ export default async function SettingsPage({
     redirect("/admin");
   }
 
-  // ── Instructor view: Enrollware + About Page bio tabs ────────────────────
+  // ── Instructor view: Account + Enrollware + About Page bio tabs ──────────
   if (role === "instructor") {
     const admin = await createAdminClient();
 
-    // Fetch bookmarklet key and current bio in parallel
+    // Fetch bookmarklet key and current profile (bio + account fields) in parallel
     const [{ data: existingKey }, { data: bioProfile }] = await Promise.all([
       // maybeSingle avoids a PGRST116 error log for users without a key yet
       admin
@@ -112,7 +114,9 @@ export default async function SettingsPage({
         .maybeSingle(),
       admin
         .from("profiles")
-        .select("bio_photo, bio_description, bio_credentials")
+        .select(
+          "bio_photo, bio_description, bio_credentials, first_name, last_name, phone, email"
+        )
         .eq("id", user.id)
         .single(),
     ]);
@@ -128,6 +132,11 @@ export default async function SettingsPage({
           initialPhoto={bioProfile?.bio_photo ?? null}
           initialDescription={bioProfile?.bio_description ?? ""}
           initialCredentials={bioProfile?.bio_credentials ?? ""}
+          initialFirstName={bioProfile?.first_name ?? ""}
+          initialLastName={bioProfile?.last_name ?? ""}
+          initialPhone={bioProfile?.phone ?? ""}
+          initialEmail={bioProfile?.email ?? ""}
+          isOwner={OWNER_EMAILS.includes((bioProfile?.email ?? "").toLowerCase())}
         />
       </div>
     );

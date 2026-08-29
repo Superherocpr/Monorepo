@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * /book/reset-password — Customer password reset completion page.
+ * /book/reset-password — Password reset completion page (customers and staff).
  * Reached by clicking the reset link sent by /book/forgot-password.
  * Supabase appends a URL hash with a recovery access_token and refresh_token.
- * This page exchanges those tokens for a live session, then lets the customer
- * choose a new password. On success, redirects to /dashboard.
+ * This page exchanges those tokens for a live session, then lets the user
+ * choose a new password. On success, staff are sent to /admin and customers
+ * to /dashboard — staff arrive here via the Account tab on /admin/settings.
  * Used by: Supabase password-reset email (redirectTo in resetPasswordForEmail).
  */
 
@@ -13,6 +14,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { STAFF_ROLES } from "@/lib/auth/view-as-constants";
+import type { UserRole } from "@/types/users";
 
 /** Possible UI states for the reset flow. */
 type Status = "loading" | "ready" | "error" | "submitting" | "done";
@@ -117,7 +120,7 @@ export default function ResetPasswordPage() {
     setStatus("submitting");
 
     const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ password });
+    const { data: updated, error } = await supabase.auth.updateUser({ password });
 
     if (error) {
       setFormError(error.message ?? "Failed to update password. Please try again.");
@@ -126,7 +129,23 @@ export default function ResetPasswordPage() {
     }
 
     setStatus("done");
-    router.push("/dashboard");
+
+    // Staff reach this same flow from the Account tab's "forgot password" link,
+    // so send them back to the admin area rather than the customer dashboard.
+    // Own-row read, permitted by the profiles_auth_read_own RLS policy.
+    let destination = "/dashboard";
+    if (updated.user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", updated.user.id)
+        .single();
+      if (profile && STAFF_ROLES.includes(profile.role as UserRole)) {
+        destination = "/admin";
+      }
+    }
+
+    router.push(destination);
   }
 
   // ── Loading state ──────────────────────────────────────────────────────────
