@@ -3,15 +3,17 @@
 /**
  * InstructorSettingsClient component
  * Tab container for the instructor-facing settings page.
- * Tabs: "Enrollware" (bookmarklet setup) and "About Page" (bio editor).
- * Owns tab state and the shared toast so callbacks can be passed to BioSettingsSection.
+ * Tabs: "Account" (own name/phone/email/password), "About Page" (bio editor),
+ * and "Enrollware" (bookmarklet setup).
+ * Owns tab state and the shared toast so callbacks can be passed to the sections.
  * Used by: /admin/settings/page.tsx (instructor role branch)
  */
 
 import React, { useState } from "react";
 import BioSettingsSection from "./BioSettingsSection";
+import AccountSettingsSection from "./AccountSettingsSection";
 
-type TabId = "enrollware" | "about";
+type TabId = "account" | "enrollware" | "about";
 
 interface TabDef {
   id: TabId;
@@ -32,29 +34,50 @@ interface InstructorSettingsClientProps {
   initialDescription: string;
   /** Current saved credentials string (comma-separated). */
   initialCredentials: string;
+  /** Current saved first name. */
+  initialFirstName: string;
+  /** Current saved last name. */
+  initialLastName: string;
+  /** Current saved phone number. Empty string when never set. */
+  initialPhone: string;
+  /** Current saved email — also the login address. */
+  initialEmail: string;
+  /** True when this is an owner account, whose email is pinned by configuration. */
+  isOwner: boolean;
 }
 
 const TABS: TabDef[] = [
-  { id: "enrollware", label: "Enrollware" },
+  { id: "account", label: "Account" },
   { id: "about", label: "About Page" },
+  { id: "enrollware", label: "Enrollware" },
 ];
 
 /**
  * Root client component for the instructor settings page.
  * Owns tab state and toast notifications shared across all tabs.
- * Renders BioSettingsSection directly so it can pass live callback props.
+ * Renders the section components directly so it can pass live callback props.
  * @param enrollwareSlot - BookmarkletSetup content for the Enrollware tab.
  * @param initialPhoto - Saved headshot URL from the DB.
  * @param initialDescription - Saved bio description from the DB.
  * @param initialCredentials - Saved credentials string from the DB.
+ * @param initialFirstName - Saved first name from the DB.
+ * @param initialLastName - Saved last name from the DB.
+ * @param initialPhone - Saved phone number from the DB.
+ * @param initialEmail - Saved email / login address from the DB.
+ * @param isOwner - Whether this is an owner account (email locked).
  */
 const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
   enrollwareSlot,
   initialPhoto,
   initialDescription,
   initialCredentials,
+  initialFirstName,
+  initialLastName,
+  initialPhone,
+  initialEmail,
+  isOwner,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabId>("enrollware");
+  const [activeTab, setActiveTab] = useState<TabId>("account");
   const [toast, setToast] = useState<Toast | null>(null);
 
   /**
@@ -76,7 +99,7 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Manage your Enrollware integration and public About page bio.
+            Manage your account details, Enrollware integration, and public About page bio.
           </p>
         </div>
         <a
@@ -115,15 +138,23 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
         })}
       </div>
 
-      {/* Tab panels — both rendered, inactive hidden via CSS so unsaved edits
+      {/* Tab panels — all rendered, inactive hidden via CSS so unsaved edits
           survive switching tabs. */}
       <div
-        id="tab-panel-enrollware"
+        id="tab-panel-account"
         role="tabpanel"
-        aria-labelledby="tab-enrollware"
-        className={activeTab === "enrollware" ? "" : "hidden"}
+        aria-labelledby="tab-account"
+        className={activeTab === "account" ? "" : "hidden"}
       >
-        {enrollwareSlot}
+        <AccountSettingsSection
+          initialFirstName={initialFirstName}
+          initialLastName={initialLastName}
+          initialPhone={initialPhone}
+          initialEmail={initialEmail}
+          isOwner={isOwner}
+          onSuccess={(msg) => showToast("success", msg)}
+          onError={(msg) => showToast("error", msg)}
+        />
       </div>
 
       <div
@@ -139,6 +170,15 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
           onSuccess={(msg) => showToast("success", msg)}
           onError={(msg) => showToast("error", msg)}
         />
+      </div>
+
+      <div
+        id="tab-panel-enrollware"
+        role="tabpanel"
+        aria-labelledby="tab-enrollware"
+        className={activeTab === "enrollware" ? "" : "hidden"}
+      >
+        {enrollwareSlot}
       </div>
 
       {/* Toast */}

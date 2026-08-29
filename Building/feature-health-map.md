@@ -12,7 +12,7 @@ Companion to [`maintenance-overhaul.md`](maintenance-overhaul.md).
 | **E**● | e2e — outcome | A real action completes and the result is asserted |
 | **C** | Cron / automated alert | Something machine-checks it on a schedule |
 | **A** | Admin surface | A human *could* notice, if they happen to look |
-| **I** | SQL invariant | Data corruption would be caught (none exist yet) |
+| **I** | SQL invariant | Data corruption would be caught (14 checks live — migrations 0056, 0061, 0065) |
 | **M** | Manual Todoist task | A human is scheduled to look |
 
 **A is not a signal.** It's the possibility of a signal. Counting it as coverage is
@@ -385,9 +385,53 @@ today). The cron provides a health signal for the cleanup path but not for uploa
 | Feature | U | E | C | A | I | M | Verdict |
 |---|---|---|---|---|---|---|---|
 | Auth / roles / RLS | ✅✅ | ● redirects | — | ✅ | — | ✅ | Redirect assertions are real; quarterly RLS review |
+| **Staff self-service account** | ✅✅ | — | — | ✅ | ✅ | — | Invariant #14 catches profiles/auth email drift — see note below |
 | Blog / SEO | — | — | — | ✅ | — | ✅ | No test; quarterly Lighthouse |
 | Analytics | — | ○ smoke | — | ✅ | — | — | — |
 | File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
+
+### Staff self-service account (added 2026-08-28)
+
+The Account tab on `/admin/settings` lets staff change their own name, phone,
+login email, and password via `PATCH /api/profile/self-update`. It joins the
+existing super-admin-only `PATCH /api/staff/[id]/update` as the **second** route
+that writes an email address to two tables at once — `public.profiles.email` and
+`auth.users.email` — because the site treats the contact address and the login
+address as a single value.
+
+**Why that needed a signal.** Both routes roll the profiles write back if the
+auth write fails, but that rollback is ordinary code that can regress, and the
+resulting split is completely silent: the person keeps signing in with the old
+address while `/book` and every confirmation email show the new one, because
+those read `profiles`. No screen in the app compares the two. A support ticket
+months later ("I can't log in with my new email") would be the first symptom.
+
+**Signals added:**
+
+- **I — invariant #14** `profile_auth_email_mismatch` (migration 0065). Joins
+  `profiles` to `auth.users` and counts case-insensitive disagreements. Runs in
+  the nightly canary with the other thirteen. Verified on apply: production 14
+  checks / 0 breaches; staging 14 / 1.
+- **U** — `tests/unit/lib/verify-password.test.ts` covers the shared
+  `verifyPassword` gate that stands in front of every email and password change:
+  wrong password, credentials resolving to a *different* account (the check that
+  stops one user authorizing a change to someone else's row), and the
+  privileged-anon-key refusal.
+
+**Known non-zero on staging.** Check #14 reports 1 breach on staging: a test
+customer row whose profile address and auth address were deliberately pointed at
+different mailboxes during earlier manual testing (`nate.hedgeman@gmail.com` vs
+`nate.hedgeman2@gmail.com`, created 2026-04-26). It is a real inconsistency and
+the check is right to report it — it is simply pre-existing rather than caused by
+this feature. Production is clean. Left in place rather than silently rewritten
+because aligning it either changes a real login address or a real contact
+address, which is the account owner's call, not a migration's.
+
+**Not covered.** There is no outcome e2e test driving the form itself, so a
+front-end regression (a field that silently stops submitting) would not be
+caught by anything here — the invariant only proves the two tables agree, not
+that a save did what the user asked. `// TODO:` an outcome e2e test for the
+Account tab, modelled on `tests/e2e/rollcall.spec.ts`, is the honest fill.
 
 ---
 

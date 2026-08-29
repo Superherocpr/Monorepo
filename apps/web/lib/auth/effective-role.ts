@@ -28,18 +28,11 @@ import type { UserRole } from "@/types/users";
 import {
   VIEW_AS_COOKIE,
   VIEW_AS_ROLES,
+  STAFF_ROLES,
   type ViewAsRole,
 } from "@/lib/auth/view-as-constants";
-export { VIEW_AS_COOKIE, VIEW_AS_ROLES };
+export { VIEW_AS_COOKIE, VIEW_AS_ROLES, STAFF_ROLES };
 export type { ViewAsRole };
-
-/** Roles permitted to access the admin area. */
-export const STAFF_ROLES: UserRole[] = [
-  "instructor",
-  "manager",
-  "super_admin",
-  "inspector",
-];
 
 /** Profile columns loaded for every admin request. */
 export interface AdminActorProfile {

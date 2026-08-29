@@ -509,6 +509,11 @@ export const GROUPS: GroupDef[] = [
         url: "/admin/settings",
         role: "all",
         bullets: [
+          "Account tab — update your own first name, last name, phone number, and email address",
+          "Account tab — the email here is both your contact address and the address you sign in with; they are always the same",
+          "Account tab — your name, phone, and email are what students see on the booking page and in confirmation emails, and update everywhere as soon as you save",
+          "Account tab — change your password, or use the reset link to have a new-password email sent to you",
+          "Account tab — changing your email or password requires entering your current password first",
           { text: "General tab — toggle public nav pages on/off: Classes, Schedule, Merch, Blog, About, Contact", role: "super" },
           { text: "Class Types tab — create, edit, delete, or deactivate class types; set name, description, duration, price, capacity, AHA certified flag (auto-set when a cert type is selected), linked certification type, and eligible add-ons", role: "super" },
           { text: "Grades tab — configure preset grade values and labels used in the Grading Tool", role: "super" },
