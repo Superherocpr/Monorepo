@@ -3,8 +3,8 @@
 /**
  * InstructorSettingsClient component
  * Tab container for the instructor-facing settings page.
- * Tabs: "Account" (own name/phone/email/password), "Enrollware" (bookmarklet
- * setup), and "About Page" (bio editor).
+ * Tabs: "Account" (own name/phone/email/password), "About Page" (bio editor),
+ * and "Enrollware" (bookmarklet setup).
  * Owns tab state and the shared toast so callbacks can be passed to the sections.
  * Used by: /admin/settings/page.tsx (instructor role branch)
  */
@@ -48,8 +48,8 @@ interface InstructorSettingsClientProps {
 
 const TABS: TabDef[] = [
   { id: "account", label: "Account" },
-  { id: "enrollware", label: "Enrollware" },
   { id: "about", label: "About Page" },
+  { id: "enrollware", label: "Enrollware" },
 ];
 
 /**
@@ -158,15 +158,6 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
       </div>
 
       <div
-        id="tab-panel-enrollware"
-        role="tabpanel"
-        aria-labelledby="tab-enrollware"
-        className={activeTab === "enrollware" ? "" : "hidden"}
-      >
-        {enrollwareSlot}
-      </div>
-
-      <div
         id="tab-panel-about"
         role="tabpanel"
         aria-labelledby="tab-about"
@@ -179,6 +170,15 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
           onSuccess={(msg) => showToast("success", msg)}
           onError={(msg) => showToast("error", msg)}
         />
+      </div>
+
+      <div
+        id="tab-panel-enrollware"
+        role="tabpanel"
+        aria-labelledby="tab-enrollware"
+        className={activeTab === "enrollware" ? "" : "hidden"}
+      >
+        {enrollwareSlot}
       </div>
 
       {/* Toast */}

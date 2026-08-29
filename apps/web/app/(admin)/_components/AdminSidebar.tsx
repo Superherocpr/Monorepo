@@ -89,12 +89,12 @@ const NAV_ITEMS: NavItem[] = [
   },
   { label: "Staff", href: "/admin/staff", roles: ["super_admin"] },
 
-  // ── Profile ────────────────────────────────────────────────────────────────
+  // ── Payroll ────────────────────────────────────────────────────────────────
   {
     label: "Payout Settings",
     href: "/admin/profile/payment",
     roles: ["instructor", "super_admin"],
-    sectionLabel: "Profile",
+    sectionLabel: "Payroll",
   },
 ];
 
