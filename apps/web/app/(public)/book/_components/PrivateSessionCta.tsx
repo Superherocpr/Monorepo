@@ -14,7 +14,7 @@ export default function PrivateSessionCta() {
     <section className="py-16 px-4 bg-gray-50 text-center">
       <div className="max-w-2xl mx-auto flex flex-col items-center gap-4">
         <h2 className="text-xl font-semibold text-gray-900">
-          Can&apos;t Find a Time That Works?
+          Don&apos;t See What You Need?
         </h2>
         <p className="text-gray-600 leading-relaxed">
           We offer private group sessions at your home, office, or facility.

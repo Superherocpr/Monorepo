@@ -12,11 +12,10 @@
 // supabase (admin) handles all DB reads/writes — bypasses RLS since no user
 // session exists at this point.
 import { createAdminClient } from "@/lib/supabase/server";
-// Plain (non-SSR) anon client used only for signInWithPassword. The SSR cookie
-// client is unreliable for credential-only checks inside Route Handlers because
-// its session-management machinery can swallow auth errors.
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
+// Password verification runs through the shared helper so the anon-key guard and
+// the plain-client rationale live in exactly one place.
+import { verifyPassword } from "@/lib/auth/verify-password";
 import {
   ROLLCALL_VERIFIED_EVENT,
   rollcallChannelTopic,
@@ -59,25 +58,6 @@ async function broadcastVerified(
       .httpSend(ROLLCALL_VERIFIED_EVENT, { firstName, lastName });
   } catch (err) {
     console.error("[checkin-by-profile] Broadcast failed:", err);
-  }
-}
-
-/**
- * Extracts the JWT role claim from a Supabase API key when it is in JWT format.
- * Returns null for non-JWT keys (for example, newer publishable key formats).
- * @param key - Supabase API key string
- */
-function getJwtRoleClaim(key: string): string | null {
-  const parts = key.split(".");
-  if (parts.length !== 3) return null;
-
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
-      role?: string;
-    };
-    return payload.role ?? null;
-  } catch {
-    return null;
   }
 }
 
@@ -179,40 +159,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-    if (!anonKey || !supabaseUrl) {
-      console.error("[checkin-by-profile] Missing Supabase env vars for password verification.");
-      return Response.json(
-        { success: false, error: "Server configuration error. Please contact support." },
-        { status: 500 }
-      );
-    }
-
-    const keyRole = getJwtRoleClaim(anonKey);
-    if (keyRole && keyRole !== "anon") {
-      console.error(
-        `[checkin-by-profile] Refusing password verification because NEXT_PUBLIC_SUPABASE_ANON_KEY role is '${keyRole}', expected 'anon'.`
-      );
-      return Response.json(
-        { success: false, error: "Server configuration error. Please contact support." },
-        { status: 500 }
-      );
-    }
-
     // Authenticate using the profile's stored email — this is the identity gate.
-    // A fresh plain Supabase client (not the SSR cookie client) is used here so
-    // that signInWithPassword returns a clean error on bad credentials.
-    const anonClient = createSupabaseClient(supabaseUrl, anonKey);
-    const { data: authData, error: signInError } = await anonClient.auth.signInWithPassword({
-      email: profile.email,
+    const verified = await verifyPassword(
+      profile.email,
       password,
-    });
+      profileId,
+      "checkin-by-profile"
+    );
 
-    // Require both: no auth error and an authenticated user whose ID exactly
-    // matches the profile being edited.
-    if (signInError || !authData.user || authData.user.id !== profileId) {
+    if (!verified.ok) {
+      if (verified.reason === "config") {
+        return Response.json(
+          { success: false, error: "Server configuration error. Please contact support." },
+          { status: 500 }
+        );
+      }
       return Response.json({ success: false, error: "Incorrect password." }, { status: 401 });
     }
 
