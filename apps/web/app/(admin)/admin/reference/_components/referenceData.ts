@@ -520,6 +520,7 @@ export const GROUPS: GroupDef[] = [
           { text: "Zoho tab — connect or disconnect a Zoho Mail account for replying to contact form submissions", role: "super" },
           { text: "Social tab — manually trigger a sync of the Facebook social feed cache", role: "super" },
           { text: "Locations tab — create, edit, or delete training locations; set address, notes, and home-base flag", role: "manager" },
+          { text: "About Page tab — upload a headshot photo, and set your bio description and credentials shown on the public About page; a super admin controls whether your bio is published from the Staff page", role: "instructor" },
           "Enrollware tab — generate or revoke your personal Enrollware bookmarklet API key",
           { text: "Payouts tab — set the platform fee percentage, payout trigger mode, and payout schedule", role: "super" },
           { text: "Payouts tab — shows what each platform fee percentage actually nets after PayPal's fees, and warns if the fee is set below break-even", role: "super" },

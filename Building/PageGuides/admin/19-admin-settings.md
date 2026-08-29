@@ -7,25 +7,69 @@
 
 ## Context — Read This First
 
-You are building the settings page for **Superhero CPR**. This page allows super admins to manage class types, preset grades, Zoho Mail connection, and their dark mode preference. Dark mode is stored in localStorage — it is device-specific and requires no database changes.
+You are building the settings page for **Superhero CPR**. This route is **role-branched** — it is not a super-admin-only page. `page.tsx` checks the caller's role and renders one of three entirely different views:
+
+- **super_admin** — full settings panel: class types, cert types, preset grades, add-ons, locations, Zoho Mail, social sync, nav-page visibility toggles, payouts config, and their own Enrollware bookmarklet key
+- **manager** — locations panel only (`LocationsClient`)
+- **instructor** — a restricted, personal view: **Account** (own name/phone/email/password), **About Page** (public bio: headshot photo, description, credentials), and **Enrollware** (bookmarklet key setup). See "Instructor View" and "Manager View" below.
+
+Any other role is redirected to `/admin`.
 
 This is a **Next.js 14+ App Router** project using:
 - **TypeScript** — strict mode, no `any`
 - **Tailwind CSS** — utility classes only
 - **Supabase** — Postgres database and auth (`@supabase/ssr`)
 
-Read the full schema at `/Volumes/Work/Face2Face/SuperheroCPR/Monorepo/schema.md` before writing any data fetching logic.
+Read the full schema at `Building/schema.md` before writing any data fetching logic.
 
-**Access control:** Super Admin only.
+**Access control:** Instructor, Manager, and Super Admin — each sees a different view (see above). No other role.
 
 ---
 
 ## Architecture
 
-Hybrid — server fetches class types and preset grades. Client component handles all mutations and dark mode toggle (which must be client-side to access localStorage).
+Hybrid — server fetches the data each role's view needs, branching before any query runs. Client components handle all mutations (and, for super admin, the dark mode toggle, which must be client-side to access localStorage).
 
-`page.tsx` — server wrapper, fetches data, passes to `SettingsClient.tsx`
-`SettingsClient.tsx` — client component owning all state and mutations
+`page.tsx` — server wrapper; branches on role, fetches only what that role's view needs
+`SettingsClient.tsx` — super admin's client component, owning that view's state and mutations
+`InstructorSettingsClient.tsx` — instructor's client component (Account / About Page / Enrollware tabs)
+`AccountSettingsSection.tsx` — instructor's Account tab (name/phone/email/password)
+`BioSettingsSection.tsx` — instructor's About Page tab (photo/description/credentials)
+`LocationsClient` — manager's locations panel (shared with the super admin Locations tab)
+
+---
+
+## Instructor View
+
+**Route:** same `/admin/settings`, rendered when `role === 'instructor'`.
+
+Three tabs, no dark mode toggle, no class-type/grade/Zoho sections — those are super-admin only.
+
+### Account tab
+- Fields: first name, last name, phone, email (required), plus a change-password sub-form (new + confirm password, min 8 chars)
+- Email is both the contact address shown to students and the sign-in address — a single field, not two
+- Changing email or password requires the current password; a "Forgot your password?" link is shown otherwise
+- Owner accounts (`OWNER_EMAILS`) have the email field locked/disabled
+- Saves via `PATCH /api/profile/self-update`
+
+### About Page tab
+- Fields: headshot photo (upload to S3 via `/api/profile/upload-photo`, accepts jpeg/png/webp/heic/heif up to 5MB), bio description, credentials
+- Saves via `PATCH /api/profile/bio`
+- `bio_published` is intentionally absent from this tab — a super admin controls whether the bio is actually published, from the Staff Management page, not here
+
+### Enrollware tab
+- Same `BookmarkletSetup` component used on the super admin view — generate/revoke a personal Enrollware bookmarklet API key, with install instructions
+- Shown here so instructors don't need to visit `/admin/enrollware-tool` separately to manage the key
+
+**Not on this page for instructors:** payout email and earnings/payout history — those remain at `/admin/profile/payment` (see `20-instructor-payment-settings.md`).
+
+---
+
+## Manager View
+
+**Route:** same `/admin/settings`, rendered when `role === 'manager'`.
+
+Locations panel only (`LocationsClient`, `userRole="manager"`) — create, edit, or delete training locations (address, notes, home-base flag). No class types, grades, Zoho, account, or bio sections.
 
 ---
 
@@ -193,16 +237,9 @@ Clicking Connect initiates OAuth flow — redirects to `/api/contact/zoho-auth` 
 
 ---
 
-## Instructor Payment Account — NOT on this page
+## Instructor Payout Email and Earnings — NOT on this page
 
-The payment account connection for instructors lives in the **instructor's own profile area**, not here. This is intentional — it only affects the individual instructor and should feel personal to them, not like a system-wide setting.
-
-Leave a note in the page for super admins:
-```
-"Instructors manage their payment account connections from their own profile settings."
-```
-
-Link: `"Go to my payment settings →"` — only shown if the current super admin is also an instructor (role check). Otherwise omit.
+Unlike Account and About Page (which **are** instructor tabs on this settings page), the PayPal payout email and earnings/payout history live on a separate route, `/admin/profile/payment` — see `20-instructor-payment-settings.md`. This split is intentional: payout details are money-sensitive and get their own dedicated page rather than sharing this general settings screen.
 
 ---
 
@@ -264,7 +301,9 @@ This runs before React hydrates and prevents a flash of light mode on dark mode 
 - Do not store dark mode preference in the database — localStorage only
 - Do not allow class types to be deleted — only deactivated
 - Do not allow preset grades in use to be deleted
-- Do not put instructor payment account settings on this page
+- Do not put the instructor payout email or earnings/payout history on this page — those stay on `/admin/profile/payment`
+- Do not show class types, preset grades, Zoho, or dark mode to instructors or managers
+- Do not show the instructor's Account/About Page tabs to managers or super admins — each role gets exactly one view
 - Do not use `any` TypeScript types
 - Do not use inline styles
 
@@ -272,8 +311,12 @@ This runs before React hydrates and prevents a flash of light mode on dark mode 
 
 ## Definition of Done
 
-- [ ] Access restricted to super admin
-- [ ] Dark mode toggle reads/writes localStorage correctly
+- [ ] Access restricted to instructor, manager, and super admin — each redirected to their own view; all other roles redirected to `/admin`
+- [ ] Instructor sees Account, About Page, and Enrollware tabs only
+- [ ] Instructor Account tab saves via `PATCH /api/profile/self-update`; email/password changes require current password
+- [ ] Instructor About Page tab uploads photo via `/api/profile/upload-photo` and saves bio via `PATCH /api/profile/bio`; no publish toggle shown
+- [ ] Manager sees the locations panel only
+- [ ] Dark mode toggle reads/writes localStorage correctly (super admin view)
 - [ ] Dark mode initializes on mount without flash
 - [ ] `class="dark"` added/removed on documentElement correctly
 - [ ] Class types list shows all types with active/inactive badge

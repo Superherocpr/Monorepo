@@ -105,6 +105,21 @@ Displays:
 
 ---
 
+### Assistant and Add-ons — Quick Actions
+
+**Visible/editable to instructors (own session) and managers/super admins (any session).** Unlike the fields in the Edit form below, these two are **not gated by approval status** — changing either never resets an approved session back to `pending_approval`.
+
+*Assistant:*
+- Set an assistant as either another platform instructor (dropdown) or a plain free-text name — never both (`setSessionAssistant`, `assistant_instructor_id` / `assistant_name` columns)
+- Instructors may only set this on their own session
+
+*Add-ons:*
+- Add or remove the add-ons offered on this session, and manage per-add-on pricing (`setSessionAddons`, replace-all against `session_addons`)
+- Only add-ons already eligible for the session's class type (`addon_class_types`) may be selected — the server rejects anything else
+- Instructors may only manage this on their own session
+
+---
+
 ### Open Opportunity Banner — Claim This Class
 
 Shown when `status = 'cancelled'` AND `instructor_id IS NULL` (amber banner, same visual language as the Accept-to-Teach banner). Any instructor/manager/super admin can claim:
@@ -138,6 +153,11 @@ Combined list of all students from `bookings` (non-cancelled) and `roster_record
 ```
 "Students register via rollcall at superherocpr.com/rollcall using the instructor's daily class code."
 ```
+
+**Per-student documents (Photos button):**
+- Each student row shows a photo/document count badge (e.g. `📷 2`) that opens a modal to upload, view, or delete files (photos or PDFs — e.g. signed forms, ID) for that student (`uploadStudentDocument` / `deleteStudentDocument`, `student_documents` table)
+- Access: any manager, or the owning instructor on their own session (`canManagePhotos = isManager || (isInstructor && isOwnSession)`)
+- These files are later merged per-student into a single PDF and can be pushed into Enrollware's Documents section by the Enrollware bookmarklet (`GET /api/enrollware/session-documents`)
 
 ---
 
@@ -239,6 +259,8 @@ On confirm — handled by `POST /api/sessions/[id]/cancel`:
 - [ ] Open-opportunity banner lets any instructor claim a cancelled session with a location picker (409 on lost race)
 - [ ] Students only emailed when a cancelled class is claimed — never at cancellation
 - [ ] Students section shows combined bookings + roster records
+- [ ] Assistant and add-ons can be changed without resetting approval status
+- [ ] Photos button uploads/views/deletes per-student documents, gated to managers and the owning instructor
 - [ ] Roster upload banner shown when unimported upload exists
 - [ ] Invoices section visible to instructor (own) and super admin only
 - [ ] Tools section shows correct items per role
