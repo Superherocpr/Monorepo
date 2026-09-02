@@ -237,7 +237,9 @@ export async function POST(request: Request) {
       );
     }
 
-    await broadcastVerified(
+    // Fire-and-forget: a slow or failed broadcast must never delay the check-in
+    // response. The instructor's page has a polling fallback for missed events.
+    void broadcastVerified(
       supabase,
       sessionId,
       updates.firstName.trim(),
@@ -285,7 +287,9 @@ export async function POST(request: Request) {
     );
   }
 
-  await broadcastVerified(supabase, sessionId, profile.first_name, profile.last_name);
+  // Fire-and-forget: a slow or failed broadcast must never delay the check-in
+  // response. The instructor's page has a polling fallback for missed events.
+  void broadcastVerified(supabase, sessionId, profile.first_name, profile.last_name);
 
   return Response.json({
     success: true,
