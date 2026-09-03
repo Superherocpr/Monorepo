@@ -19,7 +19,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClassSession, type CreateClassSessionParams } from "@/lib/session-create";
 import { createAndSendInvoice } from "@/lib/invoice-actions";
@@ -291,7 +291,7 @@ async function sendShareLinkEmail(
     pendingApproval: boolean;
   }
 ): Promise<void> {
-  if (!process.env.RESEND_API_KEY) return;
+  if (!isEmailConfigured()) return;
 
   const [{ data: actor }, { data: session }] = await Promise.all([
     adminClient.from("profiles").select("first_name, email").eq("id", args.actorId).maybeSingle(),
@@ -327,12 +327,14 @@ async function sendShareLinkEmail(
     pendingApproval: args.pendingApproval,
   });
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL!,
+  // Best-effort: the booking and its share token already exist, and the staff
+  // member can copy the link from the admin UI if the mail never lands.
+  await sendEmail({
+    context: "team-bookings:share-link",
     to: actor.email as string,
     subject,
     html,
+    idempotencyKey: `team-share-link-${args.shareToken}`,
   });
 }
 

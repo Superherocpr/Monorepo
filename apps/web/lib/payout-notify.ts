@@ -9,7 +9,7 @@
  * Server-side only; never import from a client component.
  */
 
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   instructorPayoutSentEmail,
@@ -46,7 +46,7 @@ export async function notifyPayoutDenied(
   paypalStatus: string
 ): Promise<void> {
   try {
-    if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+    if (!isEmailConfigured()) {
       console.warn("[payout-notify] Resend not configured — skipping denial alert.");
       return;
     }
@@ -89,17 +89,13 @@ export async function notifyPayoutDenied(
       baseUrl: getBaseUrl(),
     });
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const result = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL,
+    await sendEmail({
+      context: "payout-notify:denial",
       to: recipients,
       subject: email.subject,
       html: email.html,
+      idempotencyKey: `payout-denied-${batchId}`,
     });
-
-    if (result.error) {
-      console.error("[payout-notify] Denial alert email failed:", result.error);
-    }
   } catch (err) {
     console.error("[payout-notify] Denial alert failed (non-fatal):", err);
   }
@@ -127,7 +123,7 @@ export async function notifyPayoutIssuesDigest(
   if (batchIds.length === 0) return;
 
   try {
-    if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+    if (!isEmailConfigured()) {
       console.warn("[payout-notify] Resend not configured — skipping stuck-batch digest.");
       return;
     }
@@ -177,17 +173,12 @@ export async function notifyPayoutIssuesDigest(
       baseUrl: getBaseUrl(),
     });
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const result = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL,
+    await sendEmail({
+      context: "payout-notify:stuck-digest",
       to: recipients,
       subject: email.subject,
       html: email.html,
     });
-
-    if (result.error) {
-      console.error("[payout-notify] Stuck-batch digest email failed:", result.error);
-    }
   } catch (err) {
     console.error("[payout-notify] Stuck-batch digest failed (non-fatal):", err);
   }
@@ -212,7 +203,7 @@ export async function notifyInstructorsPaid(
   if (itemIds.length === 0) return;
 
   try {
-    if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+    if (!isEmailConfigured()) {
       console.warn("[payout-notify] Resend not configured — skipping payout emails.");
       return;
     }
@@ -231,7 +222,6 @@ export async function notifyInstructorsPaid(
 
     if (items.length === 0) return;
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
     const baseUrl = getBaseUrl();
 
     for (const item of items) {
@@ -245,19 +235,15 @@ export async function notifyInstructorsPaid(
         baseUrl,
       });
 
-      const result = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL,
+      // Keyed on the payout item so a re-run of reconciliation cannot tell an
+      // instructor twice that the same payout was sent.
+      await sendEmail({
+        context: "payout-notify:instructor-paid",
         to,
         subject: email.subject,
         html: email.html,
+        idempotencyKey: `payout-sent-${item.id}`,
       });
-
-      if (result.error) {
-        console.error(
-          `[payout-notify] Payout email failed for item ${item.id}:`,
-          result.error
-        );
-      }
     }
   } catch (err) {
     console.error("[payout-notify] Instructor payout emails failed (non-fatal):", err);

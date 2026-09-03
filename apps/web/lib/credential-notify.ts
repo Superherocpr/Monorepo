@@ -13,8 +13,9 @@
  * Server-side only; never import from a client component.
  */
 
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { createAdminClient } from "@/lib/supabase/server";
+import { escapeHtml } from "@/lib/emails";
 import type { CredentialProbe, ProbeSummary } from "@/lib/credential-probes";
 
 /** Returns the configured app base URL for links inside emails. */
@@ -48,15 +49,6 @@ function isProductionEnvironment(): boolean {
     // An unparseable base URL is not a reason to start emailing from staging.
     return false;
   }
-}
-
-/** Minimal HTML escape for values interpolated into the email body. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /** Row colour per status — dead and probe_failed both read as red. */
@@ -168,7 +160,7 @@ export async function notifyCredentialProblems(summary: ProbeSummary): Promise<v
   }
 
   try {
-    if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+    if (!isEmailConfigured()) {
       console.warn("[credential-notify] Resend not configured — skipping alert email.");
       return;
     }
@@ -191,17 +183,12 @@ export async function notifyCredentialProblems(summary: ProbeSummary): Promise<v
     }
 
     const email = credentialAlertEmail(summary, getBaseUrl());
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const result = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL,
+    await sendEmail({
+      context: "credential-notify:alert",
       to: recipients,
       subject: email.subject,
       html: email.html,
     });
-
-    if (result.error) {
-      console.error("[credential-notify] Alert email failed:", result.error);
-    }
   } catch (err) {
     console.error("[credential-notify] Alert failed (non-fatal):", err);
   }

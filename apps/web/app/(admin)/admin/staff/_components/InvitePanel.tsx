@@ -44,6 +44,7 @@ const InvitePanel: React.FC<InvitePanelProps> = ({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState("instructor");
   const [personalMessage, setPersonalMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -105,6 +106,7 @@ const InvitePanel: React.FC<InvitePanelProps> = ({
     setFirstName("");
     setLastName("");
     setEmail("");
+    setPhone("");
     setRole("instructor");
     setPersonalMessage("");
   }
@@ -122,7 +124,7 @@ const InvitePanel: React.FC<InvitePanelProps> = ({
       const res = await fetch("/api/staff/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firstName, lastName, email, role, personalMessage }),
+        body: JSON.stringify({ firstName, lastName, email, phone, role, personalMessage }),
       });
       const data: { success: boolean; error?: string; emailSent?: boolean } = await res.json();
       if (!res.ok || !data.success) {
@@ -219,6 +221,26 @@ const InvitePanel: React.FC<InvitePanelProps> = ({
                 required
                 autoComplete="off"
               />
+            </div>
+
+            {/* Phone — required. An instructor's number is printed in the
+                customer's booking confirmation email, so it cannot be blank. */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Phone Number <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className={inputClass}
+                placeholder="(813) 555-0147"
+                required
+                autoComplete="off"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Shown to customers on booking confirmations for classes this person teaches.
+              </p>
             </div>
 
             {/* Role — Super Admin intentionally excluded */}

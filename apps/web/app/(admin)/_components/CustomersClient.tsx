@@ -230,7 +230,14 @@ export default function CustomersClient({
       setLastName("");
       setNewEmail("");
       setPhone("");
-      setSuccessToast(`Account created. Setup email sent to ${newEmail}.`);
+      // The route reports whether the setup email actually went out. Saying it
+      // was sent when it failed leaves the customer unable to set a password
+      // with nobody aware of it, so the two outcomes read differently.
+      setSuccessToast(
+        json.emailSent
+          ? `Account created. Setup email sent to ${newEmail}.`
+          : `Account created, but the setup email to ${newEmail} could not be sent. Use "Send password reset" to try again.`
+      );
 
       // Refresh the customer list from the server
       fetchSearch(query, certFilter, bookingFilter);

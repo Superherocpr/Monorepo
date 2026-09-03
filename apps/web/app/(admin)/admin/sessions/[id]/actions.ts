@@ -9,7 +9,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import sharp from "sharp";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -406,7 +406,7 @@ export async function removeBookingFromSession(
 
   // ── Cancellation email ────────────────────────────────────────────────────
   // Best-effort, does not affect the DB result.
-  if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
+  if (isEmailConfigured()) {
     try {
       const profile = Array.isArray(booking.profiles) ? booking.profiles[0] : booking.profiles;
       const session = Array.isArray(booking.class_sessions)
@@ -427,17 +427,14 @@ export async function removeBookingFromSession(
       const startsAt = session?.starts_at ?? floatingNow();
 
       if (toEmail) {
-        const resend = new Resend(process.env.RESEND_API_KEY);
         const { subject, html } = bookingCancelledEmail({ firstName, className, startsAt });
-        const { error: emailError } = await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL,
+        await sendEmail({
+          context: "admin/sessions:booking-cancelled",
           to: toEmail,
           subject,
           html,
+          idempotencyKey: `booking-cancelled-${bookingId}`,
         });
-        if (emailError) {
-          console.error("[removeBookingFromSession] Cancellation email failed:", emailError);
-        }
       } else {
         console.warn("[removeBookingFromSession] Cancellation email skipped: no email on profile", { bookingId });
       }

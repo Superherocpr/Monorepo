@@ -24,19 +24,21 @@ vi.mock("@/lib/auth/effective-role", () => ({
   requireApiRole: vi.fn(),
 }));
 
+/**
+ * One shared send mock rather than a per-construction one: lib/send-email.ts
+ * caches its Resend client, so the number of clients built is an implementation
+ * detail. What matters is how many messages were sent.
+ */
+const sendMock = vi.fn().mockResolvedValue({ data: { id: "email-id" }, error: null });
+
 vi.mock("resend", () => ({
   Resend: vi.fn().mockImplementation(function Resend() {
-    return {
-      emails: {
-        send: vi.fn().mockResolvedValue({ data: { id: "email-id" }, error: null }),
-      },
-    };
+    return { emails: { send: sendMock } };
   }),
 }));
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { Resend } from "resend";
 import { floatingNow, addFloatingMinutes } from "@/lib/business-time";
 
 const INSTRUCTOR_ID = "11111111-1111-1111-1111-111111111111";
@@ -186,6 +188,7 @@ describe("POST /api/sessions/[id]/cancel", () => {
     beforeEach(() => {
       process.env.RESEND_API_KEY = "test-key";
       process.env.RESEND_FROM_EMAIL = "noreply@superherocpr.com";
+      sendMock.mockClear();
     });
 
     afterEach(() => {
@@ -206,10 +209,8 @@ describe("POST /api/sessions/[id]/cancel", () => {
       const res = await POST(makeRequest(), params());
       expect(res.status).toBe(200);
 
-      const ResendCtor = vi.mocked(Resend);
-      const instance = ResendCtor.mock.results[0].value as { emails: { send: ReturnType<typeof vi.fn> } };
       // Only the admin notification should be sent; no instructor opportunity email.
-      expect(instance.emails.send).toHaveBeenCalledTimes(1);
+      expect(sendMock).toHaveBeenCalledTimes(1);
     });
 
     test("sends instructor opportunity email when the session has active bookings", async () => {
@@ -225,10 +226,8 @@ describe("POST /api/sessions/[id]/cancel", () => {
       const res = await POST(makeRequest(), params());
       expect(res.status).toBe(200);
 
-      const ResendCtor = vi.mocked(Resend);
-      const instance = ResendCtor.mock.results[0].value as { emails: { send: ReturnType<typeof vi.fn> } };
       // Both the admin notification and the instructor opportunity email should be sent.
-      expect(instance.emails.send).toHaveBeenCalledTimes(2);
+      expect(sendMock).toHaveBeenCalledTimes(2);
     });
   });
 });

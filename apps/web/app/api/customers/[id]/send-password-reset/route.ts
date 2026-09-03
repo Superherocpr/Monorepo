@@ -9,7 +9,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { passwordResetEmail } from "@/lib/emails";
 
 /**
@@ -56,31 +56,30 @@ export async function POST(
     );
   }
 
-  // ── Send email via Resend ──────────────────────────────────────────────────
-  if (!process.env.RESEND_API_KEY) {
-    console.error(`[customers/${customerId}/send-password-reset] RESEND_API_KEY not configured`);
-    return Response.json(
-      { success: false, error: "Email service is not configured." },
-      { status: 500 }
-    );
-  }
-
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  // ── Send email ─────────────────────────────────────────────────────────────
+  // Sending IS this route's purpose, so a failure is fatal and surfaces to the
+  // staff member who clicked, rather than being swallowed as best-effort.
   const { subject, html } = passwordResetEmail({
     firstName: customer.first_name,
     actionLink: linkData.properties.action_link,
   });
-  const { error: emailError } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL!,
+
+  const result = await sendEmail({
+    context: "customers/send-password-reset",
     to: customer.email,
     subject,
     html,
   });
 
-  if (emailError) {
-    console.error(`[customers/${customerId}/send-password-reset] email send failed:`, emailError);
+  if (!result.sent) {
     return Response.json(
-      { success: false, error: "Failed to send reset email. Please try again." },
+      {
+        success: false,
+        error:
+          result.reason === "not_configured"
+            ? "Email service is not configured."
+            : "Failed to send reset email. Please try again.",
+      },
       { status: 500 }
     );
   }

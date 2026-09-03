@@ -12,7 +12,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { classRequestRejectedCustomerEmail } from "@/lib/emails";
@@ -89,32 +89,23 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
   }
 
   // ── Send rejection email to customer (best-effort) ────────────────────────
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[class-requests/reject] RESEND_API_KEY not set — skipping email");
-    return NextResponse.json({ data: { ok: true } });
-  }
-
+  // The rejection is already recorded; sendEmail guards and logs on its own.
   const classType = classRequest.class_types as unknown as { name: string } | null;
   const customer = classRequest.profiles as unknown as { first_name: string; email: string } | null;
 
   if (customer && classType) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
     const rejectedEmail = classRequestRejectedCustomerEmail({
       firstName: customer.first_name,
       className: classType.name,
       reason: reason.trim(),
     });
 
-    const result = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
+    await sendEmail({
+      context: "class-requests/reject:customer",
       to: customer.email,
       subject: rejectedEmail.subject,
       html: rejectedEmail.html,
     });
-
-    if (result.error) {
-      console.error("[class-requests/reject] Email send failed:", result.error);
-    }
   }
 
   return NextResponse.json({ data: { ok: true } });

@@ -12,7 +12,7 @@
  * results to HTTP responses. This file has no knowledge of Request/Response.
  */
 
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   invoiceEmail,
@@ -298,8 +298,7 @@ export async function createAndSendInvoice(
     },
   ]);
 
-  if (process.env.RESEND_API_KEY) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+  {
     const { subject, html } = invoiceEmail({
       invoiceNumber: invoice.invoice_number,
       recipientName: params.recipientName,
@@ -316,30 +315,27 @@ export async function createAndSendInvoice(
       notes: params.notes,
       paymentLink,
     });
-    await resend.emails
-      .send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: params.recipientEmail,
-        subject,
-        html,
-        ...(params.invoiceType === "group" && {
-          attachments: [
-            {
-              filename: "roster-template.csv",
-              content: Buffer.from(
-                [
-                  `"First Name","Last Name","Email","Phone","Employer"`,
-                  `"Jane","Smith","jane.smith@example.com","555-867-5309","Acme Hospital"`,
-                  `"John","Doe","john.doe@example.com","",""`,
-                ].join("\r\n")
-              ),
-            },
-          ],
-        }),
-      })
-      .catch((err: unknown) => {
-        console.error("[invoice-actions] Invoice email failed (non-fatal):", err);
-      });
+    await sendEmail({
+      context: "invoice-actions:invoice",
+      to: params.recipientEmail,
+      subject,
+      html,
+      idempotencyKey: `invoice-sent-${invoice.id}`,
+      ...(params.invoiceType === "group" && {
+        attachments: [
+          {
+            filename: "roster-template.csv",
+            content: Buffer.from(
+              [
+                `"First Name","Last Name","Email","Phone","Employer"`,
+                `"Jane","Smith","jane.smith@example.com","555-867-5309","Acme Hospital"`,
+                `"John","Doe","john.doe@example.com","",""`,
+              ].join("\r\n")
+            ),
+          },
+        ],
+      }),
+    });
   }
 
   return { success: true, invoiceId: invoice.id, invoiceNumber: invoice.invoice_number };
@@ -447,51 +443,42 @@ export async function markInvoicePaidAndNotify(
     ? session?.class_types[0]
     : session?.class_types;
 
-  if (process.env.RESEND_API_KEY) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+  // Both sends are best-effort — a failed email must not reverse the paid status.
+  // Keyed on the invoice so a webhook redelivery cannot double-notify.
+  if (instructorProfile?.email) {
+    const { subject, html } = invoicePaidEmail({
+      firstName: instructorProfile.first_name,
+      invoiceNumber: invoice.invoice_number,
+      recipientName: invoice.recipient_name,
+      studentCount: invoice.student_count as number,
+    });
+    await sendEmail({
+      context: "invoice-actions:instructor-paid",
+      to: instructorProfile.email,
+      subject,
+      html,
+      idempotencyKey: `invoice-paid-instructor-${invoice.id}`,
+    });
+  }
 
-    // Notify the instructor (best-effort — a failed email shouldn't reverse the paid status)
-    if (instructorProfile?.email) {
-      const { subject, html } = invoicePaidEmail({
-        firstName: instructorProfile.first_name,
-        invoiceNumber: invoice.invoice_number,
-        recipientName: invoice.recipient_name,
-        studentCount: invoice.student_count as number,
-      });
-      await resend.emails
-        .send({
-          from: process.env.RESEND_FROM_EMAIL!,
-          to: instructorProfile.email,
-          subject,
-          html,
-        })
-        .catch((err: unknown) => {
-          console.error("[invoice-actions] Instructor paid-notification email failed (non-fatal):", err);
-        });
-    }
-
-    // Notify the invoice recipient — the only customer-facing confirmation that
-    // payment was received, including the roster-upload link for group invoices.
-    if (invoice.recipient_email && session && classType) {
-      const { subject, html } = invoicePaymentConfirmedCustomerEmail({
-        recipientName: invoice.recipient_name,
-        invoiceNumber: invoice.invoice_number,
-        invoiceType: invoice.invoice_type as "individual" | "group",
-        className: classType.name,
-        classDate: session.starts_at,
-        totalAmount: Number(invoice.total_amount),
-      });
-      await resend.emails
-        .send({
-          from: process.env.RESEND_FROM_EMAIL!,
-          to: invoice.recipient_email,
-          subject,
-          html,
-        })
-        .catch((err: unknown) => {
-          console.error("[invoice-actions] Customer payment-confirmed email failed (non-fatal):", err);
-        });
-    }
+  // Notify the invoice recipient — the only customer-facing confirmation that
+  // payment was received, including the roster-upload link for group invoices.
+  if (invoice.recipient_email && session && classType) {
+    const { subject, html } = invoicePaymentConfirmedCustomerEmail({
+      recipientName: invoice.recipient_name,
+      invoiceNumber: invoice.invoice_number,
+      invoiceType: invoice.invoice_type as "individual" | "group",
+      className: classType.name,
+      classDate: session.starts_at,
+      totalAmount: Number(invoice.total_amount),
+    });
+    await sendEmail({
+      context: "invoice-actions:customer-paid",
+      to: invoice.recipient_email,
+      subject,
+      html,
+      idempotencyKey: `invoice-paid-customer-${invoice.id}`,
+    });
   }
 
   return { success: true, paidAt };

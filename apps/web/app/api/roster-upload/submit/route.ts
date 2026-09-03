@@ -10,7 +10,9 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getS3BucketName, getS3Region } from "@/lib/s3";
 import { createAdminClient } from "@/lib/supabase/server";
-import { Resend } from "resend";
+import { sendEmails } from "@/lib/send-email";
+import { escapeHtml } from "@/lib/emails";
+import { BUSINESS_CONTACT_EMAIL } from "@/lib/contact-constants";
 
 export const runtime = "nodejs";
 
@@ -261,52 +263,53 @@ export async function POST(request: Request) {
 
   // ── Send emails ────────────────────────────────────────────────────────────
   // Both emails are best-effort — the submission is already saved even if they fail.
-  if (process.env.RESEND_API_KEY) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const invoiceRef = invoiceNumber ?? invoiceId;
+  const invoiceRef = invoiceNumber ?? invoiceId;
 
+  // This route is public and unauthenticated, so the filename and submitter
+  // details are attacker-controlled. Escape every one before interpolating —
+  // the manager notification lands in a staff inbox.
+  const safeInvoiceRef = escapeHtml(invoiceRef);
+  const safeSubmitterName = escapeHtml(submittedByName ?? "Unknown");
+  const safeSubmitterEmail = escapeHtml(submittedByEmail ?? "no email provided");
+  const safeFileName = escapeHtml(file.name);
+
+  await sendEmails([
     // Confirmation email to the person who submitted
-    if (submittedByEmail) {
-      await resend.emails
-        .send({
-          from: process.env.RESEND_FROM_EMAIL!,
-          to: submittedByEmail,
-          subject: `Your roster for invoice ${invoiceRef} has been received`,
-          html: `
+    ...(submittedByEmail
+      ? [
+          {
+            context: "roster-upload/submit:submitter",
+            to: submittedByEmail,
+            subject: `Your roster for invoice ${invoiceRef} has been received`,
+            html: `
             <h1>Roster received!</h1>
-            <p>Hi ${submittedByName ?? "there"},</p>
+            <p>Hi ${escapeHtml(submittedByName ?? "there")},</p>
             <p>We've received your staff roster for your upcoming CPR class.
                Our team will review it before class day.</p>
             <p>If you need to make changes, simply resubmit the updated file at
                <a href="https://superherocpr.com/submit-roster">superherocpr.com/submit-roster</a>
                using the same invoice number.</p>
-            <p>Invoice number: <strong>${invoiceRef}</strong></p>
+            <p>Invoice number: <strong>${safeInvoiceRef}</strong></p>
             <p>— The SuperHeroCPR Team</p>
           `,
-        })
-        .catch((err: unknown) => {
-          console.error("[roster-upload/submit] Submitter confirmation email failed (non-fatal):", err);
-        });
-    }
+          },
+        ]
+      : []),
 
     // Manager notification so staff know a new roster is ready to import
-    await resend.emails
-      .send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: "contact@superherocpr.com",
-        subject: `Roster submitted — Invoice ${invoiceRef}`,
-        html: `
+    {
+      context: "roster-upload/submit:manager",
+      to: BUSINESS_CONTACT_EMAIL,
+      subject: `Roster submitted — Invoice ${invoiceRef}`,
+      html: `
           <p>A customer has submitted a roster.</p>
-          <p><strong>Invoice:</strong> ${invoiceRef}</p>
-          <p><strong>File:</strong> ${file.name}</p>
-          <p><strong>Submitted by:</strong> ${submittedByName ?? "Unknown"} (${submittedByEmail ?? "no email provided"})</p>
+          <p><strong>Invoice:</strong> ${safeInvoiceRef}</p>
+          <p><strong>File:</strong> ${safeFileName}</p>
+          <p><strong>Submitted by:</strong> ${safeSubmitterName} (${safeSubmitterEmail})</p>
           <p>Import the roster from the session detail page in the admin panel.</p>
         `,
-      })
-      .catch((err: unknown) => {
-        console.error("[roster-upload/submit] Manager notification email failed (non-fatal):", err);
-      });
-  }
+    },
+  ]);
 
   return Response.json({ success: true });
 }

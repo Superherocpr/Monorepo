@@ -10,7 +10,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { orderShippedEmail, OrderEmailItem } from "@/lib/emails";
 
 export async function POST(request: Request) {
@@ -76,9 +76,9 @@ export async function POST(request: Request) {
   }
 
   // ── Send shipping confirmation email (non-fatal) ────────────────────────────
-  if (process.env.RESEND_API_KEY) {
+  // The order is already marked shipped; sendEmail logs any failure itself.
+  {
     try {
-      const resend = new Resend(process.env.RESEND_API_KEY);
       const customer = order.profiles as unknown as { first_name: string; email: string };
       const items = order.order_items as unknown as Array<{
         quantity: number;
@@ -104,15 +104,15 @@ export async function POST(request: Request) {
         shippingState: order.shipping_state,
       });
 
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
+      await sendEmail({
+        context: "orders/mark-shipped",
         to: customer.email,
         subject,
         html,
       });
     } catch (emailErr) {
-      // Non-fatal — order is already marked shipped, just log the failure
-      console.error("[mark-shipped] Shipping email failed:", emailErr);
+      // Guards the template build above, not the send — sendEmail never throws.
+      console.error("[mark-shipped] Shipping email could not be prepared:", emailErr);
     }
   }
 

@@ -40,7 +40,7 @@ import {
   describeBookSpotFailure,
   isLoggableCaptureFailure,
 } from "@/lib/payment-failures";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { teamSignupConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
 import { NextResponse } from "next/server";
 
@@ -546,9 +546,9 @@ async function finaliseSignup(
   }
 
   // ── Emails (best-effort) ────────────────────────────────────────────────
-  if (!process.env.RESEND_API_KEY) return;
-
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  // The signup and payment are already committed; skip the profile lookups
+  // entirely when no mail could be sent anyway.
+  if (!isEmailConfigured()) return;
 
   const { data: customerProfile } = await supabase
     .from("profiles")
@@ -573,16 +573,13 @@ async function finaliseSignup(
       cancellationPhone: team.cancellationPhone,
     });
 
-    await resend.emails
-      .send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: customerProfile.email,
-        subject,
-        html,
-      })
-      .catch((err: unknown) => {
-        console.error("[team-signup] Confirmation email failed:", err);
-      });
+    await sendEmail({
+      context: "team-signup:customer",
+      to: customerProfile.email,
+      subject,
+      html,
+      idempotencyKey: `team-signup-customer-${args.bookingId}`,
+    });
   }
 
   // Notify the instructor, same as any other booking.
@@ -615,14 +612,11 @@ async function finaliseSignup(
     source: args.promoCode ? "promo" : "online",
   });
 
-  await resend.emails
-    .send({
-      from: process.env.RESEND_FROM_EMAIL!,
-      to: instructorProfile.email,
-      subject,
-      html,
-    })
-    .catch((err: unknown) => {
-      console.error("[team-signup] Instructor notification email failed:", err);
-    });
+  await sendEmail({
+    context: "team-signup:instructor",
+    to: instructorProfile.email,
+    subject,
+    html,
+    idempotencyKey: `team-signup-instructor-${args.bookingId}`,
+  });
 }
