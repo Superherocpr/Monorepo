@@ -40,6 +40,11 @@ RESEND_API_KEY=re_123456789
 # Must be a domain verified in your Resend account.
 RESEND_FROM_EMAIL=Superhero CPR <noreply@superherocpr.com>
 
+# The business inbox that customer-originated notifications are delivered to:
+# contact form submissions, merch orders, and roster uploads.
+# Optional — defaults to contact@superherocpr.com when unset.
+CONTACT_EMAIL=contact@superherocpr.com
+
 
 # ------------------------------------------------------------------------------
 # 4. PayPal (Bookings, Invoices & Instructor Payouts)

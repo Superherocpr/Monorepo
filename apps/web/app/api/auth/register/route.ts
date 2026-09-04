@@ -15,7 +15,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { createAdminClient } from "@/lib/supabase/server";
 import { welcomeEmail } from "@/lib/emails";
 
@@ -107,20 +107,14 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Send the branded welcome email — best-effort, never blocks account creation
-  if (process.env.RESEND_API_KEY) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const { subject, html } = welcomeEmail({ firstName: firstName.trim() });
-    await resend.emails
-      .send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: email.toLowerCase(),
-        subject,
-        html,
-      })
-      .catch((err: unknown) => {
-        console.error("[auth/register] Welcome email failed:", err);
-      });
-  }
+  const { subject, html } = welcomeEmail({ firstName: firstName.trim() });
+  await sendEmail({
+    context: "auth/register:welcome",
+    to: email.toLowerCase(),
+    subject,
+    html,
+    idempotencyKey: `welcome-${authData.user.id}`,
+  });
 
   return NextResponse.json({ success: true });
 }

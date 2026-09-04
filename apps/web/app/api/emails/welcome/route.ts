@@ -7,7 +7,7 @@
  * Failure is non-fatal — the booking flow continues regardless.
  */
 
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { welcomeEmail } from "@/lib/emails";
 
 /** Type guard — ensures a value is a non-null object. */
@@ -28,20 +28,21 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Missing required fields" }, { status: 400 });
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    // Skip silently in environments without Resend configured
-    return Response.json({ success: true, skipped: true });
-  }
-
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const { subject, html } = welcomeEmail({ firstName });
 
-  await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL!,
+  // Best-effort: the caller is mid-booking and must not be blocked by a mail
+  // failure. The outcome is still reported so the booking flow — and the server
+  // log — can tell a delivered welcome from a dropped one.
+  const result = await sendEmail({
+    context: "emails/welcome",
     to: email,
     subject,
     html,
   });
 
-  return Response.json({ success: true });
+  return Response.json({
+    success: true,
+    emailSent: result.sent,
+    ...(result.sent ? {} : { skipped: result.reason === "not_configured" }),
+  });
 }

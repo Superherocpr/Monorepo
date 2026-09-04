@@ -28,7 +28,7 @@ import {
   evaluateCaptureOutcome,
   classifyCaptureRequestError,
 } from "@/lib/paypal";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
 import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
@@ -469,7 +469,7 @@ export async function POST(request: Request) {
   await maybeTriggerImmediatePayout(supabase);
 
   // ── Step 5: Send booking confirmation email (best-effort) ────────────────
-  if (process.env.RESEND_API_KEY && typeof startsAt === "string") {
+  if (isEmailConfigured() && typeof startsAt === "string") {
     // Fetch instructor + customer contact details server-side — never trust
     // client-supplied values. The customer profile fetch is also a fallback:
     // an existing customer who signed in (rather than creating a new account)
@@ -498,8 +498,6 @@ export async function POST(request: Request) {
         customerId,
       });
     } else {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-
       const { subject, html } = bookingConfirmationEmail({
         firstName:
           typeof customerFirstName === "string" && customerFirstName
@@ -523,18 +521,20 @@ export async function POST(request: Request) {
         addons: resolvedAddons.map((a) => ({ name: a.name, price: a.price })),
       });
 
-      const { error: emailError } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
+      // Keyed on the booking so a client retry of confirm cannot send the
+      // customer two confirmations for the same purchase.
+      const result = await sendEmail({
+        context: "bookings/confirm:customer",
         to: resolvedCustomerEmail,
         subject,
         html,
+        idempotencyKey: `booking-confirm-${bookingId}`,
       });
 
-      if (emailError) {
-        console.error("[bookings/confirm] Confirmation email failed:", {
-          bookingId,
-          error: emailError,
-        });
+      if (!result.sent) {
+        console.error(
+          `[bookings/confirm] CRITICAL: confirmation email not delivered for booking ${bookingId}`
+        );
       }
 
       // Notify the instructor of the new booking (best-effort — non-fatal).
@@ -557,13 +557,12 @@ export async function POST(request: Request) {
           source: appliedPromoCode ? "promo" : "online",
         });
 
-        await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL!,
+        await sendEmail({
+          context: "bookings/confirm:instructor",
           to: instructorProfile.email,
           subject: iSubject,
           html: iHtml,
-        }).catch((err: unknown) => {
-          console.error("[bookings/confirm] Instructor notification email failed:", { bookingId, error: err });
+          idempotencyKey: `booking-confirm-instructor-${bookingId}`,
         });
       }
     }

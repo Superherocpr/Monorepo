@@ -27,7 +27,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { sessionCancelledAdminEmail, openOpportunityInstructorEmail } from "@/lib/emails";
@@ -133,12 +133,13 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
     );
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[sessions/cancel] RESEND_API_KEY not set — skipping emails");
+  // The cancellation is already committed. Skip the recipient lookups entirely
+  // when no mail could be sent anyway; sendEmail would guard this too.
+  if (!isEmailConfigured()) {
+    console.warn("[sessions/cancel] Resend not configured — skipping emails");
     return NextResponse.json({ data: { ok: true } });
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
 
   const classType = session.class_types as unknown as { name: string } | null;
@@ -178,15 +179,12 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
         sessionId,
         baseUrl,
       });
-      const result = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
+      await sendEmail({
+        context: "sessions/cancel:admin",
         to: adminEmails,
         subject: adminEmail.subject,
         html: adminEmail.html,
       });
-      if (result.error) {
-        console.error("[sessions/cancel] Admin notification email failed:", result.error);
-      }
     }
 
     const instructorEmails = (instructorProfiles ?? []).map((p) => p.email).filter(Boolean);
@@ -200,15 +198,12 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
         sessionId,
         baseUrl,
       });
-      const result = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
+      await sendEmail({
+        context: "sessions/cancel:instructor-opportunity",
         to: instructorEmails,
         subject: opportunityEmail.subject,
         html: opportunityEmail.html,
       });
-      if (result.error) {
-        console.error("[sessions/cancel] Instructor opportunity email failed:", result.error);
-      }
     }
   }
 

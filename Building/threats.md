@@ -975,3 +975,82 @@ module into `bookings/confirm`, `orders/confirm` (merch), and
 **Until the wider fix ships:** every OTHER payment surface on staging still
 charges real cards. Anyone testing booking checkout, merch, or team signups on
 staging is moving real money through the real business account.
+
+---
+
+## THREAT-066 — Unescaped roster filename injected HTML into a staff inbox
+
+**Severity:** 4/10 (medium)
+**File:** `apps/web/app/api/roster-upload/submit/route.ts`
+**Date:** 2026-09-02
+**Status:** FIXED
+
+**Description:** `POST /api/roster-upload/submit` is a public, unauthenticated
+endpoint — a customer submits a roster using only an invoice number. It then
+emails a notification to the business inbox that interpolated three
+attacker-controlled values straight into the HTML body with no escaping:
+`file.name`, `submittedByName`, and `submittedByEmail`. Uploading a file named
+`<a href="https://evil.example">Click to import roster</a>.csv` would render as a
+live link inside the staff notification.
+
+**Attack vector:** Submit a roster with a crafted filename or contact name. The
+resulting email arrives at the business inbox from the site's own verified
+sending domain, carrying attacker-chosen markup — a credible phishing vector
+precisely because the message is genuinely from SuperHeroCPR.
+
+**Why 4 and not higher:** email clients strip `<script>` and block most active
+content, so the realistic ceiling is link injection and content spoofing inside
+an internal email, not code execution or data access. It also requires a valid
+invoice number to reach the send path.
+
+**Fix:** All three values now pass through the shared `escapeHtml()` from
+`lib/emails.ts` before interpolation. That helper was previously a private copy
+duplicated in two files; it is now exported once and reused, so the same escaping
+applies to the merch-order emails in `orders/confirm` as well.
+
+---
+
+## THREAT-067 — Invoice and order emails interpolated staff/customer text unescaped
+
+**Severity:** 5/10 (medium)
+**File:** `apps/web/lib/emails.ts` — `invoiceEmail`, `invoiceResendEmail`,
+`invoicePaidEmail`, `invoicePaymentConfirmedCustomerEmail`, `orderShippedEmail`,
+`accountDeletedEmail`, `customerSetupEmail`, `passwordResetEmail`,
+`selfServicePasswordResetEmail`, `staffInviteEmail`
+**Date:** 2026-09-02
+**Status:** FIXED
+
+**Description:** `escapeHtml()` was applied inconsistently across the template
+layer. Roughly half the builders escaped every interpolated value; the rest
+interpolated raw. The unescaped set included invoice `notes` and `paymentLink`
+(staff free text typed into the invoice form), `recipientName` and `companyName`
+(staff-entered), `trackingNumber`, `carrier`, `shippingName`/`City`/`State`
+(customer-entered at checkout), and `firstName` (customer-entered at
+registration). `paymentLink` was the sharpest case: it landed inside
+`href="${paymentLink}"`, so a value containing a double quote could close the
+attribute and add its own.
+
+**Attack vector:** A customer registers with a first name containing markup, or
+places a merch order with a crafted shipping name; the value is echoed into a
+transactional email sent from the site's verified sending domain. For the invoice
+path, a staff member pasting an untrusted string into the notes field achieves
+the same.
+
+**Why 5 and not higher:** mail clients strip `<script>` and block active content,
+so the realistic ceiling is link injection and content spoofing rather than code
+execution. It is rated above THREAT-066 because the invoice templates carry a
+payment link, which is exactly the element a spoofed link would want to sit
+beside, and because several of these fields are reachable by unauthenticated
+self-registration.
+
+**Fix:** Every free-text parameter in every affected builder now passes through
+`escapeHtml()` before interpolation. `paymentLink` and the Supabase-generated
+`actionLink`/`setupLink` values are escaped for attribute context; invoice
+numbers embedded in roster URLs now use `encodeURIComponent`. A new
+`tests/unit/lib/emails.test.ts` renders each template with a hostile string and
+asserts no `<script>` survives.
+
+**Related, found in the same pass (not security):** subject lines in 14 builders
+were interpolating the *escaped* value. Subjects are plain text, not HTML, so a
+class named "First Aid & CPR" reached the inbox as "First Aid &amp; CPR". Those
+now use the raw trimmed value while the body keeps the escaped one.

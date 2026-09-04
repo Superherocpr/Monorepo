@@ -19,7 +19,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { bookingConfirmationEmail } from "@/lib/emails";
 
 /** Type guard — ensures a value is a non-null object. */
@@ -129,7 +129,6 @@ export async function POST(request: Request) {
 
   // ── Step 4: Send confirmation email (best-effort, same as real flow) ─────
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
     const { subject, html } = bookingConfirmationEmail({
       firstName: typeof customerFirstName === "string" ? customerFirstName : "there",
       className: typeof className === "string" ? className : "your class",
@@ -144,15 +143,16 @@ export async function POST(request: Request) {
       transactionId: null,
     });
 
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL ?? "",
+    await sendEmail({
+      context: "dev/book-free",
       to: typeof customerEmail === "string" ? customerEmail : "",
       subject,
       html,
+      idempotencyKey: `dev-book-free-${bookingId}`,
     });
   } catch (emailErr) {
-    // Email failure is non-fatal — log and continue so the test flow isn't blocked.
-    console.error("[dev/book-free] Confirmation email failed:", emailErr);
+    // Guards the template build above — sendEmail never throws.
+    console.error("[dev/book-free] Confirmation email could not be prepared:", emailErr);
   }
 
   return Response.json({ success: true, bookingId });

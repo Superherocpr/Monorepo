@@ -7,7 +7,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { assistantNeededEmail } from "./emails";
 
 /** Paid enrollment count at which BLS/ACLS classes require an assistant. */
@@ -77,7 +77,7 @@ export async function maybeSendAssistantReminder(
 
   if (claimError || !claimed || claimed.length === 0) return;
 
-  if (!process.env.RESEND_API_KEY) return;
+  if (!isEmailConfigured()) return;
 
   const { data: instructor } = await supabase
     .from("profiles")
@@ -96,15 +96,13 @@ export async function maybeSendAssistantReminder(
     baseUrl,
   });
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  await resend.emails
-    .send({
-      from: process.env.RESEND_FROM_EMAIL!,
-      to: instructor.email,
-      subject,
-      html,
-    })
-    .catch((err: unknown) => {
-      console.error("[assistant-reminder] Email send failed (non-fatal):", err);
-    });
+  // The assistant_reminder_sent_at claim above already guarantees one send per
+  // session, so the key here only guards this module's own retries.
+  await sendEmail({
+    context: "assistant-reminder",
+    to: instructor.email,
+    subject,
+    html,
+    idempotencyKey: `assistant-reminder-${sessionId}`,
+  });
 }
