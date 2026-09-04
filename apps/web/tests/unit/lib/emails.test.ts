@@ -1,10 +1,10 @@
 /**
  * Unit tests for lib/emails.ts — the template layer.
  *
- * These lock in four properties that a follow-up audit found broken. Each one is
- * invisible to the type checker, which is why they survived: every value
- * involved is a `string`, so TypeScript is satisfied whether or not it was
- * escaped, and `${null}` is a perfectly legal template interpolation.
+ * These lock in four invariants that were previously violated in production.
+ * Each one is invisible to the type checker, which is why they survived: every
+ * value involved is a `string`, so TypeScript is satisfied whether or not it
+ * was escaped, and `${null}` is a perfectly legal template interpolation.
  *
  *   1. No template may ever print the literal text "null" where a value is
  *      missing. `bookingConfirmationEmail` did exactly that — "Call us at null"
@@ -54,7 +54,7 @@ function bookingArgs(over: Record<string, unknown> = {}) {
   };
 }
 
-describe("Bug 1 — a missing value must never render as the text 'null'", () => {
+describe("a missing value never renders as the literal text 'null'", () => {
   test("booking confirmation falls back to the business phone when the instructor has none", () => {
     // 5 of 6 active production instructors had no phone, so this was the
     // default path for the most-sent customer-facing email in the system.
@@ -120,7 +120,7 @@ describe("Bug 1 — a missing value must never render as the text 'null'", () =>
   });
 });
 
-describe("Bug 2 — user- and staff-supplied text is escaped in the HTML body", () => {
+describe("user- and staff-supplied text is HTML-escaped in the body", () => {
   test("invoice notes and payment link are escaped", () => {
     // Notes are free text typed by staff, and paymentLink lands inside an href —
     // the two fields an attacker or a careless paste is most likely to reach.
@@ -220,7 +220,7 @@ describe("Bug 2 — user- and staff-supplied text is escaped in the HTML body", 
   });
 });
 
-describe("Bug 3 — subject lines are plain text and must not carry HTML entities", () => {
+describe("subject lines stay plain text and never carry HTML entities", () => {
   test("an ampersand in a class name survives the subject unescaped", () => {
     const { subject, html } = bookingConfirmationEmail(
       bookingArgs({ className: "First Aid & CPR" })
