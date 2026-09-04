@@ -151,7 +151,7 @@ a product gap, not just a monitoring one.
 | Sessions & scheduling | ✅✅ | ○ smoke | ✅ | ✅ | ✅✅ | — | Cron covers unclaimed escalation only |
 | **Class time correctness** | ✅✅ | — | — | ✅ | — | — | ⚠️ Unit-only; call-site gap fired 2026-08-23 — see note below |
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
-| **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast |
+| **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast. 2026-09-04: wired the branded welcome email (`rollcallWelcomeEmail`, previously dead code — dropped in a 2026-07-15 refactor) into `checkin-by-profile`, fired only on first confirmation, not the idempotent re-check-in path; covered by `tests/unit/api/rollcall-checkin-by-profile.test.ts` |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
 | Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on + price-vs-UpdatePanel guard + auto-submit on Mark-as-submitted, all 2026-08-24; unit coverage for all four |
 | **Student documents / photos** | — | — | ✅ | ✅ | — | — | Bookmarklet injects merged PDFs into Enrollware via AjaxUpload1; cron purges DB rows at 30 days; S3 lifecycle rule handles file expiry |
@@ -372,11 +372,54 @@ today). The cron provides a health signal for the cleanup path but not for uploa
 
 | Feature | U | E | C | A | I | M | Verdict |
 |---|---|---|---|---|---|---|---|
-| Transactional email (Resend) | — | — | ✅ | — | — | ✅✅ | Was "zero automated checks". The weekly credential probe now verifies the API key **and** that the sending domain is still `verified` |
+| **Transactional email (Resend)** | ✅✅ (173) | — | ✅✅ | — | — | ✅✅ | Reworked 2026-09-02; test coverage built out 2026-09-04. All 52 send sites go through `lib/send-email.ts`. Three layers now: (1) `send-email.test.ts` — 22 tests on the wrapper's guards, retry policy and resolved-error handling; (2) `emails-render.test.ts` — all 36 templates rendered full **and** with every optional field null, asserting no `null`/`undefined` leakage, no entities or newlines in subjects; (3) `email-send-sites.test.ts` — an inventory of all 52 send contexts that **fails if one is deleted or moved**, which is the exact failure that lost the rollcall welcome email for seven weeks. On top of that, 34 of the 52 sites have runtime tests proving the send fires under the right conditions and stays silent under the wrong ones. The weekly credential probe still verifies the API key and sending-domain status — **plus** two cron jobs that fail loudly when mail is broken (see below) |
 | Contact form / Zoho | ✅✅ | ○ validation | ✅ | ✅ | — | — | Was "token can be revoked with no signal". The probe now exchanges the refresh token weekly and alerts if Zoho refuses it |
-| Daily summary email | — | — | ✅ | ~ | — | — | Its own arrival is the signal — but nobody's alerted if it *doesn't* arrive |
+| Daily summary email | — | — | ✅✅ | ~ | — | — | Its arrival was the only signal. Since 2026-09-02 the route returns **500 when the digest reaches zero recipients**, so a broken mailer registers as a failed heartbeat and surfaces as an overdue job — no longer dependent on someone noticing an absence |
 | Social feed | ✅ | ○ presence | ✅✅ | ✅ | — | — | Dead FB token → 200 + empty cache. Refresh cron, **plus** weekly `debug_token` liveness check |
 | **Third-party credentials** | ✅ (22) | — | ✅ | — | — | — | New 2026-08-20. Weekly probe of 5 credentials; 502 on failure escalates through `cron_health()` into the digest |
+
+### Transactional email — one delivery path, and a failure that escalates without email (2026-09-02)
+
+Email had a credential probe but no signal that *sends* were working, and the
+send sites themselves were inconsistent in a way that hid failures. Three
+concrete defects were live in production:
+
+- **Two sites had no error handling at all.** `POST /api/customers/create` and
+  `POST /api/emails/welcome` awaited `resend.emails.send(...)` bare — no
+  `.catch()`, no result check, no log. An admin created a customer, the setup
+  email failed, and nobody — admin, customer, or CloudWatch — learned anything.
+- **`.catch()` does not catch a Resend failure.** The SDK **resolves** with
+  `{ data: null, error }` on API rejections. Roughly a dozen sites attached only
+  `.catch()`, which sees network throws alone, so every bad address, quota
+  breach, and rejected key was swallowed silently.
+- **`RESEND_FROM_EMAIL` was asserted, not checked.** `process.env.RESEND_FROM_EMAIL!`
+  appeared at nearly every call site and was guarded at two. Dropping that one
+  Amplify variable would have failed every email in the system at once.
+
+All ~35 call sites now route through **`lib/send-email.ts`**, which guards both
+variables, inspects `result.error`, retries transient failures (429/5xx/network)
+under a stable idempotency key so a retry cannot double-send, and **never
+throws** — so a mail failure still cannot abort a committed booking or payment.
+
+The design rule, and why the probe alone was not enough: **a broken mailer must
+not be reported by email.** That is circular — the alert travels the exact path
+that is down. So two cron routes now fail loudly instead:
+
+- `POST /api/admin/daily-summary` returns **500** when the digest reaches zero of
+  its recipients.
+- `POST /api/certifications/send-reminders` returns **500** when Resend is
+  unconfigured, instead of the old `{ count: 0 }` — which was indistinguishable
+  from "no certifications were due."
+
+Both are wrapped by `withCronHeartbeat`, so a failure writes `ok=false` and
+`cron_health()` reports the job overdue in the digest's existing cron banner.
+The escalation path is the database, not the inbox.
+
+One data-loss bug fell out of the same review: `send-reminders` stamped
+`last_reminder_sent_days` **before** checking whether the send succeeded. Because
+the SDK resolves on error, a failed send still marked the milestone as reminded,
+and the next run skipped that customer — permanently suppressing their 90/60/30/7-day
+notice. The stamp now happens only after a confirmed send.
 
 ---
 
@@ -608,6 +651,11 @@ overdue in the digest's existing cron banner.
 
 ### What the invariants do not yet cover
 
-Merch orders, add-ons, blog, class requests, grading/CCF, contact/Zoho, and
-transactional email have no invariant — several have no natural one, and need an
-outcome test or a heartbeat instead.
+Merch orders, add-ons, blog, class requests, grading/CCF, and contact/Zoho have no
+invariant — several have no natural one, and need an outcome test or a heartbeat
+instead.
+
+Transactional email came off this list on 2026-09-02: it has no natural SQL
+invariant either, but it now has the heartbeat escalation described under
+Communications, so a broken mailer surfaces as an overdue cron job rather than
+as silence.

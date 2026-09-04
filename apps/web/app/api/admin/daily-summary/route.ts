@@ -11,7 +11,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { fetchHealthInvariants, summarizeInvariants } from "@/lib/health-invariants";
-import { Resend } from "resend";
+import { sendEmails } from "@/lib/send-email";
 import {
   dailySummaryEmail,
   type DailySummaryRevenue,
@@ -472,7 +472,6 @@ async function handlePOST(request: Request): Promise<Response> {
   }
 
   // ── Build and send emails ────────────────────────────────────────────────────
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
   const adminUrl = `${baseUrl}/admin`;
 
@@ -515,28 +514,33 @@ async function handlePOST(request: Request): Promise<Response> {
     pendingClassApprovalsCount,
   });
 
-  let sentCount = 0;
-  for (const recipient of recipients) {
-    try {
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: recipient.email!,
-        subject,
-        html,
-      });
-      sentCount++;
-    } catch (emailError) {
-      console.error(
-        "[POST /api/admin/daily-summary] Email send failed for",
-        recipient.email,
-        emailError
-      );
-    }
+  // One message per recipient rather than a single multi-recipient send, so one
+  // bad address cannot cost every admin the digest.
+  const { sent: sentCount, failed } = await sendEmails(
+    recipients.map((recipient) => ({
+      context: "admin/daily-summary",
+      to: recipient.email,
+      subject,
+      html,
+    }))
+  );
+
+  // If nobody received the digest, the job did not do its work — say so, so the
+  // cron heartbeat records a failed run instead of a healthy one that sent zero.
+  if (sentCount === 0) {
+    console.error(
+      `[POST /api/admin/daily-summary] Digest reached none of ${recipients.length} recipient(s).`
+    );
+    return Response.json(
+      { success: false, error: "Daily summary could not be delivered to any recipient." },
+      { status: 500 }
+    );
   }
 
   return Response.json({
     success: true,
     sent: sentCount,
+    failed,
     recipients: recipients.length,
     triggeredBy: viaCron ? "cron" : actorId,
   });

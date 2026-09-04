@@ -9,7 +9,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
 import { floatingNow } from "@/lib/business-time";
 
@@ -102,7 +102,7 @@ export async function POST(
     return Response.json({ success: false, error: "Failed to create booking." }, { status: 500 });
   }
 
-  if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
+  if (isEmailConfigured()) {
     const { data: customerProfile } = await supabase
       .from("profiles")
       .select("first_name, last_name, email")
@@ -134,7 +134,6 @@ export async function POST(
       });
     } else {
       try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
         const { subject, html } = bookingConfirmationEmail({
           firstName: customerFirstName,
           className,
@@ -154,18 +153,15 @@ export async function POST(
           instructorPhone: instructorProfile?.phone ?? null,
         });
 
-        const { error: emailError } = await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL ?? "",
+        await sendEmail({
+          context: "customers/add-booking:customer",
           to: resolvedEmail,
           subject,
           html,
         });
-
-        if (emailError) {
-          console.error("[customers/[id]/add-booking] Confirmation email failed:", emailError);
-        }
       } catch (emailErr) {
-        console.error("[customers/[id]/add-booking] Confirmation email failed:", emailErr);
+        // Guards the template build above — sendEmail never throws.
+        console.error("[customers/[id]/add-booking] Confirmation email could not be prepared:", emailErr);
       }
 
       // Notify the instructor of the new booking (best-effort — non-fatal).
@@ -187,18 +183,15 @@ export async function POST(
             source: "manual",
           });
 
-          const { error: iEmailError } = await new Resend(process.env.RESEND_API_KEY).emails.send({
-            from: process.env.RESEND_FROM_EMAIL ?? "",
+          await sendEmail({
+            context: "customers/add-booking:instructor",
             to: instructorProfile.email,
             subject: iSubject,
             html: iHtml,
           });
-
-          if (iEmailError) {
-            console.error("[customers/[id]/add-booking] Instructor notification email failed:", iEmailError);
-          }
         } catch (iEmailErr) {
-          console.error("[customers/[id]/add-booking] Instructor notification email failed:", iEmailErr);
+          // Guards the template build above — sendEmail never throws.
+          console.error("[customers/[id]/add-booking] Instructor notification could not be prepared:", iEmailErr);
         }
       }
     }

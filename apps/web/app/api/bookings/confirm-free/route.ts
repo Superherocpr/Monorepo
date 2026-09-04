@@ -20,7 +20,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
 import { maybeSendAssistantReminder } from "@/lib/assistant-reminder";
@@ -178,7 +178,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // ── Step 4: Send booking confirmation email (best-effort) ────────────────
-  if (process.env.RESEND_API_KEY && typeof startsAt === "string") {
+  if (isEmailConfigured() && typeof startsAt === "string") {
     // Fetch instructor + customer contact details server-side — never trust
     // client-supplied values. The customer profile fetch is also a fallback:
     // an existing customer who signed in (rather than creating a new account)
@@ -207,8 +207,6 @@ export async function POST(request: Request): Promise<Response> {
         customerId,
       });
     } else {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-
       const { subject, html } = bookingConfirmationEmail({
         firstName:
           typeof customerFirstName === "string" && customerFirstName
@@ -232,18 +230,20 @@ export async function POST(request: Request): Promise<Response> {
         instructorPhone: instructorProfile?.phone ?? null,
       });
 
-      const { error: emailError } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
+      // Keyed on the booking so a client retry cannot send the customer two
+      // confirmations for the same free booking.
+      const result = await sendEmail({
+        context: "bookings/confirm-free:customer",
         to: resolvedCustomerEmail,
         subject,
         html,
+        idempotencyKey: `booking-confirm-free-${bookingId}`,
       });
 
-      if (emailError) {
-        console.error("[bookings/confirm-free] Confirmation email failed:", {
-          bookingId,
-          error: emailError,
-        });
+      if (!result.sent) {
+        console.error(
+          `[bookings/confirm-free] CRITICAL: confirmation email not delivered for booking ${bookingId}`
+        );
       }
 
       // Notify the instructor of the new booking (best-effort — non-fatal).
@@ -266,13 +266,12 @@ export async function POST(request: Request): Promise<Response> {
           source: "promo",
         });
 
-        await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL!,
+        await sendEmail({
+          context: "bookings/confirm-free:instructor",
           to: instructorProfile.email,
           subject: iSubject,
           html: iHtml,
-        }).catch((err: unknown) => {
-          console.error("[bookings/confirm-free] Instructor notification email failed:", { bookingId, error: err });
+          idempotencyKey: `booking-confirm-free-instructor-${bookingId}`,
         });
       }
     }

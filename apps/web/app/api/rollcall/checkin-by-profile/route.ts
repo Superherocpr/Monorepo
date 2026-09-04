@@ -6,7 +6,9 @@
  *       profile updates, preventing anyone else from changing their data.
  * Creates a roster_record for the student in the session. Sets confirmed=true.
  * Sets corrected=true when updates are saved. Idempotent — already-checked-in
- * students are confirmed gracefully without an error.
+ * students are confirmed gracefully without an error. On the first confirmation
+ * (not the idempotent already-checked-in path), sends the branded rollcall
+ * welcome email.
  */
 
 // supabase (admin) handles all DB reads/writes — bypasses RLS since no user
@@ -20,6 +22,8 @@ import {
   ROLLCALL_VERIFIED_EVENT,
   rollcallChannelTopic,
 } from "@/lib/rollcall-realtime";
+import { sendEmail } from "@/lib/send-email";
+import { rollcallWelcomeEmail } from "@/lib/emails";
 
 /** Fields the student may update during check-in. */
 interface ProfileUpdates {
@@ -59,6 +63,25 @@ async function broadcastVerified(
   } catch (err) {
     console.error("[checkin-by-profile] Broadcast failed:", err);
   }
+}
+
+/**
+ * Sends the branded rollcall welcome email to a student on their first
+ * confirmation. Fire-and-forget, same as broadcastVerified — a slow or failed
+ * send must never delay the check-in response, and sendEmail itself never
+ * throws or rejects.
+ * @param email - Student's email (the post-update value when info was corrected).
+ * @param firstName - Student's first name for personalization.
+ */
+function sendWelcomeEmail(email: string | null, firstName: string): void {
+  if (!email) return;
+  const { subject, html } = rollcallWelcomeEmail({ firstName });
+  void sendEmail({
+    context: "rollcall/checkin-by-profile:welcome",
+    to: email,
+    subject,
+    html,
+  });
 }
 
 /**
@@ -237,12 +260,15 @@ export async function POST(request: Request) {
       );
     }
 
-    await broadcastVerified(
+    // Fire-and-forget: a slow or failed broadcast must never delay the check-in
+    // response. The instructor's page has a polling fallback for missed events.
+    void broadcastVerified(
       supabase,
       sessionId,
       updates.firstName.trim(),
       updates.lastName.trim()
     );
+    sendWelcomeEmail(updates.email.trim().toLowerCase(), updates.firstName.trim());
 
     return Response.json({
       success: true,
@@ -285,7 +311,10 @@ export async function POST(request: Request) {
     );
   }
 
-  await broadcastVerified(supabase, sessionId, profile.first_name, profile.last_name);
+  // Fire-and-forget: a slow or failed broadcast must never delay the check-in
+  // response. The instructor's page has a polling fallback for missed events.
+  void broadcastVerified(supabase, sessionId, profile.first_name, profile.last_name);
+  sendWelcomeEmail(profile.email, profile.first_name);
 
   return Response.json({
     success: true,

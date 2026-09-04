@@ -15,7 +15,8 @@
  * user-supplied values before inserting them into HTML.
  */
 
-import { wrapEmail } from "@/lib/email";
+import { wrapEmail, wrapStandaloneEmail } from "@/lib/email";
+import { BUSINESS_PHONE } from "@/lib/constants";
 import {
   formatClassDate,
   formatClassTime,
@@ -27,8 +28,16 @@ import type { CronHealthSummary } from "@/lib/cron-heartbeat";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
-/** Escapes HTML special characters to prevent injection in email bodies. */
-function escapeHtml(value: string): string {
+/**
+ * Escapes HTML special characters to prevent injection in email bodies.
+ *
+ * Exported because routes that build ad-hoc email HTML (merch orders, roster
+ * uploads) need the same escaping; they each used to carry a private copy.
+ *
+ * @param value - Raw, possibly user-supplied text.
+ * @returns The text with &, <, >, " and ' replaced by entities.
+ */
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -70,8 +79,9 @@ export function welcomeEmail({ firstName }: { firstName: string }): EmailContent
 // ── 2. Rollcall welcome email (new student checked in at class) ────────────────
 
 /**
- * Sent to a new student after they create an account on the rollcall check-in page.
- * Triggered by: POST /api/rollcall/register
+ * Sent to a student the first time they are confirmed on a session roster via
+ * the rollcall check-in flow — not on repeat check-ins.
+ * Triggered by: POST /api/rollcall/checkin-by-profile
  * @param firstName - The student's first name.
  */
 export function rollcallWelcomeEmail({ firstName }: { firstName: string }): EmailContent {
@@ -357,7 +367,8 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
 
   return {
     subject: "Welcome to SuperHeroCPR!",
-    html: wrapEmail(content),
+    // Standalone: this Stripo design paints its own header and footer.
+    html: wrapStandaloneEmail(content),
   };
 }
 
@@ -446,7 +457,7 @@ export function accountDeletedEmail({ firstName }: { firstName: string }): Email
     subject: "Your SuperHeroCPR account has been deleted",
     html: wrapEmail(`
       <h1>Account Deleted</h1>
-      <p>Hi ${firstName},</p>
+      <p>Hi ${escapeHtml(firstName.trim())},</p>
       <p>Your SuperHeroCPR account has been successfully deleted. You will no longer be able to log in.</p>
       <p>Your certification history has been preserved for our records.</p>
       <p>If you believe this was a mistake or wish to restore your account, please contact us at
@@ -500,14 +511,14 @@ export function orderShippedEmail({
   shippingState: string;
 }): EmailContent {
   const carrierLine = carrier
-    ? `<p><strong>Carrier:</strong> ${carrier}</p>`
+    ? `<p><strong>Carrier:</strong> ${escapeHtml(carrier.trim())}</p>`
     : "";
 
   const itemsHtml = items
     .map(
       (item) => `<tr>
-        <td style="padding:4px 8px">${item.productName}</td>
-        <td style="padding:4px 8px">${item.size}</td>
+        <td style="padding:4px 8px">${escapeHtml(item.productName)}</td>
+        <td style="padding:4px 8px">${escapeHtml(item.size)}</td>
         <td style="padding:4px 8px;text-align:center">${item.quantity}</td>
         <td style="padding:4px 8px;text-align:right">$${item.priceAtPurchase.toFixed(2)}</td>
       </tr>`
@@ -517,9 +528,9 @@ export function orderShippedEmail({
   return {
     subject: "Your SuperHeroCPR order has shipped!",
     html: wrapEmail(`
-      <h1>Your order is on the way, ${firstName}!</h1>
+      <h1>Your order is on the way, ${escapeHtml(firstName.trim())}!</h1>
       <p>Your SuperHeroCPR order has shipped.</p>
-      <p><strong>Tracking number:</strong> ${trackingNumber}</p>
+      <p><strong>Tracking number:</strong> ${escapeHtml(trackingNumber.trim())}</p>
       ${carrierLine}
       <h3>Your order:</h3>
       <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">
@@ -534,7 +545,7 @@ export function orderShippedEmail({
         <tbody>${itemsHtml}</tbody>
       </table>
       <p style="margin-top:12px"><strong>Order Total: $${totalAmount.toFixed(2)}</strong></p>
-      <p>Shipping to: ${shippingName}, ${shippingCity}, ${shippingState}</p>
+      <p>Shipping to: ${escapeHtml(shippingName)}, ${escapeHtml(shippingCity)}, ${escapeHtml(shippingState)}</p>
       <p>- The SuperHeroCPR Team</p>
     `),
   };
@@ -581,7 +592,7 @@ export function staffInviteEmail({
       ${safePersonalMessage}
       <p>Your account has been created with the role of <strong>${escapeHtml(roleLabel)}</strong>.</p>
       <p>Click the link below to set your password and activate your account.</p>
-      <p><a href="${actionLink}">Set My Password →</a></p>
+      <p><a href="${escapeHtml(actionLink)}">Set My Password →</a></p>
       <p>This link expires in 24 hours.</p>
       ${instructorNote}
       <p>- The SuperHeroCPR Team</p>
@@ -607,9 +618,9 @@ export function customerSetupEmail({
   return {
     subject: "Set up your SuperHeroCPR account",
     html: wrapEmail(`
-      <h1>Welcome to SuperHeroCPR, ${firstName}!</h1>
+      <h1>Welcome to SuperHeroCPR, ${escapeHtml(firstName.trim())}!</h1>
       <p>An account has been created for you. Click the link below to set your password and activate your account.</p>
-      <p><a href="${setupLink}">Set My Password →</a></p>
+      <p><a href="${escapeHtml(setupLink)}">Set My Password →</a></p>
       <p>This link expires in 24 hours.</p>
       <p>- The SuperHeroCPR Team</p>
     `),
@@ -635,9 +646,9 @@ export function passwordResetEmail({
     subject: "Reset your SuperHeroCPR password",
     html: wrapEmail(`
       <h1>Password Reset</h1>
-      <p>Hi ${firstName},</p>
+      <p>Hi ${escapeHtml(firstName.trim())},</p>
       <p>A staff member has sent you a password reset link. Click below to set a new password for your SuperHeroCPR account.</p>
-      <p><a href="${actionLink}">Reset My Password →</a></p>
+      <p><a href="${escapeHtml(actionLink)}">Reset My Password →</a></p>
       <p>This link expires in 24 hours. If you did not expect this email, you can safely ignore it.</p>
       <p>- The SuperHeroCPR Team</p>
     `),
@@ -839,7 +850,8 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
 
   return {
     subject: "Your CPR Certification Expires Soon",
-    html: wrapEmail(content),
+    // Standalone: this Stripo design paints its own header and footer.
+    html: wrapStandaloneEmail(content),
   };
 }
 
@@ -867,8 +879,8 @@ export function invoicePaidEmail({
   return {
     subject: `Invoice ${invoiceNumber} marked as paid`,
     html: wrapEmail(`
-      <p>Hi ${firstName},</p>
-      <p>Invoice <strong>${invoiceNumber}</strong> for ${recipientName} has been marked as paid.</p>
+      <p>Hi ${escapeHtml(firstName.trim())},</p>
+      <p>Invoice <strong>${escapeHtml(invoiceNumber.trim())}</strong> for ${escapeHtml(recipientName.trim())} has been marked as paid.</p>
       <p>${studentCount} student spot${studentCount !== 1 ? "s" : ""} have been reserved for the class.</p>
       <p>- The SuperHeroCPR Team</p>
     `),
@@ -935,22 +947,34 @@ export function invoiceResendEmail({
     ? `<tr><td style="padding:8px;color:#555">Instructor</td><td style="padding:8px;font-weight:bold">${safeInstructorName}</td></tr>`
     : "";
 
+  // Staff- and customer-supplied free text, all escaped before interpolation.
+  const safeInvoiceNumber = escapeHtml(invoiceNumber.trim());
+  const safeRecipientName = escapeHtml(recipientName.trim());
+  const safeClassName = escapeHtml(className.trim());
+  const safeLocationName = escapeHtml(locationName.trim());
+  const safeLocationCity = escapeHtml(locationCity.trim());
+  const safeLocationState = escapeHtml(locationState.trim());
+  const safeNotes = notes ? escapeHtml(notes.trim()) : null;
+  const safePaymentPlatform = paymentPlatform
+    ? escapeHtml(paymentPlatform.trim())
+    : "See your instructor";
+
   return {
-    subject: `Invoice ${invoiceNumber} from SuperHeroCPR`,
+    subject: `Invoice ${invoiceNumber.trim()} from SuperHeroCPR`,
     html: wrapEmail(`
-      <h1>Invoice ${invoiceNumber}</h1>
-      <p>Hello ${recipientName},</p>
+      <h1>Invoice ${safeInvoiceNumber}</h1>
+      <p>Hello ${safeRecipientName},</p>
       <p>Please find your invoice for the upcoming CPR class below.</p>
       <table style="border-collapse:collapse;width:100%;max-width:500px">
-        <tr><td style="padding:8px;color:#555">Class</td><td style="padding:8px;font-weight:bold">${className}</td></tr>
+        <tr><td style="padding:8px;color:#555">Class</td><td style="padding:8px;font-weight:bold">${safeClassName}</td></tr>
         <tr><td style="padding:8px;color:#555">Date</td><td style="padding:8px">${formattedDate}</td></tr>
-        <tr><td style="padding:8px;color:#555">Location</td><td style="padding:8px">${locationName}, ${locationCity}, ${locationState}</td></tr>
+        <tr><td style="padding:8px;color:#555">Location</td><td style="padding:8px">${safeLocationName}, ${safeLocationCity}, ${safeLocationState}</td></tr>
         ${instructorRow}
         <tr><td style="padding:8px;color:#555">Students</td><td style="padding:8px">${studentCount}</td></tr>
         <tr><td style="padding:8px;color:#555;font-weight:bold">Total Due</td><td style="padding:8px;font-weight:bold;font-size:18px">${formattedAmount}</td></tr>
       </table>
-      ${notes ? `<p style="margin-top:16px;color:#555">Note: ${notes}</p>` : ""}
-      <p style="margin-top:24px">Payment platform: ${paymentPlatform ?? "See your instructor"}</p>
+      ${safeNotes ? `<p style="margin-top:16px;color:#555">Note: ${safeNotes}</p>` : ""}
+      <p style="margin-top:24px">Payment platform: ${safePaymentPlatform}</p>
       <p>- The SuperHeroCPR Team</p>
     `),
   };
@@ -1040,7 +1064,7 @@ export function bookingConfirmationEmail({
     : "";
 
   return {
-    subject: `Booking Confirmed - ${safeClassName} on ${formattedDate}`,
+    subject: `Booking Confirmed - ${className.trim()} on ${formattedDate}`,
     html: wrapEmail(`
       <h1>You're booked!</h1>
       <p>Hi ${safeFirstName ?? "there"},</p>
@@ -1066,7 +1090,7 @@ export function bookingConfirmationEmail({
         <tr><td><strong>Transaction ID:</strong></td><td>${transactionId ?? "N/A"}</td></tr>
       </table>
       <p>Please arrive a few minutes early. Wear comfortable clothing.</p>
-      <p>Need to reschedule? Call us at ${safeInstructorPhone}.</p>
+      <p>Need to reschedule? Call us at ${safeInstructorPhone ?? BUSINESS_PHONE}.</p>
       <p>See you in class!</p>
       <p>— The SuperHeroCPR Team</p>
     `),
@@ -1133,6 +1157,15 @@ export function invoiceEmail({
     currency: "USD",
   }).format(totalAmount);
 
+  // Every one of these is staff- or customer-supplied free text typed into the
+  // invoice form, so all of it is escaped before it reaches the HTML body.
+  const safeInvoiceNumber = escapeHtml(invoiceNumber.trim());
+  const safeRecipientName = escapeHtml(recipientName.trim());
+  const safeClassName = escapeHtml(className.trim());
+  const safeLocationName = escapeHtml(locationName.trim());
+  const safeLocationCity = escapeHtml(locationCity.trim());
+  const safeLocationState = escapeHtml(locationState.trim());
+
   const instructorRow = instructorName
     ? `<tr>
         <td style="padding:6px 0;color:#6b7280;font-size:14px;">Instructor:</td>
@@ -1143,21 +1176,25 @@ export function invoiceEmail({
   const companyRow = companyName
     ? `<tr>
         <td style="padding:6px 0;color:#6b7280;font-size:14px;">Company:</td>
-        <td style="padding:6px 0;font-size:14px;">${companyName}</td>
+        <td style="padding:6px 0;font-size:14px;">${escapeHtml(companyName.trim())}</td>
        </tr>`
     : "";
 
   const notesRow = notes
     ? `<tr>
         <td style="padding:6px 0;color:#6b7280;font-size:14px;vertical-align:top;">Note:</td>
-        <td style="padding:6px 0;font-size:14px;">${notes}</td>
+        <td style="padding:6px 0;font-size:14px;">${escapeHtml(notes.trim())}</td>
        </tr>`
     : "";
 
-  const paymentRow = paymentLink
+  // paymentLink lands in an href, so it is escaped for attribute context too —
+  // escapeHtml turns a `"` into `&quot;`, which is what stops a crafted link
+  // from closing the attribute and adding its own.
+  const safePaymentLink = paymentLink ? escapeHtml(paymentLink.trim()) : null;
+  const paymentRow = safePaymentLink
     ? `<tr>
         <td style="padding:6px 0;color:#6b7280;font-size:14px;">Pay here:</td>
-        <td style="padding:6px 0;font-size:14px;"><a href="${paymentLink}" style="color:#dc2626;">${paymentLink}</a></td>
+        <td style="padding:6px 0;font-size:14px;"><a href="${safePaymentLink}" style="color:#dc2626;">${safePaymentLink}</a></td>
        </tr>`
     : "";
 
@@ -1172,9 +1209,9 @@ export function invoiceEmail({
            If you have a list of staff attending this class, you can submit it in advance to save time on class day.
            This is only needed if you have multiple attendees to pre-register them. Attached to this email is the roster template CSV you should use to fill in your attendees.
          </p>
-         <p style="font-size:14px;color:#6b7280;">Your invoice number: <strong>${invoiceNumber}</strong></p>
+         <p style="font-size:14px;color:#6b7280;">Your invoice number: <strong>${safeInvoiceNumber}</strong></p>
          <p>
-           <a href="${baseUrl}/submit-roster?invoice=${invoiceNumber}"
+           <a href="${baseUrl}/submit-roster?invoice=${encodeURIComponent(invoiceNumber.trim())}"
               style="display:inline-block;background:#dc2626;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:600;">
              Submit Your Roster →
            </a>
@@ -1186,17 +1223,17 @@ export function invoiceEmail({
     subject: `Invoice ${invoiceNumber} - ${className} on ${formattedDate}`,
     html: wrapEmail(`
       <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Invoice from SuperHeroCPR</h1>
-      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Invoice number: <strong>${invoiceNumber}</strong></p>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Invoice number: <strong>${safeInvoiceNumber}</strong></p>
 
       <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
         <tr>
           <td style="padding:6px 0;color:#6b7280;font-size:14px;">To:</td>
-          <td style="padding:6px 0;font-size:14px;font-weight:600;">${recipientName}</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;">${safeRecipientName}</td>
         </tr>
         ${companyRow}
         <tr>
           <td style="padding:6px 0;color:#6b7280;font-size:14px;">Class:</td>
-          <td style="padding:6px 0;font-size:14px;">${className}</td>
+          <td style="padding:6px 0;font-size:14px;">${safeClassName}</td>
         </tr>
         <tr>
           <td style="padding:6px 0;color:#6b7280;font-size:14px;">Date:</td>
@@ -1204,7 +1241,7 @@ export function invoiceEmail({
         </tr>
         <tr>
           <td style="padding:6px 0;color:#6b7280;font-size:14px;">Location:</td>
-          <td style="padding:6px 0;font-size:14px;">${locationName}, ${locationCity}, ${locationState}</td>
+          <td style="padding:6px 0;font-size:14px;">${safeLocationName}, ${safeLocationCity}, ${safeLocationState}</td>
         </tr>
         ${instructorRow}
         <tr>
@@ -1229,7 +1266,7 @@ export function invoiceEmail({
   };
 }
 
-// ── 14. Self-service password reset ───────────────────────────────────────────
+// ── 15. Self-service password reset ───────────────────────────────────────────
 
 /**
  * Sent to a customer when they request a password reset themselves via
@@ -1251,7 +1288,7 @@ export function selfServicePasswordResetEmail({
       <p>Click the button below to choose a new password. This link expires in <strong>24 hours</strong>.</p>
 
       <p style="margin:24px 0;">
-        <a href="${actionLink}"
+        <a href="${escapeHtml(actionLink)}"
            style="display:inline-block;background-color:#dc2626;color:#ffffff;font-weight:700;font-size:15px;padding:14px 28px;border-radius:8px;text-decoration:none;">
           Reset My Password →
         </a>
@@ -1261,7 +1298,7 @@ export function selfServicePasswordResetEmail({
         If the button doesn&rsquo;t work, copy and paste this link into your browser:
       </p>
       <p style="font-size:13px;word-break:break-all;">
-        <a href="${actionLink}" style="color:#dc2626;">${actionLink}</a>
+        <a href="${escapeHtml(actionLink)}" style="color:#dc2626;">${escapeHtml(actionLink)}</a>
       </p>
 
       <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
@@ -1335,7 +1372,7 @@ export function classRequestAdminNotificationEmail({
   const adminLink = `${baseUrl}/admin/class-requests/${requestId}`;
 
   return {
-    subject: `New Class Request from ${safeName} — Action Required`,
+    subject: `New Class Request from ${customerName.trim()} — Action Required`,
     html: wrapEmail(`
       <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">New Class Request</h1>
       <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">
@@ -1636,7 +1673,7 @@ export function instructorClassOpportunityEmail({
   const acceptLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
   return {
-    subject: `New Class Available — ${safeClass} on ${formattedDate} (First Come, First Serve)`,
+    subject: `New Class Available — ${className.trim()} on ${formattedDate} (First Come, First Serve)`,
     html: wrapEmail(`
       <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">New Class Opportunity!</h1>
       <p style="font-size:14px;color:#6b7280;margin-bottom:8px;">
@@ -1732,7 +1769,7 @@ export function instructorAcceptedAdminEmail({
   const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
   return {
-    subject: `${safeInstructor} accepted a class — ${safeClass}`,
+    subject: `${instructorName.trim()} accepted a class — ${className.trim()}`,
     html: wrapEmail(`
       <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Instructor Accepted!</h1>
       <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">
@@ -1773,7 +1810,7 @@ export function instructorAcceptedAdminEmail({
   };
 }
 
-// ── 22b. Customer-Requested Class — Instructor confirmed notification to customer ──
+// ── 22. Customer-Requested Class — Instructor confirmed notification to customer ──
 
 /**
  * Sent to the customer as soon as an instructor accepts their class request.
@@ -1817,7 +1854,7 @@ export function instructorConfirmedCustomerEmail({
   const formattedDate = formatClassDateTimeLong(sessionDate);
 
   return {
-    subject: `An instructor has been confirmed for your ${safeClass} class!`,
+    subject: `An instructor has been confirmed for your ${className.trim()} class!`,
     html: wrapEmail(`
       <h1>Great News, ${safeFirstName}!</h1>
       <p><strong>${safeInstructor}</strong> has been confirmed as your instructor. Here are your class details:</p>
@@ -1854,7 +1891,7 @@ export function instructorConfirmedCustomerEmail({
   };
 }
 
-// ── 22c. Invoice payment confirmed notification to customer ────────────────────
+// ── 23. Invoice payment confirmed notification to customer ────────────────────
 
 /**
  * Sent to the invoice recipient once their invoice is marked paid — the only
@@ -1904,7 +1941,7 @@ export function invoicePaymentConfirmedCustomerEmail({
            If you haven't already, submit your list of attendees so we can prepare for class day.
          </p>
          <p>
-           <a href="${baseUrl}/submit-roster?invoice=${invoiceNumber}"
+           <a href="${baseUrl}/submit-roster?invoice=${encodeURIComponent(invoiceNumber.trim())}"
               style="display:inline-block;background:#dc2626;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:600;">
              Submit Your Roster →
            </a>
@@ -1915,13 +1952,13 @@ export function invoicePaymentConfirmedCustomerEmail({
     subject: `Payment received — Invoice ${invoiceNumber}`,
     html: wrapEmail(`
       <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Payment Confirmed!</h1>
-      <p>Hi ${recipientName},</p>
-      <p>We've received your payment for invoice <strong>${invoiceNumber}</strong>. Your class is confirmed.</p>
+      <p>Hi ${escapeHtml(recipientName.trim())},</p>
+      <p>We've received your payment for invoice <strong>${escapeHtml(invoiceNumber.trim())}</strong>. Your class is confirmed.</p>
 
       <table style="width:100%;border-collapse:collapse;margin:16px 0 24px;">
         <tr>
           <td style="padding:6px 0;color:#6b7280;font-size:14px;width:140px;">Class:</td>
-          <td style="padding:6px 0;font-size:14px;">${className}</td>
+          <td style="padding:6px 0;font-size:14px;">${escapeHtml(className.trim())}</td>
         </tr>
         <tr>
           <td style="padding:6px 0;color:#6b7280;font-size:14px;">Date:</td>
@@ -1943,7 +1980,7 @@ export function invoicePaymentConfirmedCustomerEmail({
   };
 }
 
-// ── 23. Open Opportunity — Session cancelled, notify admins/managers ───────────
+// ── 24. Open Opportunity — Session cancelled, notify admins/managers ───────────
 
 /**
  * Sent to all admin/manager profiles when a session is cancelled.
@@ -1983,7 +2020,7 @@ export function sessionCancelledAdminEmail({
   const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
   return {
-    subject: `Class cancelled — ${safeClass} on ${formattedDate}`,
+    subject: `Class cancelled — ${className.trim()} on ${formattedDate}`,
     html: wrapEmail(`
       <h1>A Class Was Cancelled</h1>
       <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
@@ -2023,7 +2060,7 @@ export function sessionCancelledAdminEmail({
   };
 }
 
-// ── 24. Open Opportunity — Broadcast to instructors ─────────────────────────────
+// ── 25. Open Opportunity — Broadcast to instructors ─────────────────────────────
 
 /**
  * Sent to every active instructor/manager/super_admin when a session is cancelled
@@ -2064,7 +2101,7 @@ export function openOpportunityInstructorEmail({
   const claimLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
   return {
-    subject: `Open Class Opportunity — ${safeClass} on ${formattedDate} (First Come, First Serve)`,
+    subject: `Open Class Opportunity — ${className.trim()} on ${formattedDate} (First Come, First Serve)`,
     html: wrapEmail(`
       <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">A Class Needs a New Instructor</h1>
       <p style="font-size:14px;color:#6b7280;margin-bottom:8px;">
@@ -2103,7 +2140,7 @@ export function openOpportunityInstructorEmail({
   };
 }
 
-// ── 25. Open Opportunity — Session claimed, notify students ────────────────────
+// ── 26. Open Opportunity — Session claimed, notify students ────────────────────
 
 /**
  * Sent to every student booked into a session once another instructor claims it.
@@ -2147,7 +2184,7 @@ export function sessionClaimedStudentEmail({
   const formattedDate = formatClassDateTimeLong(sessionDate);
 
   return {
-    subject: `Good news — your class has a new instructor (${safeClass})`,
+    subject: `Good news — your class has a new instructor (${className.trim()})`,
     html: wrapEmail(`
       <h1>Good News, ${safeFirstName}!</h1>
       <p>Your class is back on. A new instructor has been assigned:</p>
@@ -2184,7 +2221,7 @@ export function sessionClaimedStudentEmail({
   };
 }
 
-// ── 26. Open Opportunity — Session claimed, notify admins/managers ─────────────
+// ── 27. Open Opportunity — Session claimed, notify admins/managers ─────────────
 
 /**
  * Sent to all admin/manager profiles when a cancelled session is claimed by a new instructor.
@@ -2216,7 +2253,7 @@ export function sessionClaimedAdminEmail({
   const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
   return {
-    subject: `${safeInstructor} claimed a cancelled class — ${safeClass}`,
+    subject: `${newInstructorName.trim()} claimed a cancelled class — ${className.trim()}`,
     html: wrapEmail(`
       <h1>Open Class Claimed</h1>
       <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">
@@ -2248,7 +2285,7 @@ export function sessionClaimedAdminEmail({
   };
 }
 
-// ── 27. Open Opportunity — 48hr unclaimed escalation digest to super admins ────
+// ── 28. Open Opportunity — 48hr unclaimed escalation digest to super admins ────
 
 /** One still-unclaimed session listed in the escalation digest email. */
 export interface UnclaimedOpportunitySummary {
@@ -2310,7 +2347,7 @@ export function unclaimedOpportunityEscalationEmail({
   };
 }
 
-// ── 28. Class Assistant — Enrollment threshold reached, notify instructor ──────
+// ── 29. Class Assistant — Enrollment threshold reached, notify instructor ──────
 
 /**
  * Sent once to the assigned instructor when a BLS/ACLS class reaches 9 paid
@@ -2350,7 +2387,7 @@ export function assistantNeededEmail({
   const sessionLink = `${baseUrl}/admin/sessions/${sessionId}`;
 
   return {
-    subject: `Assistant needed — ${safeClass} on ${formattedDate}`,
+    subject: `Assistant needed — ${className.trim()} on ${formattedDate}`,
     html: wrapEmail(`
       <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">You Need an Assistant for This Class</h1>
       <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Hi ${safeInstructor},</p>
@@ -2377,7 +2414,7 @@ export function assistantNeededEmail({
   };
 }
 
-// ── Payout denied — super admin alert ─────────────────────────────────────────
+// ── 30. Payout denied — super admin alert ─────────────────────────────────────────
 
 /**
  * Sent to all super_admins when a PayPal payout batch is denied after PayPal had
@@ -2454,7 +2491,7 @@ export function payoutDeniedAdminEmail({
   };
 }
 
-// ── Payout batches stuck — super admin digest ─────────────────────────────────
+// ── 31. Payout batches stuck — super admin digest ─────────────────────────────────
 
 /** One payout batch summarized inside the stuck-batch digest email. */
 export interface PayoutStuckDigestBatch {
@@ -2546,7 +2583,7 @@ export function payoutStuckDigestAdminEmail({
   };
 }
 
-// ── Instructor payout sent ────────────────────────────────────────────────────
+// ── 32. Instructor payout sent ────────────────────────────────────────────────────
 
 /**
  * Sent to an instructor once PayPal confirms their payout was delivered.
@@ -2610,7 +2647,7 @@ export function instructorPayoutSentEmail({
   };
 }
 
-// ── 30. Booking cancelled by admin ────────────────────────────────────────────
+// ── 33. Booking cancelled by admin ────────────────────────────────────────────
 
 
 /**
@@ -2636,7 +2673,7 @@ export function bookingCancelledEmail({
   const formattedTime = formatClassTime(startsAt);
 
   return {
-    subject: `Your booking for ${safeClassName} has been cancelled`,
+    subject: `Your booking for ${className.trim()} has been cancelled`,
     html: wrapEmail(`
       <h1>Your Booking Has Been Cancelled</h1>
       <p>Hi ${safeFirstName},</p>
@@ -2657,7 +2694,7 @@ export function bookingCancelledEmail({
   };
 }
 
-// ── 31. Instructor new booking notification ────────────────────────────────────
+// ── 34. Instructor new booking notification ────────────────────────────────────
 
 /**
  * Sent to the class instructor when a student books their session.
@@ -2701,7 +2738,7 @@ export function instructorBookingNotificationEmail({
       : "";
 
   return {
-    subject: `New booking — ${safeClass} on ${formattedDate}`,
+    subject: `New booking — ${className.trim()} on ${formattedDate}`,
     html: wrapEmail(`
       <h1>New Student Booked Your Class</h1>
       <p>Hi ${safeInstructor},</p>
@@ -2719,7 +2756,7 @@ export function instructorBookingNotificationEmail({
   };
 }
 
-// ── 32. Daily operations summary — admin morning digest ────────────────────────
+// ── 35. Daily operations summary — admin morning digest ────────────────────────
 
 /** One row of revenue broken down by payment type in the daily digest. */
 export interface DailySummaryRevenue {
@@ -3177,7 +3214,7 @@ export function dailySummaryEmail({
   };
 }
 
-// ── 33. Team booking — staff share link + employee signup confirmation ────────
+// ── 36. Team booking — staff share link + employee signup confirmation ────────
 
 /**
  * Sent to the staff member who just created a team/corporate booking, carrying
@@ -3243,7 +3280,7 @@ export function teamBookingCreatedEmail({
     : "";
 
   return {
-    subject: `Team booking created — ${safeCompany} (${formattedDate})`,
+    subject: `Team booking created — ${companyName.trim()} (${formattedDate})`,
     html: wrapEmail(`
       <h1>Team Booking Link Ready</h1>
       <p>Hi ${safeStaff},</p>
@@ -3337,7 +3374,7 @@ export function teamSignupConfirmationEmail({
     : "";
 
   return {
-    subject: `You're signed up — ${safeClass} on ${formattedDate}`,
+    subject: `You're signed up — ${className.trim()} on ${formattedDate}`,
     html: wrapEmail(`
       <h1>Your Spot Is Reserved</h1>
       <p>Hi ${safeFirst},</p>

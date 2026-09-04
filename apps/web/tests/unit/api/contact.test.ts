@@ -7,7 +7,7 @@
  * External dependencies are mocked:
  *   @/lib/supabase/server — prevents Next.js cookies() runtime requirement
  *   @/lib/turnstile       — controls captcha pass/fail per test
- *   resend                — prevents real email sends
+ *   @/lib/send-email      — prevents real sends AND lets the tests assert them
  */
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { POST } from "@/app/api/contact/route";
@@ -24,12 +24,15 @@ vi.mock("@/lib/turnstile", () => ({
   getClientIp: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(() => ({
-    emails: {
-      send: vi.fn().mockResolvedValue({ data: { id: "email-id" }, error: null }),
-    },
-  })),
+/**
+ * Mocked at the wrapper rather than at `resend`, so the tests can assert which
+ * emails the route decided to send. The contact route uses the plural form.
+ */
+const sendEmailsMock = vi.fn();
+vi.mock("@/lib/send-email", () => ({
+  sendEmail: vi.fn().mockResolvedValue({ sent: true, id: "email-1" }),
+  sendEmails: (...args: unknown[]) => sendEmailsMock(...args),
+  isEmailConfigured: () => true,
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -79,8 +82,7 @@ describe("POST /api/contact", () => {
     // Default: captcha passes, DB succeeds
     (verifyTurnstileToken as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true });
     mockDbSuccess();
-    // Unset RESEND_API_KEY so email is skipped and we get a clean 200
-    delete process.env.RESEND_API_KEY;
+    sendEmailsMock.mockResolvedValue({ sent: 2, failed: 0, results: [] });
   });
 
   test("returns 200 with success:true for a valid submission", async () => {
@@ -88,6 +90,30 @@ describe("POST /api/contact", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.success).toBe(true);
+  });
+
+  test("sends both the business notification and the visitor auto-reply", async () => {
+    await POST(makeRequest());
+
+    expect(sendEmailsMock).toHaveBeenCalledTimes(1);
+    const batch = sendEmailsMock.mock.calls[0][0] as Array<Record<string, string>>;
+    expect(batch.map((e) => e.context)).toEqual(["contact:business", "contact:auto-reply"]);
+
+    const [business, autoReply] = batch;
+    // Replies to the business copy must go to the visitor, so staff can answer
+    // without digging the address out of the body.
+    expect(business.replyTo).toBe("alice@example.com");
+    expect(autoReply.to).toBe("alice@example.com");
+    expect(business.subject).toContain("General Question");
+    expect(autoReply.html).toContain("Alice");
+  });
+
+  test("does not email when the submission is rejected", async () => {
+    (verifyTurnstileToken as ReturnType<typeof vi.fn>).mockResolvedValue({ success: false });
+
+    await POST(makeRequest());
+
+    expect(sendEmailsMock).not.toHaveBeenCalled();
   });
 
   test("returns 400 when the request body is not valid JSON", async () => {

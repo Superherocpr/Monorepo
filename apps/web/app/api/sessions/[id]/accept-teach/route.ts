@@ -28,7 +28,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { instructorAcceptedAdminEmail, instructorConfirmedCustomerEmail } from "@/lib/emails";
@@ -128,12 +128,12 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
   const location = session.locations as unknown as { name: string; city: string; state: string } | null;
   const instructorFullName = `${actor.profile.first_name} ${actor.profile.last_name}`;
 
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[accept-teach] RESEND_API_KEY not set — skipping emails and invoicing");
+  // Invoicing is bundled into this block, so an unconfigured mailer skips both.
+  if (!isEmailConfigured()) {
+    console.warn("[accept-teach] Resend not configured — skipping emails and invoicing");
     return NextResponse.json({ data: { ok: true } });
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
 
   // ── Notify the customer their instructor is confirmed (best-effort) ────────
@@ -154,15 +154,13 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
         venueCity: location.city,
         venueState: location.state,
       });
-      const result = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
+      await sendEmail({
+        context: "accept-teach:customer",
         to: customerProfile.email,
         subject: confirmedEmail.subject,
         html: confirmedEmail.html,
+        idempotencyKey: `accept-teach-customer-${sessionId}`,
       });
-      if (result.error) {
-        console.error("[accept-teach] Customer confirmation email failed:", result.error);
-      }
     }
 
     // ── Auto-create and send the invoice (best-effort) ───────────────────────
@@ -239,16 +237,13 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
       baseUrl,
     });
 
-    const result = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
+    await sendEmail({
+      context: "accept-teach:admin",
       to: adminEmails,
       subject: notifyEmail.subject,
       html: notifyEmail.html,
+      idempotencyKey: `accept-teach-admin-${sessionId}`,
     });
-
-    if (result.error) {
-      console.error("[accept-teach] Admin notification email failed:", result.error);
-    }
   }
 
   return NextResponse.json({ data: { ok: true } });

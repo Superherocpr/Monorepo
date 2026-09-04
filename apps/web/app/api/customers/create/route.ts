@@ -17,7 +17,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { customerSetupEmail } from "@/lib/emails";
 
 /** Basic email format check — not a substitute for server-side validation but catches obvious garbage. */
@@ -124,18 +124,26 @@ export async function POST(request: Request) {
 
   const setupLink = linkData?.properties?.action_link ?? null;
 
-  // ── 5. Send account setup email via Resend ─────────────────────────────────
-  // Silently skipped if RESEND_API_KEY is not set (local dev without email).
-  if (process.env.RESEND_API_KEY && setupLink) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+  // ── 5. Send account setup email ────────────────────────────────────────────
+  // The customer cannot sign in until they follow this link, so the admin who
+  // created the account is told whether it actually went out — previously this
+  // send had no error handling at all and a failure was invisible to everyone.
+  let emailSent = false;
+
+  if (setupLink) {
     const { subject, html } = customerSetupEmail({ firstName: firstName.trim(), setupLink });
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
+    const result = await sendEmail({
+      context: "customers/create:setup",
       to: email.toLowerCase(),
       subject,
       html,
     });
+    emailSent = result.sent;
+  } else {
+    console.error(
+      `[customers/create] No setup link generated for ${newCustomer.id} — customer cannot set a password.`
+    );
   }
 
-  return Response.json({ success: true, customer: newCustomer });
+  return Response.json({ success: true, customer: newCustomer, emailSent });
 }

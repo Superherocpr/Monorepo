@@ -3,20 +3,21 @@
  * Called by: Admin Staff Management — Invite Staff Member panel
  * Auth: super_admin only
  * Creates a Supabase auth user with email confirmation, inserts their profile,
- * generates a password setup link, and sends a welcome email via Resend.
+ * generates a password setup link, and sends a welcome email.
+ * Phone is required — instructors' numbers appear in customer booking emails.
  * Super Admin role is blocked here — staff must be promoted manually after creation.
  */
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { OWNER_EMAILS } from "@/lib/constants";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { staffInviteEmail } from "@/lib/emails";
 
 /**
  * Creates a new staff account, sends a password setup email.
  * Rolls back the auth user if the profile insert fails.
- * @param request - POST body: { firstName, lastName, email, role, personalMessage? }
+ * @param request - POST body: { firstName, lastName, email, phone, role, personalMessage? }
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -29,15 +30,20 @@ export async function POST(request: Request) {
 
   // ── Parse and validate body ────────────────────────────────────────────────
   const body = await request.json();
-  const { firstName, lastName, email, role, personalMessage } = body as {
+  const { firstName, lastName, email, phone, role, personalMessage } = body as {
     firstName: string;
     lastName: string;
     email: string;
+    phone: string;
     role: string;
     personalMessage?: string;
   };
 
-  if (!firstName?.trim() || !lastName?.trim() || !email?.trim() || !role) {
+  // Phone is required for every account in this system, staff included. Staff
+  // used to be created without one, which left instructors with a null phone —
+  // and the booking confirmation email prints the instructor's number to the
+  // customer, so those accounts were the source of "Call us at null".
+  if (!firstName?.trim() || !lastName?.trim() || !email?.trim() || !phone?.trim() || !role) {
     return Response.json(
       { success: false, error: "Missing required fields." },
       { status: 400 }
@@ -94,6 +100,7 @@ export async function POST(request: Request) {
     first_name: firstName.trim(),
     last_name: lastName.trim(),
     email,
+    phone: phone.trim(),
     role,
   });
 
@@ -130,7 +137,6 @@ export async function POST(request: Request) {
   const setupLink = `${baseUrl}/setup-password?token_hash=${linkData.properties.hashed_token}&type=recovery`;
 
   // ── Send invitation email ──────────────────────────────────────────────────
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const roleLabel =
     role === "instructor" ? "Instructor" : role === "manager" ? "Manager" : "Inspector";
 
@@ -142,19 +148,14 @@ export async function POST(request: Request) {
     isInstructor: role === "instructor",
   });
 
-  const { error: emailError } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL!,
+  // Account was created either way — a mail failure returns partial success so
+  // the admin knows to use the Staff List "resend invite" action.
+  const result = await sendEmail({
+    context: "staff/invite",
     to: email,
     subject,
     html,
   });
 
-  if (emailError) {
-    // Account was created but the email failed — return partial success so the
-    // admin knows to resend via the Staff List "resend invite" action.
-    console.error("[staff/invite] email send failed:", emailError);
-    return Response.json({ success: true, emailSent: false });
-  }
-
-  return Response.json({ success: true, emailSent: true });
+  return Response.json({ success: true, emailSent: result.sent });
 }

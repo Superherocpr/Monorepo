@@ -20,6 +20,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { floatingNow, addFloatingMinutes } from "../../../lib/business-time";
 
 /** Everything the spec needs to drive the flow and clean up afterwards. */
 export interface SeededRollcall {
@@ -101,6 +102,11 @@ export async function seedRollcallScenario(): Promise<SeededRollcall> {
   const instructorId = randomUUID();
   const studentId = randomUUID();
   const now = new Date();
+  // starts_at must be a floating wall-clock value (Eastern time labelled Z) so
+  // that verify-code's classDate filter matches it. Using now.toISOString() here
+  // gives a true UTC timestamp whose calendar date diverges from businessDate(now)
+  // between 00:00–04:00 UTC, which is when the nightly CI run fires.
+  const floatingStart = floatingNow();
 
   const { error: instructorError } = await db.from("profiles").insert({
     id: instructorId,
@@ -136,16 +142,18 @@ export async function seedRollcallScenario(): Promise<SeededRollcall> {
     throw new Error(`[rollcall-seed] student insert failed: ${studentError.message}`);
   }
 
-  // starts_at = now is always on today's business calendar day, which is
-  // exactly what verify-code filters on.
+  // starts_at must match the floating wall-clock convention: verify-code filters
+  // with classDate(starts_at) === businessDate(now), where classDate slices the
+  // literal YYYY-MM-DD from the stored string. A true UTC instant diverges from
+  // the Eastern calendar date between 00:00–04:00 UTC, so floatingNow() is used.
   const { data: session, error: sessionError } = await db
     .from("class_sessions")
     .insert({
       class_type_id: classType.id,
       location_id: location.id,
       instructor_id: instructorId,
-      starts_at: now.toISOString(),
-      ends_at: new Date(now.getTime() + 4 * 60 * 60 * 1000).toISOString(),
+      starts_at: floatingStart,
+      ends_at: addFloatingMinutes(floatingStart, 4 * 60),
       max_capacity: 10,
       status: "in_progress",
       approval_status: "approved",

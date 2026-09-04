@@ -163,13 +163,22 @@ test.describe("Roll call happy path (seeded)", () => {
 
     const broadcastReceived = new Promise<{ firstName: string; lastName: string }>(
       (resolve) => {
-        channel
-          .on("broadcast", { event: ROLLCALL_VERIFIED_EVENT }, (msg) =>
-            resolve(msg.payload)
-          )
-          .subscribe();
+        channel.on("broadcast", { event: ROLLCALL_VERIFIED_EVENT }, (msg) =>
+          resolve(msg.payload)
+        );
       }
     );
+
+    // Wait for the WebSocket subscription to be fully established before
+    // starting the check-in flow. Without this, the broadcast can fire while
+    // the handshake is still in progress and the event is lost.
+    await new Promise<void>((resolve, reject) => {
+      channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") resolve();
+        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT")
+          reject(new Error(`Realtime subscription failed: ${status}`));
+      });
+    });
 
     await page.goto("/rollcall");
     await page.getByRole("textbox", { name: /access code/i }).fill(seed.code);
