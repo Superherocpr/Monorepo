@@ -88,12 +88,15 @@ vi.mock("@/lib/assistant-reminder", () => ({
   maybeSendAssistantReminder: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(function Resend() {
-    return {
-      emails: { send: vi.fn().mockResolvedValue({ data: { id: "email-id" }, error: null }) },
-    };
-  }),
+/**
+ * Mocked at the wrapper so the tests can assert which confirmations a manual
+ * charge produces — and, just as importantly, which it suppresses.
+ */
+const sendEmailMock = vi.fn().mockResolvedValue({ sent: true, id: "email-1" });
+vi.mock("@/lib/send-email", () => ({
+  sendEmail: (...args: unknown[]) => sendEmailMock(...args),
+  sendEmails: vi.fn().mockResolvedValue({ sent: 0, failed: 0, results: [] }),
+  isEmailConfigured: () => true,
 }));
 
 import { createAdminClient } from "@/lib/supabase/server";
@@ -489,6 +492,62 @@ describe("POST /api/sessions/[id]/charge-and-book", () => {
     );
   });
 
+  test("emails the student their confirmation after a successful charge", async () => {
+    mockAdminClient();
+    queueResponse(fetchMock, true, captureBody("COMPLETED"));
+
+    await POST(makeRequest(baseBody), params());
+
+    const customer = sendEmailMock.mock.calls.find(
+      (call) => (call[0] as { context: string }).context === "charge-and-book:customer"
+    )?.[0] as { to: string; subject: string; idempotencyKey: string };
+
+    expect(customer).toBeDefined();
+    expect(customer.to).toBe("s@x.com");
+    expect(customer.subject).toContain("Booking Confirmed");
+    // Keyed on the booking so a double-submit cannot double-confirm.
+    expect(customer.idempotencyKey).toBe("charge-and-book-customer-booking-1");
+  });
+
+  test("skips the instructor notification when the instructor is the one charging", async () => {
+    // Default actor IS the session instructor — they are standing right there,
+    // so telling them about the booking they just made is noise.
+    mockAdminClient();
+    queueResponse(fetchMock, true, captureBody("COMPLETED"));
+
+    await POST(makeRequest(baseBody), params());
+
+    const contexts = sendEmailMock.mock.calls.map(
+      (call) => (call[0] as { context: string }).context
+    );
+    expect(contexts).toContain("charge-and-book:customer");
+    expect(contexts).not.toContain("charge-and-book:instructor");
+  });
+
+  test("notifies the instructor when someone else charges into their class", async () => {
+    mockActor("manager", OTHER_INSTRUCTOR_ID);
+    mockAdminClient();
+    queueResponse(fetchMock, true, captureBody("COMPLETED"));
+
+    await POST(makeRequest(baseBody), params());
+
+    const instructor = sendEmailMock.mock.calls.find(
+      (call) => (call[0] as { context: string }).context === "charge-and-book:instructor"
+    )?.[0] as { to: string; idempotencyKey: string };
+
+    expect(instructor).toBeDefined();
+    expect(instructor.idempotencyKey).toBe("charge-and-book-instructor-booking-1");
+  });
+
+  test("sends nothing when the card is declined", async () => {
+    mockAdminClient();
+    queueResponse(fetchMock, false, { message: "declined" });
+
+    await POST(makeRequest(baseBody), params());
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
   test("records the amount PayPal actually captured, not the one submitted", async () => {
     // Inside the rounding tolerance, so this is accepted rather than reversed —
     // but the money recorded must be PayPal's figure, not the submitted one.
@@ -556,6 +615,16 @@ describe("POST /api/sessions/[id]/charge-and-book", () => {
         "book_spot",
         expect.objectContaining({ p_booking_source: "manual" })
       );
+    });
+
+    test("sends no confirmation for a mock charge — no real money, no real email", async () => {
+      mockAdminClient();
+
+      await POST(makeRequest(baseBody), params());
+
+      // Staging runs against LIVE PayPal credentials, so the mock bypass is the
+      // only thing standing between a test charge and a real customer's inbox.
+      expect(sendEmailMock).not.toHaveBeenCalled();
     });
 
     test("never creates an instructor earning — a mock charge must not enter the real payout pipeline", async () => {

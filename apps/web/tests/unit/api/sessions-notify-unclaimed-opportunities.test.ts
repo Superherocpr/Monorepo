@@ -18,14 +18,16 @@ vi.mock("@/lib/supabase/server", () => ({
   createAdminClient: vi.fn(),
 }));
 
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(function Resend() {
-    return {
-      emails: {
-        send: vi.fn().mockResolvedValue({ data: { id: "email-id" }, error: null }),
-      },
-    };
-  }),
+/**
+ * Mocked at the wrapper so the tests can assert the digest actually goes out —
+ * this job's entire purpose is that one email, so a silent failure here means
+ * nobody learns a class is going untaught.
+ */
+const sendEmailMock = vi.fn().mockResolvedValue({ sent: true, id: "email-1" });
+vi.mock("@/lib/send-email", () => ({
+  sendEmail: (...args: unknown[]) => sendEmailMock(...args),
+  sendEmails: vi.fn().mockResolvedValue({ sent: 0, failed: 0, results: [] }),
+  isEmailConfigured: () => true,
 }));
 
 import { createAdminClient } from "@/lib/supabase/server";
@@ -158,6 +160,26 @@ describe("POST /api/sessions/notify-unclaimed-opportunities", () => {
     expect(updateChain.update).toHaveBeenCalledWith(
       expect.objectContaining({ unclaimed_escalation_sent_at: expect.any(String) })
     );
+
+    // The digest itself — the only output of this job that a human ever sees.
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const digest = sendEmailMock.mock.calls[0][0] as {
+      context: string;
+      to: string[];
+      subject: string;
+    };
+    expect(digest.context).toBe("notify-unclaimed-opportunities:digest");
+    expect(digest.to).toEqual(["admin@superherocpr.com"]);
+    expect(digest.subject).toContain("Action needed");
+  });
+
+  test("sends no digest when there is nothing unclaimed", async () => {
+    mockFromSequence([chain({ data: [], error: null })]);
+
+    await POST(cronRequest());
+
+    // A daily "nothing to report" email is trained-to-ignore within a month.
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   test("returns 500 when the query fails", async () => {

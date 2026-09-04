@@ -165,6 +165,7 @@ export const GROUPS: GroupDef[] = [
           "Shows a live-updating list of students who have successfully verified their attendance",
           "Codes are valid for the current business day — prompts to refresh if yesterday's code is loaded",
           "Session header displays class type, location, and time for easy reference at the front of the room",
+          "A student is sent a branded welcome email the first time they're confirmed — not on repeat check-ins",
         ],
       },
       {

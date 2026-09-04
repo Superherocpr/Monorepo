@@ -141,3 +141,41 @@ describe("POST /api/staff/invite — phone is required", () => {
     expect(insertedProfile).toBeNull();
   });
 });
+
+describe("POST /api/staff/invite — the invitation email", () => {
+  test("emails the new staff member their setup link", async () => {
+    const res = await POST(makeRequest(body()));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true, emailSent: true });
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const call = sendEmailMock.mock.calls[0][0] as {
+      context: string;
+      to: string;
+      html: string;
+    };
+    expect(call.context).toBe("staff/invite");
+    expect(call.to).toBe("jane@example.com");
+    // The link is the whole point of the invite — without it the account is
+    // unreachable, since the temp password is a random UUID nobody is told.
+    expect(call.html).toContain("token_hash=tok");
+  });
+
+  test("reports emailSent:false so the admin knows to use Resend Invite", async () => {
+    sendEmailMock.mockResolvedValue({ sent: false, reason: "failed", error: "boom" });
+
+    const res = await POST(makeRequest(body()));
+
+    // The account was still created, so this is a partial success, not a 500 —
+    // but the admin must be told the invite did not go out.
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true, emailSent: false });
+  });
+
+  test("sends no invite when the invite is rejected", async () => {
+    await POST(makeRequest(body({ phone: "" })));
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+});
