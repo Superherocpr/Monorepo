@@ -23,7 +23,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmail, sendEmails, isEmailConfigured } from "@/lib/send-email";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { sessionClaimedStudentEmail, sessionClaimedAdminEmail } from "@/lib/emails";
@@ -121,12 +121,13 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
     );
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[sessions/claim] RESEND_API_KEY not set — skipping emails");
+  // The claim is already committed; skip the recipient lookups when no mail
+  // could go out anyway.
+  if (!isEmailConfigured()) {
+    console.warn("[sessions/claim] Resend not configured — skipping emails");
     return NextResponse.json({ data: { ok: true } });
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
   const classType = session.class_types as unknown as { name: string } | null;
 
@@ -157,8 +158,10 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
       .map((b) => b.profiles as unknown as { first_name: string; email: string } | null)
       .filter((p): p is { first_name: string; email: string } => !!p?.email);
 
-    await Promise.all(
-      students.map(async (student) => {
+    // One message per student rather than a single multi-recipient send, so one
+    // bad address cannot cost the whole class its notification.
+    await sendEmails(
+      students.map((student) => {
         const studentEmail = sessionClaimedStudentEmail({
           firstName: student.first_name,
           className: classType.name,
@@ -169,15 +172,12 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
           newVenueCity: location.city,
           newVenueState: location.state,
         });
-        const result = await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL!,
+        return {
+          context: "sessions/claim:student",
           to: student.email,
           subject: studentEmail.subject,
           html: studentEmail.html,
-        });
-        if (result.error) {
-          console.error("[sessions/claim] Student notification email failed:", result.error);
-        }
+        };
       })
     );
 
@@ -190,15 +190,12 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
         sessionId,
         baseUrl,
       });
-      const result = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
+      await sendEmail({
+        context: "sessions/claim:admin",
         to: adminEmails,
         subject: adminEmail.subject,
         html: adminEmail.html,
       });
-      if (result.error) {
-        console.error("[sessions/claim] Admin notification email failed:", result.error);
-      }
     }
   }
 

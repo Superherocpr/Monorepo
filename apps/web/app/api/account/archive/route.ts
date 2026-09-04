@@ -8,13 +8,11 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { accountDeletedEmail } from "@/lib/emails";
 
 /** Archives the authenticated customer's account and sends a confirmation email. */
 export async function POST() {
-  // Instantiated inside the handler so it never executes at build time
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const supabase = await createClient();
   const {
     data: { user },
@@ -50,19 +48,16 @@ export async function POST() {
     );
   }
 
-  // Send account deletion confirmation email — non-fatal if this fails
+  // Send account deletion confirmation email — non-fatal if this fails; the
+  // archive is already committed and must not be reported as failed.
   if (profile) {
     const { subject, html } = accountDeletedEmail({ firstName: profile.first_name });
-    const { error: emailError } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
+    await sendEmail({
+      context: "account/archive",
       to: profile.email,
       subject,
       html,
     });
-
-    if (emailError) {
-      console.error("[account/archive] confirmation email failed (non-fatal):", emailError);
-    }
   }
 
   return Response.json({ success: true });

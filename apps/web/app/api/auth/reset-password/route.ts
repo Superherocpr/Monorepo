@@ -16,7 +16,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { selfServicePasswordResetEmail } from "@/lib/emails";
 
 /** Minimal email format check — belt-and-suspenders against obviously bad input. */
@@ -42,15 +42,13 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ success: true });
   }
 
-  // RESEND_API_KEY is required to send a branded email. If it is absent
-  // (e.g. local dev without Resend configured), fall back silently to
-  // Supabase's default email so the reset flow still works in development.
-  if (!process.env.RESEND_API_KEY) {
-    const supabase = await createAdminClient();
-    const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-    await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${siteUrl}/book/reset-password`,
-    }).catch(() => {/* non-fatal — always return success */});
+  // Resend is required to send a BRANDED email. If it is not fully configured
+  // (e.g. local dev), fall back silently to Supabase's default email so the
+  // reset flow still works. Both env vars are checked — a missing FROM address
+  // used to slip past this guard and then fail the branded send, leaving the
+  // user with no reset email at all.
+  if (!isEmailConfigured()) {
+    await sendSupabaseResetFallback(email);
     return Response.json({ success: true });
   }
 
@@ -76,22 +74,47 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Send the branded email via Resend
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const { subject, html } = selfServicePasswordResetEmail({
     actionLink: linkData.properties.action_link,
   });
 
-  await resend.emails
-    .send({
-      from: process.env.RESEND_FROM_EMAIL!,
-      to: email,
-      subject,
-      html,
-    })
-    .catch((err: unknown) => {
-      // Email failure is logged but not surfaced — response is always success
-      console.error("[reset-password] Resend send failed (non-fatal):", err);
-    });
+  const result = await sendEmail({
+    context: "auth/reset-password",
+    to: email,
+    subject,
+    html,
+  });
+
+  // Losing a password-reset email locks a customer out of their account, so this
+  // is the one flow worth a second delivery path: if the branded send fails,
+  // fall back to Supabase's own reset email rather than leaving them stranded.
+  if (!result.sent) {
+    console.error("[reset-password] Branded email failed — falling back to Supabase reset email.");
+    await sendSupabaseResetFallback(email);
+  }
 
   return Response.json({ success: true });
+}
+
+/**
+ * Sends Supabase's own (unbranded) password reset email.
+ *
+ * Used both when Resend is unconfigured and as a last-resort fallback when the
+ * branded send fails. Never throws — the caller always reports success to avoid
+ * leaking whether the account exists.
+ *
+ * Side effects: triggers one Supabase auth recovery email.
+ *
+ * @param email - Address to send the reset link to.
+ */
+async function sendSupabaseResetFallback(email: string): Promise<void> {
+  try {
+    const supabase = await createAdminClient();
+    const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${siteUrl}/book/reset-password`,
+    });
+  } catch (err) {
+    console.error("[reset-password] Supabase fallback reset email failed:", err);
+  }
 }

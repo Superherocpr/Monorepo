@@ -13,7 +13,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { certReminderEmail } from "@/lib/emails";
 import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
 
@@ -95,8 +95,18 @@ async function handlePOST(request: Request) {
     return Response.json({ success: true, count: 0, triggeredBy: viaCron ? "cron" : actorId });
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  // Fail loudly rather than reporting a successful run that sent nothing. Without
+  // this, a missing Resend variable returned `count: 0` — indistinguishable from
+  // "no certs were due" — and the cron heartbeat recorded a healthy run forever.
+  if (!isEmailConfigured()) {
+    console.error(
+      "[POST /api/certifications/send-reminders] Resend is not configured — no reminders can be sent."
+    );
+    return Response.json({ error: "Email is not configured." }, { status: 500 });
+  }
+
   let sentCount = 0;
+  let failedCount = 0;
 
   for (const cert of certs) {
     const daysRemaining = Math.ceil(
@@ -117,38 +127,46 @@ async function handlePOST(request: Request) {
 
     if (!profileData?.email || !certTypeData?.name) continue;
 
-    try {
-      const { subject, html } = certReminderEmail({
-        firstName: profileData.first_name,
-        certName: certTypeData.name,
-        daysRemaining,
-      });
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: profileData.email,
-        subject,
-        html,
-      });
+    const { subject, html } = certReminderEmail({
+      firstName: profileData.first_name,
+      certName: certTypeData.name,
+      daysRemaining,
+    });
 
-      // Stamp the milestone reached (not just "reminded") so the next run
-      // can tell whether this cert still owes an email for a closer stage.
-      await adminSupabase
-        .from("certifications")
-        .update({ last_reminder_sent_days: milestone })
-        .eq("id", cert.id);
+    // Keyed on cert + milestone so a cron retry of this whole run cannot email
+    // the same customer about the same milestone twice.
+    const result = await sendEmail({
+      context: "certifications/send-reminders",
+      to: profileData.email,
+      subject,
+      html,
+      idempotencyKey: `cert-reminder-${cert.id}-${milestone}`,
+    });
 
-      sentCount++;
-    } catch (emailError) {
-      // Log the failure but continue sending to other customers
-      console.error(
-        "[POST /api/certifications/send-reminders] Email send failed for cert",
-        cert.id,
-        emailError
-      );
+    // Only stamp the milestone when the mail actually went out. Stamping on a
+    // failed send would permanently suppress this customer's reminder for this
+    // milestone — the next run would skip them as "already reminded".
+    if (!result.sent) {
+      failedCount++;
+      continue;
     }
+
+    // Stamp the milestone reached (not just "reminded") so the next run
+    // can tell whether this cert still owes an email for a closer stage.
+    await adminSupabase
+      .from("certifications")
+      .update({ last_reminder_sent_days: milestone })
+      .eq("id", cert.id);
+
+    sentCount++;
   }
 
-  return Response.json({ success: true, count: sentCount, triggeredBy: viaCron ? "cron" : actorId });
+  return Response.json({
+    success: true,
+    count: sentCount,
+    failed: failedCount,
+    triggeredBy: viaCron ? "cron" : actorId,
+  });
 }
 
 /**

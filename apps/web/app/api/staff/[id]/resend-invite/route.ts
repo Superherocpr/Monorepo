@@ -9,7 +9,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { staffInviteEmail } from "@/lib/emails";
 
 /** Maps stored role values to human-readable labels for the email. */
@@ -80,7 +80,6 @@ export async function POST(
   const setupLink = `${baseUrl}/setup-password?token_hash=${linkData.properties.hashed_token}&type=recovery`;
 
   // ── Send invitation email ──────────────────────────────────────────────────
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const roleLabel = ROLE_LABELS[profile.role] ?? profile.role;
 
   const { subject, html } = staffInviteEmail({
@@ -92,15 +91,16 @@ export async function POST(
     isInstructor: profile.role === "instructor",
   });
 
-  const { error: emailError } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL!,
+  // Sending the mail IS this route's entire purpose, so unlike most call sites a
+  // failure here is fatal and surfaces to the admin who clicked the button.
+  const result = await sendEmail({
+    context: "staff/resend-invite",
     to: profile.email,
     subject,
     html,
   });
 
-  if (emailError) {
-    console.error(`[staff/${staffId}/resend-invite] email send failed:`, emailError);
+  if (!result.sent) {
     return Response.json(
       { success: false, error: "Failed to send invite email. Please try again." },
       { status: 500 }

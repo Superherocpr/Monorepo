@@ -18,6 +18,37 @@
  */
 
 /**
+ * Wraps a SELF-CONTAINED email design in a bare HTML document — doctype, head,
+ * and body only, with no SuperHeroCPR header, footer, or typography defaults.
+ *
+ * For the two legacy Stripo-authored templates (rollcall welcome, certification
+ * reminder) that already carry their own full layout including a header, footer,
+ * social icons, and copyright line. Passing those through `wrapEmail` nested a
+ * complete email inside another one, so recipients saw the branding and the
+ * footer twice in a noticeably longer message.
+ *
+ * Use `wrapEmail` for everything else. Reach for this only when the content
+ * genuinely paints its own shell.
+ *
+ * @param content - A complete standalone email body (its own tables and footer).
+ * @returns A complete HTML email document ready to pass to Resend's `html` field.
+ */
+export function wrapStandaloneEmail(content: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+</head>
+<body style="margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+${content}
+</body>
+</html>`.trim();
+}
+
+/**
  * Wraps email body HTML in the SuperHeroCPR branded email shell.
  * @param content - Inner HTML content for the email body (h1, p, a, table, etc.)
  * @returns A complete HTML email document ready to pass to Resend's `html` field.

@@ -17,7 +17,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmails } from "@/lib/send-email";
+import { escapeHtml } from "@/lib/emails";
+import { BUSINESS_CONTACT_EMAIL } from "@/lib/contact-constants";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import {
   getMerchPayPalAccessToken,
@@ -32,16 +34,6 @@ const SHIPPING_RATE = parseFloat(process.env.NEXT_PUBLIC_SHIPPING_RATE ?? "0");
 
 /** Acceptable rounding tolerance when comparing client/server totals. */
 const PRICE_TOLERANCE = 0.01;
-
-/** Escapes HTML special characters to prevent injection in email HTML. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#x27;");
-}
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -406,14 +398,8 @@ export async function POST(request: Request) {
   }
 
   // ── Steps 7 & 8: Send emails (best-effort) ────────────────────────────────
-  if (!process.env.RESEND_API_KEY) {
-    console.warn(
-      "[orders/confirm] RESEND_API_KEY is not set — skipping email notifications"
-    );
-    return NextResponse.json({ success: true, orderId: order.id });
-  }
-
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  // The payment is already captured and the order recorded, so a mail failure is
+  // logged by sendEmail and never turns a paid order into an error response.
 
   // Build item list HTML — escape all user-supplied values before interpolation.
   // Prices use DB-authoritative values (variantMap) not client-supplied prices.
@@ -437,14 +423,16 @@ export async function POST(request: Request) {
   const shippingCostNum = serverShipping;
   const totalNum = serverTotal;
 
-  const emailPromises = [
+  // Both keyed on the PayPal transaction so a client retry of the confirm call
+  // cannot email the customer about the same order twice.
+  await sendEmails([
     // Confirmation to customer
-    resend.emails
-      .send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: shippingInfo.email,
-        subject: "Your SuperHeroCPR Order is Confirmed!",
-        html: `
+    {
+      context: "orders/confirm:customer",
+      to: shippingInfo.email,
+      idempotencyKey: `order-confirm-customer-${paypalTransactionId}`,
+      subject: "Your SuperHeroCPR Order is Confirmed!",
+      html: `
           <h1>Order Confirmed!</h1>
           <p>Thanks for your order. Here's a summary:</p>
           <table>
@@ -462,21 +450,18 @@ export async function POST(request: Request) {
             ${safeCity}, ${safeState} ${safeZip}
           </p>
           <p>Transaction ID: ${safeTransactionId}</p>
-          <p>Questions? Contact us at contact@superherocpr.com or (813) 966-3969.</p>
+          <p>Questions? Contact us at ${BUSINESS_CONTACT_EMAIL} or (813) 966-3969.</p>
           <p>— The SuperHeroCPR Team</p>
         `,
-      })
-      .catch((err: unknown) =>
-        console.error("[orders/confirm] Failed to send confirmation email:", err)
-      ),
+    },
 
     // Notification to business
-    resend.emails
-      .send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: "contact@superherocpr.com",
-        subject: `New Merch Order — $${totalNum.toFixed(2)}`,
-        html: `
+    {
+      context: "orders/confirm:business",
+      to: BUSINESS_CONTACT_EMAIL,
+      idempotencyKey: `order-confirm-business-${paypalTransactionId}`,
+      subject: `New Merch Order — $${totalNum.toFixed(2)}`,
+      html: `
           <h2>New merch order received</h2>
           <table>
             <thead><tr><th>Item</th><th>Qty</th><th>Price</th></tr></thead>
@@ -491,13 +476,8 @@ export async function POST(request: Request) {
           <p><strong>Total:</strong> $${totalNum.toFixed(2)}</p>
           <p><strong>PayPal Transaction:</strong> ${safeTransactionId}</p>
         `,
-      })
-      .catch((err: unknown) =>
-        console.error("[orders/confirm] Failed to send business notification:", err)
-      ),
-  ];
-
-  await Promise.all(emailPromises);
+    },
+  ]);
 
   return NextResponse.json({ success: true, orderId: order.id });
 }

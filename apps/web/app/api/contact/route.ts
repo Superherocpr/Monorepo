@@ -10,7 +10,8 @@
  */
 
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmails } from "@/lib/send-email";
+import { BUSINESS_CONTACT_EMAIL } from "@/lib/contact-constants";
 import { contactNotificationEmail, contactAutoReplyEmail } from "@/lib/emails";
 import { createClient } from "@/lib/supabase/server";
 import { verifyTurnstileToken, getClientIp } from "@/lib/turnstile";
@@ -89,19 +90,9 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── 2. Send emails via Resend ────────────────────────────────────────────────
-  // Emails are best-effort — if RESEND_API_KEY is missing, we log a warning and
-  // skip the send rather than failing the request. The submission is already
-  // stored in the DB, so the message is not lost.
-  if (!process.env.RESEND_API_KEY) {
-    console.warn(
-      "[contact] RESEND_API_KEY is not set — skipping email notifications"
-    );
-    return NextResponse.json({ success: true });
-  }
-
-  const resend = new Resend(process.env.RESEND_API_KEY);
-
+  // ── 2. Send emails ───────────────────────────────────────────────────────────
+  // Best-effort: the submission is already stored in the DB, so the message is
+  // never lost even when both sends fail. sendEmail logs each failure itself.
   const businessEmail = contactNotificationEmail({
     name: name.trim(),
     email: email.trim(),
@@ -114,31 +105,24 @@ export async function POST(request: Request) {
     firstName: name.trim().split(" ")[0],
   });
 
-  // Notification email to business
-  const [businessResult, autoReplyResult] = await Promise.all([
-    resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
-      to: "contact@superherocpr.com",
+  await sendEmails([
+    // Notification to the business, with replies routed straight to the visitor
+    // so staff can answer without copying the address out of the body.
+    {
+      context: "contact:business",
+      to: BUSINESS_CONTACT_EMAIL,
+      replyTo: email.trim(),
       subject: businessEmail.subject,
       html: businessEmail.html,
-    }),
-    resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
+    },
+    // Auto-reply to the visitor
+    {
+      context: "contact:auto-reply",
       to: email.trim(),
       subject: autoReply.subject,
       html: autoReply.html,
-    }),
+    },
   ]);
-
-  // Log any Resend errors so they appear in server logs / Amplify CloudWatch.
-  // The Resend SDK resolves (not rejects) on API-level errors, so .catch() alone
-  // would miss these. Failures are non-fatal — the submission is already stored.
-  if (businessResult.error) {
-    console.error("[contact] Business notification email failed:", businessResult.error);
-  }
-  if (autoReplyResult.error) {
-    console.error("[contact] Auto-reply email failed:", autoReplyResult.error);
-  }
 
   return NextResponse.json({ success: true });
 }

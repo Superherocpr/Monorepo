@@ -54,11 +54,21 @@ vi.mock("@/lib/assistant-reminder", () => ({
   maybeSendAssistantReminder: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(function Resend() {
-    return { emails: { send: vi.fn().mockResolvedValue({ data: { id: "email-id" }, error: null }) } };
-  }),
+/**
+ * Mocked at the wrapper so the tests can assert WHICH emails a confirmed
+ * booking produces — the customer's receipt and the instructor's heads-up.
+ */
+const sendEmailMock = vi.fn().mockResolvedValue({ sent: true, id: "email-1" });
+vi.mock("@/lib/send-email", () => ({
+  sendEmail: (...args: unknown[]) => sendEmailMock(...args),
+  sendEmails: vi.fn().mockResolvedValue({ sent: 0, failed: 0, results: [] }),
+  isEmailConfigured: () => true,
 }));
+
+/** Contexts passed to sendEmail across all calls in the current test. */
+function sentContexts(): string[] {
+  return sendEmailMock.mock.calls.map((call) => (call[0] as { context: string }).context);
+}
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { recordBookingEarning } from "@/lib/instructor-earnings";
@@ -168,6 +178,54 @@ describe("POST /api/bookings/confirm", () => {
       expect.anything(),
       expect.objectContaining({ instructorId: INSTRUCTOR_ID, grossAmount: PRICE })
     );
+  });
+
+  test("emails the customer their confirmation and the instructor their heads-up", async () => {
+    mockAdminClient({});
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        purchase_units: [{ payments: { captures: [{ id: CAPTURE_ID, status: "COMPLETED", amount: { value: "100.00" } }] } }],
+      }),
+    });
+
+    // startsAt is what gates the whole email step — without a class time there
+    // is nothing to confirm, so the route deliberately stays silent.
+    await POST(
+      makeRequest({
+        ...baseBody,
+        startsAt: "2026-10-01T14:00:00",
+        className: "BLS Provider",
+        customerEmail: "dana@example.com",
+        customerFirstName: "Dana",
+      })
+    );
+
+    expect(sentContexts()).toEqual(
+      expect.arrayContaining(["bookings/confirm:customer", "bookings/confirm:instructor"])
+    );
+
+    const customer = sendEmailMock.mock.calls.find(
+      (call) => (call[0] as { context: string }).context === "bookings/confirm:customer"
+    )?.[0] as { to: string; subject: string; html: string; idempotencyKey: string };
+    expect(customer.to).toBe("dana@example.com");
+    expect(customer.subject).toContain("Booking Confirmed");
+    // The receipt must carry the real price, not a placeholder.
+    expect(customer.html).toContain("100.00");
+    // Keyed on the booking so a client retry cannot double-send the receipt.
+    expect(customer.idempotencyKey).toBe("booking-confirm-booking-1");
+  });
+
+  test("sends no email when the payment is declined", async () => {
+    mockAdminClient({});
+    fetchMock.mockResolvedValueOnce({ ok: false, text: async () => "capture declined" });
+
+    await POST(
+      makeRequest({ ...baseBody, startsAt: "2026-10-01T14:00:00", customerEmail: "dana@example.com" })
+    );
+
+    // A confirmation for a booking that does not exist is worse than silence.
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   test("returns 502 and does not book when PayPal capture fails for a non-decline reason", async () => {

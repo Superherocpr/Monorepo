@@ -13,7 +13,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmails, isEmailConfigured } from "@/lib/send-email";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import {
   classRequestAdminNotificationEmail,
@@ -219,13 +219,14 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  // ── Send emails via Resend (best-effort) ──────────────────────────────────
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[class-requests POST] RESEND_API_KEY not set — skipping emails");
+  // ── Send emails (best-effort) ─────────────────────────────────────────────
+  // The request row is already saved; skip the admin lookup when no mail could
+  // be sent anyway.
+  if (!isEmailConfigured()) {
+    console.warn("[class-requests POST] Resend not configured — skipping emails");
     return NextResponse.json({ data: { id: newRequest.id } });
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
 
   // Fetch all managers and super admins to notify
@@ -261,33 +262,27 @@ export async function POST(request: Request): Promise<Response> {
     venueName: venue_name.trim(),
   });
 
-  const emailSends: Promise<unknown>[] = [
-    resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
+  await sendEmails([
+    {
+      context: "class-requests:customer-confirm",
       to: profile.email,
       subject: confirmEmail.subject,
       html: confirmEmail.html,
-    }),
-  ];
-
-  // Fan-out to all admins/managers
-  if (adminEmails.length > 0) {
-    emailSends.push(
-      resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: adminEmails,
-        subject: adminEmail.subject,
-        html: adminEmail.html,
-      })
-    );
-  }
-
-  const results = await Promise.all(emailSends);
-  results.forEach((r, i) => {
-    if (r && typeof r === "object" && "error" in r && r.error) {
-      console.error(`[class-requests POST] Email send ${i} failed:`, r.error);
-    }
-  });
+      idempotencyKey: `class-request-confirm-${newRequest.id}`,
+    },
+    // Fan-out to all admins/managers
+    ...(adminEmails.length > 0
+      ? [
+          {
+            context: "class-requests:admin-notify",
+            to: adminEmails,
+            subject: adminEmail.subject,
+            html: adminEmail.html,
+            idempotencyKey: `class-request-admin-${newRequest.id}`,
+          },
+        ]
+      : []),
+  ]);
 
   return NextResponse.json({ data: { id: newRequest.id } });
 }

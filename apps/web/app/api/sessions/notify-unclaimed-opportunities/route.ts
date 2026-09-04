@@ -22,7 +22,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { createAdminClient } from "@/lib/supabase/server";
 import {
   unclaimedOpportunityEscalationEmail,
@@ -89,8 +89,10 @@ async function handlePOST(request: Request): Promise<Response> {
     return NextResponse.json({ data: { notified: 0 } });
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[notify-unclaimed-opportunities] RESEND_API_KEY not set — skipping emails");
+  // Bail before marking sessions escalated — stamping them without sending the
+  // digest would suppress the escalation permanently.
+  if (!isEmailConfigured()) {
+    console.warn("[notify-unclaimed-opportunities] Resend not configured — skipping emails");
     return NextResponse.json({ data: { notified: 0 } });
   }
 
@@ -111,17 +113,13 @@ async function handlePOST(request: Request): Promise<Response> {
   }));
 
   if (superAdminEmails.length > 0) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
     const digest = unclaimedOpportunityEscalationEmail({ sessions: summaries, baseUrl });
-    const result = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
+    await sendEmail({
+      context: "notify-unclaimed-opportunities:digest",
       to: superAdminEmails,
       subject: digest.subject,
       html: digest.html,
     });
-    if (result.error) {
-      console.error("[notify-unclaimed-opportunities] Digest email failed:", result.error);
-    }
   }
 
   const { error: markError } = await admin

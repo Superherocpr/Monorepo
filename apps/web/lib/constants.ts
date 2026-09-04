@@ -20,3 +20,13 @@ export const OWNER_EMAILS: string[] = (process.env.OWNER_EMAIL ?? "contact@super
  * blocked from cancelling a class online because it starts within 48 hours.
  */
 export const OWNER_DIRECT_PHONE = "(813) 966-3969";
+
+/**
+ * The main business line customers are told to call.
+ *
+ * Used as the fallback wherever a specific person's number is missing — an
+ * instructor without a phone on file, say. Emails must never print a bare
+ * `null` where a number belongs, so every customer-facing "call us" line
+ * resolves to this when it has nothing better.
+ */
+export const BUSINESS_PHONE = "(813) 966-3969";

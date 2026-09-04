@@ -16,7 +16,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmails, isEmailConfigured } from "@/lib/send-email";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import {
@@ -161,13 +161,14 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
     // Non-fatal — session is created; surface warning but proceed with emails.
   }
 
-  // ── 4. Send emails via Resend (best-effort) ────────────────────────────────
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[class-requests/approve] RESEND_API_KEY not set — skipping emails");
+  // ── 4. Send emails (best-effort) ───────────────────────────────────────────
+  // The session already exists; skip the instructor lookup when no mail could
+  // be sent anyway.
+  if (!isEmailConfigured()) {
+    console.warn("[class-requests/approve] Resend not configured — skipping emails");
     return NextResponse.json({ data: { sessionId: newSession.id } });
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
 
   const timeLabel =
@@ -204,32 +205,26 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
     .map((p) => p.email)
     .filter(Boolean);
 
-  const emailSends: Promise<unknown>[] = [
-    resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
+  await sendEmails([
+    {
+      context: "class-requests/approve:customer",
       to: customer.email,
       subject: approvedEmail.subject,
       html: approvedEmail.html,
-    }),
-  ];
-
-  if (instructorEmails.length > 0) {
-    emailSends.push(
-      resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: instructorEmails,
-        subject: opportunityEmail.subject,
-        html: opportunityEmail.html,
-      })
-    );
-  }
-
-  const results = await Promise.all(emailSends);
-  results.forEach((r, i) => {
-    if (r && typeof r === "object" && "error" in r && r.error) {
-      console.error(`[class-requests/approve] Email send ${i} failed:`, r.error);
-    }
-  });
+      idempotencyKey: `class-request-approved-${newSession.id}`,
+    },
+    ...(instructorEmails.length > 0
+      ? [
+          {
+            context: "class-requests/approve:instructor-opportunity",
+            to: instructorEmails,
+            subject: opportunityEmail.subject,
+            html: opportunityEmail.html,
+            idempotencyKey: `class-request-opportunity-${newSession.id}`,
+          },
+        ]
+      : []),
+  ]);
 
   return NextResponse.json({ data: { sessionId: newSession.id } });
 }

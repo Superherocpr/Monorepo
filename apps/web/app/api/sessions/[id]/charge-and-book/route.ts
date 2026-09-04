@@ -36,7 +36,7 @@ import { maybeSendAssistantReminder } from "@/lib/assistant-reminder";
 import { getSessionPricing } from "@/lib/session-pricing";
 import { logPaymentFailure, describeBookSpotFailure } from "@/lib/payment-failures";
 import { floatingNow } from "@/lib/business-time";
-import { Resend } from "resend";
+import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
 import { isMockPaymentsEnabled, mockCaptureOutcome } from "@/lib/mock-payments";
 
@@ -535,7 +535,7 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
   // ── Confirmation emails (best-effort) ─────────────────────────────────────
   // Skipped entirely in mock mode: Resend on staging is the same real
   // account, and nobody should get "you were charged $75" for a test run.
-  if (!mockMode && process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
+  if (!mockMode && isEmailConfigured()) {
     const location = firstRelation(
       session.locations as
         | { name: string; address: string; city: string; state: string; zip: string }
@@ -554,8 +554,6 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
       .select("first_name, last_name, email")
       .eq("id", customerId)
       .maybeSingle();
-
-    const resend = new Resend(process.env.RESEND_API_KEY);
 
     if (!customerProfile?.email) {
       console.error("[charge-and-book] No email on file — confirmation not sent", {
@@ -583,17 +581,16 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
           instructorPhone: instructorProfile?.phone ?? null,
         });
 
-        const { error: emailError } = await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL,
+        await sendEmail({
+          context: "charge-and-book:customer",
           to: customerProfile.email,
           subject,
           html,
+          idempotencyKey: `charge-and-book-customer-${bookingId}`,
         });
-        if (emailError) {
-          console.error("[charge-and-book] Confirmation email failed:", emailError);
-        }
       } catch (err) {
-        console.error("[charge-and-book] Confirmation email failed:", err);
+        // Guards the template build above — sendEmail never throws.
+        console.error("[charge-and-book] Confirmation email could not be prepared:", err);
       }
     }
 
@@ -615,17 +612,16 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
           source: "manual",
         });
 
-        const { error: emailError } = await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL,
+        await sendEmail({
+          context: "charge-and-book:instructor",
           to: instructorProfile.email,
           subject,
           html,
+          idempotencyKey: `charge-and-book-instructor-${bookingId}`,
         });
-        if (emailError) {
-          console.error("[charge-and-book] Instructor notification failed:", emailError);
-        }
       } catch (err) {
-        console.error("[charge-and-book] Instructor notification failed:", err);
+        // Guards the template build above — sendEmail never throws.
+        console.error("[charge-and-book] Instructor notification could not be prepared:", err);
       }
     }
   } else if (mockMode) {

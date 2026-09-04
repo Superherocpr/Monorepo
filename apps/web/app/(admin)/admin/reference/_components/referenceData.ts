@@ -165,6 +165,7 @@ export const GROUPS: GroupDef[] = [
           "Shows a live-updating list of students who have successfully verified their attendance",
           "Codes are valid for the current business day — prompts to refresh if yesterday's code is loaded",
           "Session header displays class type, location, and time for easy reference at the front of the room",
+          "A student is sent a branded welcome email the first time they're confirmed — not on repeat check-ins",
         ],
       },
       {
@@ -363,7 +364,8 @@ export const GROUPS: GroupDef[] = [
         url: "/admin/staff",
         role: "super",
         bullets: [
-          "Invite a new staff member via a slide-in panel — enter their name, email, and role (Instructor, Manager, Super Admin, or Inspector)",
+          "Invite a new staff member via a slide-in panel — enter their name, email, phone, and role (Instructor, Manager, or Inspector; Super Admin must be assigned afterwards)",
+          "Phone is required when inviting staff — an instructor's number is printed on the booking confirmation customers receive for their classes",
           "Change role for any existing staff member",
           "Deactivate an account to revoke login access, or reactivate a deactivated account",
           "Edit instructor bio — photo, description, credentials, and published/unpublished toggle for the public About page",

@@ -10,7 +10,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/send-email";
 import { invoiceResendEmail } from "@/lib/emails";
 
 /** Type guard — ensures a value is a non-null object. */
@@ -95,10 +95,8 @@ export async function POST(request: Request) {
   // Send invoice email via Resend. This is best-effort — if delivery fails,
   // we still log the resend action so there is a record of the attempt.
   // The instructor can retry if the email doesn't arrive.
-  let emailSendError: Error | null = null;
-  if (process.env.RESEND_API_KEY) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
+  let emailSendError: string | null = null;
+  {
     const session = invoice.class_sessions as unknown as {
       starts_at: string;
       class_types: { name: string } | null;
@@ -119,18 +117,17 @@ export async function POST(request: Request) {
       paymentPlatform: invoice.payment_platform ?? null,
     });
 
-    emailSendError = await resend.emails
-      .send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: newEmail,
-        subject,
-        html,
-      })
-      .then(() => null)
-      .catch((err: unknown) => {
-        console.error("[invoices/resend] Email send failed (non-fatal):", err);
-        return err instanceof Error ? err : new Error(String(err));
-      });
+    const result = await sendEmail({
+      context: "invoices/resend",
+      to: newEmail,
+      subject,
+      html,
+    });
+
+    // Captured so the reason lands in invoice_activity_log below — this route's
+    // record of the attempt is what an admin reads when a customer says the
+    // invoice never arrived.
+    emailSendError = result.sent ? null : (result.error ?? result.reason);
   }
 
   // Log the action regardless of whether the email send succeeded.
@@ -139,7 +136,7 @@ export async function POST(request: Request) {
     ? `Resent to ${newEmail} (corrected from ${originalEmail})`
     : `Resent to ${newEmail}`;
   const logNote = emailSendError
-    ? `${baseLogNote} (email delivery failed: ${emailSendError.message})`
+    ? `${baseLogNote} (email delivery failed: ${emailSendError})`
     : baseLogNote;
 
   await adminClient.from("invoice_activity_log").insert({
