@@ -79,8 +79,9 @@ export function welcomeEmail({ firstName }: { firstName: string }): EmailContent
 // ── 2. Rollcall welcome email (new student checked in at class) ────────────────
 
 /**
- * Sent to a new student after they create an account on the rollcall check-in page.
- * Triggered by: POST /api/rollcall/register
+ * Sent to a student the first time they are confirmed on a session roster via
+ * the rollcall check-in flow — not on repeat check-ins.
+ * Triggered by: POST /api/rollcall/checkin-by-profile
  * @param firstName - The student's first name.
  */
 export function rollcallWelcomeEmail({ firstName }: { firstName: string }): EmailContent {

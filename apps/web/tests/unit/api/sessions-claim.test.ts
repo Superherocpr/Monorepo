@@ -20,14 +20,16 @@ vi.mock("@/lib/auth/effective-role", () => ({
   requireApiRole: vi.fn(),
 }));
 
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(function Resend() {
-    return {
-      emails: {
-        send: vi.fn().mockResolvedValue({ data: { id: "email-id" }, error: null }),
-      },
-    };
-  }),
+/**
+ * Mocked at the wrapper so the tests can assert that a claimed class actually
+ * notifies the enrolled students and the admins.
+ */
+const sendEmailMock = vi.fn().mockResolvedValue({ sent: true, id: "email-1" });
+const sendEmailsMock = vi.fn().mockResolvedValue({ sent: 0, failed: 0, results: [] });
+vi.mock("@/lib/send-email", () => ({
+  sendEmail: (...args: unknown[]) => sendEmailMock(...args),
+  sendEmails: (...args: unknown[]) => sendEmailsMock(...args),
+  isEmailConfigured: () => true,
 }));
 
 import { createAdminClient } from "@/lib/supabase/server";
@@ -110,6 +112,58 @@ describe("POST /api/sessions/[id]/claim", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.data.ok).toBe(true);
+  });
+
+  test("notifies every enrolled student and the admins when a class is claimed", async () => {
+    mockFromSequence([
+      chain({ data: LOCATION, error: null }), // fetch location
+      chain({ data: OPEN_SESSION, error: null }), // fetch session
+      chain({
+        data: { id: SESSION_ID, instructor_id: CLAIMING_INSTRUCTOR_ID },
+        error: null,
+      }), // atomic update succeeds
+      chain({ data: { phone: "555-1234" }, error: null }), // claiming profile phone
+      chain({
+        data: [
+          { profiles: { first_name: "Dana", email: "dana@example.com" } },
+          { profiles: { first_name: "Fox", email: "fox@example.com" } },
+        ],
+        error: null,
+      }), // enrolled students
+      chain({ data: [{ email: "admin@example.com" }], error: null }), // admins
+    ]);
+
+    await POST(makeRequest(), params());
+
+    // One message per student, not one multi-recipient send — a single bad
+    // address must not cost the whole class its notification.
+    expect(sendEmailsMock).toHaveBeenCalledTimes(1);
+    const studentBatch = sendEmailsMock.mock.calls[0][0] as Array<Record<string, string>>;
+    expect(studentBatch).toHaveLength(2);
+    expect(studentBatch.map((e) => e.to)).toEqual(["dana@example.com", "fox@example.com"]);
+    expect(new Set(studentBatch.map((e) => e.context))).toEqual(
+      new Set(["sessions/claim:student"])
+    );
+    // The new instructor's name is the whole point of the notification.
+    expect(studentBatch[0].html).toContain("Jamie Claimer");
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const adminCall = sendEmailMock.mock.calls[0][0] as { context: string; to: string[] };
+    expect(adminCall.context).toBe("sessions/claim:admin");
+    expect(adminCall.to).toEqual(["admin@example.com"]);
+  });
+
+  test("sends nothing when the claim loses the race", async () => {
+    mockFromSequence([
+      chain({ data: LOCATION, error: null }),
+      chain({ data: OPEN_SESSION, error: null }),
+      chain({ data: null, error: null }), // atomic update matched no row
+    ]);
+
+    await POST(makeRequest(), params());
+
+    expect(sendEmailsMock).not.toHaveBeenCalled();
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   test("returns 409 when a concurrent request already claimed the session", async () => {
