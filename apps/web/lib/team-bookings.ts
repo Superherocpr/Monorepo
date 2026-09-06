@@ -234,9 +234,9 @@ export async function createTeamBooking(
   // Non-fatal by design: the link and the class already exist, and blocking here
   // would strand a created session with no way to reach it. What is NOT
   // optional is telling someone — a failure here means real money goes unbilled,
-  // so it alerts super_admins immediately and /admin/team-bookings offers a
-  // retry. (Before 2026-09-05 this was a bare console.error, and two company
-  // bookings went uninvoiced without anyone noticing.)
+  // so it alerts super_admins immediately, and both /admin/invoices and the
+  // class's own detail page offer a retry. (Before 2026-09-05 this was a bare
+  // console.error, and two company bookings went uninvoiced unnoticed.)
   let invoiceNumber: string | null = null;
   let invoiceError: string | undefined;
 

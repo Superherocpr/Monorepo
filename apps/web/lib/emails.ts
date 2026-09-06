@@ -3507,7 +3507,7 @@ export function teamInvoiceMissingAdminEmail({
       </table>
 
       <p style="margin:24px 0;">
-        <a href="${escapeHtml(baseUrl)}/admin/team-bookings?filter=uninvoiced"
+        <a href="${escapeHtml(baseUrl)}/admin/invoices"
            style="display:inline-block;background:#dc2626;color:white;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:700;">
           Retry Invoice →
         </a>
@@ -3515,10 +3515,11 @@ export function teamInvoiceMissingAdminEmail({
 
       <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
       <p style="font-size:12px;color:#9ca3af;">
-        The Team Bookings page has a one-click retry for each of these. Retrying is safe —
-        it re-checks the booking first and will not raise a second invoice. If a row says an
-        invoice was raised but not linked, do NOT retry it: the company would be billed twice.
-        Check PayPal for an unsent draft before raising a new invoice by hand.
+        The Invoices page lists these above the invoice table with a one-click retry, and each
+        booking&rsquo;s class page carries the same button. Retrying is safe — it re-checks the
+        booking first and will not raise a second invoice. If a row says an invoice was raised
+        but not linked, do NOT retry it: the company would be billed twice. Check PayPal for an
+        unsent draft before raising a new invoice by hand.
       </p>
     `),
   };

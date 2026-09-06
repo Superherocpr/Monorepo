@@ -69,7 +69,7 @@ clone — so this file is the one that travels with the repo.
 | Promo codes | ✅ | — | — | ✅ | — | ✅ | Quarterly abuse audit only. No `max_uses` column exists, so there is no redemption cap to check |
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
-| **Team bookings** (0055) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — admin page, retry cron + email alert, and the root-cause PayPal bug fixed — see below |
+| **Team bookings** (0055) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — surfaced on the session and invoices pages, retry cron + email alert, root-cause PayPal bug fixed — see below |
 | **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
 
 ### Staging mock payments — a narrower fix for a bigger discovery
@@ -167,7 +167,7 @@ idle feature.
 | `tests/unit/lib/team-bookings.test.ts` (+6) | `ensureTeamInvoice()` short-circuits — an already-linked booking, a per-seat booking, and a booking with no total must never reach PayPal |
 | Cron `retry-team-booking-invoices` (0067) | Daily 13:00 UTC. Retries every breaching booking, so the common case self-heals. **⚠️ Written and applied but NOT YET SCHEDULED in either environment** — see below |
 | Email alert | Fires **immediately** at booking time on failure, and daily from the sweep for anything still outstanding. This is the part that was missing |
-| `/admin/team-bookings` | The operator can finally see group bookings, with a red banner counting uninvoiced ones and their dollar total, and a one-click retry |
+| Admin surfaces | The signup link and company details now sit on the class's own page (`/admin/sessions/[id]`), with a Copy button and, for company bookings, a Raise invoice action. `/admin/invoices` lists any uninvoiced company bookings above the table with the same retry, and tags raised team invoices so they are distinguishable from ordinary group ones |
 
 **Two deliberate constraints on the automatic retry**, both about not making the
 cure worse than the disease:
@@ -582,7 +582,7 @@ transactional email, blog, both PayPal webhooks.
 
 | # | Gap | Why it ranks here |
 |---|---|---|
-| 1 | ~~**Team bookings fully invisible**~~ | ✅ Closed 2026-09-05 — admin page, retry cron, email alert, and the root-cause PayPal `Prefer` bug fixed |
+| 1 | ~~**Team bookings fully invisible**~~ | ✅ Closed 2026-09-05 — surfaced on the session + invoices pages, retry cron, email alert, and the root-cause PayPal `Prefer` bug fixed |
 | 2 | **PayPal payouts webhook** | May be inert entirely; real money already went DENIED once |
 | 3 | **PayPal invoice webhook** | Silent failure = invoices never mark paid = revenue leak |
 | 4 | **No booking completes in any test** | The primary revenue path |
@@ -612,8 +612,10 @@ clearing the two blockers in `qa-todo.md` first: staging admin credentials and
 the blank PayPal client ID. Sandbox PayPal makes a real booking assertable.
 
 **Team bookings admin surface** (#1) — ✅ shipped 2026-09-05
-`/admin/team-bookings` now lists every group booking, flags the uninvoiced ones,
-and offers a one-click retry. It is backed by a real alert, not just the page.
+Deliberately **not** a page of its own. A team booking is a property of a class,
+so the signup link and company details live on that class's detail page, and the
+money side lives on Invoices — where anyone chasing an unbilled company already
+looks. Both carry the same retry action. Backed by a real alert, not just a page.
 
 **CLAUDE.md rule** (prevents recurrence)
 Shipping a feature includes declaring its health signal. This is the fix for the

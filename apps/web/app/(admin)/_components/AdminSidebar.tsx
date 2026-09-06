@@ -40,7 +40,6 @@ const NAV_ITEMS: NavItem[] = [
     sectionLabel: "Operations",
   },
   { label: "Class Sessions", href: "/admin/sessions", roles: ["manager", "super_admin"] },
-  { label: "Team Bookings", href: "/admin/team-bookings", roles: ["manager", "super_admin"] },
   { label: "Customers", href: "/admin/customers", roles: ["manager", "super_admin"] },
   {
     label: "Session Approvals",

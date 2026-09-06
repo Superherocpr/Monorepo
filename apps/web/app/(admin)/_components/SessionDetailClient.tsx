@@ -36,6 +36,7 @@ import {
   type SessionEditFields,
   type StudentDocumentRecord,
 } from "@/app/(admin)/admin/sessions/[id]/actions";
+import RaiseTeamInvoiceButton from "@/app/(admin)/_components/RaiseTeamInvoiceButton";
 import { PayPalProvider } from "@paypal/react-paypal-js/sdk-v6";
 import { CardPaymentSection } from "@/app/_components/PayPalCardPaymentSection";
 import { MockCardPaymentSection } from "@/app/_components/MockCardPaymentSection";
@@ -200,6 +201,35 @@ export interface SessionDetailData {
   roster_records: SessionRosterRecord[];
   invoices: SessionInvoice[];
   roster_uploads: SessionRosterUpload[];
+  /** The corporate booking this class was created for, or null for a normal class. */
+  team_booking: SessionTeamBooking | null;
+}
+
+/**
+ * The team/corporate booking attached to a session. Its signup link is the whole
+ * point of the booking — staff hand it to the company contact, who distributes
+ * it to their own employees — so the detail page surfaces it prominently rather
+ * than burying it.
+ */
+export interface SessionTeamBooking {
+  id: string;
+  company_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string | null;
+  /** 'company' = flat total invoiced to the contact; 'per_seat' = employees pay. */
+  payment_mode: "company" | "per_seat";
+  price_per_seat: number | null;
+  total_price: number | null;
+  /** Null in per_seat mode, or when invoice creation failed and needs retrying. */
+  invoice_id: string | null;
+  /**
+   * The full public signup URL. Built server-side from NEXT_PUBLIC_BASE_URL —
+   * the same source the share-link email uses — so it renders identically on
+   * server and client and needs no post-mount origin lookup.
+   */
+  share_url: string;
+  created_at: string;
 }
 
 /** A class type option for the edit form dropdown. */
@@ -596,6 +626,26 @@ export default function SessionDetailClient({
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>(session.addon_ids);
   const [isSavingAddons, setIsSavingAddons] = useState(false);
   const [addonsError, setAddonsError] = useState<string | null>(null);
+
+  // ── Team booking share link ───────────────────────────────────────────────
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+
+  /**
+   * Copies the public /team/<token> signup link to the clipboard.
+   * The company contact distributes this to their own employees, so it is the
+   * single thing staff most often need off this page for a corporate class.
+   * Side effect: writes to the system clipboard.
+   */
+  async function handleCopyShareLink(): Promise<void> {
+    if (!session.team_booking) return;
+    try {
+      await navigator.clipboard.writeText(session.team_booking.share_url);
+      setShareLinkCopied(true);
+      setTimeout(() => setShareLinkCopied(false), 2000);
+    } catch {
+      // Clipboard permission denied — the full link stays visible and selectable.
+    }
+  }
 
   // ── Remove student state ──────────────────────────────────────────────────
   // removingStudentIds: set of booking IDs or roster_record IDs currently being removed.
@@ -2356,6 +2406,11 @@ export default function SessionDetailClient({
                 {session.discount_percent}% OFF
               </span>
             )}
+            {session.team_booking && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                Team Booking
+              </span>
+            )}
             {session.enrollware_submitted && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                 Submitted to Enrollware
@@ -2460,6 +2515,88 @@ export default function SessionDetailClient({
             </div>
           )}
         </div>
+
+        {/* ── Team booking: the signup link staff hand to the company ── */}
+        {session.team_booking && (
+          <div className="border-2 border-indigo-300 bg-indigo-50/60 rounded-lg p-5 space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-indigo-900">
+                  Team booking — {session.team_booking.company_name}
+                </p>
+                <p className="text-xs text-indigo-800/80 mt-0.5">
+                  {session.team_booking.contact_name} · {session.team_booking.contact_email}
+                  {session.team_booking.contact_phone
+                    ? ` · ${session.team_booking.contact_phone}`
+                    : ""}
+                </p>
+              </div>
+              <p className="text-xs font-medium text-indigo-900 shrink-0">
+                {session.team_booking.payment_mode === "company"
+                  ? `$${Number(session.team_booking.total_price ?? 0).toFixed(2)} total, billed to the company`
+                  : `$${Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} per seat, paid by each employee`}
+              </p>
+            </div>
+
+            {/* The whole reason this card is here — staff send this link on. */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="team-share-url"
+                className="block text-xs font-medium text-indigo-900 uppercase tracking-wide"
+              >
+                Signup link
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  id="team-share-url"
+                  type="text"
+                  readOnly
+                  value={session.team_booking.share_url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="flex-1 min-w-0 text-sm bg-white border border-indigo-300 rounded-md px-3 py-2 text-gray-800 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleCopyShareLink()}
+                  className="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700 transition-colors"
+                >
+                  {shareLinkCopied ? "Copied!" : "Copy signup link"}
+                </button>
+              </div>
+              <p className="text-xs text-indigo-800/80">
+                Send this to {session.team_booking.contact_name} — they share it with their own
+                staff, who each sign up with a real account so RollCall shows correct names.
+              </p>
+            </div>
+
+            {/* Company mode with no invoice: money agreed but never billed. */}
+            {session.team_booking.payment_mode === "company" &&
+              !session.team_booking.invoice_id &&
+              isManager && (
+                <div className="border-t border-indigo-200 pt-3 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-red-700">No invoice has been raised</p>
+                    <p className="text-xs text-red-700/80 mt-0.5">
+                      The company was told the class is booked but has never been asked to pay.
+                      Raising it is safe — it re-checks first and will not bill them twice.
+                    </p>
+                  </div>
+                  <RaiseTeamInvoiceButton teamBookingId={session.team_booking.id} />
+                </div>
+              )}
+
+            {session.team_booking.invoice_id && (
+              <div className="border-t border-indigo-200 pt-3">
+                <Link
+                  href={`/admin/invoices/${session.team_booking.invoice_id}`}
+                  className="text-sm font-medium text-indigo-700 hover:underline"
+                >
+                  View company invoice →
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Assistant assignment (documentation only, no pay impact) ── */}
         {canManageAssistant && session.class_types?.requires_assistant_at_capacity && (

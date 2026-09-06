@@ -87,21 +87,6 @@ export const GROUPS: GroupDef[] = [
         ],
       },
       {
-        id: "team-bookings",
-        name: "Team Bookings",
-        url: "/admin/team-bookings",
-        role: "manager",
-        bullets: [
-          "See every corporate / group booking in one place, newest first — company, contact, class, price, and whether it has been invoiced",
-          "A red banner at the top counts any company-paid bookings that have no invoice, and totals the money not yet billed",
-          "\"Needs invoice\" filter shows only those bookings; alert emails link straight to it",
-          "Raise invoice button bills a company whose invoice failed when the booking was made — it re-checks first, so pressing it twice never bills them twice",
-          "Copy the signup link for any booking to re-send it to the company contact",
-          "Jump to the invoice for any booking that has one",
-          "Company bookings are invoiced automatically when created; this page is the recovery path for when that fails, and a nightly job also retries on its own and emails super admins anything it could not fix",
-        ],
-      },
-      {
         id: "sessions-approvals",
         name: "Approvals Queue",
         url: "/admin/sessions/approvals",
@@ -143,6 +128,8 @@ export const GROUPS: GroupDef[] = [
             role: "instructor",
           },
           "Send Invoice — opens the invoice creation form pre-filled with this session",
+          "Team / corporate classes show a Team Booking badge and a highlighted panel near the top with the company and contact details, the agreed price, and the signup link to send them — with a Copy signup link button",
+          { text: "If a company-paid team class was never invoiced, that panel says so and gives you a Raise invoice button; it re-checks first, so pressing it twice never bills the company twice", role: "manager" },
           "Log a payment for a student manually",
           "Add Student — search customers by name, email, or phone, or create an account on the spot for a walk-in who isn't in the system yet",
           {
@@ -273,6 +260,8 @@ export const GROUPS: GroupDef[] = [
           { text: "Filter by instructor", role: "manager" },
           { text: "Instructors see only their own invoices", role: "manager" },
           "Button to create a new invoice at the top of the page",
+          "Corporate invoices raised from a team booking carry a Team tag so you can pick them out from ordinary group invoices",
+          { text: "A red panel above the list shows any company team bookings that were never invoiced, with the total owed and a one-click Raise invoice for each — these have no invoice yet, so they cannot appear in the list itself", role: "manager" },
         ],
       },
       {

@@ -15,12 +15,40 @@ import SessionDetailClient, {
   type InstructorOption,
   type AddonOption,
 } from "../../../_components/SessionDetailClient";
-import type { UserRole } from "@/types/users";
 import type { SessionStatus, SessionApprovalStatus } from "@/types/schedule";
 
 /** Props passed to Next.js dynamic route pages. */
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+/**
+ * Reduces the embedded team_bookings relation to the single booking the detail
+ * card renders, converting the numeric price columns Postgres returns as
+ * strings.
+ * @param raw - The embedded relation, which PostgREST returns as an array.
+ * @returns The team booking for this session, or null when it is a normal class.
+ */
+function normalizeTeamBooking(raw: unknown): SessionDetailData["team_booking"] {
+  const rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const row = rows[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
+
+  return {
+    id: row.id as string,
+    company_name: row.company_name as string,
+    contact_name: row.contact_name as string,
+    contact_email: row.contact_email as string,
+    contact_phone: (row.contact_phone as string | null) ?? null,
+    payment_mode: row.payment_mode === "company" ? "company" : "per_seat",
+    price_per_seat: row.price_per_seat == null ? null : Number(row.price_per_seat),
+    total_price: row.total_price == null ? null : Number(row.total_price),
+    invoice_id: (row.invoice_id as string | null) ?? null,
+    // Built here rather than in the browser so the field renders the same on
+    // server and client. Same source as the share-link email in lib/team-bookings.
+    share_url: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com"}/team/${row.share_token as string}`,
+    created_at: row.created_at as string,
+  };
 }
 
 /** Fetches session detail and renders the interactive client view. */
@@ -72,6 +100,10 @@ export default async function SessionDetailPage({ params }: PageProps) {
       roster_uploads (
         id, original_filename, submitted_by_name,
         submitted_by_email, imported, created_at
+      ),
+      team_bookings (
+        id, company_name, contact_name, contact_email, contact_phone,
+        payment_mode, price_per_seat, total_price, invoice_id, share_token, created_at
       )
     `
     )
@@ -151,6 +183,10 @@ export default async function SessionDetailPage({ params }: PageProps) {
     invoices: (raw.invoices as SessionDetailData["invoices"]) ?? [],
     roster_uploads:
       (raw.roster_uploads as SessionDetailData["roster_uploads"]) ?? [],
+    // A session carries at most one team booking in practice, but the relation
+    // is one-to-many (a company could book two blocks on the same class), so
+    // PostgREST returns an array. The detail card shows the first.
+    team_booking: normalizeTeamBooking(raw.team_bookings),
   };
 
   // Fetch class types for the edit form dropdown (active types only)

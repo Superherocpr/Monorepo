@@ -600,8 +600,8 @@ export default function CreateSessionClient({
             >
               The booking was created, but the invoice could not be sent: {created.invoiceError} A
               super admin has been alerted, and you can retry it from the{" "}
-              <a href="/admin/team-bookings?filter=uninvoiced" className="underline font-medium">
-                Team Bookings page
+              <a href="/admin/invoices" className="underline font-medium">
+                Invoices page
               </a>
               .
             </div>
