@@ -15,6 +15,7 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor, type AdminActor } from "@/lib/auth/effective-role";
 import { bookingCancelledEmail } from "@/lib/emails";
+import { sendContactLinksForApprovedSessions } from "@/lib/team-bookings";
 import type { UserRole } from "@/types/users";
 import { floatingNow } from "@/lib/business-time";
 import { getS3BucketName, getS3Region } from "@/lib/s3";
@@ -41,6 +42,11 @@ async function requireActionRole(
 /**
  * Approves a class session by setting approval_status to 'approved'.
  * Auth: manager and super_admin only.
+ *
+ * Side effects: UPDATE on class_sessions, and for a team booking on this
+ * session, the signup link is emailed to the company contact — approval is the
+ * point that link starts accepting signups, so it is the point it can be sent.
+ *
  * @param sessionId - UUID of the class_sessions record to approve.
  * @returns An error message string on failure, or null on success.
  * TODO: Send approval notification email to the instructor via Resend.
@@ -55,6 +61,9 @@ export async function approveSession(sessionId: string): Promise<string | null> 
     .update({ approval_status: "approved" })
     .eq("id", sessionId);
   if (error) return error.message;
+
+  await sendContactLinksForApprovedSessions(admin, [sessionId]);
+
   revalidatePath(`/admin/sessions/${sessionId}`);
   revalidatePath("/admin/sessions");
   // Revalidate public pages so the newly approved session appears immediately
@@ -100,6 +109,10 @@ export async function rejectSession(
 /**
  * Approves multiple class sessions in a single batch update.
  * Used by the inline "Approve All" action on the approvals queue page.
+ *
+ * Side effects: UPDATE on class_sessions, plus the company-contact signup link
+ * email for any team bookings among them (see approveSession).
+ *
  * @param sessionIds - Array of class_sessions UUIDs to approve.
  * @returns An error message string on failure, or null on success.
  * TODO: Send approval notification emails to each instructor via Resend.
@@ -115,6 +128,9 @@ export async function bulkApproveSession(sessionIds: string[]): Promise<string |
     .update({ approval_status: "approved" })
     .in("id", sessionIds);
   if (error) return error.message;
+
+  await sendContactLinksForApprovedSessions(admin, sessionIds);
+
   revalidatePath("/admin/sessions/approvals");
   revalidatePath("/admin/sessions");
   // Revalidate public pages so newly approved sessions appear immediately

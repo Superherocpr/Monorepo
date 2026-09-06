@@ -69,7 +69,7 @@ clone — so this file is the one that travels with the repo.
 | Promo codes | ✅ | — | — | ✅ | — | ✅ | Quarterly abuse audit only. No `max_uses` column exists, so there is no redemption cap to check |
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
-| **Team bookings** (0055) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — surfaced on the session and invoices pages, retry cron + email alert, root-cause PayPal bug fixed — see below |
+| **Team bookings** (0055, 0067, 0068) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — surfaced on the session and invoices pages, retry cron + email alert, root-cause PayPal bug fixed. 2026-09-06: third payment mode (bill the company per signup) + the signup link now emails the contact automatically — see below |
 | **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
 
 ### Staging mock payments — a narrower fix for a bigger discovery
@@ -201,6 +201,77 @@ admin page — not the sweep.
   by the very failure this work fixes. Enabling the sweep first would raise a
   second invoice for the same class. Section 3 of migration 0067 is the enable
   step.
+
+### Team bookings — third payment mode and automatic contact link (2026-09-06)
+
+Two changes on top of the invoice work above, both driven by how the feature is
+actually sold.
+
+**1. `company_per_signup`, a third payment mode (migration 0068).** The two
+original modes forced a bad choice for the common corporate arrangement of "bill
+us for however many of our people come": `company` means quoting a flat total on
+the phone and eating the difference, and `per_seat` bills the employees rather
+than the company. The new mode bills the company `price_per_seat x signups`.
+
+The billable number is **signups, not attendance** (agreed explicitly), counted
+as live `bookings` rows carrying the `team_booking_id`, and there is no minimum.
+The amount is therefore not knowable until people have signed up, which is why
+this mode is invoiced late rather than at creation:
+
+| Trigger | When |
+|---|---|
+| Nightly sweep (`retry-team-booking-invoices`) | Once the class has **ended**. Skipped silently before that: an uninvoiced per-signup booking is correct, not a breach |
+| Raise invoice button | Any time, on the class page or the invoices page. Bills whoever has signed up at that moment |
+
+Two things this mode needed that the flat one did not:
+
+- **A zero-signup outcome that is not a fault.** A class nobody joined owes
+  nothing, and a $0 PayPal invoice is invalid anyway. That returns
+  `nothing_to_bill`, a distinct status from `not_applicable`, precisely so the
+  sweep does not email super_admins about the same empty class every day
+  forever. The button treats it the same way: neutral, and it stays clickable.
+- **The uninvoiced band had to learn the difference.** `/admin/invoices` only
+  lists per-signup bookings once their class is over, and shows their *rate*
+  rather than a total, since the total does not exist yet. The band's dollar
+  headline deliberately sums flat totals only: adding a rate into that figure
+  would state an amount the business is not owed.
+
+Also fixed while in here: `/api/team-bookings/[share_token]/signup` branched on
+`payment_mode === "company"` to decide whether an employee pays. Left alone, a
+per-signup employee would have fallen through to the paid path and been charged
+for a seat their employer is also invoiced for. Both company modes now route
+through one `isCompanyBilled()` helper.
+
+**2. The signup link is emailed to the company contact automatically.** It was
+previously mailed only to the staff creator, who had to forward it by hand — a
+step that can simply be forgotten, with no trace when it is. It now goes to the
+contact directly.
+
+The one real constraint is that an instructor-created class is not approved yet,
+and an unapproved link **actively refuses signups**. Mailing it on creation would
+send contacts to a page that turns their people away, so the send is held and
+fires from `approveSession` / `bulkApproveSession` instead. Exactly-once is
+enforced by claiming `team_bookings.contact_link_sent_at` with a conditional
+UPDATE *before* sending, not by Resend's idempotency key: approve → edit (which
+resets the class to `pending_approval`) → re-approve days later would otherwise
+mail the same contact twice, and a duplicate to a customer is worse than a missed
+one that staff can resend from the class page. A send that demonstrably failed
+releases the claim so a later approval can retry.
+
+**Health signals for both:** 12 new unit tests in
+`tests/unit/lib/team-bookings.test.ts` (43 total) covering the per-signup
+arithmetic including cent rounding, the zero-signup guard, the missing-rate
+guard, the still-enforced double-invoice refusal, and the new phone precedence;
+plus the two email registries (`emails-render`, `email-send-sites`), which both
+failed until the new template and send site were registered — working as
+intended.
+
+**Gap, stated honestly:** there is no signal that would catch the contact link
+silently never being sent. `contact_link_sent_at` makes it *visible* (the class
+page says whether and when it went out), but nothing asserts it. A booking whose
+class is approved and imminent with `contact_link_sent_at` still null is a clean
+SQL invariant and is the obvious next addition. `// TODO:` noted here rather than
+in code, since it belongs to the canary, not to a function.
 
 **Still open:** the `invoices` table having been empty means no invoice has ever
 been marked paid in production either, so the PayPal paid-invoice webhook is

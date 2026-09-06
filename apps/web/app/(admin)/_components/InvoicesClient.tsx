@@ -65,13 +65,20 @@ export interface UninvoicedTeamBooking {
   companyName: string;
   contactName: string;
   contactEmail: string;
-  /** Flat total the company owes, in dollars. */
+  /** True when the company is billed per signup rather than a flat total. */
+  perSignup: boolean;
+  /**
+   * Dollars the company owes: the flat total, or the per-signup rate when
+   * `perSignup` is true (the real total is not known until it is billed).
+   */
   totalPrice: number;
   createdAt: string;
   sessionId: string;
   className: string;
   /** Floating wall-clock ISO of the class start, or null if the session is gone. */
   classStartsAt: string | null;
+  /** Floating wall-clock ISO of the class end, or null when not recorded. */
+  classEndsAt: string | null;
 }
 
 /** An instructor entry for the filter dropdown (manager/super admin only). */
@@ -117,6 +124,16 @@ export default function InvoicesClient({
   const [filterTo, setFilterTo] = useState("");
   const [filterInstructor, setFilterInstructor] = useState("all");
   const [filterClass, setFilterClass] = useState("all");
+
+  // Dollars actually owed on flat-total bookings. Per-signup bookings carry a
+  // rate rather than a total, so they are counted in the band but not summed.
+  const flatTotalOwed = useMemo(
+    () =>
+      uninvoicedTeamBookings
+        .filter((b) => !b.perSignup)
+        .reduce((sum, b) => sum + b.totalPrice, 0),
+    [uninvoicedTeamBookings]
+  );
 
   // ─── Build class options from the invoices data ─────────────────────────────
   const classOptions = useMemo(() => {
@@ -197,10 +214,10 @@ export default function InvoicesClient({
                 <h2 className="text-sm font-semibold text-red-900">
                   {uninvoicedTeamBookings.length} team booking
                   {uninvoicedTeamBookings.length === 1 ? "" : "s"} awaiting an invoice
-                  {": "}
-                  {formatCurrency(
-                    uninvoicedTeamBookings.reduce((sum, b) => sum + b.totalPrice, 0)
-                  )}
+                  {/* Only flat totals are summed. A per-signup booking's figure
+                      is a rate, so adding it here would state a dollar amount
+                      the business is not in fact owed. */}
+                  {flatTotalOwed > 0 ? `: ${formatCurrency(flatTotalOwed)}` : ""}
                 </h2>
                 <p className="text-xs text-red-800/80 mt-0.5">
                   Each company was told their class is booked but has never been asked to pay.
@@ -230,11 +247,15 @@ export default function InvoicesClient({
                       {booking.classStartsAt ? ` · ${formatDate(booking.classStartsAt)}` : ""}
                       {" · booked "}
                       {formatDate(booking.createdAt)}
+                      {booking.perSignup ? " · billed per signup, class has ended" : ""}
                     </p>
                   </div>
                   <div className="shrink-0 flex items-center gap-4">
                     <span className="font-semibold text-gray-900">
                       {formatCurrency(booking.totalPrice)}
+                      {booking.perSignup ? (
+                        <span className="font-normal text-gray-500 text-xs"> per signup</span>
+                      ) : null}
                     </span>
                     <RaiseTeamInvoiceButton teamBookingId={booking.id} compact />
                   </div>

@@ -15,6 +15,14 @@
  * a maintenance checklist somebody has to remember to run, whereas this both
  * fixes the common case on its own and pages a human when it cannot.
  *
+ * Two populations, with opposite defaults:
+ *   'company'            — should have been invoiced at booking time, so a
+ *                          missing invoice is a failure to recover and report.
+ *   'company_per_signup' — is SUPPOSED to be uninvoiced until the class has run,
+ *                          because the amount depends on who signed up. This job
+ *                          is the thing that finally bills it, once the class has
+ *                          ended. Before then it is skipped silently.
+ *
  * Retries are safe. ensureTeamInvoice() re-reads each booking and short-circuits
  * when an invoice already exists, so a booking rescued by an admin between runs
  * is never billed twice.
@@ -58,27 +66,54 @@ const MAX_RETRIES_PER_RUN = 25;
  */
 const AUTO_BILL_GRACE_DAYS = 7;
 
-/** The team_bookings columns the sweep needs, with the joined class date. */
+/** The team_bookings columns the sweep needs, with the joined class times. */
 interface UninvoicedRow {
   id: string;
   company_name: string;
   contact_name: string;
   contact_email: string;
+  payment_mode: string;
   total_price: number | string | null;
+  price_per_seat: number | string | null;
   created_at: string;
   created_by: string;
-  class_sessions: { starts_at: string } | { starts_at: string }[] | null;
+  class_sessions:
+    | { starts_at: string; ends_at: string | null }
+    | { starts_at: string; ends_at: string | null }[]
+    | null;
 }
 
 /**
- * Reads the class start date off a PostgREST embedded relation, which arrives
- * as an object or a single-element array depending on the join.
+ * Reads the embedded class session off a PostgREST relation, which arrives as an
+ * object or a single-element array depending on the join.
+ * @param row - One uninvoiced team booking row.
+ * @returns The session times, or null when the session could not be embedded.
+ */
+function sessionOf(row: UninvoicedRow): { starts_at: string; ends_at: string | null } | null {
+  return Array.isArray(row.class_sessions) ? (row.class_sessions[0] ?? null) : row.class_sessions;
+}
+
+/**
+ * Reads the class start date off a row.
  * @param row - One uninvoiced team booking row.
  * @returns The ISO class start, or null when the session could not be embedded.
  */
 function classDateOf(row: UninvoicedRow): string | null {
-  const session = Array.isArray(row.class_sessions) ? row.class_sessions[0] : row.class_sessions;
-  return session?.starts_at ?? null;
+  return sessionOf(row)?.starts_at ?? null;
+}
+
+/**
+ * Whether a per-signup booking's class has finished, which is when its headcount
+ * is final and it becomes billable unattended. Falls back to the start time for
+ * a session with no end recorded.
+ * @param row - One uninvoiced team booking row.
+ * @returns True once the class is over.
+ */
+function classHasEnded(row: UninvoicedRow): boolean {
+  const session = sessionOf(row);
+  if (!session) return false;
+  const finished = session.ends_at ?? session.starts_at;
+  return new Date(finished).getTime() < Date.now();
 }
 
 /**
@@ -106,10 +141,11 @@ async function handlePOST(request: Request): Promise<Response> {
   const { data, error } = await adminClient
     .from("team_bookings")
     .select(
-      `id, company_name, contact_name, contact_email, total_price, created_at, created_by,
-       class_sessions ( starts_at )`
+      `id, company_name, contact_name, contact_email, payment_mode, total_price,
+       price_per_seat, created_at, created_by,
+       class_sessions ( starts_at, ends_at )`
     )
-    .eq("payment_mode", "company")
+    .in("payment_mode", ["company", "company_per_signup"])
     .is("invoice_id", null)
     .lt("created_at", cutoff)
     .order("created_at", { ascending: false });
@@ -129,11 +165,13 @@ async function handlePOST(request: Request): Promise<Response> {
       success: true,
       created: 0,
       stillMissing: 0,
+      notYetDue: 0,
       triggeredBy: viaCron ? "cron" : actorId,
     });
   }
 
   let created = 0;
+  let notYetDue = 0;
   const stillMissing: TeamInvoiceAlertBooking[] = [];
 
   const autoBillFloor = Date.now() - AUTO_BILL_GRACE_DAYS * 24 * 60 * 60 * 1000;
@@ -143,6 +181,14 @@ async function handlePOST(request: Request): Promise<Response> {
   // of a bad batch and risks PayPal rate limits.
   for (const row of rows.slice(0, MAX_RETRIES_PER_RUN)) {
     const classStart = classDateOf(row);
+
+    // A per-signup booking is meant to be uninvoiced until its class has run:
+    // the headcount is not final before then. Not a breach, so it is skipped
+    // silently rather than reported — staff can still bill it early by hand.
+    if (row.payment_mode === "company_per_signup" && !classHasEnded(row)) {
+      notYetDue += 1;
+      continue;
+    }
 
     // Too old to bill without a person looking at it. Reported, never charged.
     if (classStart !== null && new Date(classStart).getTime() < autoBillFloor) {
@@ -182,6 +228,12 @@ async function handlePOST(request: Request): Promise<Response> {
       case "created":
       case "already_linked":
         created += result.status === "created" ? 1 : 0;
+        break;
+
+      case "nothing_to_bill":
+        // A class nobody signed up for owes nothing. Alerting on this would
+        // mail super_admins about the same empty class every day forever.
+        notYetDue += 1;
         break;
 
       case "created_unlinked":
@@ -226,6 +278,7 @@ async function handlePOST(request: Request): Promise<Response> {
     success: true,
     created,
     stillMissing: stillMissing.length,
+    notYetDue,
     triggeredBy: viaCron ? "cron" : actorId,
   });
 }

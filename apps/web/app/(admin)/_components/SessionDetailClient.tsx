@@ -217,12 +217,20 @@ export interface SessionTeamBooking {
   contact_name: string;
   contact_email: string;
   contact_phone: string | null;
-  /** 'company' = flat total invoiced to the contact; 'per_seat' = employees pay. */
-  payment_mode: "company" | "per_seat";
+  /**
+   * 'company' = flat total invoiced up front; 'per_seat' = employees pay;
+   * 'company_per_signup' = company billed per head after the class.
+   */
+  payment_mode: "company" | "per_seat" | "company_per_signup";
   price_per_seat: number | null;
   total_price: number | null;
-  /** Null in per_seat mode, or when invoice creation failed and needs retrying. */
+  /**
+   * Null in per_seat mode, when a per-signup booking has not been billed yet,
+   * or when invoice creation failed and needs retrying.
+   */
   invoice_id: string | null;
+  /** When the signup link was emailed to the contact. Null until it is sent. */
+  contact_link_sent_at: string | null;
   /**
    * The full public signup URL. Built server-side from NEXT_PUBLIC_BASE_URL:
    * the same source the share-link email uses: so it renders identically on
@@ -360,6 +368,23 @@ function invoiceStatusBadgeClass(status: string): string {
  * (EDT) or 4:00 AM (EST) to anyone west of UTC.
  * @param iso - Stored class timestamp.
  */
+/**
+ * Formats a real timestamptz (an actual instant, e.g. when an email was sent)
+ * as a plain date in the reader's own timezone.
+ *
+ * Deliberately does NOT pin timeZone: "UTC" the way formatDateTime does. That
+ * pinning exists for floating class times, which carry no timezone; this value
+ * is a genuine instant, so converting it to local time is the correct reading.
+ * @param iso - A real UTC timestamp.
+ */
+function formatInstantDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
     timeZone: "UTC",
@@ -2534,7 +2559,9 @@ export default function SessionDetailClient({
               <p className="text-xs font-medium text-indigo-900 shrink-0">
                 {session.team_booking.payment_mode === "company"
                   ? `$${Number(session.team_booking.total_price ?? 0).toFixed(2)} total, billed to the company`
-                  : `$${Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} per seat, paid by each employee`}
+                  : session.team_booking.payment_mode === "company_per_signup"
+                    ? `$${Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} per signup, billed to the company`
+                    : `$${Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} per seat, paid by each employee`}
               </p>
             </div>
 
@@ -2564,12 +2591,16 @@ export default function SessionDetailClient({
                 </button>
               </div>
               <p className="text-xs text-indigo-800/80">
-                Send this to {session.team_booking.contact_name}; they share it with their own
-                staff, who each sign up with a real account so RollCall shows correct names.
+                {session.team_booking.contact_link_sent_at
+                  ? `Emailed to ${session.team_booking.contact_name} on ${formatInstantDate(
+                      session.team_booking.contact_link_sent_at
+                    )}. Their staff each sign up with a real account, so RollCall shows correct names.`
+                  : `${session.team_booking.contact_name} is emailed this link automatically once the class is approved. Their staff each sign up with a real account, so RollCall shows correct names.`}
               </p>
             </div>
 
-            {/* Company mode with no invoice: money agreed but never billed. */}
+            {/* Flat company mode with no invoice: money agreed but never billed.
+                This is a fault, so it reads as one. */}
             {session.team_booking.payment_mode === "company" &&
               !session.team_booking.invoice_id &&
               isManager && (
@@ -2579,6 +2610,25 @@ export default function SessionDetailClient({
                     <p className="text-xs text-red-700/80 mt-0.5">
                       The company was told the class is booked but has never been asked to pay.
                       Raising it is safe; it re-checks first and will not bill them twice.
+                    </p>
+                  </div>
+                  <RaiseTeamInvoiceButton teamBookingId={session.team_booking.id} />
+                </div>
+              )}
+
+            {/* Per-signup mode with no invoice: normal until the class has run,
+                so this is neutral and explains when billing happens by itself. */}
+            {session.team_booking.payment_mode === "company_per_signup" &&
+              !session.team_booking.invoice_id &&
+              isManager && (
+                <div className="border-t border-indigo-200 pt-3 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-indigo-900">Not invoiced yet</p>
+                    <p className="text-xs text-indigo-800/80 mt-0.5">
+                      The company is billed $
+                      {Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} for each person
+                      who signs up. This goes out automatically after the class, or you can raise it
+                      now for whoever has signed up so far.
                     </p>
                   </div>
                   <RaiseTeamInvoiceButton teamBookingId={session.team_booking.id} />

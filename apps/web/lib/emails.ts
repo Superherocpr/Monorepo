@@ -3217,8 +3217,12 @@ export function dailySummaryEmail({
 // ── 36. Team booking — staff share link + employee signup confirmation ────────
 
 /**
- * Sent to the staff member who just created a team/corporate booking, carrying
- * the share link they hand to the company contact.
+ * Sent to the staff member who just created a team/corporate booking, as their
+ * own record of the booking and a copy of the link.
+ *
+ * The contact receives the link automatically (teamContactShareLinkEmail), so
+ * this is confirmation rather than an instruction to forward anything.
+ *
  * Triggered by: POST /api/team-bookings.
  * @param staffFirstName    - First name of the staff member who created it.
  * @param companyName       - The company the booking is for.
@@ -3226,10 +3230,10 @@ export function dailySummaryEmail({
  * @param className         - Name of the class type.
  * @param startsAt          - ISO datetime string of the session start.
  * @param locationName      - Venue name.
- * @param shareUrl          - Full public /team/<token> URL to forward.
- * @param paymentMode       - 'company' (invoiced flat) or 'per_seat' (employees pay).
+ * @param shareUrl          - Full public /team/<token> URL.
+ * @param paymentMode       - Which of the three payment modes applies.
  * @param priceLabel        - Human-readable price, e.g. "$1,200.00 total" or "$80.00 per seat".
- * @param invoiceNumber     - Invoice raised in company mode, else null.
+ * @param invoiceNumber     - Invoice raised in flat company mode, else null.
  * @param pendingApproval   - True when the class still needs approval before the link accepts signups.
  */
 export function teamBookingCreatedEmail({
@@ -3252,7 +3256,7 @@ export function teamBookingCreatedEmail({
   startsAt: string;
   locationName: string;
   shareUrl: string;
-  paymentMode: "company" | "per_seat";
+  paymentMode: "company" | "per_seat" | "company_per_signup";
   priceLabel: string;
   invoiceNumber: string | null;
   pendingApproval: boolean;
@@ -3273,18 +3277,23 @@ export function teamBookingCreatedEmail({
       ? `<p style="font-size:14px;color:#374151;">${safeCompany} is being invoiced for the full amount${
           invoiceNumber ? ` (invoice <strong>${escapeHtml(invoiceNumber)}</strong>)` : ""
         }. Employees sign up free through the link — they can do so before the invoice is paid.</p>`
-      : `<p style="font-size:14px;color:#374151;">Each employee pays ${safePrice} when they sign up.</p>`;
+      : paymentMode === "company_per_signup"
+        ? `<p style="font-size:14px;color:#374151;">${safeCompany} is billed ${safePrice}. Employees sign up free, and the invoice is raised after the class for however many people signed up. You can also raise it early from the class page at any time.</p>`
+        : `<p style="font-size:14px;color:#374151;">Each employee pays ${safePrice} when they sign up.</p>`;
 
-  const approvalNote = pendingApproval
-    ? `<p style="font-size:13px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;">This class still needs manager approval before the link will accept signups. Don't send it out until it's approved.</p>`
-    : "";
+  // What the contact has (or has not yet) received. The link is mailed to them
+  // automatically, so the staff copy exists to say which of those happened.
+  const contactNote = pendingApproval
+    ? `<p style="font-size:13px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;">This class needs manager approval before the link accepts signups, so ${safeContact} has not been emailed yet. The link is sent to them automatically the moment it is approved.</p>`
+    : `<p style="font-size:14px;color:#374151;">${safeContact} has been emailed the signup link already. Your copy is below if you need to send it again.</p>`;
 
   return {
     subject: `Team booking created — ${companyName.trim()} (${formattedDate})`,
     html: wrapEmail(`
-      <h1>Team Booking Link Ready</h1>
+      <h1>Team Booking Created</h1>
       <p>Hi ${safeStaff},</p>
-      <p>The corporate booking for <strong>${safeCompany}</strong> is set up. Send the link below to ${safeContact} — they'll forward it to their own staff.</p>
+      <p>The corporate booking for <strong>${safeCompany}</strong> is set up.</p>
+      ${contactNote}
       <table cellpadding="6" style="margin:16px 0;">
         <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Company</td><td><strong>${safeCompany}</strong></td></tr>
         <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Contact</td><td>${safeContact}</td></tr>
@@ -3294,11 +3303,105 @@ export function teamBookingCreatedEmail({
         <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Location</td><td>${safeLoc}</td></tr>
         <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Pricing</td><td>${safePrice}</td></tr>
       </table>
-      ${approvalNote}
       <p style="margin:20px 0;"><a href="${safeUrl}" style="background:#dc2626;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;display:inline-block;">Open the signup page</a></p>
       <p style="font-size:13px;color:#6b7280;word-break:break-all;">${safeUrl}</p>
       ${paymentNote}
       <p style="font-size:13px;color:#6b7280;">Anyone with this link can sign up, so only share it with the company contact. The same page shows them who has signed up so far.</p>
+      <p>- The SuperHeroCPR Team</p>
+    `),
+  };
+}
+
+/**
+ * Sent to the company contact with the signup link for their team's class.
+ *
+ * This is the mail that used to be a manual step: staff copied the link out of
+ * the admin UI and sent it themselves, which could simply be forgotten. It goes
+ * out automatically when the booking is created, or when the class is approved
+ * if it was not approved yet (an unapproved link turns signups away).
+ *
+ * Triggered by: sendContactShareLink (POST /api/team-bookings, and the approve
+ * actions on /admin/sessions/[id] and the approvals queue).
+ *
+ * @param contactName     - The company's contact person, who receives this.
+ * @param companyName     - Their company.
+ * @param className       - Name of the class type.
+ * @param startsAt        - ISO datetime string of the session start.
+ * @param locationName    - Venue name.
+ * @param locationAddress - Full street address, already joined.
+ * @param shareUrl        - Full public /team/<token> URL for their people.
+ * @param paymentMode     - Which of the three payment modes applies.
+ * @param pricePerSeat    - What each employee pays in per_seat mode, else null.
+ * @param priceLabel      - Human-readable price for the company's own reference.
+ * @param supportPhone    - Number to call with questions: the instructor's.
+ */
+export function teamContactShareLinkEmail({
+  contactName,
+  companyName,
+  className,
+  startsAt,
+  locationName,
+  locationAddress,
+  shareUrl,
+  paymentMode,
+  pricePerSeat,
+  priceLabel,
+  supportPhone,
+}: {
+  contactName: string;
+  companyName: string;
+  className: string;
+  startsAt: string;
+  locationName: string;
+  locationAddress: string;
+  shareUrl: string;
+  paymentMode: "company" | "per_seat" | "company_per_signup";
+  pricePerSeat: number | null;
+  priceLabel: string;
+  supportPhone: string;
+}): EmailContent {
+  const safeContact = escapeHtml(contactName.trim());
+  const safeCompany = escapeHtml(companyName.trim());
+  const safeClass   = escapeHtml(className.trim());
+  const safeLoc     = escapeHtml(locationName.trim());
+  const safeAddress = escapeHtml(locationAddress.trim());
+  const safeUrl     = escapeHtml(shareUrl);
+  const safePrice   = escapeHtml(priceLabel);
+  const safePhone   = escapeHtml(supportPhone.trim());
+
+  const formattedDate = formatClassDate(startsAt);
+  const formattedTime = formatClassTime(startsAt);
+
+  // What the contact's own people will experience when they open the link.
+  const costNote =
+    paymentMode === "per_seat"
+      ? `<p style="font-size:14px;color:#374151;">Each person pays $${(pricePerSeat ?? 0).toFixed(
+          2
+        )} for themselves when they sign up.</p>`
+      : paymentMode === "company_per_signup"
+        ? `<p style="font-size:14px;color:#374151;">Your people sign up at no cost to them. ${safeCompany} is invoiced ${safePrice} after the class, based on how many signed up.</p>`
+        : `<p style="font-size:14px;color:#374151;">Your people sign up at no cost to them. ${safeCompany} is invoiced separately for the class.</p>`;
+
+  return {
+    subject: `Your team's ${className.trim()} signup link (${formattedDate})`,
+    html: wrapEmail(`
+      <h1>Your Team's Signup Link</h1>
+      <p>Hi ${safeContact},</p>
+      <p>Your ${safeClass} class for <strong>${safeCompany}</strong> is booked. Share the link below with the people you want to attend, and they can each reserve their own spot.</p>
+      <table cellpadding="6" style="margin:16px 0;">
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Class</td><td><strong>${safeClass}</strong></td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Date</td><td>${formattedDate}</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Time</td><td>${formattedTime} ET</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Location</td><td>${safeLoc}${
+          safeAddress ? `<br><span style="color:#6b7280;font-size:13px;">${safeAddress}</span>` : ""
+        }</td></tr>
+      </table>
+      <p style="margin:20px 0;"><a href="${safeUrl}" style="background:#dc2626;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;display:inline-block;">Open the signup page</a></p>
+      <p style="font-size:13px;color:#6b7280;word-break:break-all;">${safeUrl}</p>
+      ${costNote}
+      <p style="font-size:14px;color:#374151;">The same page shows you who has signed up so far, so you can check the list at any time.</p>
+      <p style="font-size:13px;color:#6b7280;">Anyone with this link can sign up for the class, so please only share it inside your organization.</p>
+      <p style="font-size:14px;color:#374151;">Questions? Call ${safePhone}.</p>
       <p>- The SuperHeroCPR Team</p>
     `),
   };

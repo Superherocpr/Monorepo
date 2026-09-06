@@ -48,18 +48,31 @@ interface RawUninvoicedTeamBooking {
   company_name: string;
   contact_name: string;
   contact_email: string;
+  payment_mode: string;
   total_price: number | string | null;
+  price_per_seat: number | string | null;
   created_at: string;
   session_id: string;
   class_sessions:
-    | { starts_at: string; class_types: { name: string } | { name: string }[] | null }
-    | { starts_at: string; class_types: { name: string } | { name: string }[] | null }[]
+    | RawUninvoicedSession
+    | RawUninvoicedSession[]
     | null;
+}
+
+/** The session fields joined onto an uninvoiced team booking. */
+interface RawUninvoicedSession {
+  starts_at: string;
+  ends_at: string | null;
+  class_types: { name: string } | { name: string }[] | null;
 }
 
 /**
  * Loads company-paid team bookings that still have no invoice attached: money
  * the business agreed to bill and has not.
+ *
+ * Per-signup bookings are only included once their class has ended. Before that
+ * they are uninvoiced by design (the amount depends on who signs up), so listing
+ * them as a problem would train staff to ignore this band.
  *
  * Deliberately a plain async function rather than inline page code: it reads the
  * wall clock to apply the grace window, which is not allowed during a component
@@ -73,39 +86,54 @@ interface RawUninvoicedTeamBooking {
 async function fetchUninvoicedTeamBookings(
   adminClient: Awaited<ReturnType<typeof createAdminClient>>
 ): Promise<UninvoicedTeamBooking[]> {
-  const cutoff = new Date(Date.now() - UNINVOICED_GRACE_MS).toISOString();
+  const now = Date.now();
+  const cutoff = new Date(now - UNINVOICED_GRACE_MS).toISOString();
 
   const { data } = await adminClient
     .from("team_bookings")
     .select(
-      `id, company_name, contact_name, contact_email, total_price, created_at, session_id,
-       class_sessions ( starts_at, class_types ( name ) )`
+      `id, company_name, contact_name, contact_email, payment_mode, total_price,
+       price_per_seat, created_at, session_id,
+       class_sessions ( starts_at, ends_at, class_types ( name ) )`
     )
-    .eq("payment_mode", "company")
+    .in("payment_mode", ["company", "company_per_signup"])
     .is("invoice_id", null)
     .lt("created_at", cutoff)
     .order("created_at", { ascending: true });
 
-  return ((data ?? []) as unknown as RawUninvoicedTeamBooking[]).map((row) => {
-    const session = Array.isArray(row.class_sessions) ? row.class_sessions[0] : row.class_sessions;
-    const classType = session
-      ? Array.isArray(session.class_types)
-        ? session.class_types[0]
-        : session.class_types
-      : null;
+  return ((data ?? []) as unknown as RawUninvoicedTeamBooking[])
+    .map((row) => {
+      const session = Array.isArray(row.class_sessions) ? row.class_sessions[0] : row.class_sessions;
+      const classType = session
+        ? Array.isArray(session.class_types)
+          ? session.class_types[0]
+          : session.class_types
+        : null;
 
-    return {
-      id: row.id,
-      companyName: row.company_name,
-      contactName: row.contact_name,
-      contactEmail: row.contact_email,
-      totalPrice: Number(row.total_price) || 0,
-      createdAt: row.created_at,
-      sessionId: row.session_id,
-      className: classType?.name ?? "CPR Class",
-      classStartsAt: session?.starts_at ?? null,
-    };
-  });
+      const perSignup = row.payment_mode === "company_per_signup";
+
+      return {
+        id: row.id,
+        companyName: row.company_name,
+        contactName: row.contact_name,
+        contactEmail: row.contact_email,
+        perSignup,
+        // A per-signup booking has no total until it is billed; show the rate so
+        // the band still says what the company is on the hook for.
+        totalPrice: Number(perSignup ? row.price_per_seat : row.total_price) || 0,
+        createdAt: row.created_at,
+        sessionId: row.session_id,
+        className: classType?.name ?? "CPR Class",
+        classStartsAt: session?.starts_at ?? null,
+        classEndsAt: session?.ends_at ?? null,
+      };
+    })
+    .filter((row) => {
+      // Per-signup bookings are correctly uninvoiced until the class is over.
+      if (!row.perSignup) return true;
+      const finished = row.classEndsAt ?? row.classStartsAt;
+      return finished !== null && new Date(finished).getTime() < now;
+    });
 }
 
 /**

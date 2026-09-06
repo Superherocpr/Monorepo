@@ -85,7 +85,9 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
   const [searchTerm, setSearchTerm] = useState("");
 
   const amountDue = appliedPromo ? appliedPromo.finalPrice : view.pricePerSeat;
-  const isCompanyPaid = view.paymentMode === "company";
+  // Both company modes are free to the employee: in per-signup mode the company
+  // is billed later for exactly the signups made here.
+  const isCompanyPaid = view.paymentMode === "company" || view.paymentMode === "company_per_signup";
 
   // ── Detect an existing session so returning employees skip the auth step ──
   useEffect(() => {
@@ -414,7 +416,7 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
 
         {view.attendeeCount === 0 ? (
           <p className="mt-4 text-sm text-gray-500">
-            Nobody has signed up yet. Be the first — or send this link to your team.
+            Nobody has signed up yet. Be the first.
           </p>
         ) : visibleAttendees.length === 0 ? (
           <p className="mt-4 text-sm text-gray-500">No one matching “{searchTerm}”.</p>

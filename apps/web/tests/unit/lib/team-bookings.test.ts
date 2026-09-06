@@ -90,6 +90,42 @@ describe("validateTeamPricing", () => {
   test("rejects a non-finite price rather than passing NaN to PayPal", () => {
     expect(validateTeamPricing(details({ pricePerSeat: Number.NaN }))).toMatch(/required/i);
   });
+
+  // ── company_per_signup ────────────────────────────────────────────────────
+  // The company is billed rate x headcount, so the RATE is required up front and
+  // the total must not be: it is computed at invoice time from actual signups.
+
+  test("accepts a per-signup booking carrying only a rate", () => {
+    expect(
+      validateTeamPricing(
+        details({ paymentMode: "company_per_signup", pricePerSeat: 80, totalPrice: null })
+      )
+    ).toBeNull();
+  });
+
+  test("rejects a per-signup booking with no rate", () => {
+    expect(
+      validateTeamPricing(
+        details({ paymentMode: "company_per_signup", pricePerSeat: null, totalPrice: null })
+      )
+    ).toMatch(/rate per signup is required/i);
+  });
+
+  test("rejects a zero per-signup rate, which would bill nothing at any headcount", () => {
+    expect(
+      validateTeamPricing(
+        details({ paymentMode: "company_per_signup", pricePerSeat: 0, totalPrice: null })
+      )
+    ).toMatch(/greater than zero/i);
+  });
+
+  test("rejects a per-signup booking that also carries a total up front", () => {
+    expect(
+      validateTeamPricing(
+        details({ paymentMode: "company_per_signup", pricePerSeat: 80, totalPrice: 1200 })
+      )
+    ).toMatch(/calculated at invoice time/i);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -124,7 +160,12 @@ function mockSupabase(
    * Tables whose conditional UPDATE ... .is(col, null) claims zero rows, i.e. a
    * lost race against a concurrent writer. Reads on them are unaffected.
    */
-  claimsNothing: string[] = []
+  claimsNothing: string[] = [],
+  /**
+   * Row counts returned for head:true count queries, keyed by table. Used by
+   * countTeamSignups, which asks for the headcount rather than the rows.
+   */
+  counts: Record<string, number> = {}
 ) {
   selectsByTable.clear();
   const from = vi.fn((table: string) => {
@@ -135,17 +176,21 @@ function mockSupabase(
     // the caller detects a claim that lost its race — so once update() has been
     // called, the chain resolves to an array, not to the seeded read row.
     let isUpdate = false;
-    chain.select = vi.fn((cols?: string) => {
+    // Set by a `.select(cols, { count: "exact", head: true })` call, which asks
+    // for a row count instead of rows and so resolves to a different shape.
+    let isCount = false;
+    chain.select = vi.fn((cols?: string, options?: { head?: boolean }) => {
       if (typeof cols === "string") {
         selectsByTable.set(table, [...(selectsByTable.get(table) ?? []), cols]);
       }
+      if (options?.head) isCount = true;
       return chain;
     });
     chain.update = vi.fn(() => {
       isUpdate = true;
       return chain;
     });
-    for (const method of ["eq", "not", "order", "in", "is"]) {
+    for (const method of ["eq", "not", "order", "in", "is", "neq", "lt"]) {
       chain[method] = vi.fn(self);
     }
     chain.maybeSingle = vi.fn(() => Promise.resolve(result));
@@ -153,6 +198,13 @@ function mockSupabase(
     // Awaiting the chain directly (list queries) resolves to the same result;
     // an update resolves to the rows it claimed instead.
     chain.then = (resolve: (v: unknown) => unknown) => {
+      if (isCount) {
+        return resolve({
+          count: counts[table] ?? 0,
+          error: errors[table] ?? null,
+          data: null,
+        });
+      }
       if (!isUpdate) return resolve(result);
       const claimed = claimsNothing.includes(table) ? [] : [{ id: TEAM_ID }];
       return resolve({ data: errors[table] ? null : claimed, error: errors[table] ?? null });
@@ -287,7 +339,11 @@ describe("getTeamBookingByShareToken", () => {
     expect(view?.closedReason).toBe(expected);
   });
 
-  test("uses the instructor's phone when an instructor created the booking", async () => {
+  // The company calls whoever is teaching their class, not the office. These
+  // pin that precedence: assigned instructor, then an instructor who created the
+  // booking, then the main line.
+
+  test("uses the assigned instructor's phone", async () => {
     const supabase = mockSupabase({
       team_bookings: teamRow(),
       bookings: [],
@@ -298,12 +354,29 @@ describe("getTeamBookingByShareToken", () => {
     expect((await getTeamBookingByShareToken(supabase, TOKEN))?.cancellationPhone).toBe("555-0199");
   });
 
-  test("falls back to the main line for manager-created bookings", async () => {
+  test("uses the assigned instructor's phone even on a manager-created booking", async () => {
+    // The manager arranged it, but the instructor is who can answer about the
+    // day itself, so their number is the one the company sees.
     const supabase = mockSupabase({
       team_bookings: teamRow(),
       bookings: [],
       invoices: [],
       profiles: { first_name: "Ada", last_name: "Lovelace", phone: "555-0100", role: "manager" },
+    });
+
+    expect((await getTeamBookingByShareToken(supabase, TOKEN))?.cancellationPhone).toBe("555-0100");
+  });
+
+  test("falls back to the main line when the class has no instructor assigned", async () => {
+    const base = teamRow();
+    const supabase = mockSupabase({
+      team_bookings: {
+        ...base,
+        class_sessions: { ...(base.class_sessions as object), instructor_id: null },
+      },
+      bookings: [],
+      invoices: [],
+      profiles: { first_name: "Ada", last_name: "Lovelace", phone: null, role: "manager" },
     });
 
     expect((await getTeamBookingByShareToken(supabase, TOKEN))?.cancellationPhone).toBe(
@@ -581,5 +654,167 @@ describe("ensureTeamInvoice", () => {
       quantity: 1,
       unitAmount: 1020,
     });
+  });
+
+  // ── company_per_signup ────────────────────────────────────────────────────
+  // The amount is not stored anywhere before billing: it is the live signup
+  // count times the rate, so these tests pin the arithmetic and the guard that
+  // stops a company being invoiced for a class nobody joined.
+
+  /** A per-signup row: a rate, and no total until it is billed. */
+  function perSignupRow(overrides: Record<string, unknown> = {}) {
+    return companyRow({
+      payment_mode: "company_per_signup",
+      total_price: null,
+      price_per_seat: "80.00",
+      ...overrides,
+    });
+  }
+
+  /** The session and profile rows the invoice path reads after the booking. */
+  const invoiceContext = {
+    class_sessions: {
+      starts_at: "2026-09-09T10:30:00",
+      instructor_id: INSTRUCTOR_ID,
+      class_types: { name: "BLS Renewals" },
+      locations: { name: "Acme HQ", city: "Tampa", state: "FL" },
+    },
+    profiles: { first_name: "Ada", last_name: "Lovelace" },
+  };
+
+  test("bills rate x signups, and records the computed total", async () => {
+    createAndSendInvoiceMock.mockResolvedValue({
+      success: true,
+      invoiceId: "inv-2",
+      invoiceNumber: "INV-00002",
+    });
+
+    const supabase = mockSupabase(
+      { team_bookings: perSignupRow(), ...invoiceContext },
+      {},
+      [],
+      { bookings: 7 }
+    );
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    expect(result.status).toBe("created");
+
+    const sent = createAndSendInvoiceMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(sent.totalAmount).toBe(560); // 7 signups x $80
+    // Still zero: a team invoice must never reserve capacity, in either mode.
+    expect(sent.studentCount).toBe(0);
+    // The company gets a line it can check against its own headcount.
+    expect(sent.primaryLineItem).toEqual({
+      name: "Corporate Training — BLS Renewals (7 people at $80.00 each)",
+      quantity: 1,
+      unitAmount: 560,
+    });
+  });
+
+  test("bills nothing, and reports it as ordinary, when nobody signed up", async () => {
+    const supabase = mockSupabase(
+      { team_bookings: perSignupRow(), ...invoiceContext },
+      {},
+      [],
+      { bookings: 0 }
+    );
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    // Distinct from not_applicable so the nightly sweep does not alert on it
+    // every day for the rest of time.
+    expect(result.status).toBe("nothing_to_bill");
+    expect(createAndSendInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  test("refuses a per-signup booking with no rate rather than billing zero", async () => {
+    const supabase = mockSupabase(
+      { team_bookings: perSignupRow({ price_per_seat: null }), ...invoiceContext },
+      {},
+      [],
+      { bookings: 5 }
+    );
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    expect(result.status).toBe("not_applicable");
+    expect(createAndSendInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  test("rounds to cents rather than sending a float artifact to PayPal", async () => {
+    createAndSendInvoiceMock.mockResolvedValue({
+      success: true,
+      invoiceId: "inv-3",
+      invoiceNumber: "INV-00003",
+    });
+
+    const supabase = mockSupabase(
+      { team_bookings: perSignupRow({ price_per_seat: "10.10" }), ...invoiceContext },
+      {},
+      [],
+      { bookings: 3 }
+    );
+
+    await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    // 10.10 * 3 is 30.299999999999997 in binary floating point.
+    const sent = createAndSendInvoiceMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(sent.totalAmount).toBe(30.3);
+  });
+
+  test("uses the singular line for a single signup", async () => {
+    createAndSendInvoiceMock.mockResolvedValue({
+      success: true,
+      invoiceId: "inv-4",
+      invoiceNumber: "INV-00004",
+    });
+
+    const supabase = mockSupabase(
+      { team_bookings: perSignupRow(), ...invoiceContext },
+      {},
+      [],
+      { bookings: 1 }
+    );
+
+    await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    const sent = createAndSendInvoiceMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(sent.primaryLineItem).toMatchObject({
+      name: "Corporate Training — BLS Renewals (1 person at $80.00 each)",
+      unitAmount: 80,
+    });
+  });
+
+  test("still refuses to raise a second invoice on a per-signup booking", async () => {
+    const supabase = mockSupabase(
+      { team_bookings: perSignupRow({ invoice_id: "already-there" }), ...invoiceContext },
+      {},
+      [],
+      { bookings: 9 }
+    );
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    expect(result).toEqual({ status: "already_linked", invoiceId: "already-there" });
+    expect(createAndSendInvoiceMock).not.toHaveBeenCalled();
   });
 });
