@@ -9,11 +9,12 @@
  *   - the cancellation phone follows the creator, per the agreed behaviour
  * The Supabase client is mocked; no real DB access.
  */
-import { describe, test, expect, vi } from "vitest";
+import { describe, test, expect, vi, beforeEach } from "vitest";
 import {
   validateTeamPricing,
   generateShareToken,
   getTeamBookingByShareToken,
+  ensureTeamInvoice,
   MAIN_CANCELLATION_PHONE,
   type TeamBookingDetails,
 } from "@/lib/team-bookings";
@@ -118,26 +119,44 @@ const selectsByTable = new Map<string, string[]>();
  */
 function mockSupabase(
   tables: Record<string, unknown>,
-  errors: Record<string, unknown> = {}
+  errors: Record<string, unknown> = {},
+  /**
+   * Tables whose conditional UPDATE ... .is(col, null) claims zero rows, i.e. a
+   * lost race against a concurrent writer. Reads on them are unaffected.
+   */
+  claimsNothing: string[] = []
 ) {
   selectsByTable.clear();
   const from = vi.fn((table: string) => {
     const result = { data: tables[table] ?? null, error: errors[table] ?? null };
     const chain: Record<string, unknown> = {};
     const self = () => chain;
+    // An UPDATE ... .select() returns the rows it actually changed, which is how
+    // the caller detects a claim that lost its race — so once update() has been
+    // called, the chain resolves to an array, not to the seeded read row.
+    let isUpdate = false;
     chain.select = vi.fn((cols?: string) => {
       if (typeof cols === "string") {
         selectsByTable.set(table, [...(selectsByTable.get(table) ?? []), cols]);
       }
       return chain;
     });
-    for (const method of ["eq", "not", "order", "in"]) {
+    chain.update = vi.fn(() => {
+      isUpdate = true;
+      return chain;
+    });
+    for (const method of ["eq", "not", "order", "in", "is"]) {
       chain[method] = vi.fn(self);
     }
     chain.maybeSingle = vi.fn(() => Promise.resolve(result));
     chain.single = vi.fn(() => Promise.resolve(result));
-    // Awaiting the chain directly (list queries) resolves to the same result.
-    chain.then = (resolve: (v: unknown) => unknown) => resolve(result);
+    // Awaiting the chain directly (list queries) resolves to the same result;
+    // an update resolves to the rows it claimed instead.
+    chain.then = (resolve: (v: unknown) => unknown) => {
+      if (!isUpdate) return resolve(result);
+      const claimed = claimsNothing.includes(table) ? [] : [{ id: TEAM_ID }];
+      return resolve({ data: errors[table] ? null : claimed, error: errors[table] ?? null });
+    };
     return chain;
   });
   return { from } as unknown as Parameters<typeof getTeamBookingByShareToken>[0];
@@ -367,5 +386,200 @@ describe("getTeamBookingByShareToken", () => {
     });
 
     expect((await getTeamBookingByShareToken(supabase, TOKEN))?.pricePerSeat).toBe(80);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ensureTeamInvoice
+// ---------------------------------------------------------------------------
+
+/**
+ * These guard the one thing that must never happen while recovering an invoice:
+ * billing a company twice. ensureTeamInvoice() is reachable from an admin button
+ * AND a nightly cron sweep, so it can be entered concurrently for the same
+ * booking — every short-circuit below is what keeps that safe.
+ *
+ * createAndSendInvoice is mocked, so a test that reached PayPal would fail loudly
+ * on the assertion that it was never called.
+ */
+const createAndSendInvoiceMock = vi.fn();
+vi.mock("@/lib/invoice-actions", () => ({
+  createAndSendInvoice: (...args: unknown[]) => createAndSendInvoiceMock(...args),
+}));
+
+vi.mock("@/lib/send-email", () => ({
+  sendEmail: vi.fn().mockResolvedValue({ sent: true, id: "email-1" }),
+  isEmailConfigured: () => false,
+}));
+
+/** A company-mode team_bookings row as ensureTeamInvoice() reads it. */
+function companyRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: TEAM_ID,
+    session_id: SESSION_ID,
+    company_name: "Bradenton Bay High School",
+    contact_name: "Stephanie Booker",
+    contact_email: "contact@school.example",
+    contact_phone: "941-555-0100",
+    payment_mode: "company",
+    total_price: "1020.00",
+    invoice_id: null,
+    ...overrides,
+  };
+}
+
+describe("ensureTeamInvoice", () => {
+  beforeEach(() => {
+    createAndSendInvoiceMock.mockReset();
+  });
+
+  test("refuses to raise a second invoice when one is already linked", async () => {
+    const supabase = mockSupabase({
+      team_bookings: companyRow({ invoice_id: "already-there" }),
+    });
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    expect(result).toEqual({ status: "already_linked", invoiceId: "already-there" });
+    // The money path must not have been entered at all.
+    expect(createAndSendInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  test("does nothing for a per-seat booking, where a null invoice is correct", async () => {
+    const supabase = mockSupabase({
+      team_bookings: companyRow({ payment_mode: "per_seat", total_price: null }),
+    });
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    expect(result.status).toBe("not_applicable");
+    expect(createAndSendInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  test("does nothing for a missing booking", async () => {
+    const supabase = mockSupabase({ team_bookings: null });
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    expect(result.status).toBe("not_applicable");
+    expect(createAndSendInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  test("treats a company booking with no total as corrupt, not as retryable", async () => {
+    const supabase = mockSupabase({ team_bookings: companyRow({ total_price: null }) });
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    // "failed" would put it back in the retry queue forever; it can never succeed.
+    expect(result.status).toBe("not_applicable");
+    expect(createAndSendInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  test("reports a PayPal failure as retryable", async () => {
+    createAndSendInvoiceMock.mockResolvedValue({ success: false, error: "PayPal is down." });
+
+    const supabase = mockSupabase({
+      team_bookings: companyRow(),
+      class_sessions: {
+        starts_at: "2026-09-09T10:30:00",
+        instructor_id: INSTRUCTOR_ID,
+        class_types: { name: "BLS Renewals" },
+        locations: { name: "Bradenton Bay", city: "Bradenton", state: "FL" },
+      },
+      profiles: { first_name: "Ada", last_name: "Lovelace" },
+    });
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    expect(result).toEqual({ status: "failed", error: "PayPal is down." });
+  });
+
+  test("reports a lost race as unlinked, never as a clean success", async () => {
+    // Another caller (the nightly sweep, or a second click) linked an invoice
+    // between our null check and our write. A second invoice really was raised
+    // on PayPal, so this must reach a human and must never be retried.
+    createAndSendInvoiceMock.mockResolvedValue({
+      success: true,
+      invoiceId: "inv-duplicate",
+      invoiceNumber: "INV-00002",
+    });
+
+    const supabase = mockSupabase(
+      {
+        team_bookings: companyRow(),
+        class_sessions: {
+          starts_at: "2026-09-09T10:30:00",
+          instructor_id: INSTRUCTOR_ID,
+          class_types: { name: "BLS Renewals" },
+          locations: { name: "Bradenton Bay", city: "Bradenton", state: "FL" },
+        },
+        profiles: { first_name: "Ada", last_name: "Lovelace" },
+      },
+      {},
+      ["team_bookings"]
+    );
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    expect(result.status).toBe("created_unlinked");
+  });
+
+  test("bills the flat total, with zero students so no seats are consumed", async () => {
+    createAndSendInvoiceMock.mockResolvedValue({
+      success: true,
+      invoiceId: "inv-1",
+      invoiceNumber: "INV-00001",
+    });
+
+    const supabase = mockSupabase({
+      team_bookings: companyRow(),
+      class_sessions: {
+        starts_at: "2026-09-09T10:30:00",
+        instructor_id: INSTRUCTOR_ID,
+        class_types: { name: "BLS Renewals" },
+        locations: { name: "Bradenton Bay", city: "Bradenton", state: "FL" },
+      },
+      profiles: { first_name: "Ada", last_name: "Lovelace" },
+    });
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    expect(result).toEqual({
+      status: "created",
+      invoiceId: "inv-1",
+      invoiceNumber: "INV-00001",
+    });
+
+    const sent = createAndSendInvoiceMock.mock.calls[0][1] as Record<string, unknown>;
+    // The numeric total must survive Postgres returning it as a string.
+    expect(sent.totalAmount).toBe(1020);
+    // student_count 0 is what stops a team invoice reserving class capacity.
+    expect(sent.studentCount).toBe(0);
+    expect(sent.primaryLineItem).toEqual({
+      name: "Corporate Training — BLS Renewals",
+      quantity: 1,
+      unitAmount: 1020,
+    });
   });
 });

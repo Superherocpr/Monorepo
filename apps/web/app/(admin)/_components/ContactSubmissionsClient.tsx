@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ContactSubmissionsClient — client component for the admin contact submissions page.
+ * ContactSubmissionsClient: client component for the admin contact submissions page.
  * Renders the filter bar, the grouped submission list (unanswered / replied),
  * per-submission expand/collapse accordion, Zoho email thread display,
  * reply form, call-status toggle, and a timestamped staff notes log.
@@ -130,7 +130,7 @@ function typeBadgeClass(type: string): string {
   }
 }
 
-/** Matches YYYY-MM-DD — used to validate date filter inputs before navigating. */
+/** Matches YYYY-MM-DD: used to validate date filter inputs before navigating. */
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ export default function ContactSubmissionsClient({
         );
       }
     } catch {
-      // localStorage unavailable — degrade silently
+      // localStorage unavailable: degrade silently
     }
   }, [expandedId, replySubject, replyBody]);
 
@@ -259,7 +259,7 @@ export default function ContactSubmissionsClient({
         setNotesLoaded((prev) => new Set(prev).add(submissionId));
       }
     } catch {
-      // Non-fatal — user can retry by switching tabs
+      // Non-fatal: user can retry by switching tabs
     } finally {
       setNotesLoading(null);
     }
@@ -805,7 +805,7 @@ function SubmissionRow({
 
   return (
     <div className={`${accentClass} ${sub.called ? "bg-blue-50/30" : "bg-white"} rounded-lg border border-gray-200 overflow-hidden`}>
-      {/* Summary row — always visible */}
+      {/* Summary row: always visible */}
       <div className="flex w-full items-start gap-3 px-4 py-3">
         <button
           type="button"
@@ -976,7 +976,7 @@ function SubmissionRow({
                       <div>
                         <label htmlFor={`files-${sub.id}`} className="mb-1 block text-xs font-medium text-gray-600">
                           Attachments{" "}
-                          <span className="font-normal text-gray-400">(PDF, DOC, DOCX, JPG, PNG — max 10 MB each)</span>
+                          <span className="font-normal text-gray-400">(PDF, DOC, DOCX, JPG, PNG; max 10 MB each)</span>
                         </label>
                         <input
                           id={`files-${sub.id}`} type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"

@@ -1,5 +1,5 @@
 /**
- * CustomersClient — client component for the admin customer management page.
+ * CustomersClient: client component for the admin customer management page.
  * Used by: app/(admin)/admin/customers/page.tsx
  *
  * Owns search state (debounced, server-side), filter state, and the
@@ -48,7 +48,7 @@ type StatusFilter = "all" | "active" | "archived";
  * Priority: expiring > active > expired > none.
  * @param activeCertsCount - Number of non-expired certs.
  * @param hasExpiringSoon - Whether any cert expires within 90 days.
- * @param totalCertsCount - Total certs count (not used — inferred by activeCertsCount === 0 check).
+ * @param totalCertsCount - Total certs count (not used: inferred by activeCertsCount === 0 check).
  */
 function certBadge(
   activeCertsCount: number,
@@ -119,7 +119,7 @@ export default function CustomersClient({
   const [query, setQuery] = useState("");
   // Search results carry the key that produced them (query plus the server-side
   // filters). An empty query falls back to the server-rendered list, and a key
-  // mismatch means a fetch is still in flight — so neither the list nor the
+  // mismatch means a fetch is still in flight: so neither the list nor the
   // loading flag has to be restored from inside an effect.
   const [searchResults, setSearchResults] = useState<{
     key: string;
@@ -150,7 +150,7 @@ export default function CustomersClient({
   const customers = query.length === 0 ? initialCustomers : searchResults.items;
   const filtered = applyFilters(customers, certFilter, bookingFilter, statusFilter);
 
-  // ── Search — debounced 300ms ─────────────────────────────────────────────────
+  // ── Search: debounced 300ms ─────────────────────────────────────────────────
   /**
    * Fires a fetch to /api/customers/search after 300ms of no typing.
    * Resets to initial customers when the query is cleared.
@@ -169,7 +169,7 @@ export default function CustomersClient({
         const json = await res.json();
         setSearchResults({ key, items: json.customers ?? [] });
       } catch {
-        // Network error — record an empty result so the spinner stops rather
+        // Network error: record an empty result so the spinner stops rather
         // than spinning forever against a search that will never resolve.
         setSearchResults({ key, items: [] });
       }
@@ -179,7 +179,7 @@ export default function CustomersClient({
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    // An empty query renders initialCustomers directly — nothing to fetch.
+    // An empty query renders initialCustomers directly: nothing to fetch.
     if (query.length === 0) return;
 
     debounceRef.current = setTimeout(() => {
@@ -233,7 +233,7 @@ export default function CustomersClient({
         return;
       }
 
-      // Success — close panel, reset form, refresh list, show toast
+      // Success: close panel, reset form, refresh list, show toast
       setPanelOpen(false);
       setFirstName("");
       setLastName("");
@@ -301,7 +301,7 @@ export default function CustomersClient({
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
           <p className="mt-1 text-sm text-gray-500">
-            All customer accounts — active and archived.
+            All customer accounts, active and archived.
           </p>
         </div>
         {/* Managers and super admins can create new customers */}
@@ -423,7 +423,7 @@ export default function CustomersClient({
           </div>
         ) : (
           <>
-            {/* Scrollable table — horizontal scroll on small screens */}
+            {/* Scrollable table: horizontal scroll on small screens */}
             <div className="overflow-x-auto rounded-lg border border-gray-200">
               <table className="min-w-[640px] w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">

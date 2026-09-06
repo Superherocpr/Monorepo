@@ -1,5 +1,5 @@
 /**
- * /admin/profile/payment — Instructor payout settings page.
+ * /admin/profile/payment: Instructor payout settings page.
  * Server component: fetches the logged-in instructor's PayPal payout email.
  * Access: instructor and super_admin only.
  * Used by: AdminSidebar "Payout Settings" link.
@@ -31,7 +31,7 @@ export default async function PaymentAccountPage() {
     redirect("/admin");
   }
 
-  // paypal_payout_email isn't part of the shared actor profile — fetch it here.
+  // paypal_payout_email isn't part of the shared actor profile: fetch it here.
   const admin = await createAdminClient();
   const [{ data: profile }, earningsData] = await Promise.all([
     admin

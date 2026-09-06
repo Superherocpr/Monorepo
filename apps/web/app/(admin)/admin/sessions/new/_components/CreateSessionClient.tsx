@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * CreateSessionClient — form UI for creating a new class session.
+ * CreateSessionClient: form UI for creating a new class session.
  * Used by: app/(admin)/admin/sessions/new/page.tsx
  * Managers and super admins can assign any instructor. Instructors always
  * create sessions for themselves and do not see the instructor selector.
@@ -25,7 +25,7 @@ export interface ClassTypeOption {
   name: string;
   duration_minutes: number;
   max_capacity: number;
-  /** Base price in USD — used for the discount preview. */
+  /** Base price in USD: used for the discount preview. */
   price: number;
   /** IDs of add-ons eligible for this class type (addon_class_types). */
   addon_ids: string[];
@@ -59,13 +59,13 @@ interface CreateSessionClientProps {
   locations: LocationOption[];
   /** Non-empty only for manager and super admin roles. */
   instructors: InstructorOption[];
-  /** Full add-on catalog — filtered per class type via ClassTypeOption.addon_ids. */
+  /** Full add-on catalog: filtered per class type via ClassTypeOption.addon_ids. */
   addons: AddonOption[];
   /** Whether the viewing user is an instructor (hides instructor selector). */
   isInstructor: boolean;
   /**
    * Full name of the currently logged-in user. Only provided when isInstructor
-   * is true — displayed in a read-only row in place of the instructor selector.
+   * is true: displayed in a read-only row in place of the instructor selector.
    */
   instructorName?: string;
 }
@@ -79,9 +79,9 @@ interface SessionForm {
   date: string;
   /** Local start time as HH:MM (24-hour) */
   start_time: string;
-  /** Duration in hours — auto-filled from class type, editable. Stored as minutes in DB. */
+  /** Duration in hours: auto-filled from class type, editable. Stored as minutes in DB. */
   duration_minutes: string;
-  /** Max students — auto-filled from class type, editable */
+  /** Max students: auto-filled from class type, editable */
   max_capacity: string;
   /** Promotional discount as a percentage string (0–50). Empty = no discount. */
   discount_percent: string;
@@ -164,22 +164,22 @@ export default function CreateSessionClient({
   }));
   /** The class request this booking came from, carried through to the API. */
   const classRequestId = searchParams.get("request_id");
-  /** Set once a team booking is created — switches the view to the share link. */
+  /** Set once a team booking is created: switches the view to the share link. */
   const [created, setCreated] = useState<TeamBookingCreated | null>(null);
   const [copied, setCopied] = useState(false);
   /**
    * Shown after validation passes on a team-booking submit, before it actually
-   * goes out — the share-link email fires immediately, so this is the last
+   * goes out: the share-link email fires immediately, so this is the last
    * point to remind the creator they still have to forward it themselves.
    */
   const [showTeamReminder, setShowTeamReminder] = useState(false);
   /** The validated request body, held while the reminder is up. */
   const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
-  /** IDs of add-ons selected to offer on this session — narrowed to the selected class type's eligibility. */
+  /** IDs of add-ons selected to offer on this session: narrowed to the selected class type's eligibility. */
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   /** Tracks whether duration and capacity were last populated by the class-type auto-fill. */
   const [autoFilled, setAutoFilled] = useState(false);
-  /** Local copy of locations — updated when a new location is added inline so the dropdown refreshes without a page reload. */
+  /** Local copy of locations: updated when a new location is added inline so the dropdown refreshes without a page reload. */
   const [locationList, setLocationList] = useState<LocationOption[]>(locations);
   /** Controls whether the Add Location slide-out panel is visible. */
   const [showAddLocationPanel, setShowAddLocationPanel] = useState(false);
@@ -333,7 +333,7 @@ export default function CreateSessionClient({
 
       if (discountType === "percent") {
         if (rawDiscount > 50) {
-          setError("Discount cannot exceed 50% — the final price must be at least 50% of the class price.");
+          setError("Discount cannot exceed 50%; the final price must be at least 50% of the class price.");
           return;
         }
         resolvedDiscountPercent = rawDiscount;
@@ -341,7 +341,7 @@ export default function CreateSessionClient({
         // Fixed dollar mode: cap at 50% of the class price.
         if (classPrice !== null && rawDiscount > classPrice * 0.5) {
           const maxFixed = (classPrice * 0.5).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-          setError(`Fixed discount cannot exceed $${maxFixed} — the final price must be at least 50% of the class price.`);
+          setError(`Fixed discount cannot exceed $${maxFixed}; the final price must be at least 50% of the class price.`);
           return;
         }
         // Convert to percent for the API; skip if the class has no price.
@@ -391,7 +391,7 @@ export default function CreateSessionClient({
       }
     }
 
-    // Stored as floating wall-clock time — the time entered here is the time
+    // Stored as floating wall-clock time: the time entered here is the time
     // shown everywhere, with no timezone conversion. See lib/business-time.ts.
     const starts_at = toFloatingISO(form.date, form.start_time);
     const ends_at = addFloatingMinutes(starts_at, durationMin);
@@ -407,7 +407,7 @@ export default function CreateSessionClient({
       addon_ids: selectedAddonIds,
     };
 
-    // Instructors omit instructor_id — server resolves it from their own profile.
+    // Instructors omit instructor_id: server resolves it from their own profile.
     if (!isInstructor) {
       payload.instructor_id = form.instructor_id;
     }
@@ -429,7 +429,7 @@ export default function CreateSessionClient({
     }
 
     // Team bookings pause here for a confirmation: creating this immediately
-    // emails the creator the share link (not the company contact — the creator
+    // emails the creator the share link (not the company contact: the creator
     // has to forward it themselves), and for a manager/super admin the class
     // goes live right away. Regular sessions submit straight through as before.
     if (isTeam) {
@@ -443,7 +443,7 @@ export default function CreateSessionClient({
 
   /**
    * Posts the validated payload to the appropriate endpoint and handles the
-   * response — team bookings show the share link, regular sessions redirect
+   * response: team bookings show the share link, regular sessions redirect
    * to the new session's detail page.
    * @param payload - The request body built and validated by handleSubmit.
    */
@@ -519,7 +519,7 @@ export default function CreateSessionClient({
 
   /**
    * True when the selected date + start time resolve to a moment in the past.
-   * Used to show an amber warning banner — non-blocking so managers can still
+   * Used to show an amber warning banner: non-blocking so managers can still
    * create historical sessions intentionally.
    */
   const isPastSession =
@@ -555,7 +555,7 @@ export default function CreateSessionClient({
   })();
 
   /**
-   * Shows the equivalent minutes when the user enters hours — helps verify the duration.
+   * Shows the equivalent minutes when the user enters hours: helps verify the duration.
    * e.g. "1.5" → "= 90 min". Returns null when the field is empty or invalid.
    */
   const durationHint = (() => {
@@ -577,7 +577,7 @@ export default function CreateSessionClient({
             <div>
               <h1 className="text-xl font-bold text-gray-900">Team booking created</h1>
               <p className="text-sm text-gray-500 mt-0.5">
-                Send this link to {teamForm.contact_name.trim() || "the company contact"} — they
+                Send this link to {teamForm.contact_name.trim() || "the company contact"}; they
                 share it with their own staff.
               </p>
             </div>
@@ -598,8 +598,12 @@ export default function CreateSessionClient({
               role="alert"
               className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm"
             >
-              The booking was created, but the invoice could not be sent: {created.invoiceError} You
-              can raise it manually from the Invoices page.
+              The booking was created, but the invoice could not be sent: {created.invoiceError} A
+              super admin has been alerted, and you can retry it from the{" "}
+              <a href="/admin/invoices" className="underline font-medium">
+                Invoices page
+              </a>
+              .
             </div>
           )}
 
@@ -685,7 +689,7 @@ export default function CreateSessionClient({
         </Link>
       </div>
 
-      {/* Bulk creation prompt — not relevant while building a single team booking */}
+      {/* Bulk creation prompt: not relevant while building a single team booking */}
       {!isTeam && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600 flex items-center justify-between">
           <span>Scheduling multiple sessions at once?</span>
@@ -698,7 +702,7 @@ export default function CreateSessionClient({
         </div>
       )}
 
-      {/* Team/corporate toggle — switches this form between the two modes */}
+      {/* Team/corporate toggle: switches this form between the two modes */}
       <label className="flex items-start gap-3 bg-white border border-gray-200 rounded-lg px-4 py-3 cursor-pointer">
         <input
           type="checkbox"
@@ -735,13 +739,13 @@ export default function CreateSessionClient({
           </div>
         )}
 
-        {/* Past-date warning — informational only, does not block submission */}
+        {/* Past-date warning: informational only, does not block submission */}
         {isPastSession && (
           <div
             role="status"
             className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm"
           >
-            This session is scheduled in the past — double-check the date and time before submitting.
+            This session is scheduled in the past. Double-check the date and time before submitting.
           </div>
         )}
 
@@ -808,7 +812,7 @@ export default function CreateSessionClient({
               />
             </div>
 
-            {/* Payment mode — decides who gets billed and what employees see */}
+            {/* Payment mode: decides who gets billed and what employees see */}
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-gray-700">Who is paying?</span>
               <div className="grid grid-cols-2 gap-2">
@@ -899,7 +903,7 @@ export default function CreateSessionClient({
           </select>
         </div>
 
-        {/* Instructor — selector for managers; read-only display for instructors */}
+        {/* Instructor: selector for managers; read-only display for instructors */}
         {!isInstructor ? (
           <div className="flex flex-col gap-1.5">
             <label htmlFor="cs-instructor" className="text-sm font-medium text-gray-700">
@@ -921,7 +925,7 @@ export default function CreateSessionClient({
             </select>
           </div>
         ) : (
-          /* Instructors always create sessions for themselves — confirm who that is. */
+          /* Instructors always create sessions for themselves: confirm who that is. */
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-gray-700">Instructor</span>
             <div className="border border-gray-200 bg-gray-50 rounded-lg px-3 py-2.5 text-sm text-gray-700">
@@ -954,13 +958,13 @@ export default function CreateSessionClient({
             <option value="">Select a location…</option>
             {locationList.map((l) => (
               <option key={l.id} value={l.id}>
-                {l.name} — {l.city}, {l.state}
+                {l.name}, {l.city}, {l.state}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Date + Start time — side by side */}
+        {/* Date + Start time: side by side */}
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="cs-date" className="text-sm font-medium text-gray-700">
@@ -991,7 +995,7 @@ export default function CreateSessionClient({
           </div>
         </div>
 
-        {/* Duration + Capacity — side by side */}
+        {/* Duration + Capacity: side by side */}
         <div className="space-y-1.5">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
@@ -1009,7 +1013,7 @@ export default function CreateSessionClient({
                 placeholder="e.g. 2"
                 className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
-              {/* Computed hours — helps staff verify the duration at a glance */}
+              {/* Computed hours: helps staff verify the duration at a glance */}
               {durationHint && (
                 <p className="text-xs text-gray-400">{durationHint}</p>
               )}
@@ -1032,10 +1036,10 @@ export default function CreateSessionClient({
             </div>
           </div>
 
-          {/* Auto-filled hint — clears when the user manually edits either field */}
+          {/* Auto-filled hint: clears when the user manually edits either field */}
           {autoFilled && (
             <p className="text-xs text-gray-400">
-              Duration and capacity were auto-filled from the class type — edit if needed.
+              Duration and capacity were auto-filled from the class type; edit if needed.
             </p>
           )}
         </div>
@@ -1050,7 +1054,7 @@ export default function CreateSessionClient({
                   ? "(optional, max 50%)"
                   : selectedClassTypePrice !== null
                     ? `(optional, max $${(selectedClassTypePrice * 0.5).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
-                    : "(optional — select a class type first)"}
+                    : "(optional, select a class type first)"}
               </span>
             </label>
             {parsedDiscountPreview !== null && (
@@ -1107,7 +1111,7 @@ export default function CreateSessionClient({
               );
             })}
 
-            {/* % / $ pill toggle — switches discount input between percent and fixed dollar */}
+            {/* % / $ pill toggle: switches discount input between percent and fixed dollar */}
             <div className="flex rounded-lg border border-gray-300 overflow-hidden shrink-0">
               <button
                 type="button"
@@ -1138,7 +1142,7 @@ export default function CreateSessionClient({
             </div>
           </div>
 
-          {/* Custom discount input — adapts label and constraints to the active mode */}
+          {/* Custom discount input: adapts label and constraints to the active mode */}
           <div className="flex items-center gap-2">
             {discountType === "fixed" && (
               <span className="text-sm text-gray-500 select-none">$</span>
@@ -1203,7 +1207,7 @@ export default function CreateSessionClient({
             )}
           </div>
 
-          {/* Live price preview — shown when a class type with a price is selected and a valid discount is entered */}
+          {/* Live price preview: shown when a class type with a price is selected and a valid discount is entered */}
           {selectedClassTypePrice !== null && parsedDiscountPreview !== null && (
             <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
               Price per person:{" "}
@@ -1232,7 +1236,7 @@ export default function CreateSessionClient({
           )}
         </div>
 
-        {/* Add-ons (optional) — only shown once a class type with eligible add-ons
+        {/* Add-ons (optional): only shown once a class type with eligible add-ons
             is selected. Never offered on team bookings: the price is a flat or
             per-seat rate negotiated with the company. */}
         {!isTeam && (() => {
@@ -1280,7 +1284,7 @@ export default function CreateSessionClient({
             placeholder="Any additional details for this session…"
             className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
           />
-          {/* Character counter — appears once the user starts typing */}
+          {/* Character counter: appears once the user starts typing */}
           {form.notes.length > 0 && (
             <p className="text-xs text-gray-400 text-right">{form.notes.length}/500</p>
           )}
@@ -1310,7 +1314,7 @@ export default function CreateSessionClient({
         </div>
       </form>
 
-      {/* Add Location slide-out panel — rendered outside the form to avoid nested form issues */}
+      {/* Add Location slide-out panel: rendered outside the form to avoid nested form issues */}
       {showAddLocationPanel && (
         <AddLocationPanel
           onClose={() => setShowAddLocationPanel(false)}
@@ -1331,7 +1335,7 @@ export default function CreateSessionClient({
         />
       )}
 
-      {/* Team-booking submit reminder — the share-link email fires immediately
+      {/* Team-booking submit reminder: the share-link email fires immediately
           on creation, and it goes to the creator, not the company contact, so
           this is the last chance to remind them they still have to forward it. */}
       {showTeamReminder && (
@@ -1343,7 +1347,7 @@ export default function CreateSessionClient({
             <p className="text-sm text-gray-600">
               {isTeam && isInstructor ? (
                 <>
-                  You&apos;ll get an email with this class&apos;s signup link — look for it in
+                  You&apos;ll get an email with this class&apos;s signup link. Look for it in
                   your inbox. We don&apos;t send it to the company contact automatically, so
                   forward it to them yourself. This class still needs manager approval
                   before anyone can sign up, so don&apos;t send it out until it&apos;s
@@ -1351,7 +1355,7 @@ export default function CreateSessionClient({
                 </>
               ) : (
                 <>
-                  You&apos;ll get an email with this class&apos;s signup link — look for it in
+                  You&apos;ll get an email with this class&apos;s signup link. Look for it in
                   your inbox. We don&apos;t send it to the company contact automatically, so
                   forward it to them yourself. This class goes live as soon as you submit,
                   so people can start signing up the moment you send it.

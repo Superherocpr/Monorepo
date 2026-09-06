@@ -1,5 +1,5 @@
 /**
- * Admin Class Requests page — /admin/class-requests
+ * Admin Customer Requests page: /admin/class-requests
  * Access: manager and super_admin only.
  * Lists all customer-submitted class requests with status filtering.
  * Auth guard is handled by app/(admin)/layout.tsx.
@@ -13,7 +13,7 @@ import type { ClassRequest, ClassRequestStatus } from "@/types/class-requests";
 import { CLASS_REQUEST_STATUS_LABELS } from "@/types/class-requests";
 
 export const metadata = {
-  title: "Class Requests | Admin | SuperHeroCPR",
+  title: "Customer Requests | Admin | SuperHeroCPR",
 };
 
 /** Valid status filter values for the query param. */
@@ -85,7 +85,7 @@ export default async function ClassRequestsAdminPage({ searchParams }: PageProps
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Class Requests</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Customer Requests</h1>
         <p className="text-sm text-gray-500 mt-1">
           Customer-submitted requests for classes at their location. Review and approve or reject each request.
         </p>
@@ -126,7 +126,7 @@ export default async function ClassRequestsAdminPage({ searchParams }: PageProps
         <div className="text-center py-20 text-gray-400">
           <p className="text-lg font-medium">No requests found</p>
           <p className="text-sm mt-1">
-            {statusFilter ? `No ${CLASS_REQUEST_STATUS_LABELS[statusFilter].toLowerCase()} requests.` : "No class requests have been submitted yet."}
+            {statusFilter ? `No ${CLASS_REQUEST_STATUS_LABELS[statusFilter].toLowerCase()} requests.` : "No customer requests have been submitted yet."}
           </p>
         </div>
       ) : (
@@ -154,7 +154,7 @@ export default async function ClassRequestsAdminPage({ searchParams }: PageProps
                     </div>
                     <p className="text-sm text-gray-500 mb-3">
                       {customer
-                        ? `${customer.first_name} ${customer.last_name} — ${customer.email}`
+                        ? `${customer.first_name} ${customer.last_name}, ${customer.email}`
                         : "Unknown customer"}
                     </p>
                     <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600">

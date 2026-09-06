@@ -1,5 +1,5 @@
 /**
- * ManagerDashboard — dashboard view for the manager role.
+ * ManagerDashboard: dashboard view for the manager role.
  * Shows: pending approvals, today's all-instructor classes, recent bookings,
  * unanswered contact submissions, and low stock alerts.
  * Used by: app/(admin)/page.tsx and SuperAdminDashboard.tsx
@@ -49,7 +49,7 @@ export interface ManagerDashboardProps {
   recentBookings: RecentBooking[];
   unansweredContactCount: number;
   lowStockVariants: LowStockVariant[];
-  /** When true, suppresses the greeting h1 — used when ManagerDashboard is embedded in SuperAdminDashboard. */
+  /** When true, suppresses the greeting h1: used when ManagerDashboard is embedded in SuperAdminDashboard. */
   hideGreeting?: boolean;
 }
 
@@ -63,7 +63,7 @@ const BOOKING_SOURCE_COLORS: Record<string, string> = {
 
 /**
  * Formats a class date as e.g. "Jun 12".
- * timeZone is pinned to UTC because class times are floating wall-clock values —
+ * timeZone is pinned to UTC because class times are floating wall-clock values:
  * see lib/business-time.ts.
  * @param timestamp - Stored class timestamp
  */
@@ -95,7 +95,7 @@ export default function ManagerDashboard({
 
       {/* ── Alert row: Pending Approvals + Contact ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Pending approvals — always shown */}
+        {/* Pending approvals: always shown */}
         <Link
           href="/admin/sessions/approvals"
           className="flex items-center justify-between bg-white border border-gray-200 rounded-lg p-5 hover:border-gray-300 transition-colors"
@@ -115,7 +115,7 @@ export default function ManagerDashboard({
           )}
         </Link>
 
-        {/* Unanswered contact — hidden if zero */}
+        {/* Unanswered contact: hidden if zero */}
         {unansweredContactCount > 0 && (
           <Link
             href="/admin/contact"

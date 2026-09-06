@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * NewSubmissionsSection — Approvals queue section for fresh (never-rejected) sessions.
+ * NewSubmissionsSection: Approvals queue section for fresh (never-rejected) sessions.
  * Manages inline approve/reject state for each card and bulk-approve for the whole section.
  * Used by: ApprovalsPage (approvals/page.tsx)
  */

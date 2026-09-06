@@ -2,7 +2,7 @@
  * Staff Management Page
  * Route: /admin/staff
  * Called by: Admin sidebar nav
- * Auth: super_admin only — all other roles are redirected to /admin
+ * Auth: super_admin only: all other roles are redirected to /admin
  * Fetches all staff profiles (active and deactivated) and passes them to the
  * client component for filtering and interactive actions.
  */
@@ -17,11 +17,11 @@ import type { StaffMember } from "./_components/StaffManagement";
 export const metadata = { title: "Staff Management" };
 
 /**
- * Server component — fetches all staff members and current user info.
+ * Server component: fetches all staff members and current user info.
  * Redirects non-super-admins (by effective role) back to /admin.
  */
 export default async function StaffPage() {
-  // Role check — super admin only (honors view-as)
+  // Role check: super admin only (honors view-as)
   const actor = await getAdminActor();
   if (!actor || actor.effectiveRole !== "super_admin") redirect("/admin");
 

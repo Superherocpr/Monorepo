@@ -48,13 +48,13 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
   onSuccess,
   onError,
 }) => {
-  // Description textarea value — initialised from the member's current bio
+  // Description textarea value: initialised from the member's current bio
   const [description, setDescription] = useState("");
-  // Credentials textarea value — comma-separated list, initialised from DB
+  // Credentials textarea value: comma-separated list, initialised from DB
   const [credentials, setCredentials] = useState("");
-  // Public publishing toggle — unpublished bios are stored but hidden from /about
+  // Public publishing toggle: unpublished bios are stored but hidden from /about
   const [published, setPublished] = useState(false);
-  // Stat fields — only shown/used for the lead instructor, but stored for all staff
+  // Stat fields: only shown/used for the lead instructor, but stored for all staff
   const [yearsExperience, setYearsExperience] = useState("");
   const [studentsTrained, setStudentsTrained] = useState("");
   // The photo URL currently saved in the DB (shown as the current photo)
@@ -233,13 +233,13 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
 
   if (!member) return null;
 
-  // The photo to show in the preview — pending file takes precedence over saved URL
+  // The photo to show in the preview: pending file takes precedence over saved URL
   const displayPhoto = previewUrl ?? savedPhotoUrl;
   const fullName = `${member.first_name} ${member.last_name}`;
 
   return (
     <>
-      {/* Overlay — click to close */}
+      {/* Overlay: click to close */}
       <div
         className="fixed inset-0 bg-black/50 z-40"
         onClick={onClose}
@@ -287,7 +287,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
                   fill
                   className="object-cover"
                   sizes="128px"
-                  // Always unoptimized — this is a small admin panel thumbnail.
+                  // Always unoptimized: this is a small admin panel thumbnail.
                   // Bypasses Next.js image optimization so blob: preview URLs
                   // and any S3 URL work without remotePatterns restrictions.
                   unoptimized
@@ -320,7 +320,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
 
             {pendingFile && (
               <p className="text-xs text-gray-500 mt-2">
-                New photo selected: {pendingFile.name} — will upload when you save.
+                New photo selected: {pendingFile.name}. Will upload when you save.
               </p>
             )}
 
@@ -408,7 +408,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
             </label>
           </div>
 
-          {/* Stats section — displayed in the lead instructor's stat block on the About page */}
+          {/* Stats section: displayed in the lead instructor's stat block on the About page */}
           <div>
             <p className="text-sm font-semibold text-gray-700 mb-1">Stats</p>
             <p className="text-xs text-gray-500 mb-3">
@@ -446,7 +446,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
           </div>
         </div>
 
-        {/* Footer — save / cancel */}
+        {/* Footer: save / cancel */}
         <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end shrink-0">
           <button
             type="button"

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * MerchAdminClient — client component for all merch admin UI.
+ * MerchAdminClient: client component for all merch admin UI.
  * Handles product listing, add/edit panels, image uploads, activate/deactivate,
  * and stock adjustment with logging.
  * Used by: app/(admin)/admin/merch/page.tsx
@@ -21,7 +21,7 @@ type SizeOption = (typeof SIZE_ORDER)[number];
 
 /** A variant row in the add/edit product form. */
 interface VariantFormRow {
-  /** Stable client-side key — not the DB id (new rows don't have one yet). */
+  /** Stable client-side key: not the DB id (new rows don't have one yet). */
   key: string;
   /** The DB variant id, or null for newly-added rows. */
   id: string | null;
@@ -214,7 +214,7 @@ function SlidePanel({
 interface MerchAdminClientProps {
   /** All products with variants, fetched server-side. */
   initialProducts: ProductWithVariants[];
-  /** The logged-in super admin's user id — used for stock_adjustments logging. */
+  /** The logged-in super admin's user id: used for stock_adjustments logging. */
   actorId: string;
 }
 
@@ -301,7 +301,7 @@ export default function MerchAdminClient({
   }
 
   /**
-   * Handles image file selection — validates type/size and sets preview.
+   * Handles image file selection: validates type/size and sets preview.
    * @param e - The file input change event.
    */
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1078,7 +1078,7 @@ function ProductFormBody({
                     </option>
                   ))}
                 </select>
-                {/* Stock input only shown for new variants — existing stock managed via Adjust Stock */}
+                {/* Stock input only shown for new variants: existing stock managed via Adjust Stock */}
                 {v.id === null ? (
                   <div className="flex-1">
                     <label className="sr-only" htmlFor={`stock-${v.key}`}>
@@ -1119,7 +1119,7 @@ function ProductFormBody({
                   <span
                     className="cursor-not-allowed text-gray-200"
                     title="Cannot remove variant with stock > 0"
-                    aria-label={`Cannot remove ${v.size} variant — stock > 0`}
+                    aria-label={`Cannot remove ${v.size} variant with stock > 0`}
                   >
                     ✕
                   </span>

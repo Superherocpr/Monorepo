@@ -46,6 +46,15 @@ export interface InvoiceLineItem {
 interface PlatformResult {
   platformInvoiceId: string | null;
   paymentLink: string | null;
+  /** Why the attempt failed. Null on success. Never shown to a customer. */
+  error: string | null;
+  /**
+   * Set when PayPal accepted the draft but the follow-up send call failed. The
+   * draft exists on the merchant account and is invisible to this app, so a
+   * blind retry would leave a duplicate behind — the caller surfaces this id so
+   * an admin can send or delete that draft in PayPal by hand.
+   */
+  strandedDraftId?: string;
 }
 
 /** Parameters needed to create an invoice on PayPal. */
@@ -56,10 +65,51 @@ interface PlatformCreateParams {
 }
 
 /**
+ * Pulls the PayPal invoice id out of a create-draft-invoice response body.
+ *
+ * PayPal answers `POST /v2/invoicing/invoices` in one of two shapes depending on
+ * the `Prefer` header. `return=representation` yields the full invoice object
+ * with a top-level `id`; the DEFAULT, `return=minimal`, yields only
+ * `{ rel, href, method }`, where the id is the last path segment of `href`.
+ *
+ * This distinction is not academic. Until 2026-09-05 this module sent no
+ * `Prefer` header and read `body.id`, which is absent from the minimal shape —
+ * so every real invoice creation drew a 201 from PayPal, found no id, and
+ * reported "we couldn't create the invoice in PayPal" while leaving an unsent
+ * draft on the merchant account. No production invoice had ever been created.
+ *
+ * We now request the representation AND read both shapes, so a merchant account
+ * or API version that ignores the header cannot resurrect that failure.
+ *
+ * @param body - Parsed JSON body from the create call.
+ * @returns The PayPal invoice id, or null when neither shape yields one.
+ */
+function extractPayPalInvoiceId(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const record = body as Record<string, unknown>;
+
+  if (typeof record.id === "string" && record.id) return record.id;
+
+  if (typeof record.href === "string" && record.href) {
+    const segments = record.href.split("?")[0].split("/").filter(Boolean);
+    const last = segments[segments.length - 1];
+    return last && last !== "invoices" ? last : null;
+  }
+
+  return null;
+}
+
+/**
  * Creates and sends a PayPal invoice from the business PayPal account.
+ *
  * Side effects: creates a PayPal invoice and sends it to the recipient.
+ *
+ * Every failure path returns a populated `error` — there is deliberately no
+ * silent null return here, because a silent one is what hid the missing-id bug
+ * described on extractPayPalInvoiceId for the life of the feature.
+ *
  * @param params - Recipient, invoice number, and line items for the PayPal payload.
- * @returns PayPal invoice id and hosted payment link, or null fields on failure.
+ * @returns PayPal invoice id and hosted payment link, or null fields plus a reason.
  */
 export async function createBusinessPayPalInvoice(
   params: PlatformCreateParams
@@ -74,6 +124,9 @@ export async function createBusinessPayPalInvoice(
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
+        // Ask for the full invoice object so the response carries a top-level
+        // `id`. Without this PayPal returns the minimal href-only shape.
+        Prefer: "return=representation",
       },
       body: JSON.stringify({
         detail: {
@@ -99,12 +152,29 @@ export async function createBusinessPayPalInvoice(
     if (!createRes.ok) {
       const errorText = await createRes.text().catch(() => "");
       console.error("[invoice-actions] PayPal invoice create failed:", errorText);
-      return { platformInvoiceId: null, paymentLink: null };
+      return {
+        platformInvoiceId: null,
+        paymentLink: null,
+        error: `PayPal rejected the invoice (HTTP ${createRes.status}).`,
+      };
     }
 
-    const createData = (await createRes.json()) as { id?: string };
-    const platformInvoiceId = createData.id ?? null;
-    if (!platformInvoiceId) return { platformInvoiceId: null, paymentLink: null };
+    const createBody: unknown = await createRes.json().catch(() => null);
+    const platformInvoiceId = extractPayPalInvoiceId(createBody);
+
+    if (!platformInvoiceId) {
+      // PayPal accepted the request but we cannot address the result. Log the
+      // body so the next shape change is diagnosable from one log line.
+      console.error(
+        "[invoice-actions] PayPal invoice create returned no usable id:",
+        JSON.stringify(createBody)
+      );
+      return {
+        platformInvoiceId: null,
+        paymentLink: null,
+        error: "PayPal accepted the invoice but returned no invoice id.",
+      };
+    }
 
     const sendRes = await fetch(
       `${apiBase}/v2/invoicing/invoices/${platformInvoiceId}/send`,
@@ -122,16 +192,26 @@ export async function createBusinessPayPalInvoice(
     if (!sendRes.ok) {
       const errorText = await sendRes.text().catch(() => "");
       console.error("[invoice-actions] PayPal invoice send failed:", errorText);
-      return { platformInvoiceId: null, paymentLink: null };
+      return {
+        platformInvoiceId: null,
+        paymentLink: null,
+        error: `PayPal created the invoice but would not send it (HTTP ${sendRes.status}).`,
+        strandedDraftId: platformInvoiceId,
+      };
     }
 
     return {
       platformInvoiceId,
       paymentLink: `${connectBase}/invoice/p/#${platformInvoiceId}`,
+      error: null,
     };
   } catch (err) {
     console.error("[invoice-actions] PayPal invoice request failed:", err);
-    return { platformInvoiceId: null, paymentLink: null };
+    return {
+      platformInvoiceId: null,
+      paymentLink: null,
+      error: "Could not reach PayPal to raise the invoice.",
+    };
   }
 }
 
@@ -246,17 +326,23 @@ export async function createAndSendInvoice(
     ...(params.extraLineItems ?? []),
   ];
 
-  const { platformInvoiceId, paymentLink } = await createBusinessPayPalInvoice({
+  const platform = await createBusinessPayPalInvoice({
     recipientEmail: params.recipientEmail,
     invoiceNumber,
     items,
   });
 
+  const { platformInvoiceId, paymentLink } = platform;
+
   if (!platformInvoiceId || !paymentLink) {
+    // The reason is one of our own fixed strings, never raw PayPal output, so
+    // it is safe to hand to the admin UI that triggered this (CLAUDE.md §9).
+    const reason = platform.error ?? "PayPal did not return a usable invoice.";
     return {
       success: false,
-      error:
-        "We couldn't create the invoice in PayPal. Please check the business PayPal settings and try again.",
+      error: platform.strandedDraftId
+        ? `${reason} A draft invoice (${platform.strandedDraftId}) is sitting unsent in PayPal — send or delete it there before retrying, or you will bill twice.`
+        : `${reason} Please check the business PayPal settings and try again.`,
     };
   }
 

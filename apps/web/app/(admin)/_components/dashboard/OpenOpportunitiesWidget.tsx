@@ -1,5 +1,5 @@
 /**
- * OpenOpportunitiesWidget — card listing cancelled sessions that have no
+ * OpenOpportunitiesWidget: card listing cancelled sessions that have no
  * instructor yet, open for any instructor to claim first-come-first-serve.
  * Used by: InstructorDashboard.tsx
  */
@@ -32,7 +32,7 @@ interface OpenOpportunitiesWidgetProps {
  * Renders a card listing open (cancelled, unclaimed) sessions any instructor
  * can claim. Returns null when there are none so the grid collapses cleanly.
  * Once a session is claimed by anyone, the server query that feeds this widget
- * naturally excludes it on the next page load — no realtime sync needed.
+ * naturally excludes it on the next page load: no realtime sync needed.
  */
 export default function OpenOpportunitiesWidget({
   opportunities,

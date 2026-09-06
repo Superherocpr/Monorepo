@@ -1,5 +1,5 @@
 /**
- * Admin Edit Blog Post Page — /admin/blog/[id]
+ * Admin Edit Blog Post Page: /admin/blog/[id]
  * Fetches the full post (including body) and all tags, renders BlogEditorClient pre-populated.
  * Auth: super_admin only.
  */

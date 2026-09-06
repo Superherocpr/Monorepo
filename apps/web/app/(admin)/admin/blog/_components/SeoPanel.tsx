@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SeoPanel — DataForSEO keyword check panel in the blog editor.
+ * SeoPanel: DataForSEO keyword check panel in the blog editor.
  * Shows keyword search volume / competition from DataForSEO plus a local content checklist.
  * Used by BlogEditorClient.
  */
@@ -101,19 +101,19 @@ export default function SeoPanel({ keyword, title, body, excerpt, seoDescription
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-base font-bold text-gray-900">
-                    {result.keyword.monthly_searches?.toLocaleString() ?? "—"}
+                    {result.keyword.monthly_searches?.toLocaleString() ?? "-"}
                   </p>
                   <p className="text-xs text-gray-500">Monthly searches</p>
                 </div>
                 <div>
                   <p className="text-base font-bold text-gray-900">
-                    {result.keyword.competition_level ?? "—"}
+                    {result.keyword.competition_level ?? "-"}
                   </p>
                   <p className="text-xs text-gray-500">Competition</p>
                 </div>
                 <div>
                   <p className="text-base font-bold text-gray-900">
-                    {result.keyword.cpc !== null ? `$${result.keyword.cpc.toFixed(2)}` : "—"}
+                    {result.keyword.cpc !== null ? `$${result.keyword.cpc.toFixed(2)}` : "-"}
                   </p>
                   <p className="text-xs text-gray-500">CPC</p>
                 </div>

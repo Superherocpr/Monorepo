@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ClassRequestDetailClient — interactive detail view for a class request.
+ * ClassRequestDetailClient: interactive detail view for a class request.
  * Handles Approve (→ API, then redirect to created session) and Reject
  * (requires a reason ≥ 10 chars) actions for pending requests.
  * Used by: /admin/class-requests/[id]/page.tsx
@@ -154,7 +154,7 @@ export default function ClassRequestDetailClient({ request }: Props) {
           <div>
             <dt className="text-xs text-gray-500 mb-0.5">Class Type</dt>
             <dd className="text-sm font-medium text-gray-900">
-              {classType?.name ?? "—"}
+              {classType?.name ?? "-"}
               {classType?.duration_minutes && (
                 <span className="text-gray-400 font-normal">
                   {" "}
@@ -168,7 +168,7 @@ export default function ClassRequestDetailClient({ request }: Props) {
           <div>
             <dt className="text-xs text-gray-500 mb-0.5">Base Price</dt>
             <dd className="text-sm font-medium text-gray-900">
-              ${classType?.price != null ? Number(classType.price).toFixed(2) : "—"} / student
+              ${classType?.price != null ? Number(classType.price).toFixed(2) : "-"} / student
             </dd>
           </div>
           <div>
@@ -261,7 +261,7 @@ export default function ClassRequestDetailClient({ request }: Props) {
               {approving ? "Approving…" : "Approve & Create Session"}
             </button>
 
-            {/* Convert to team booking — for corporate/group callers. Pre-fills
+            {/* Convert to team booking: for corporate/group callers. Pre-fills
                 the team form from this request rather than creating anything
                 here, so staff can confirm the details agreed on the call. */}
             <Link
@@ -296,7 +296,7 @@ export default function ClassRequestDetailClient({ request }: Props) {
           </div>
           <p className="mt-3 text-xs text-gray-500">
             Use <strong>Convert to Team Booking</strong> when the caller is a company booking for
-            their staff — it creates a private class plus a signup link to send them.
+            their staff; it creates a private class plus a signup link to send them.
           </p>
 
           {/* Inline rejection reason form */}

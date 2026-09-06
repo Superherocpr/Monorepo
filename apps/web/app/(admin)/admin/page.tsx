@@ -1,10 +1,10 @@
 /**
  * GET /admin
  * Route: /admin
- * Auth: Staff only — layout.tsx enforces this.
+ * Auth: Staff only: layout.tsx enforces this.
  * Role-aware dashboard page. Fetches data in parallel via Promise.all based on
  * the logged-in user's role and renders the correct dashboard sub-component.
- * Fully server-rendered — no client components.
+ * Fully server-rendered: no client components.
  */
 
 import { redirect } from "next/navigation";
@@ -27,7 +27,7 @@ import type { LowStockVariant } from "../_components/dashboard/ManagerDashboard"
 
 /**
  * Returns the UTC ISO boundaries for the current calendar day.
- * Note: uses UTC — class sessions stored as timestamptz. For US Eastern
+ * Note: uses UTC: class sessions stored as timestamptz. For US Eastern
  * time accuracy, a timezone-aware approach would be needed in the future.
  */
 function getTodayUTCRange(): { start: string; end: string } {
@@ -91,7 +91,7 @@ function buildActivePromoCodes(rows: unknown[]): ActivePromoCode[] {
         hour: "numeric",
         minute: "2-digit",
       });
-      return [`${className}${locName ? ` — ${locName}` : ""} · ${time}`];
+      return [`${className}${locName ? `, ${locName}` : ""} · ${time}`];
     });
 
     const MAX_SESSION_LABELS = 3;
@@ -128,7 +128,7 @@ export default async function AdminDashboardPage() {
   // full table visibility across all customers, sessions, and transactions.
   const admin = await createAdminClient();
 
-  // daily_access_code isn't part of the shared actor profile — fetch it here.
+  // daily_access_code isn't part of the shared actor profile: fetch it here.
   const { data: profile } = await admin
     .from("profiles")
     .select("first_name, daily_access_code, access_code_generated_at")
@@ -199,7 +199,7 @@ export default async function AdminDashboardPage() {
         .eq("status", "sent")
         .order("created_at", { ascending: false }),
 
-      // Cancelled sessions with no instructor yet — open for any instructor to claim
+      // Cancelled sessions with no instructor yet: open for any instructor to claim
       admin
         .from("class_sessions")
         .select("id, starts_at, class_types ( name ), locations ( name, city )")
@@ -207,7 +207,7 @@ export default async function AdminDashboardPage() {
         .is("instructor_id", null)
         .order("starts_at"),
 
-      // Active promo codes with scope details — instructors use this as a quick reference
+      // Active promo codes with scope details: instructors use this as a quick reference
       admin
         .from("promo_codes")
         .select(`
@@ -259,13 +259,13 @@ export default async function AdminDashboardPage() {
   // ── Manager + Super Admin shared data ──────────────────────────────────────
   if (role === "manager" || role === "super_admin") {
     const today = getTodayUTCRange();
-    // Month range needed by the super_admin extra queries — must be computed here
+    // Month range needed by the super_admin extra queries: must be computed here
     // so it is available when superAdminExtraPromise is created below.
     const month = getThisMonthUTCRange();
 
     // Fire the super_admin-only queries immediately so they run in parallel with
     // the shared batch below, cutting the super_admin page load from 2 serial
-    // round-trips to 1. null for managers — they return before it is awaited.
+    // round-trips to 1. null for managers: they return before it is awaited.
     // IMPORTANT: any new role added to this block MUST return before the
     // `await superAdminExtraPromise!` line below, or that assertion will throw.
     const superAdminExtraPromise =
@@ -293,7 +293,7 @@ export default async function AdminDashboardPage() {
               .gte("created_at", month.start)
               .lte("created_at", month.end),
 
-            // Paid invoices this month — invoice revenue is tracked separately from online
+            // Paid invoices this month: invoice revenue is tracked separately from online
             admin
               .from("invoices")
               .select("total_amount")
@@ -311,7 +311,7 @@ export default async function AdminDashboardPage() {
               .limit(5),
 
             // Activity feed: recent payments. Must stay filtered to 'completed'
-            // — failed attempts are also stored in this table and would
+            //: failed attempts are also stored in this table and would
             // otherwise render as "X paid $Y", describing a decline as a sale.
             admin
               .from("payments")
@@ -349,7 +349,7 @@ export default async function AdminDashboardPage() {
               .limit(5),
 
             // Pending grades: all completed sessions system-wide with at least one ungraded
-            // roster student — super_admins oversee all instructors
+            // roster student: super_admins oversee all instructors
             admin
               .from("class_sessions")
               .select(
@@ -357,7 +357,7 @@ export default async function AdminDashboardPage() {
               )
               .eq("status", "completed"),
 
-            // Pending invoices: all sent-but-unpaid invoices system-wide —
+            // Pending invoices: all sent-but-unpaid invoices system-wide:
             // super_admins oversee all instructors
             admin
               .from("invoices")
@@ -442,7 +442,7 @@ export default async function AdminDashboardPage() {
       };
     });
 
-    // Normalize recent bookings — pick the correct FK-hinted profile
+    // Normalize recent bookings: pick the correct FK-hinted profile
     const recentBookings = (rawRecentBookings ?? []).map((booking) => ({
       id: booking.id,
       created_at: booking.created_at,
@@ -491,7 +491,7 @@ export default async function AdminDashboardPage() {
 
     // ── Super Admin extra data ──────────────────────────────────────────────
     // superAdminExtraPromise was fired before the shared batch above.
-    // It is guaranteed non-null here — manager returned early above.
+    // It is guaranteed non-null here: manager returned early above.
     const [
       { count: totalCustomers },
       { count: classesThisMonth },
@@ -516,7 +516,7 @@ export default async function AdminDashboardPage() {
     );
 
     // Filter completed sessions to those with at least one ungraded roster student,
-    // across all instructors — super_admins have full visibility
+    // across all instructors: super_admins have full visibility
     const superAdminPendingGrades = (completedSessionsForSuperAdmin ?? [])
       .filter((session) =>
         (
@@ -576,7 +576,7 @@ export default async function AdminDashboardPage() {
         return {
           id: p.id,
           type: "payment_failed" as const,
-          description: `${who} — payment of $${Number(p.amount).toFixed(2)} failed${
+          description: `${who}: payment of $${Number(p.amount).toFixed(2)} failed${
             p.notes ? ` (${p.notes})` : ""
           }`,
           created_at: p.created_at,
@@ -585,7 +585,7 @@ export default async function AdminDashboardPage() {
       ...(recentInvoicesActivity ?? []).map((inv) => ({
         id: inv.id,
         type: "invoice" as const,
-        description: `Invoice sent to ${inv.recipient_name} — $${Number(inv.total_amount).toFixed(2)}`,
+        description: `Invoice sent to ${inv.recipient_name}: $${Number(inv.total_amount).toFixed(2)}`,
         created_at: inv.created_at,
       })),
       ...(recentCustomersActivity ?? []).map((c) => ({

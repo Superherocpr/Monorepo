@@ -64,6 +64,7 @@ import {
   dailySummaryEmail,
   teamBookingCreatedEmail,
   teamSignupConfirmationEmail,
+  teamInvoiceMissingAdminEmail,
 } from "@/lib/emails";
 
 const ISO = "2026-10-01T14:00:00";
@@ -742,6 +743,43 @@ const FIXTURES: Record<string, Fixture> = {
         priceLabel: "$75 per seat",
         invoiceNumber: null,
         pendingApproval: true,
+      }),
+  },
+
+  teamInvoiceMissingAdminEmail: {
+    full: () =>
+      teamInvoiceMissingAdminEmail({
+        bookings: [
+          {
+            teamBookingId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            companyName: "Tampa General",
+            contactName: "Dana Scully",
+            contactEmail: "dana@tgh.example",
+            totalPrice: 1020,
+            createdAt: "2026-09-04T21:53:00Z",
+            classDate: ISO,
+            lastError: "PayPal accepted the invoice but returned no invoice id.",
+          },
+        ],
+        trigger: "sweep",
+        baseUrl: BASE_URL,
+      }),
+    sparse: () =>
+      teamInvoiceMissingAdminEmail({
+        bookings: [
+          {
+            teamBookingId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            companyName: "Tampa General",
+            contactName: "Dana Scully",
+            contactEmail: "dana@tgh.example",
+            totalPrice: 0,
+            createdAt: "2026-09-04T21:53:00Z",
+            classDate: null,
+            lastError: null,
+          },
+        ],
+        trigger: "booking",
+        baseUrl: BASE_URL,
       }),
   },
 

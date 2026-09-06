@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * AnalyticsClient — root client component for /admin/analytics.
+ * AnalyticsClient: root client component for /admin/analytics.
  * Owns the date range filter state and re-fetches all sections when the range changes.
- * Each section loads/updates independently — the page never goes entirely blank.
+ * Each section loads/updates independently: the page never goes entirely blank.
  * Used by: app/(admin)/admin/analytics/page.tsx
  */
 
@@ -243,7 +243,7 @@ interface Props {
 }
 
 /**
- * Root analytics client — manages filter state, triggers re-fetches,
+ * Root analytics client: manages filter state, triggers re-fetches,
  * and renders all sections with appropriate loading states.
  * @param initialData - data fetched server-side for the default range
  * @param initialStart - default range start ISO string
@@ -258,7 +258,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
   const [customTo, setCustomTo] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  // Tracks which sections are collapsed — all collapsed by default
+  // Tracks which sections are collapsed: all collapsed by default
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
     overview: true,
     revenue: true,
@@ -358,7 +358,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
         </button>
       </div>
 
-      {/* ── Date range filter — sticky ─────────────────────────────────── */}
+      {/* ── Date range filter: sticky ─────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 pb-4 mb-8 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4">
         <div className="flex flex-wrap gap-2 items-center">
           {PRESETS.map((preset) => (
@@ -457,7 +457,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
         />
         <div className={collapsed["revenue"] ? "hidden" : ""}>
 
-        {/* Revenue over time — full width */}
+        {/* Revenue over time: full width */}
         <Card className="mb-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Revenue Over Time</h3>
           {isPending ? (
@@ -535,7 +535,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
         />
         <div className={collapsed["classes"] ? "hidden" : ""}>
 
-        {/* Classes per month — full width */}
+        {/* Classes per month: full width */}
         <Card className="mb-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Completed Sessions per Month</h3>
           {isPending ? (
@@ -681,7 +681,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
           </Card>
         </div>
 
-        {/* Top employers — full width */}
+        {/* Top employers: full width */}
         <Card>
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Top Employers</h3>
           {isPending ? (
@@ -840,7 +840,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
         />
         <div className={collapsed["merch"] ? "hidden" : ""}>
 
-        {/* Merch revenue over time — full width */}
+        {/* Merch revenue over time: full width */}
         <Card className="mb-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Merch Revenue Over Time</h3>
           {isPending ? (
@@ -995,7 +995,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
           )}
         </div>
 
-        {/* Payout flow over time — platform fee vs instructor payout */}
+        {/* Payout flow over time: platform fee vs instructor payout */}
         <Card className="mb-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Payout Flow Over Time</h3>
           {isPending ? (
@@ -1020,7 +1020,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
           )}
         </Card>
 
-        {/* Earnings by instructor — table */}
+        {/* Earnings by instructor: table */}
         <Card>
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Earnings by Instructor</h3>
           {isPending ? (

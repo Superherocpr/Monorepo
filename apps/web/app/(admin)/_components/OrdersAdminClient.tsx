@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * OrdersAdminClient — client component for the admin orders page.
+ * OrdersAdminClient: client component for the admin orders page.
  * Handles filter navigation, expandable order rows, mark-as-shipped,
  * mark-as-delivered, cancel/refund, and auto-saving internal notes.
  * Used by: app/(admin)/admin/orders/page.tsx
@@ -208,7 +208,7 @@ export default function OrdersAdminClient({ data }: { data: OrdersPageData }) {
     router.push(buildUrl(filters, { [field]: value || null }));
   }
 
-  /** Debounced customer search — navigates after 400ms of inactivity. */
+  /** Debounced customer search: navigates after 400ms of inactivity. */
   function handleCustomerSearchChange(value: string) {
     setCustomerSearch(value);
     if (customerSearchTimeout.current) clearTimeout(customerSearchTimeout.current);
@@ -325,7 +325,7 @@ export default function OrdersAdminClient({ data }: { data: OrdersPageData }) {
   }
 
   /**
-   * Auto-saves notes for an order on blur — PATCH to update-notes.
+   * Auto-saves notes for an order on blur: PATCH to update-notes.
    * @param orderId - ID of the order whose notes changed.
    */
   async function handleNotesSave(orderId: string) {
@@ -338,7 +338,7 @@ export default function OrdersAdminClient({ data }: { data: OrdersPageData }) {
         body: JSON.stringify({ orderId, notes }),
       });
     } catch {
-      // Silent — notes auto-save is best-effort
+      // Silent: notes auto-save is best-effort
     } finally {
       setNotesSavingId(null);
     }

@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * RosterImportClient — Interactive 4-step roster import flow.
+ * RosterImportClient: Interactive 4-step roster import flow.
  * Used by: /admin/sessions/[id]/roster
  *
  * Steps:
- *   1. Upload — drag-and-drop or click to browse a CSV file
- *   2. Column Mapping — auto-detect or manually map CSV headers to student fields
- *   3. Editable Preview — review, inline-edit, fix errors before import
- *   4. Result — success banner with import counts
+ *   1. Upload: drag-and-drop or click to browse a CSV file
+ *   2. Column Mapping: auto-detect or manually map CSV headers to student fields
+ *   3. Editable Preview: review, inline-edit, fix errors before import
+ *   4. Result: success banner with import counts
  *
  * Accepts CSV (.csv) and Excel (.xlsx, .xls). CSV is parsed via papaparse;
  * Excel is parsed via read-excel-file (no known CVEs). All cell values are
@@ -45,7 +45,7 @@ export interface PendingUpload {
 /** Props for RosterImportClient. */
 interface Props {
   session: RosterSessionInfo;
-  /** Lowercased emails already on the roster — used for duplicate detection. */
+  /** Lowercased emails already on the roster: used for duplicate detection. */
   existingEmails: string[];
   pendingUpload: PendingUpload | null;
 }
@@ -138,7 +138,7 @@ async function parseExcelFile(file: File): Promise<string[][]> {
 
 /**
  * Strips leading formula-trigger characters (=, +, -, @) to prevent CSV injection.
- * Only the first character is evaluated — email addresses, phone numbers, and other
+ * Only the first character is evaluated: email addresses, phone numbers, and other
  * values that contain these characters mid-string are unaffected.
  * e.g. "user@example.com" → "user@example.com" (unchanged)
  *      "=HYPERLINK(...)" → "HYPERLINK(...)" (formula defused)
@@ -257,7 +257,7 @@ export default function RosterImportClient({
       return;
     }
 
-    // Reject files over 5MB — large files can freeze or crash the browser tab
+    // Reject files over 5MB: large files can freeze or crash the browser tab
     // while being parsed client-side. A roster file should never approach this.
     if (file.size > MAX_FILE_SIZE_BYTES) {
       setParseError("File is too large. Please upload a file under 5MB.");
@@ -460,7 +460,7 @@ export default function RosterImportClient({
   // The five render helpers below are plain functions, not components. Defining
   // components inside the render body gives them a new identity every pass, so
   // React unmounts and remounts their whole subtree on each parent state change
-  // — which reset the editable preview cells mid-edit. Calling them as functions
+  //: which reset the editable preview cells mid-edit. Calling them as functions
   // splices their output straight into this component's tree instead. None of
   // them uses hooks, so they are safe to call conditionally.
 
@@ -852,7 +852,7 @@ export default function RosterImportClient({
         {duplicateCount > 0 && (
           <p className="mt-3 text-xs text-gray-500">
             {duplicateCount} duplicate{duplicateCount !== 1 ? "s" : ""} will be
-            skipped — these students are already on the roster.
+            skipped; these students are already on the roster.
           </p>
         )}
 

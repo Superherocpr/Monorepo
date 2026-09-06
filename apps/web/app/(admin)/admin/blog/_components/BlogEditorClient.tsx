@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * BlogEditorClient — full blog post editor with split-pane Markdown editing,
+ * BlogEditorClient: full blog post editor with split-pane Markdown editing,
  * live HTML preview, SEO check, cover image upload, and .md file import.
  * Used by /admin/blog/new and /admin/blog/[id].
  */
@@ -61,7 +61,7 @@ export default function BlogEditorClient({ post, allTags }: BlogEditorClientProp
   const [title, setTitle] = useState(post?.title ?? "");
   // The slug is derived from the title until the user types their own, so it is
   // computed during render rather than written back from an effect. `manualSlug`
-  // holds the typed value and only wins once slugManuallyEdited is set — which
+  // holds the typed value and only wins once slugManuallyEdited is set: which
   // starts true when editing an existing post so its saved slug is preserved.
   const [manualSlug, setManualSlug] = useState(post?.slug ?? "");
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(isEditing);

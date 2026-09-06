@@ -1,5 +1,5 @@
 /**
- * /admin/archived — Archived Customer Accounts page.
+ * /admin/archived: Archived Customer Accounts page.
  * Server component: fetches all archived customers with booking/cert/order counts.
  * Access: super_admin only.
  * Used by: AdminSidebar "Archived Accounts" link.

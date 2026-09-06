@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * UpcomingPayoutsPanel — who is owed what, from which classes, and what the
+ * UpcomingPayoutsPanel: who is owed what, from which classes, and what the
  * platform actually keeps after PayPal.
  * Read-only; sending is triggered from the parent page's action buttons.
  * Used by: app/(admin)/admin/payouts/page.tsx and
@@ -73,7 +73,7 @@ function StatTile({
 
 /**
  * The money summary for everything currently payable.
- * Measured PayPal fees and estimated ones are labelled separately — the outbound
+ * Measured PayPal fees and estimated ones are labelled separately: the outbound
  * fee cannot be known until the payout is actually sent.
  */
 function RevenueStrip({ totals }: { totals: PayoutRevenueTotals }) {
@@ -115,7 +115,7 @@ function RevenueStrip({ totals }: { totals: PayoutRevenueTotals }) {
       {partial ? (
         <p className="mt-2 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
           * {totals.feeUntrackedCount} of {totals.earningCount} payments have no PayPal fee
-          recorded — invoices and offline payments do not report one, so the collection fee
+          recorded; invoices and offline payments do not report one, so the collection fee
           above covers only the {totals.feeTrackedCount} that do. The real net is therefore
           slightly optimistic.
         </p>

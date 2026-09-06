@@ -1,5 +1,5 @@
 /**
- * Admin Class Request detail page — /admin/class-requests/[id]
+ * Admin Class Request detail page: /admin/class-requests/[id]
  * Access: manager and super_admin only.
  * Shows full request details and provides Approve / Reject actions for pending requests.
  * Auth guard is handled by app/(admin)/layout.tsx.
@@ -51,7 +51,7 @@ export default async function ClassRequestDetailPage({ params }: PageProps) {
           href="/admin/class-requests"
           className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 mb-4"
         >
-          ← Back to Class Requests
+          ← Back to Customer Requests
         </Link>
         <h1 className="text-2xl font-bold text-gray-900">Class Request Detail</h1>
       </div>

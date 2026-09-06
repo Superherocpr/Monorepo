@@ -23,11 +23,11 @@ import type {
 const ALLOWED_ROLES: UserRole[] = ["instructor", "manager", "super_admin"];
 
 /**
- * Server component — authenticates the user, fetches form option data,
+ * Server component: authenticates the user, fetches form option data,
  * and renders the BulkCreateSessionClient form.
  */
 export default async function BulkSessionPage(): Promise<React.ReactElement> {
-  // Auth guard — honors view-as: a downgraded super admin gets the instructor
+  // Auth guard: honors view-as: a downgraded super admin gets the instructor
   // variant of the form (own name locked in, no instructor selector).
   const actor = await getAdminActor();
   if (!actor || !ALLOWED_ROLES.includes(actor.effectiveRole)) {
@@ -50,7 +50,7 @@ export default async function BulkSessionPage(): Promise<React.ReactElement> {
     .eq("active", true)
     .order("name");
 
-  // Bulk creation doesn't support per-session add-on selection yet — addon_ids
+  // Bulk creation doesn't support per-session add-on selection yet: addon_ids
   // is always empty here so ClassTypeOption stays satisfied.
   const classTypes: ClassTypeOption[] = (rawClassTypes ?? []).map((t) => ({
     id: t.id as string,

@@ -1,5 +1,5 @@
 /**
- * PendingInvoicesWidget — card showing outstanding invoices the instructor
+ * PendingInvoicesWidget: card showing outstanding invoices the instructor
  * has submitted but not yet been paid for. Links to each invoice detail page.
  * Used by: InstructorDashboard.tsx, SuperAdminDashboard.tsx
  */

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ApprovalCard — Interactive card for a single pending session in the approvals queue.
+ * ApprovalCard: Interactive card for a single pending session in the approvals queue.
  * Supports inline approve, reject (expandable reason textarea), and visual status transitions.
  * Status is managed by the parent section; local state covers only the rejection textarea.
  * Shared by ResubmissionsSection and NewSubmissionsSection.
@@ -21,7 +21,7 @@ export interface PendingSession {
   id: string;
   starts_at: string;
   ends_at: string;
-  /** ISO string of when the session was submitted — used to compute wait time. */
+  /** ISO string of when the session was submitted: used to compute wait time. */
   created_at: string;
   rejection_reason: string | null;
   class_types: { name: string } | null;
@@ -34,9 +34,9 @@ interface ApprovalCardProps {
   session: PendingSession;
   /** Wait time string pre-computed by the parent section (e.g. "3 days"). */
   waitTime: string;
-  /** Whether the wait exceeds 24 hours — triggers amber styling. */
+  /** Whether the wait exceeds 24 hours: triggers amber styling. */
   isLongWait: boolean;
-  /** True for resubmissions — shows amber accent and prior rejection reason. */
+  /** True for resubmissions: shows amber accent and prior rejection reason. */
   isResubmission: boolean;
   /** Current lifecycle status managed by the parent section. */
   status: CardStatus;
@@ -45,15 +45,15 @@ interface ApprovalCardProps {
    * Shown inline on the card; action buttons remain active so the user can retry.
    */
   errorMsg?: string;
-  /** Called when the manager clicks Approve — parent handles the server action. */
+  /** Called when the manager clicks Approve: parent handles the server action. */
   onApprove: () => void;
-  /** Called with the typed reason when manager confirms Reject — parent handles the server action. */
+  /** Called with the typed reason when manager confirms Reject: parent handles the server action. */
   onReject: (reason: string) => void;
 }
 
 /**
  * Formats a class time for display as "Day, Mon D, YYYY · H:MM AM/PM".
- * timeZone is pinned to UTC because class times are floating wall-clock values —
+ * timeZone is pinned to UTC because class times are floating wall-clock values:
  * see lib/business-time.ts.
  * @param iso - Stored class timestamp.
  */
@@ -144,7 +144,7 @@ export default function ApprovalCard({
             <span className="text-sm text-gray-400">Waiting {waitTime}</span>
           ))}
 
-        {/* Prior rejection reason — resubmissions only, hidden once a new decision is made */}
+        {/* Prior rejection reason: resubmissions only, hidden once a new decision is made */}
         {isResubmission && session.rejection_reason && !isDone && (
           <div className="bg-red-50 border border-red-100 rounded px-3 py-2 text-sm text-red-700 mt-1">
             Previously rejected: {session.rejection_reason}
@@ -168,7 +168,7 @@ export default function ApprovalCard({
         </div>
       )}
 
-      {/* ── Action error — shown with buttons still active so manager can retry */}
+      {/* ── Action error: shown with buttons still active so manager can retry */}
       {errorMsg && !isDone && (
         <div className="bg-red-50 border border-red-100 rounded px-3 py-2 text-sm text-red-700">
           {errorMsg}

@@ -1,5 +1,5 @@
 /**
- * SuperAdminDashboard — dashboard view for the super_admin role.
+ * SuperAdminDashboard: dashboard view for the super_admin role.
  * Extends the manager dashboard with a quick stats strip and recent activity feed.
  * Used by: app/(admin)/page.tsx
  */
@@ -32,7 +32,7 @@ export interface ActivityItem {
 export interface SuperAdminDashboardProps extends ManagerDashboardProps {
   quickStats: QuickStats;
   recentActivity: ActivityItem[];
-  /** Daily rollcall code — super_admins are also instructors. */
+  /** Daily rollcall code: super_admins are also instructors. */
   dailyAccessCode: string | null;
   /** ISO timestamp when the current rollcall code was generated. */
   dailyAccessCodeGeneratedAt: string | null;
@@ -42,7 +42,7 @@ export interface SuperAdminDashboardProps extends ManagerDashboardProps {
   pendingInvoices: PendingInvoice[];
 }
 
-/** Icon labels per activity type — text-based since we're keeping deps minimal. */
+/** Icon labels per activity type: text-based since we're keeping deps minimal. */
 const ACTIVITY_LABELS: Record<ActivityItem["type"], string> = {
   booking: "Booking",
   payment: "Payment",
