@@ -69,33 +69,36 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
   const firstInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Populate fields when opening in edit mode, or reset when opening for add
-  useEffect(() => {
-    if (open) {
-      if (classType) {
-        setName(classType.name);
-        setDescription(classType.description ?? "");
-        setDurationHours(String(classType.duration_minutes / 60));
-        setMaxCapacity(String(classType.max_capacity));
-        setPrice(String(classType.price));
-        setActive(classType.active);
-        setIsAha(classType.is_aha);
-        setCertTypeId(classType.cert_type_id ?? "");
-        setAddonIds(classType.addon_ids);
-      } else {
-        setName("");
-        setDescription("");
-        setDurationHours("");
-        setMaxCapacity("");
-        setPrice("");
-        setActive(true);
-        setIsAha(false);
-        setCertTypeId("");
-        setAddonIds([]);
-      }
-      setTimeout(() => firstInputRef.current?.focus(), 50);
+  // Populate fields when opening in edit mode, or reset when opening for add.
+  // Adjusted during render, keyed on which class type the panel is open for, so
+  // the fields are right on the first painted frame instead of being written
+  // back on a second pass. Closing only clears the key — the hidden fields are
+  // left as they are and get repopulated on the next open.
+  const openKey = open ? (classType?.id ?? "new") : null;
+  const [syncedOpenKey, setSyncedOpenKey] = useState<string | null>(null);
+  if (syncedOpenKey !== openKey) {
+    setSyncedOpenKey(openKey);
+    if (openKey !== null) {
+      setName(classType?.name ?? "");
+      setDescription(classType?.description ?? "");
+      setDurationHours(
+        classType ? String(classType.duration_minutes / 60) : ""
+      );
+      setMaxCapacity(classType ? String(classType.max_capacity) : "");
+      setPrice(classType ? String(classType.price) : "");
+      setActive(classType ? classType.active : true);
+      setIsAha(classType ? classType.is_aha : false);
+      setCertTypeId(classType?.cert_type_id ?? "");
+      setAddonIds(classType ? classType.addon_ids : []);
     }
-  }, [open, classType]);
+  }
+
+  // Focus the first field once the panel is on screen.
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => firstInputRef.current?.focus(), 50);
+    return () => clearTimeout(timer);
+  }, [open]);
 
   // Trap focus and close on Escape
   useEffect(() => {

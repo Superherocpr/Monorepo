@@ -43,6 +43,26 @@ interface LocationsClientProps {
 /** Two years in milliseconds — threshold for flagging a location as unused. */
 const TWO_YEARS_MS = 2 * 365.25 * 24 * 60 * 60 * 1000;
 
+/**
+ * True when a location has never hosted a session, or its last session is more
+ * than two years old.
+ *
+ * `now` is passed in rather than read from `Date.now()` here so the check stays
+ * pure — calling `Date.now()` during render returns a new value each pass, which
+ * defeats memoization and trips the react-hooks/purity rule. The caller captures
+ * a single timestamp at mount; a location cannot cross the two-year boundary
+ * while someone is looking at the page.
+ *
+ * @param loc - The location to test.
+ * @param now - Epoch milliseconds to measure staleness against.
+ */
+function isUnusedTwoYears(loc: LocationWithCount, now: number): boolean {
+  return (
+    loc.last_used_at === null ||
+    now - new Date(loc.last_used_at).getTime() > TWO_YEARS_MS
+  );
+}
+
 /** A single address suggestion returned by the autocomplete proxy. */
 interface PlaceSuggestion {
   place_id: string;
@@ -73,39 +93,54 @@ export default function LocationsClient({
   const [topLocations, setTopLocations] = useState<LocationWithCount[]>(
     sortAndCapTopLocations(initialLocations)
   );
-  const [searchResults, setSearchResults] = useState<LocationWithCount[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
+  // Search results carry the query that produced them. Render compares that tag
+  // against the query currently typed to derive both whether the results are
+  // current and whether a fetch is still pending, so neither has to be synced
+  // from inside the effect below.
+  const [searchResults, setSearchResults] = useState<{
+    query: string;
+    locations: LocationWithCount[];
+  }>({ query: "", locations: [] });
   const [searchQuery, setSearchQuery] = useState("");
   const [showUnused, setShowUnused] = useState(false);
+  // Timestamp captured once at mount and reused for every staleness check below.
+  // See isUnusedTwoYears for why this is not read from Date.now() during render.
+  const [nowMs] = useState(() => Date.now());
+
+  const trimmedQuery = searchQuery.trim();
+  const isSearchMode = trimmedQuery.length > 0;
+  // Results still tagged with an older query mean the debounce or fetch for the
+  // current one has not landed yet.
+  const searchLoading = isSearchMode && searchResults.query !== trimmedQuery;
 
   useEffect(() => {
-    const q = searchQuery.trim();
-    if (!q) {
-      setSearchResults([]);
-      setSearchLoading(false);
-      return;
-    }
+    if (!trimmedQuery) return;
 
-    setSearchLoading(true);
+    // Guards against a slow response for an abandoned query overwriting the
+    // results of a newer one.
+    let cancelled = false;
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/locations?q=${encodeURIComponent(q)}`);
+        const res = await fetch(
+          `/api/locations?q=${encodeURIComponent(trimmedQuery)}`
+        );
         const json = (await res.json()) as {
           success: boolean;
           locations?: LocationWithCount[];
         };
-        if (json.success && json.locations) {
-          setSearchResults(json.locations);
+        if (!cancelled && json.success && json.locations) {
+          setSearchResults({ query: trimmedQuery, locations: json.locations });
         }
       } catch {
-        // Silent fail — keep previous results visible
-      } finally {
-        setSearchLoading(false);
+        // Silent fail — the spinner stays up rather than showing stale hits
       }
     }, 300);
 
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [trimmedQuery]);
 
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [showImportPanel, setShowImportPanel] = useState(false);
@@ -127,7 +162,12 @@ export default function LocationsClient({
 
   // ── Edit address autocomplete state ────────────────────────────────────────
   const [editSearchQuery, setEditSearchQuery] = useState("");
-  const [editSuggestions, setEditSuggestions] = useState<PlaceSuggestion[]>([]);
+  // Suggestions carry the query that produced them; render discards them once
+  // the query moves on, so the effect never has to clear them synchronously.
+  const [editSuggestions, setEditSuggestions] = useState<{
+    query: string;
+    items: PlaceSuggestion[];
+  }>({ query: "", items: [] });
   const [editSearchLoading, setEditSearchLoading] = useState(false);
   const [editSearchError, setEditSearchError] = useState<string | null>(null);
   const [editShowSuggestions, setEditShowSuggestions] = useState(false);
@@ -145,39 +185,57 @@ export default function LocationsClient({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const trimmedEditQuery = editSearchQuery.trim();
+  // Only suggestions fetched for the query currently typed are eligible to show.
+  // A short query yields an empty list, which collapses the dropdown on its own.
+  const visibleEditSuggestions =
+    trimmedEditQuery.length >= 3 && editSuggestions.query === trimmedEditQuery
+      ? editSuggestions.items
+      : [];
+
   // Debounce autocomplete calls while the user types in the edit search box.
   useEffect(() => {
-    const q = editSearchQuery.trim();
-    if (q.length < 3) {
-      setEditSuggestions([]);
-      setEditShowSuggestions(false);
-      return;
-    }
+    if (trimmedEditQuery.length < 3) return;
+
+    // Guards against a slow response for an abandoned query landing late.
+    let cancelled = false;
     const timer = setTimeout(async () => {
       setEditSearchLoading(true);
       setEditSearchError(null);
       try {
-        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        const res = await fetch(
+          `/api/places/autocomplete?q=${encodeURIComponent(trimmedEditQuery)}`
+        );
         const json = (await res.json()) as {
           success: boolean;
           suggestions?: PlaceSuggestion[];
           error?: string;
         };
+        if (cancelled) return;
         if (json.success && json.suggestions) {
-          setEditSuggestions(json.suggestions);
+          setEditSuggestions({
+            query: trimmedEditQuery,
+            items: json.suggestions,
+          });
           setEditShowSuggestions(json.suggestions.length > 0);
         } else {
           setEditSearchError(json.error ?? null);
-          setEditSuggestions([]);
+          setEditSuggestions({ query: trimmedEditQuery, items: [] });
         }
       } catch {
-        setEditSuggestions([]);
+        if (!cancelled) {
+          setEditSuggestions({ query: trimmedEditQuery, items: [] });
+        }
       } finally {
-        setEditSearchLoading(false);
+        if (!cancelled) setEditSearchLoading(false);
       }
     }, 300);
-    return () => clearTimeout(timer);
-  }, [editSearchQuery]);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [trimmedEditQuery]);
 
   /**
    * Called when a suggestion is selected from the edit-mode dropdown.
@@ -256,7 +314,7 @@ export default function LocationsClient({
     setEditError(null);
     // Reset autocomplete search for this new edit session
     setEditSearchQuery("");
-    setEditSuggestions([]);
+    setEditSuggestions({ query: "", items: [] });
     setEditShowSuggestions(false);
     setEditSearchError(null);
     if (deletingId === loc.id) setDeletingId(null);
@@ -268,7 +326,7 @@ export default function LocationsClient({
     setEditErrors({});
     setEditError(null);
     setEditSearchQuery("");
-    setEditSuggestions([]);
+    setEditSuggestions({ query: "", items: [] });
     setEditShowSuggestions(false);
     setEditSearchError(null);
   }
@@ -339,7 +397,7 @@ export default function LocationsClient({
           );
 
       setTopLocations((prev) => sortAndCapTopLocations(applyEdit(prev)));
-      setSearchResults(applyEdit);
+      setSearchResults((prev) => ({ ...prev, locations: applyEdit(prev.locations) }));
       setEditingId(null);
     } catch {
       setEditError("Network error. Please try again.");
@@ -377,7 +435,10 @@ export default function LocationsClient({
           );
 
       setTopLocations((prev) => sortAndCapTopLocations(applyHomeBase(prev)));
-      setSearchResults(applyHomeBase);
+      setSearchResults((prev) => ({
+        ...prev,
+        locations: applyHomeBase(prev.locations),
+      }));
     } catch {
       setHomeBaseError("Network error. Please try again.");
     } finally {
@@ -403,7 +464,10 @@ export default function LocationsClient({
       }
 
       setTopLocations((prev) => prev.filter((l) => l.id !== id));
-      setSearchResults((prev) => prev.filter((l) => l.id !== id));
+      setSearchResults((prev) => ({
+        ...prev,
+        locations: prev.locations.filter((l) => l.id !== id),
+      }));
       setDeletingId(null);
     } catch {
       setDeleteError("Network error. Please try again.");
@@ -412,17 +476,12 @@ export default function LocationsClient({
     }
   }
 
-  const isSearchMode = searchQuery.trim().length > 0;
   const isSuperAdmin = userRole === "super_admin";
 
   // Apply unused filter on top of search/top-10 results
-  const rawDisplayed = isSearchMode ? searchResults : topLocations;
+  const rawDisplayed = isSearchMode ? searchResults.locations : topLocations;
   const displayedLocations = showUnused
-    ? rawDisplayed.filter(
-        (loc) =>
-          !loc.last_used_at ||
-          Date.now() - new Date(loc.last_used_at).getTime() > TWO_YEARS_MS
-      )
+    ? rawDisplayed.filter((loc) => isUnusedTwoYears(loc, nowMs))
     : rawDisplayed;
 
   return (
@@ -515,8 +574,7 @@ export default function LocationsClient({
               <div
                 key={loc.id}
                 className={`rounded-lg border bg-white p-5 shadow-sm ${
-                  loc.last_used_at === null ||
-                  Date.now() - new Date(loc.last_used_at).getTime() > TWO_YEARS_MS
+                  isUnusedTwoYears(loc, nowMs)
                     ? "border-amber-300"
                     : "border-gray-200"
                 }`}
@@ -542,7 +600,10 @@ export default function LocationsClient({
                           type="text"
                           value={editSearchQuery}
                           onChange={(e) => setEditSearchQuery(e.target.value)}
-                          onFocus={() => editSuggestions.length > 0 && setEditShowSuggestions(true)}
+                          onFocus={() =>
+                            visibleEditSuggestions.length > 0 &&
+                            setEditShowSuggestions(true)
+                          }
                           placeholder="Start typing an address…"
                           autoComplete="off"
                           className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-9 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -554,12 +615,12 @@ export default function LocationsClient({
                       {editSearchError && (
                         <p className="mt-0.5 text-xs text-amber-600">{editSearchError}</p>
                       )}
-                      {editShowSuggestions && editSuggestions.length > 0 && (
+                      {editShowSuggestions && visibleEditSuggestions.length > 0 && (
                         <ul
                           role="listbox"
                           className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg"
                         >
-                          {editSuggestions.map((s) => (
+                          {visibleEditSuggestions.map((s) => (
                             <li key={s.place_id} role="option" aria-selected={false}>
                               <button
                                 type="button"
@@ -615,8 +676,7 @@ export default function LocationsClient({
                             Home Base
                           </span>
                         )}
-                        {(loc.last_used_at === null ||
-                          Date.now() - new Date(loc.last_used_at).getTime() > TWO_YEARS_MS) && (
+                        {isUnusedTwoYears(loc, nowMs) && (
                           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
                             Unused 2y+
                           </span>

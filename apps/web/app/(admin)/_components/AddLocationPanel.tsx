@@ -68,8 +68,15 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
   // ── Address search state ──────────────────────────────────────────────────────
   /** What the user has typed into the address search box. */
   const [searchQuery, setSearchQuery] = useState("");
-  /** Autocomplete suggestions from the server proxy. */
-  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  /**
+   * Autocomplete suggestions from the server proxy, tagged with the query that
+   * produced them. Render discards them once the query moves on, so the effect
+   * below never has to clear them synchronously.
+   */
+  const [suggestions, setSuggestions] = useState<{
+    query: string;
+    items: PlaceSuggestion[];
+  }>({ query: "", items: [] });
   /** True while the autocomplete or details fetch is in flight. */
   const [searchLoading, setSearchLoading] = useState(false);
   /** Non-null when the autocomplete call returns a non-fatal error. */
@@ -90,43 +97,57 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const trimmedQuery = searchQuery.trim();
+  /**
+   * Only suggestions fetched for the query currently typed are eligible to show.
+   * A query under three characters yields an empty list, which collapses the
+   * dropdown without the effect having to hide it.
+   */
+  const visibleSuggestions =
+    trimmedQuery.length >= 3 && suggestions.query === trimmedQuery
+      ? suggestions.items
+      : [];
+
   // Debounce autocomplete calls while the user types (300ms delay).
   useEffect(() => {
-    const q = searchQuery.trim();
-    if (q.length < 3) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
+    if (trimmedQuery.length < 3) return;
 
+    // Guards against a slow response for an abandoned query landing late.
+    let cancelled = false;
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       setSearchError(null);
       try {
-        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        const res = await fetch(
+          `/api/places/autocomplete?q=${encodeURIComponent(trimmedQuery)}`
+        );
         const json = (await res.json()) as {
           success: boolean;
           suggestions?: PlaceSuggestion[];
           error?: string;
         };
+        if (cancelled) return;
         if (json.success && json.suggestions) {
-          setSuggestions(json.suggestions);
+          setSuggestions({ query: trimmedQuery, items: json.suggestions });
           setShowSuggestions(json.suggestions.length > 0);
         } else {
           // Show the error subtly — user can still fill the form manually.
           setSearchError(json.error ?? null);
-          setSuggestions([]);
+          setSuggestions({ query: trimmedQuery, items: [] });
         }
       } catch {
         // Silent fail — user can fill the address form below manually.
-        setSuggestions([]);
+        if (!cancelled) setSuggestions({ query: trimmedQuery, items: [] });
       } finally {
-        setSearchLoading(false);
+        if (!cancelled) setSearchLoading(false);
       }
     }, 300);
 
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [trimmedQuery]);
 
   /**
    * Called when a suggestion is selected from the dropdown.
@@ -278,7 +299,9 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                onFocus={() =>
+                  visibleSuggestions.length > 0 && setShowSuggestions(true)
+                }
                 placeholder="Start typing an address…"
                 autoComplete="off"
                 className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-9 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -290,12 +313,12 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
             {searchError && (
               <p className="mt-0.5 text-xs text-amber-600">{searchError}</p>
             )}
-            {showSuggestions && suggestions.length > 0 && (
+            {showSuggestions && visibleSuggestions.length > 0 && (
               <ul
                 role="listbox"
                 className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg"
               >
-                {suggestions.map((s) => (
+                {visibleSuggestions.map((s) => (
                   <li key={s.place_id} role="option" aria-selected={false}>
                     <button
                       type="button"

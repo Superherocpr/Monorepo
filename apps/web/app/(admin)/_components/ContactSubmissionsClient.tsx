@@ -147,10 +147,18 @@ export default function ContactSubmissionsClient({
   const [fromFilter, setFromFilter] = useState(filters.from ?? "");
   const [toFilter, setToFilter] = useState(filters.to ?? "");
 
-  useEffect(() => {
+  // Re-sync the inputs when navigation changes the URL filters. Adjusting during
+  // render rather than in an effect lets React re-render with the new values
+  // before painting, instead of showing the stale ones for a frame.
+  const [syncedFilters, setSyncedFilters] = useState(filters);
+  if (
+    syncedFilters.from !== filters.from ||
+    syncedFilters.to !== filters.to
+  ) {
+    setSyncedFilters(filters);
     setFromFilter(filters.from ?? "");
     setToFilter(filters.to ?? "");
-  }, [filters.from, filters.to]);
+  }
 
   // ── Client-side text search ────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
@@ -177,9 +185,13 @@ export default function ContactSubmissionsClient({
   // ── Local submission list (updated optimistically after actions) ───────────
   const [submissions, setSubmissions] = useState<SubmissionWithReplies[]>(initialSubmissions);
 
-  useEffect(() => {
+  // A fresh list from the server supersedes any optimistic local edits. Adjusted
+  // during render for the same reason as the filter inputs above.
+  const [syncedSubmissions, setSyncedSubmissions] = useState(initialSubmissions);
+  if (syncedSubmissions !== initialSubmissions) {
+    setSyncedSubmissions(initialSubmissions);
     setSubmissions(initialSubmissions);
-  }, [initialSubmissions]);
+  }
 
   // ── Inline mark-as-replied ─────────────────────────────────────────────────
   const [markingReplied, setMarkingReplied] = useState<Set<string>>(new Set());

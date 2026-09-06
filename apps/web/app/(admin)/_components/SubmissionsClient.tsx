@@ -7,7 +7,7 @@
  * the reply form. Used by: app/(admin)/admin/contact/page.tsx
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Mail, RefreshCw, Search, Send, X } from "lucide-react";
@@ -143,11 +143,19 @@ export default function ContactSubmissionsClient({
 
   // Sync filter inputs when the server re-renders with new filter props after
   // router.push() — useState only initializes from props on first mount.
-  useEffect(() => {
+  // Adjusted during render rather than in an effect so React re-renders with the
+  // new values before painting, instead of showing the stale ones for a frame.
+  const [syncedFilters, setSyncedFilters] = useState(filters);
+  if (
+    syncedFilters.type !== filters.type ||
+    syncedFilters.from !== filters.from ||
+    syncedFilters.to !== filters.to
+  ) {
+    setSyncedFilters(filters);
     setTypeFilter(filters.type ?? "");
     setFromFilter(filters.from ?? "");
     setToFilter(filters.to ?? "");
-  }, [filters.type, filters.from, filters.to]);
+  }
 
   // ── Accordion state ────────────────────────────────────────────────────────
   /** ID of the currently expanded submission (only one open at a time). */
@@ -172,9 +180,12 @@ export default function ContactSubmissionsClient({
   );
 
   // Sync submission list when the server re-renders with new filtered results.
-  useEffect(() => {
+  // Adjusted during render for the same reason as the filter inputs above.
+  const [syncedSubmissions, setSyncedSubmissions] = useState(initialSubmissions);
+  if (syncedSubmissions !== initialSubmissions) {
+    setSyncedSubmissions(initialSubmissions);
     setSubmissions(initialSubmissions);
-  }, [initialSubmissions]);
+  }
 
   // ── URL helpers ────────────────────────────────────────────────────────────
 

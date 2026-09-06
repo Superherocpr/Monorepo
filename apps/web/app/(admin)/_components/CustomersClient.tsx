@@ -117,9 +117,14 @@ export default function CustomersClient({
 }: CustomersClientProps) {
   // ── Search state ────────────────────────────────────────────────────────────
   const [query, setQuery] = useState("");
-  const [customers, setCustomers] =
-    useState<CustomerWithMeta[]>(initialCustomers);
-  const [isSearching, setIsSearching] = useState(false);
+  // Search results carry the key that produced them (query plus the server-side
+  // filters). An empty query falls back to the server-rendered list, and a key
+  // mismatch means a fetch is still in flight — so neither the list nor the
+  // loading flag has to be restored from inside an effect.
+  const [searchResults, setSearchResults] = useState<{
+    key: string;
+    items: CustomerWithMeta[];
+  }>({ key: "", items: [] });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Filter state ────────────────────────────────────────────────────────────
@@ -139,6 +144,10 @@ export default function CustomersClient({
   const firstNameRef = useRef<HTMLInputElement>(null);
 
   // ── Derived list ────────────────────────────────────────────────────────────
+  /** Identifies one server-side search; results tagged otherwise are stale. */
+  const searchKey = JSON.stringify([query, certFilter, bookingFilter]);
+  const isSearching = query.length > 0 && searchResults.key !== searchKey;
+  const customers = query.length === 0 ? initialCustomers : searchResults.items;
   const filtered = applyFilters(customers, certFilter, bookingFilter, statusFilter);
 
   // ── Search — debounced 300ms ─────────────────────────────────────────────────
@@ -147,18 +156,22 @@ export default function CustomersClient({
    * Resets to initial customers when the query is cleared.
    */
   const fetchSearch = useCallback(
-    async (term: string, cert: CertFilter, booking: BookingFilter) => {
-      setIsSearching(true);
+    async (
+      key: string,
+      term: string,
+      cert: CertFilter,
+      booking: BookingFilter
+    ) => {
       try {
         const params = new URLSearchParams({ q: term, cert, booking });
         const res = await fetch(`/api/customers/search?${params}`);
         if (!res.ok) throw new Error("Search failed");
         const json = await res.json();
-        setCustomers(json.customers ?? []);
+        setSearchResults({ key, items: json.customers ?? [] });
       } catch {
-        // Network error — keep showing the last known list
-      } finally {
-        setIsSearching(false);
+        // Network error — record an empty result so the spinner stops rather
+        // than spinning forever against a search that will never resolve.
+        setSearchResults({ key, items: [] });
       }
     },
     []
@@ -166,21 +179,17 @@ export default function CustomersClient({
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    if (query.length === 0) {
-      // Restore initial list when search is cleared
-      setCustomers(initialCustomers);
-      return;
-    }
+    // An empty query renders initialCustomers directly — nothing to fetch.
+    if (query.length === 0) return;
 
     debounceRef.current = setTimeout(() => {
-      fetchSearch(query, certFilter, bookingFilter);
+      fetchSearch(searchKey, query, certFilter, bookingFilter);
     }, 300);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, certFilter, bookingFilter, fetchSearch, initialCustomers]);
+  }, [searchKey, query, certFilter, bookingFilter, fetchSearch]);
 
   // Focus first name input when panel opens
   useEffect(() => {
@@ -240,7 +249,7 @@ export default function CustomersClient({
       );
 
       // Refresh the customer list from the server
-      fetchSearch(query, certFilter, bookingFilter);
+      fetchSearch(searchKey, query, certFilter, bookingFilter);
     } catch {
       setCreateError("Network error. Please try again.");
     } finally {
