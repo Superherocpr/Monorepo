@@ -49,23 +49,29 @@ const AddonPanel: React.FC<AddonPanelProps> = ({ open, addon, onClose, onSaved, 
   const firstInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Populate fields when opening in edit mode, or reset when opening for add
-  useEffect(() => {
-    if (open) {
-      if (addon) {
-        setName(addon.name);
-        setDescription(addon.description ?? "");
-        setPrice(String(addon.price));
-        setActive(addon.active);
-      } else {
-        setName("");
-        setDescription("");
-        setPrice("");
-        setActive(true);
-      }
-      setTimeout(() => firstInputRef.current?.focus(), 50);
+  // Populate fields when opening in edit mode, or reset when opening for add.
+  // Adjusted during render, keyed on which add-on the panel is open for, so the
+  // fields are right on the first painted frame instead of being written back on
+  // a second pass. Closing only clears the key — the hidden fields are left as
+  // they are and get repopulated on the next open.
+  const openKey = open ? (addon?.id ?? "new") : null;
+  const [syncedOpenKey, setSyncedOpenKey] = useState<string | null>(null);
+  if (syncedOpenKey !== openKey) {
+    setSyncedOpenKey(openKey);
+    if (openKey !== null) {
+      setName(addon?.name ?? "");
+      setDescription(addon?.description ?? "");
+      setPrice(addon ? String(addon.price) : "");
+      setActive(addon ? addon.active : true);
     }
-  }, [open, addon]);
+  }
+
+  // Focus the first field once the panel is on screen.
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => firstInputRef.current?.focus(), 50);
+    return () => clearTimeout(timer);
+  }, [open]);
 
   // Trap focus and close on Escape
   useEffect(() => {

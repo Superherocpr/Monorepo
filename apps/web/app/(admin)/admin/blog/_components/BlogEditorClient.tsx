@@ -6,7 +6,7 @@
  * Used by /admin/blog/new and /admin/blog/[id].
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { remark } from "remark";
 import remarkHtml from "remark-html";
@@ -59,7 +59,11 @@ export default function BlogEditorClient({ post, allTags }: BlogEditorClientProp
   const isEditing = !!post;
 
   const [title, setTitle] = useState(post?.title ?? "");
-  const [slug, setSlug] = useState(post?.slug ?? "");
+  // The slug is derived from the title until the user types their own, so it is
+  // computed during render rather than written back from an effect. `manualSlug`
+  // holds the typed value and only wins once slugManuallyEdited is set — which
+  // starts true when editing an existing post so its saved slug is preserved.
+  const [manualSlug, setManualSlug] = useState(post?.slug ?? "");
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(isEditing);
   const [excerpt, setExcerpt] = useState(post?.excerpt ?? "");
   const [body, setBody] = useState(post?.body ?? "");
@@ -79,21 +83,20 @@ export default function BlogEditorClient({ post, allTags }: BlogEditorClientProp
   const [saved, setSaved] = useState(false);
 
   // Auto-generate slug from title unless the user has manually edited it.
-  useEffect(() => {
-    if (!slugManuallyEdited && title) {
-      setSlug(titleToSlug(title));
-    }
-  }, [title, slugManuallyEdited]);
+  const slug = slugManuallyEdited ? manualSlug : titleToSlug(title);
 
-  // Regenerate preview HTML whenever the body changes.
-  const updatePreview = useCallback(async (md: string) => {
-    const html = await markdownToHtml(md);
-    setPreview(html);
-  }, []);
-
+  // Regenerate preview HTML whenever the body changes. The result is applied in
+  // a promise callback, and a late render for superseded body text is dropped so
+  // slow markdown passes cannot land out of order.
   useEffect(() => {
-    void updatePreview(body);
-  }, [body, updatePreview]);
+    let cancelled = false;
+    void markdownToHtml(body).then((html) => {
+      if (!cancelled) setPreview(html);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [body]);
 
   function handleMdImport(importedTitle: string, importedBody: string): void {
     if (importedTitle && !isEditing) {
@@ -239,7 +242,10 @@ export default function BlogEditorClient({ post, allTags }: BlogEditorClientProp
             <input
               type="text"
               value={slug}
-              onChange={(e) => { setSlug(e.target.value); setSlugManuallyEdited(true); }}
+              onChange={(e) => {
+                setManualSlug(e.target.value);
+                setSlugManuallyEdited(true);
+              }}
               placeholder="url-friendly-slug"
               className={inputCls}
             />

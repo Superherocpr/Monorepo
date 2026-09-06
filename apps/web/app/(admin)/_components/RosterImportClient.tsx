@@ -457,7 +457,14 @@ export default function RosterImportClient({
   }
 
   /** Step indicator dots shown at the top of every step. */
-  function StepIndicator() {
+  // The five render helpers below are plain functions, not components. Defining
+  // components inside the render body gives them a new identity every pass, so
+  // React unmounts and remounts their whole subtree on each parent state change
+  // — which reset the editable preview cells mid-edit. Calling them as functions
+  // splices their output straight into this component's tree instead. None of
+  // them uses hooks, so they are safe to call conditionally.
+
+  function renderStepIndicator(): React.ReactElement {
     const steps: { key: Step; label: string }[] = [
       { key: "upload", label: "Upload" },
       { key: "mapping", label: "Map Columns" },
@@ -511,7 +518,7 @@ export default function RosterImportClient({
 
   // ── Step 1: Upload ──────────────────────────────────────────────────────────
 
-  function UploadStep() {
+  function renderUploadStep(): React.ReactElement {
     return (
       <div>
         {/* Customer roster banner */}
@@ -624,7 +631,7 @@ export default function RosterImportClient({
 
   // ── Step 2: Column Mapping ──────────────────────────────────────────────────
 
-  function MappingStep() {
+  function renderMappingStep(): React.ReactElement {
     const fields = Object.keys(columnMap) as (keyof ColumnMap)[];
 
     return (
@@ -739,7 +746,7 @@ export default function RosterImportClient({
 
   // ── Step 3: Editable Preview ────────────────────────────────────────────────
 
-  function PreviewStep() {
+  function renderPreviewStep(): React.ReactElement {
     const editableFields: (keyof Omit<
       PreviewRow,
       "key" | "hasError" | "isDuplicate"
@@ -872,7 +879,7 @@ export default function RosterImportClient({
 
   // ── Step 4: Result ──────────────────────────────────────────────────────────
 
-  function ResultStep() {
+  function renderResultStep(): React.ReactNode {
     if (!importResult) return null;
 
     return (
@@ -959,12 +966,12 @@ export default function RosterImportClient({
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8">
-        <StepIndicator />
+        {renderStepIndicator()}
 
-        {step === "upload" && <UploadStep />}
-        {step === "mapping" && <MappingStep />}
-        {step === "preview" && <PreviewStep />}
-        {step === "result" && <ResultStep />}
+        {step === "upload" && renderUploadStep()}
+        {step === "mapping" && renderMappingStep()}
+        {step === "preview" && renderPreviewStep()}
+        {step === "result" && renderResultStep()}
       </div>
     </div>
   );

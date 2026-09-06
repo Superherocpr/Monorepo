@@ -71,8 +71,13 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset form state whenever a new member is selected
-  useEffect(() => {
+  // Reset form state whenever a new member is selected. Adjusted during render,
+  // keyed on the member being edited, so the fields are right on the first
+  // painted frame rather than written back on a second pass.
+  const [syncedMemberId, setSyncedMemberId] = useState<string | null>(null);
+  const memberId = member?.id ?? null;
+  if (syncedMemberId !== memberId) {
+    setSyncedMemberId(memberId);
     if (member) {
       setDescription(member.bio_description ?? "");
       setCredentials(member.bio_credentials ?? "");
@@ -84,7 +89,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
       setPreviewUrl(null);
       setFileError(null);
     }
-  }, [member]);
+  }
 
   // Revoke the object URL when the pending file changes or the panel closes
   useEffect(() => {

@@ -8,7 +8,7 @@
  * Used by: /admin/settings/page.tsx
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import ClassTypePanel from "./ClassTypePanel";
@@ -30,6 +30,50 @@ const NAV_PAGE_LABELS: Record<NavPage, string> = {
 };
 
 const NAV_PAGES: NavPage[] = ["classes", "schedule", "merch", "blog", "about", "contact"];
+
+// ── Theme store ──────────────────────────────────────────────────────────────
+// The theme preference lives in localStorage, which is external mutable state,
+// so it is read through useSyncExternalStore rather than copied into React state
+// from an effect. Writes go through setStoredTheme so subscribers in this tab
+// are notified too — the browser's own `storage` event only fires for changes
+// made in other tabs.
+
+/** Callbacks React registered to hear about theme changes. */
+const themeSubscribers = new Set<() => void>();
+
+/**
+ * Subscribes to theme changes from this tab and others.
+ * @param onChange - Called whenever the stored theme may have changed.
+ * @returns An unsubscribe function.
+ */
+function subscribeToTheme(onChange: () => void): () => void {
+  themeSubscribers.add(onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    themeSubscribers.delete(onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+/** Reads whether dark mode is currently stored. */
+function getThemeIsDark(): boolean {
+  return localStorage.getItem("theme") === "dark";
+}
+
+/** SSR has no localStorage; light is the default until the client corrects it. */
+function getThemeIsDarkOnServer(): boolean {
+  return false;
+}
+
+/**
+ * Persists the theme preference and notifies every subscriber.
+ * Side effects: writes localStorage.
+ * @param isDark - Whether dark mode should be stored as active.
+ */
+function setStoredTheme(isDark: boolean): void {
+  localStorage.setItem("theme", isDark ? "dark" : "light");
+  themeSubscribers.forEach((notify) => notify());
+}
 
 interface SettingsClientProps {
   classTypes: ClassType[];
@@ -137,6 +181,47 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
 }) => {
   const router = useRouter();
 
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  // Declared up here because handlers throughout the component call showToast;
+  // the react-hooks/immutability rule wants it defined before its first use.
+  //
+  // A Zoho OAuth redirect lands with ?zoho=connected|error, and the resulting
+  // banner is seeded straight into the initial state instead of being pushed in
+  // from an effect on mount — so it is on screen for the first painted frame.
+  const [toast, setToast] = useState<Toast | null>(() => {
+    if (zohoParam === "connected") {
+      return { type: "success", message: "Zoho Mail connected successfully." };
+    }
+    if (zohoParam === "error") {
+      return { type: "error", message: "Zoho connection failed. Please try again." };
+    }
+    return null;
+  });
+
+  /**
+   * Shows a toast notification. Success toasts auto-dismiss via the effect below.
+   * @param type - "success" or "error"
+   * @param message - The message text.
+   */
+  function showToast(type: "success" | "error", message: string) {
+    setToast({ type, message });
+  }
+
+  // Auto-dismiss success toasts after four seconds. Keyed on the toast itself so
+  // replacing one restarts the timer rather than leaking the previous one.
+  useEffect(() => {
+    if (toast?.type !== "success") return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  // Strip the OAuth result param so a reload does not re-show the banner.
+  useEffect(() => {
+    if (zohoParam) {
+      window.history.replaceState({}, "", "/admin/settings");
+    }
+  }, [zohoParam]);
+
   // ── Tabs ───────────────────────────────────────────────────────────────────
   // We render every section all the time (just hide inactive ones with CSS) so
   // that in-progress edits — drafted grades, dirty toggles, etc. — survive a
@@ -160,24 +245,26 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   }
 
   // ── Dark mode ──────────────────────────────────────────────────────────────
-  const [isDark, setIsDark] = useState(false);
+  const isDark = useSyncExternalStore(
+    subscribeToTheme,
+    getThemeIsDark,
+    getThemeIsDarkOnServer
+  );
 
+  // Push the preference out to the document. This is an external-system sync,
+  // which is what effects are for — the value itself is read from the store
+  // above rather than mirrored into state here.
   useEffect(() => {
-    const stored = localStorage.getItem("theme");
-    const prefersDark = stored === "dark";
-    setIsDark(prefersDark);
-    document.documentElement.classList.toggle("dark", prefersDark);
-  }, []);
+    document.documentElement.classList.toggle("dark", isDark);
+  }, [isDark]);
 
   /**
-   * Toggles dark mode on/off. Writes to localStorage and updates the document class.
+   * Toggles dark mode on/off. Persists to localStorage; the document class
+   * follows via the effect above.
    * TODO: apply dark: variants to admin layout and components.
    */
   function toggleDarkMode() {
-    const next = !isDark;
-    setIsDark(next);
-    localStorage.setItem("theme", next ? "dark" : "light");
-    document.documentElement.classList.toggle("dark", next);
+    setStoredTheme(!isDark);
   }
 
   // ── Legacy site flag ───────────────────────────────────────────────────────
@@ -278,10 +365,13 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   // Sync local state when the server re-sends initialClassTypes after router.refresh().
   // useState does not reinitialize on prop changes — the component stays mounted across
   // router.refresh() calls in Next.js App Router, so edits (price, name, etc.) would
-  // otherwise remain stale in the list until a hard reload.
-  useEffect(() => {
+  // otherwise remain stale in the list until a hard reload. Adjusted during render
+  // so the refreshed list is on screen for the first painted frame.
+  const [syncedClassTypes, setSyncedClassTypes] = useState(initialClassTypes);
+  if (syncedClassTypes !== initialClassTypes) {
+    setSyncedClassTypes(initialClassTypes);
     setClassTypes(initialClassTypes);
-  }, [initialClassTypes]);
+  }
 
   const [classTypePanelOpen, setClassTypePanelOpen] = useState(false);
   const [classTypeImportPanelOpen, setClassTypeImportPanelOpen] = useState(false);
@@ -293,9 +383,11 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
 
   // Sync local state when the server re-sends initialAddons after router.refresh() —
   // same reasoning as the classTypes sync above.
-  useEffect(() => {
+  const [syncedAddons, setSyncedAddons] = useState(initialAddons);
+  if (syncedAddons !== initialAddons) {
+    setSyncedAddons(initialAddons);
     setAddons(initialAddons);
-  }, [initialAddons]);
+  }
 
   const [addonPanelOpen, setAddonPanelOpen] = useState(false);
   const [editingAddon, setEditingAddon] = useState<Addon | null>(null);
@@ -314,7 +406,12 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   const draftValueRef = useRef<HTMLInputElement>(null);
 
   // ── Zoho ───────────────────────────────────────────────────────────────────
-  const [zohoConnected, setZohoConnected] = useState(initialZohoConnected);
+  // Seeded from the server prop, except that a successful OAuth redirect lands
+  // before that prop reflects the new link — so ?zoho=connected wins on the
+  // first render. Kept in state because disconnecting flips it back locally.
+  const [zohoConnected, setZohoConnected] = useState(
+    initialZohoConnected || zohoParam === "connected"
+  );
   const [disconnectingZoho, setDisconnectingZoho] = useState(false);
 
   // ── Social feed refresh ───────────────────────────────────────────────────
@@ -347,34 +444,6 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       showToast("error", "Failed to refresh social feed.");
     } finally {
       setRefreshingFeed(false);
-    }
-  }
-
-  // ── Toast ──────────────────────────────────────────────────────────────────
-  const [toast, setToast] = useState<Toast | null>(null);
-
-  // Show Zoho OAuth result banner on mount if ?zoho= param present
-  useEffect(() => {
-    if (zohoParam === "connected") {
-      showToast("success", "Zoho Mail connected successfully.");
-      setZohoConnected(true);
-      // Clean the query param from the URL without a navigation
-      window.history.replaceState({}, "", "/admin/settings");
-    } else if (zohoParam === "error") {
-      showToast("error", "Zoho connection failed. Please try again.");
-      window.history.replaceState({}, "", "/admin/settings");
-    }
-  }, [zohoParam]);
-
-  /**
-   * Shows a toast notification. Success auto-dismisses after 4 seconds.
-   * @param type - "success" or "error"
-   * @param message - The message text.
-   */
-  function showToast(type: "success" | "error", message: string) {
-    setToast({ type, message });
-    if (type === "success") {
-      setTimeout(() => setToast(null), 4000);
     }
   }
 
