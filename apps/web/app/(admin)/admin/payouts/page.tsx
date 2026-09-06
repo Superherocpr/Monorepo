@@ -1,5 +1,5 @@
 /**
- * Admin Payouts page — /admin/payouts
+ * Admin Payouts page: /admin/payouts
  * Access: super_admin only.
  *
  * Operational view of instructor payouts: what is owed and to whom, what the
@@ -20,7 +20,7 @@ export const metadata = { title: "Instructor Payouts | SuperHeroCPR Admin" };
 
 /** Server component for the super-admin payout dashboard. */
 export default async function PayoutsPage() {
-  // Auth guard — super_admin only, honors view-as (archived/deactivated
+  // Auth guard: super_admin only, honors view-as (archived/deactivated
   // handled inside getAdminActor).
   const actor = await getAdminActor();
   if (!actor || actor.effectiveRole !== "super_admin") redirect("/admin");

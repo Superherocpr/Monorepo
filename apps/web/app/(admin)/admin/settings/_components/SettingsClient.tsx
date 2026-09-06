@@ -35,7 +35,7 @@ const NAV_PAGES: NavPage[] = ["classes", "schedule", "merch", "blog", "about", "
 // The theme preference lives in localStorage, which is external mutable state,
 // so it is read through useSyncExternalStore rather than copied into React state
 // from an effect. Writes go through setStoredTheme so subscribers in this tab
-// are notified too — the browser's own `storage` event only fires for changes
+// are notified too: the browser's own `storage` event only fires for changes
 // made in other tabs.
 
 /** Callbacks React registered to hear about theme changes. */
@@ -77,20 +77,20 @@ function setStoredTheme(isDark: boolean): void {
 
 interface SettingsClientProps {
   classTypes: ClassType[];
-  /** All active cert types — used to populate the linked cert dropdown in ClassTypePanel. */
+  /** All active cert types: used to populate the linked cert dropdown in ClassTypePanel. */
   certTypeOptions: CertTypeOption[];
-  /** The full add-on catalog — used by the Add-ons section and the ClassTypePanel eligibility checklist. */
+  /** The full add-on catalog: used by the Add-ons section and the ClassTypePanel eligibility checklist. */
   addons: Addon[];
   presetGrades: PresetGrade[];
   zohoConnected: boolean;
   zohoEmail: string | null;
-  /** Value of the ?zoho= query param — "connected" | "error" | null */
+  /** Value of the ?zoho= query param: "connected" | "error" | null */
   zohoParam: string | null;
   /** Initial value of the legacy_site_enabled system_settings flag. */
   legacySiteEnabled: boolean;
-  /** Whether the current user is a super_admin — gates the Legacy Site section. */
+  /** Whether the current user is a super_admin: gates the Legacy Site section. */
   isSuperAdmin: boolean;
-  /** Initial nav visibility flags — which public nav pages are currently enabled. */
+  /** Initial nav visibility flags: which public nav pages are currently enabled. */
   initialNavVisibility: Record<NavPage, boolean>;
   /**
    * Optional fully-rendered Enrollware Bookmarklet block. When provided, the
@@ -125,7 +125,7 @@ type SettingsTabId =
   | "enrollware"
   | "payouts";
 
-/** Tab nav definition — label + id pairs in display order. */
+/** Tab nav definition: label + id pairs in display order. */
 interface TabDef {
   id: SettingsTabId;
   label: string;
@@ -187,7 +187,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   //
   // A Zoho OAuth redirect lands with ?zoho=connected|error, and the resulting
   // banner is seeded straight into the initial state instead of being pushed in
-  // from an effect on mount — so it is on screen for the first painted frame.
+  // from an effect on mount: so it is on screen for the first painted frame.
   const [toast, setToast] = useState<Toast | null>(() => {
     if (zohoParam === "connected") {
       return { type: "success", message: "Zoho Mail connected successfully." };
@@ -224,7 +224,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
   // We render every section all the time (just hide inactive ones with CSS) so
-  // that in-progress edits — drafted grades, dirty toggles, etc. — survive a
+  // that in-progress edits: drafted grades, dirty toggles, etc.: survive a
   // tab switch.
   const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
 
@@ -252,7 +252,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   );
 
   // Push the preference out to the document. This is an external-system sync,
-  // which is what effects are for — the value itself is read from the store
+  // which is what effects are for: the value itself is read from the store
   // above rather than mirrored into state here.
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -363,7 +363,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   const [classTypes, setClassTypes] = useState<ClassType[]>(initialClassTypes);
 
   // Sync local state when the server re-sends initialClassTypes after router.refresh().
-  // useState does not reinitialize on prop changes — the component stays mounted across
+  // useState does not reinitialize on prop changes: the component stays mounted across
   // router.refresh() calls in Next.js App Router, so edits (price, name, etc.) would
   // otherwise remain stale in the list until a hard reload. Adjusted during render
   // so the refreshed list is on screen for the first painted frame.
@@ -381,7 +381,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   // ── Add-ons ────────────────────────────────────────────────────────────────
   const [addons, setAddons] = useState<Addon[]>(initialAddons);
 
-  // Sync local state when the server re-sends initialAddons after router.refresh() —
+  // Sync local state when the server re-sends initialAddons after router.refresh():
   // same reasoning as the classTypes sync above.
   const [syncedAddons, setSyncedAddons] = useState(initialAddons);
   if (syncedAddons !== initialAddons) {
@@ -407,7 +407,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
 
   // ── Zoho ───────────────────────────────────────────────────────────────────
   // Seeded from the server prop, except that a successful OAuth redirect lands
-  // before that prop reflects the new link — so ?zoho=connected wins on the
+  // before that prop reflects the new link: so ?zoho=connected wins on the
   // first render. Kept in state because disconnecting flips it back locally.
   const [zohoConnected, setZohoConnected] = useState(
     initialZohoConnected || zohoParam === "connected"
@@ -437,7 +437,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       showToast(
         "success",
         json.upserted
-          ? `Social feed updated — ${json.upserted} post${json.upserted !== 1 ? "s" : ""} cached.`
+          ? `Social feed updated: ${json.upserted} post${json.upserted !== 1 ? "s" : ""} cached.`
           : "No new photo posts found on the Facebook page."
       );
     } catch {
@@ -630,7 +630,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       showToast("error", "Label is required.");
       return;
     }
-    // Duplicate value check — exclude the row being edited
+    // Duplicate value check: exclude the row being edited
     const duplicate = grades.find(
       (g) => g.id !== id && g.value === parsedValue
     );
@@ -784,7 +784,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </p>
       </div>
 
-      {/* Tab navigation — horizontally scrollable on narrow viewports so all
+      {/* Tab navigation: horizontally scrollable on narrow viewports so all
           tabs stay reachable on mobile without wrapping. */}
       <div
         role="tablist"
@@ -813,7 +813,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         })}
       </div>
 
-      {/* ── Section: Legacy Site — super_admin only ──────────────────────── */}
+      {/* ── Section: Legacy Site: super_admin only ──────────────────────── */}
       {isSuperAdmin && <section aria-labelledby="section-legacy-site" className={tabClass("general")}>
         <h2
           id="section-legacy-site"
@@ -832,7 +832,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                 When disabled, the modern site is shown.
               </p>
             </div>
-            {/* Toggle switch — role="switch" with aria-checked for accessibility */}
+            {/* Toggle switch: role="switch" with aria-checked for accessibility */}
             <button
               role="switch"
               aria-checked={legacySiteEnabled}
@@ -871,7 +871,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                 Applies to this device only. Your preference is saved locally.
               </p>
             </div>
-            {/* Toggle switch — role="switch" with aria-checked for accessibility */}
+            {/* Toggle switch: role="switch" with aria-checked for accessibility */}
             <button
               role="switch"
               aria-checked={isDark}
@@ -909,7 +909,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                 Admin Feature Reference
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                A complete guide to every page in the admin panel — what it does and who can access it.
+                A complete guide to every page in the admin panel: what it does and who can access it.
               </p>
             </div>
             <span className="text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors ml-4 text-lg leading-none">
@@ -962,7 +962,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
             ))}
           </div>
           <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-            Toggling a page off hides it from the nav bar and makes it inaccessible to site visitors — even via direct URL. Home is always on.
+            Toggling a page off hides it from the nav bar and makes it inaccessible to site visitors, even via direct URL. Home is always on.
           </p>
         </section>
       )}
@@ -1602,7 +1602,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </section>
       )}
 
-      {/* ── Section 8: Payouts (optional slot — super_admin only) ─────────── */}
+      {/* ── Section 8: Payouts (optional slot: super_admin only) ─────────── */}
       {payoutsSlot && (
         <section className={tabClass("payouts")}>
           {payoutsSlot}

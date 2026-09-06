@@ -5,7 +5,7 @@
  * Inline form for an instructor to edit their own about-page bio.
  * Uploads headshot to /api/profile/upload-photo, then saves
  * bio_photo, bio_description, and bio_credentials via PATCH /api/profile/bio.
- * bio_published is intentionally absent — admins control publishing via the Staff page.
+ * bio_published is intentionally absent: admins control publishing via the Staff page.
  * Used by: InstructorSettingsClient (About Page tab)
  */
 
@@ -65,7 +65,7 @@ const BioSettingsSection: React.FC<BioSettingsSectionProps> = ({
   const [savedPhotoUrl, setSavedPhotoUrl] = useState<string | null>(initialPhoto);
   // A newly selected file that hasn't been uploaded yet
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  // Object URL for the selected file — used for instant local preview before upload
+  // Object URL for the selected file: used for instant local preview before upload
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -184,7 +184,7 @@ const BioSettingsSection: React.FC<BioSettingsSectionProps> = ({
               fill
               className="object-cover"
               sizes="128px"
-              // Bypass Next.js optimization — blob: preview URLs and any S3 URL
+              // Bypass Next.js optimization: blob: preview URLs and any S3 URL
               // must work without remotePatterns restrictions.
               unoptimized
             />
@@ -236,7 +236,7 @@ const BioSettingsSection: React.FC<BioSettingsSectionProps> = ({
 
         {pendingFile && (
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            New photo selected: {pendingFile.name} — will upload when you save.
+            New photo selected: {pendingFile.name}. Will upload when you save.
           </p>
         )}
         {fileError && (

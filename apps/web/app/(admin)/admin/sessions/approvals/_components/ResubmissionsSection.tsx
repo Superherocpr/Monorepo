@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ResubmissionsSection — Approvals queue section for previously-rejected sessions.
+ * ResubmissionsSection: Approvals queue section for previously-rejected sessions.
  * Manages inline approve/reject state for each card and bulk-approve for the whole section.
  * Shows an amber advisory banner reminding managers to review carefully.
  * Used by: ApprovalsPage (approvals/page.tsx)

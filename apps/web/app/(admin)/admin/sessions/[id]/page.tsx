@@ -1,5 +1,5 @@
 /**
- * Admin session detail page — /admin/sessions/[id]
+ * Admin session detail page: /admin/sessions/[id]
  * Server component: fetches full session data, validates access, passes to SessionDetailClient.
  * Instructors can only view their own sessions. Managers and super admins see all.
  * Auth guard is provided by app/(admin)/layout.tsx.
@@ -55,7 +55,7 @@ function normalizeTeamBooking(raw: unknown): SessionDetailData["team_booking"] {
 export default async function SessionDetailPage({ params }: PageProps) {
   const { id } = await params;
 
-  // Auth guard — honors view-as: the instructor ownership check below applies
+  // Auth guard: honors view-as: the instructor ownership check below applies
   // to a downgraded super admin too.
   const actor = await getAdminActor();
   if (!actor) redirect(`/signin?redirect=/admin/sessions/${id}`);
@@ -110,7 +110,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
     .eq("id", id)
     .single();
 
-  // Session not found — send back to list
+  // Session not found: send back to list
   if (!raw) redirect("/admin/sessions");
 
   // Instructors may only view their own sessions, EXCEPT open opportunities:
@@ -147,7 +147,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
       .map((a) => ({ id: a.id, name: a.name, price: Number(a.price) }));
     sessionAddonIds = ((sessionAddonRows ?? []) as { addon_id: string }[]).map((r) => r.addon_id);
   } catch {
-    // Suppress — defaults above are safe
+    // Suppress: defaults above are safe
   }
 
   // Cast the raw Supabase response into the typed shape expected by the client component

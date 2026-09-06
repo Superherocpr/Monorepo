@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * LocationsClient — client component for the admin locations management page.
+ * LocationsClient: client component for the admin locations management page.
  * Handles the add panel, inline edit mode per card, home base toggle, and
  * inline delete confirmation. Used by: app/(admin)/admin/locations/page.tsx
  */
@@ -36,11 +36,11 @@ export interface LocationWithCount {
 
 interface LocationsClientProps {
   initialLocations: LocationWithCount[];
-  /** The viewing user's role — controls delete button visibility. */
+  /** The viewing user's role: controls delete button visibility. */
   userRole?: string;
 }
 
-/** Two years in milliseconds — threshold for flagging a location as unused. */
+/** Two years in milliseconds: threshold for flagging a location as unused. */
 const TWO_YEARS_MS = 2 * 365.25 * 24 * 60 * 60 * 1000;
 
 /**
@@ -48,7 +48,7 @@ const TWO_YEARS_MS = 2 * 365.25 * 24 * 60 * 60 * 1000;
  * than two years old.
  *
  * `now` is passed in rather than read from `Date.now()` here so the check stays
- * pure — calling `Date.now()` during render returns a new value each pass, which
+ * pure: calling `Date.now()` during render returns a new value each pass, which
  * defeats memoization and trips the react-hooks/purity rule. The caller captures
  * a single timestamp at mount; a location cannot cross the two-year boundary
  * while someone is looking at the page.
@@ -132,7 +132,7 @@ export default function LocationsClient({
           setSearchResults({ query: trimmedQuery, locations: json.locations });
         }
       } catch {
-        // Silent fail — the spinner stays up rather than showing stale hits
+        // Silent fail: the spinner stays up rather than showing stale hits
       }
     }, 300);
 
@@ -171,7 +171,7 @@ export default function LocationsClient({
   const [editSearchLoading, setEditSearchLoading] = useState(false);
   const [editSearchError, setEditSearchError] = useState<string | null>(null);
   const [editShowSuggestions, setEditShowSuggestions] = useState(false);
-  /** Ref for the search container — used to close dropdown on outside click. */
+  /** Ref for the search container: used to close dropdown on outside click. */
   const editSearchRef = useRef<HTMLDivElement>(null);
 
   // Close the suggestions dropdown when the user clicks outside the search box.
@@ -267,7 +267,7 @@ export default function LocationsClient({
         }));
       }
     } catch {
-      // Silent fail — form fields remain editable so the user can correct manually.
+      // Silent fail: form fields remain editable so the user can correct manually.
     } finally {
       setEditSearchLoading(false);
     }
@@ -287,7 +287,7 @@ export default function LocationsClient({
   /**
    * Called by LocationImportPanel after a successful CSV import.
    * Reloads the top-10 list from the server so newly imported locations appear.
-   * @param _count - Number of locations created (unused here — we just refetch).
+   * @param _count - Number of locations created (unused here: we just refetch).
    */
   async function handleImported(_count: number) {
     setShowImportPanel(false);
@@ -562,7 +562,7 @@ export default function LocationsClient({
         </p>
       ) : showUnused && displayedLocations.length === 0 ? (
         <p className="text-sm text-gray-500">
-          No unused locations found — all locations have been used within the last 2 years.
+          No unused locations found. All locations have been used within the last 2 years.
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -585,7 +585,7 @@ export default function LocationsClient({
                       Edit Location
                     </p>
 
-                    {/* Address autocomplete search — same behaviour as Add Location panel */}
+                    {/* Address autocomplete search: same behaviour as Add Location panel */}
                     <div ref={editSearchRef} className="relative mb-3">
                       <label
                         htmlFor={`edit-search-${loc.id}`}

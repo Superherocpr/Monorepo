@@ -1,5 +1,5 @@
 /**
- * Admin sessions list page — /admin/sessions
+ * Admin sessions list page: /admin/sessions
  * Shows all class sessions grouped by month.
  * Instructors see only their own sessions. Managers and super admins see all.
  * Data is fetched server-side; filtering is handled by SessionsClient.
@@ -26,7 +26,7 @@ export interface SessionWithMeta {
   spotsRemaining: number;
   class_types: { id: string; name: string } | null;
   locations: { name: string } | null;
-  /** Instructor profile — populated for manager/super admin views. */
+  /** Instructor profile: populated for manager/super admin views. */
   instructor: { id: string; first_name: string; last_name: string } | null;
 }
 
@@ -39,7 +39,7 @@ export interface InstructorOption {
 
 /** Fetches data and renders the sessions list via SessionsClient. */
 export default async function SessionsPage() {
-  // Auth guard — honors view-as: a downgraded super admin gets instructor
+  // Auth guard: honors view-as: a downgraded super admin gets instructor
   // scoping ("their own" sessions, i.e. sessions assigned to them).
   const actor = await getAdminActor();
   if (!actor) redirect("/signin?redirect=/admin/sessions");
@@ -50,7 +50,7 @@ export default async function SessionsPage() {
 
   const admin = await createAdminClient();
 
-  // Build the sessions query — instructors only see their own sessions
+  // Build the sessions query: instructors only see their own sessions
   let query = admin
     .from("class_sessions")
     .select(
@@ -95,7 +95,7 @@ export default async function SessionsPage() {
     };
   });
 
-  // Fetch instructor list for filter dropdown — manager/super admin only
+  // Fetch instructor list for filter dropdown: manager/super admin only
   let instructors: InstructorOption[] = [];
   if (!isInstructor) {
     const { data: rawInstructors } = await admin

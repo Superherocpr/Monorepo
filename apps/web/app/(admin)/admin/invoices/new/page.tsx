@@ -19,7 +19,7 @@ import CreateInvoiceClient, {
   type InstructorOption,
 } from "../../../_components/CreateInvoiceClient";
 
-/** Page props — Next.js 15+ provides both params and searchParams as Promises. */
+/** Page props: Next.js 15+ provides both params and searchParams as Promises. */
 interface PageProps {
   searchParams: Promise<{ session?: string; instructor?: string }>;
 }
@@ -35,7 +35,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
   // Super admin arrives with ?instructor=[id] after choosing from the instructor selector.
   const preSelectedInstructorId = resolvedParams.instructor ?? null;
 
-  // Auth guard — honors view-as; the wizard variant follows the effective role.
+  // Auth guard: honors view-as; the wizard variant follows the effective role.
   const actor = await getAdminActor();
   if (!actor) redirect("/signin?redirect=/admin/invoices/new");
 
@@ -48,7 +48,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
 
   const admin = await createAdminClient();
 
-  // paypal_payout_email isn't part of the shared actor profile — fetch it here.
+  // paypal_payout_email isn't part of the shared actor profile: fetch it here.
   const { data: profile } = await admin
     .from("profiles")
     .select("id, paypal_payout_email")
@@ -58,7 +58,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
   if (!profile) redirect("/");
 
   // ---------------------------------------------------------------------------
-  // Super admin without instructor context — show instructor selector first.
+  // Super admin without instructor context: show instructor selector first.
   // Clicking an instructor navigates to ?instructor=[id], reloading with their sessions.
   // ---------------------------------------------------------------------------
   if (role === "super_admin" && !preSelectedSessionId && !preSelectedInstructorId) {
@@ -82,7 +82,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
   }
 
   // ---------------------------------------------------------------------------
-  // Resolve instructorId — path differs by role and entry-point context.
+  // Resolve instructorId: path differs by role and entry-point context.
   // ---------------------------------------------------------------------------
 
   let instructorId: string;
@@ -141,7 +141,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
   }
 
   // Fetch all approved sessions for this instructor (past and future).
-  // Invoicing is not restricted to upcoming classes — instructors may invoice
+  // Invoicing is not restricted to upcoming classes: instructors may invoice
   // after a class has already taken place, or on the day of the class.
   const { data: rawSessions } = await admin
     .from("class_sessions")
@@ -157,7 +157,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
     .order("starts_at", { ascending: false });
 
   // Compute spots remaining for each session.
-  // Active bookings AND pending/sent invoice student counts both consume capacity —
+  // Active bookings AND pending/sent invoice student counts both consume capacity:
   // an unpaid invoice still reserves spots to prevent overbooking.
   const sessions: SessionOption[] = (rawSessions ?? []).map((s) => {
     const bookings = Array.isArray(s.bookings) ? s.bookings : [];

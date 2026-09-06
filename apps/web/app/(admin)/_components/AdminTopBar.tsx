@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * AdminTopBar — top navigation bar for the admin area.
+ * AdminTopBar: top navigation bar for the admin area.
  * Shows the current user's name, role badge, a "View as" switcher for real
  * super admins, and a sign-out button. The badge reflects the EFFECTIVE role
  * (with a "viewing" marker while view-as is active).

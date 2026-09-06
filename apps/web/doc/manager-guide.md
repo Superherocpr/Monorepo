@@ -10,7 +10,7 @@ Managers access the admin area by signing in at `/signin`. You'll land at `/admi
 
 1. [Your Dashboard](#1-your-dashboard)
 2. [Sessions — Viewing All Classes](#2-sessions--viewing-all-classes)
-3. [Approving and Rejecting Sessions](#3-approving-and-rejecting-sessions)
+3. [Instructor Requests — Session Approvals](#3-instructor-requests--session-approvals)
 4. [Session Detail — Full Access](#4-session-detail--full-access)
 5. [Importing a Roster](#5-importing-a-roster)
 6. [Invoices — Full Management](#6-invoices--full-management)
@@ -59,11 +59,11 @@ This page shows all class sessions across every instructor, organized by month a
 
 ---
 
-## 3. Approving and Rejecting Sessions (`/admin/sessions/approvals`)
+## 3. Instructor Requests — Session Approvals (`/admin/sessions/approvals`)
 
 Instructors cannot make their sessions visible to the public until a manager or super admin approves them. This page is your review queue.
 
-### The Approvals Queue
+### The Instructor Requests Queue
 
 Sessions are split into two groups:
 1. **Resubmissions** — sessions that were previously rejected and have been resubmitted after corrections. These appear first so they aren't overlooked.

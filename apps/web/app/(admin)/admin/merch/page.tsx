@@ -1,5 +1,5 @@
 /**
- * Admin merch management page — /admin/merch
+ * Admin merch management page: /admin/merch
  * Super admin only. Manages products, variants, stock levels, and image uploads.
  * Data fetched server-side; all mutations handled by MerchAdminClient.
  * Used by: admin sidebar nav for super_admin role only.

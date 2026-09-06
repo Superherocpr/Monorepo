@@ -26,7 +26,7 @@ interface Toast {
 }
 
 interface InstructorSettingsClientProps {
-  /** Rendered BookmarkletSetup slot — passed as an opaque node. */
+  /** Rendered BookmarkletSetup slot: passed as an opaque node. */
   enrollwareSlot: React.ReactNode;
   /** Current saved headshot URL. Null if not yet uploaded. */
   initialPhoto: string | null;
@@ -40,7 +40,7 @@ interface InstructorSettingsClientProps {
   initialLastName: string;
   /** Current saved phone number. Empty string when never set. */
   initialPhone: string;
-  /** Current saved email — also the login address. */
+  /** Current saved email: also the login address. */
   initialEmail: string;
   /** True when this is an owner account, whose email is pinned by configuration. */
   isOwner: boolean;
@@ -138,7 +138,7 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
         })}
       </div>
 
-      {/* Tab panels — all rendered, inactive hidden via CSS so unsaved edits
+      {/* Tab panels: all rendered, inactive hidden via CSS so unsaved edits
           survive switching tabs. */}
       <div
         id="tab-panel-account"

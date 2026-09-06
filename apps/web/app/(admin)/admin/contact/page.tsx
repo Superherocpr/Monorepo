@@ -1,5 +1,5 @@
 /**
- * Admin Contact Submissions page — `/admin/contact`
+ * Admin Contact Submissions page: `/admin/contact`
  * Access: manager and super_admin only.
  * Loads all contact form submissions from the database (with optional filters),
  * checks whether Zoho Mail is connected, then hands off to ContactSubmissionsClient
@@ -16,13 +16,13 @@ import ContactSubmissionsClient, {
   type ContactFilters,
 } from "@/app/(admin)/_components/ContactSubmissionsClient";
 
-/** Valid inquiry_type values — built from the single source of truth in lib/contact-constants. */
+/** Valid inquiry_type values: built from the single source of truth in lib/contact-constants. */
 const VALID_TYPES = new Set<string>(CONTACT_INQUIRY_TYPES);
 
 /** Only accept YYYY-MM-DD date strings to prevent injection via date filter params. */
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Server component — handles auth, Zoho connection check, and filtered data fetch. */
+/** Server component: handles auth, Zoho connection check, and filtered data fetch. */
 export default async function ContactPage({
   searchParams,
 }: {
@@ -66,13 +66,13 @@ export default async function ContactPage({
     .order("replied", { ascending: true })
     .order("created_at", { ascending: false });
 
-  // Apply validated filters — never trust raw input directly into queries
+  // Apply validated filters: never trust raw input directly into queries
   if (params.type && VALID_TYPES.has(params.type)) {
     query = query.eq("inquiry_type", params.type);
   }
   if (params.replied === "true") query = query.eq("replied", true);
   if (params.replied === "false") query = query.eq("replied", false);
-  // Date range — DATE_RE defined at module scope
+  // Date range: DATE_RE defined at module scope
   if (params.from && DATE_RE.test(params.from)) {
     query = query.gte("created_at", params.from);
   }

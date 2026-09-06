@@ -3173,7 +3173,7 @@ export function dailySummaryEmail({
 
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
 
-      <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 12px 0;">Class Requests <span style="font-weight:400;color:#6b7280;">(${classRequests.length})</span></h2>
+      <h2 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 12px 0;">Customer Requests <span style="font-weight:400;color:#6b7280;">(${classRequests.length})</span></h2>
       ${classRequestsSection}
 
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />

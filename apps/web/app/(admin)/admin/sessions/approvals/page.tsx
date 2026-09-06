@@ -2,8 +2,8 @@
  * GET /admin/sessions/approvals
  * Access: Manager and super admin only.
  * Shows all class sessions currently pending approval, split into two prioritized groups:
- *   1. Resubmissions — previously rejected sessions that have been updated (shown first)
- *   2. New Submissions — fresh sessions never previously rejected
+ *   1. Resubmissions: previously rejected sessions that have been updated (shown first)
+ *   2. New Submissions: fresh sessions never previously rejected
  * Cards support inline approve/reject actions. A global Approve All button sits at the
  * bottom of the queue to clear everything in one action.
  */
@@ -42,12 +42,12 @@ export default async function ApprovalsPage() {
       locations ( name, city, state )
     `)
     .eq("approval_status", "pending_approval")
-    // Longest-waiting first; class_sessions has no updated_at column — ordered by created_at
+    // Longest-waiting first; class_sessions has no updated_at column: ordered by created_at
     .order("created_at", { ascending: true });
 
   const sessions = (pendingSessions ?? []) as unknown as PendingSession[];
 
-  // Resubmissions: sessions that were previously rejected — identified by a non-null rejection_reason.
+  // Resubmissions: sessions that were previously rejected: identified by a non-null rejection_reason.
   // A session that was never rejected will not have a rejection_reason set.
   const resubmissions = sessions.filter((s) => s.rejection_reason !== null);
   const newSubmissions = sessions.filter((s) => s.rejection_reason === null);

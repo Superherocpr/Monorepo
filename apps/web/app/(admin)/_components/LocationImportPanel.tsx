@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * LocationImportPanel — slide-out panel for bulk-importing locations from a
+ * LocationImportPanel: slide-out panel for bulk-importing locations from a
  * CSV or XLSX file.
  * Accepts files in the Enrollware export format: ID, Name, Abbreviation, Directions.
  * Only Name is required; all other columns are stored in the notes field.
@@ -262,7 +262,7 @@ export default function LocationImportPanel({
           {rows.length > 0 && !result && (
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">
-                Preview —{" "}
+                Preview:{" "}
                 <span className="text-gray-900">{importableCount}</span> will
                 be imported
                 {skippedCount > 0 && (
@@ -303,10 +303,10 @@ export default function LocationImportPanel({
                           )}
                         </td>
                         <td className="px-3 py-2 text-gray-500">
-                          {row.enrollware_id || "—"}
+                          {row.enrollware_id || "-"}
                         </td>
                         <td className="px-3 py-2 text-gray-500">
-                          {row.abbreviation || "—"}
+                          {row.abbreviation || "-"}
                         </td>
                         <td className="px-3 py-2">
                           {row.skip ? (
@@ -327,7 +327,7 @@ export default function LocationImportPanel({
         {/* Footer */}
         <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-3">
           <p className="text-xs text-gray-400">
-            Address fields will be blank after import — edit each location to
+            Address fields will be blank after import; edit each location to
             add them.
           </p>
           <div className="flex gap-2 shrink-0">

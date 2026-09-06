@@ -16,9 +16,9 @@ interface ClassTypePanelProps {
   open: boolean;
   /** Null when creating a new class type; populated when editing an existing one. */
   classType: ClassType | null;
-  /** All active cert types — used to populate the linked cert type dropdown. */
+  /** All active cert types: used to populate the linked cert type dropdown. */
   certTypeOptions: CertTypeOption[];
-  /** All add-ons in the catalog — used to populate the eligibility checklist. */
+  /** All add-ons in the catalog: used to populate the eligibility checklist. */
   addonOptions: Addon[];
   onClose: () => void;
   /** Called with a success message after a successful save. */
@@ -72,7 +72,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
   // Populate fields when opening in edit mode, or reset when opening for add.
   // Adjusted during render, keyed on which class type the panel is open for, so
   // the fields are right on the first painted frame instead of being written
-  // back on a second pass. Closing only clears the key — the hidden fields are
+  // back on a second pass. Closing only clears the key: the hidden fields are
   // left as they are and get repopulated on the next open.
   const openKey = open ? (classType?.id ?? "new") : null;
   const [syncedOpenKey, setSyncedOpenKey] = useState<string | null>(null);
@@ -421,7 +421,7 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
                   }}
                   className={inputClass}
                 >
-                  <option value="">None — no cert issued for this class</option>
+                  <option value="">None: no cert issued for this class</option>
                   {certTypeOptions.map((ct) => (
                     <option key={ct.id} value={ct.id}>
                       {ct.name}
@@ -461,8 +461,8 @@ const ClassTypePanel: React.FC<ClassTypePanelProps> = ({
                         <span>
                           {a.name}{" "}
                           <span className="text-gray-400">
-                            (${a.price.toFixed(2)})
-                            {!a.active && " — inactive"}
+                            (${a.price.toFixed(2)}
+                            {!a.active && ", inactive"})
                           </span>
                         </span>
                       </label>

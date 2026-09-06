@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * InstructorEarningsPanel — shows an instructor's own earnings and payout history.
+ * InstructorEarningsPanel: shows an instructor's own earnings and payout history.
  * Displays summary stat tiles, an individual earnings breakdown table, and a
  * history of payout batches they were included in.
  * Used by: app/(admin)/admin/profile/payment/page.tsx
@@ -138,7 +138,7 @@ const MONTH_NAMES = [
 function EarningsTable({ earnings }: { earnings: InstructorOwnEarning[] }): React.ReactElement {
   // Tracks WHICH filter the "show all" expansion applies to, rather than a bare
   // boolean plus an effect that resets it. Changing the filter changes the key,
-  // so the list collapses back to the first page automatically — no effect, and
+  // so the list collapses back to the first page automatically: no effect, and
   // no cascading render. (React: you might not need an effect.)
   const [showAllForFilter, setShowAllForFilter] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
@@ -277,7 +277,7 @@ function EarningsTable({ earnings }: { earnings: InstructorOwnEarning[] }): Reac
                             <span className="block font-medium text-gray-800">{earning.label}</span>
                             {earning.sessionDate || earning.detail ? (
                               <span className="block text-xs text-gray-500">
-                                {/* sessionDate is a class time — read verbatim, unlike the
+                                {/* sessionDate is a class time: read verbatim, unlike the
                                     real instants fmtDate handles elsewhere here. */}
                                 {earning.sessionDate
                                   ? formatClassDate(earning.sessionDate, { month: "short", weekday: false })
@@ -366,7 +366,7 @@ function PayoutItemsTable({ items }: { items: InstructorOwnPayoutItem[] }): Reac
               <tr key={item.id} className="hover:bg-gray-50">
                 <td className="whitespace-nowrap px-4 py-3">
                   <span className="block text-sm text-gray-800">
-                    {item.batchCreatedAt ? fmtDate(item.batchCreatedAt) : "—"}
+                    {item.batchCreatedAt ? fmtDate(item.batchCreatedAt) : "-"}
                   </span>
                   {item.paypalPayoutBatchId ? (
                     <span className="mt-0.5 block font-mono text-[10px] text-gray-400">
@@ -378,7 +378,7 @@ function PayoutItemsTable({ items }: { items: InstructorOwnPayoutItem[] }): Reac
                   {formatCurrency(item.amount)}
                 </td>
                 <td className="px-4 py-3 text-right text-xs text-gray-500">
-                  {item.paypalFeeAmount === null ? "—" : formatCurrency(item.paypalFeeAmount)}
+                  {item.paypalFeeAmount === null ? "-" : formatCurrency(item.paypalFeeAmount)}
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -465,8 +465,8 @@ export default function InstructorEarningsPanel({
           <h3 className="text-base font-semibold text-gray-900">Payout history</h3>
           <p className="mt-1 text-xs text-gray-500">
             Each time a payout was sent to your PayPal account.
-            &ldquo;Assumed sent&rdquo; means PayPal accepted it but has not confirmed delivery yet
-            — this resolves automatically within a few hours.
+            &ldquo;Assumed sent&rdquo; means PayPal accepted it but has not confirmed delivery yet;
+            this resolves automatically within a few hours.
           </p>
         </div>
         <PayoutItemsTable items={payoutItems} />

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * InvoicesClient — Filterable invoice list for /admin/invoices.
+ * InvoicesClient: Filterable invoice list for /admin/invoices.
  * Handles client-side filtering by status, type, date range, instructor, and class.
  * Used by: InvoicesPage (admin/invoices/page.tsx)
  */
@@ -42,18 +42,18 @@ export interface InvoiceRow {
     starts_at: string;
     class_types: { name: string } | null;
   } | null;
-  /** Instructor profile — populated for all invoices; shown only for manager/super admin views. */
+  /** Instructor profile: populated for all invoices; shown only for manager/super admin views. */
   profiles: { id: string; first_name: string; last_name: string } | null;
   /**
    * Team bookings pointing at this invoice. Non-empty means this is a corporate
-   * flat-rate invoice rather than an ordinary group one — they look identical
+   * flat-rate invoice rather than an ordinary group one: they look identical
    * otherwise, so the list tags them.
    */
   team_bookings: { id: string }[] | null;
 }
 
 /**
- * A company-paid team booking whose invoice was never raised — money the
+ * A company-paid team booking whose invoice was never raised: money the
  * business agreed to bill and has not.
  *
  * These have no `invoices` row at all, so they cannot appear in the table below.
@@ -140,7 +140,7 @@ export default function InvoicesClient({
       if (filterType !== "all" && inv.invoice_type !== filterType) return false;
       if (filterInstructor !== "all") {
         // Filter by instructor profile ID. The option value is the instructor's
-        // UUID, and profiles now includes id — this is exact and collision-proof.
+        // UUID, and profiles now includes id: this is exact and collision-proof.
         if (inv.profiles?.id !== filterInstructor) return false;
       }
       if (filterClass !== "all" && inv.class_sessions?.id !== filterClass) return false;
@@ -188,7 +188,7 @@ export default function InvoicesClient({
         {/* ── Company team bookings that were never invoiced ──────────────────
             These have no invoices row, so they cannot appear in the list below.
             They sit above it because this is where someone chasing unbilled
-            money looks. Manager+ only — the retry is manager-gated. */}
+            money looks. Manager+ only: the retry is manager-gated. */}
         {uninvoicedTeamBookings.length > 0 && (
           <div className="bg-white border-2 border-red-300 rounded-lg overflow-hidden">
             <div className="flex items-start gap-3 bg-red-50 px-5 py-4 border-b border-red-200">
@@ -197,14 +197,14 @@ export default function InvoicesClient({
                 <h2 className="text-sm font-semibold text-red-900">
                   {uninvoicedTeamBookings.length} team booking
                   {uninvoicedTeamBookings.length === 1 ? "" : "s"} awaiting an invoice
-                  {" — "}
+                  {": "}
                   {formatCurrency(
                     uninvoicedTeamBookings.reduce((sum, b) => sum + b.totalPrice, 0)
                   )}
                 </h2>
                 <p className="text-xs text-red-800/80 mt-0.5">
                   Each company was told their class is booked but has never been asked to pay.
-                  Raising an invoice is safe — it re-checks first and will not bill twice.
+                  Raising an invoice is safe; it re-checks first and will not bill twice.
                 </p>
               </div>
             </div>
@@ -298,7 +298,7 @@ export default function InvoicesClient({
               />
             </div>
 
-            {/* Instructor — manager/super admin only */}
+            {/* Instructor: manager/super admin only */}
             {isManager && instructors.length > 0 && (
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-gray-500">Instructor</label>
@@ -354,7 +354,7 @@ export default function InvoicesClient({
 
         {/* Invoice list or empty state */}
         {isEmpty ? (
-          /* Global empty state — no invoices at all */
+          /* Global empty state: no invoices at all */
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <FileText className="text-gray-300 mb-4" size={48} />
             <p className="text-gray-500 mb-4">No invoices found.</p>
@@ -368,7 +368,7 @@ export default function InvoicesClient({
             )}
           </div>
         ) : filtered.length === 0 ? (
-          /* Filtered empty state — invoices exist but none match current filters */
+          /* Filtered empty state: invoices exist but none match current filters */
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <FileText className="text-gray-300 mb-4" size={48} />
             <p className="text-gray-500">No invoices match the current filters.</p>
@@ -390,7 +390,7 @@ export default function InvoicesClient({
                   key={inv.id}
                   className="bg-white border border-gray-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
                 >
-                  {/* Left — main info */}
+                  {/* Left: main info */}
                   <div className="flex flex-col gap-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-sm font-semibold text-gray-700">
@@ -408,7 +408,7 @@ export default function InvoicesClient({
                           Custom price
                         </span>
                       )}
-                      {/* Corporate flat-rate invoice — otherwise indistinguishable
+                      {/* Corporate flat-rate invoice: otherwise indistinguishable
                           from an ordinary group invoice in this list. */}
                       {(inv.team_bookings?.length ?? 0) > 0 && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
@@ -429,7 +429,7 @@ export default function InvoicesClient({
                       {sessionName} · {sessionDate}
                     </p>
 
-                    {/* Instructor — manager/super admin only */}
+                    {/* Instructor: manager/super admin only */}
                     {isManager && instructorName && (
                       <p className="text-sm text-gray-400">
                         Instructor: {instructorName}
@@ -463,7 +463,7 @@ export default function InvoicesClient({
                     </div>
                   </div>
 
-                  {/* Right — action */}
+                  {/* Right: action */}
                   <div className="shrink-0">
                     <Link
                       href={`/admin/invoices/${inv.id}`}

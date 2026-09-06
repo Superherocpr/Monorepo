@@ -5,7 +5,7 @@
  * Slide-in panel from the right for inviting new staff members.
  * Sends a POST to /api/staff/invite which creates the Supabase auth account,
  * inserts the profile with the assigned role, and emails a password setup link.
- * Super Admin is excluded from the role dropdown — must be promoted manually after creation.
+ * Super Admin is excluded from the role dropdown: must be promoted manually after creation.
  * Used by: StaffManagement
  */
 
@@ -144,7 +144,7 @@ const InvitePanel: React.FC<InvitePanelProps> = ({
 
   return (
     <>
-      {/* Overlay — click to close */}
+      {/* Overlay: click to close */}
       <div
         className="fixed inset-0 bg-black/50 z-40"
         onClick={onClose}
@@ -223,7 +223,7 @@ const InvitePanel: React.FC<InvitePanelProps> = ({
               />
             </div>
 
-            {/* Phone — required. An instructor's number is printed in the
+            {/* Phone: required. An instructor's number is printed in the
                 customer's booking confirmation email, so it cannot be blank. */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">
@@ -243,13 +243,13 @@ const InvitePanel: React.FC<InvitePanelProps> = ({
               </p>
             </div>
 
-            {/* Role — Super Admin intentionally excluded */}
+            {/* Role: Super Admin intentionally excluded */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">
                 Role <span className="text-red-600">*</span>
               </label>
               {/*
-               * Super Admin is not available here — staff can only be promoted to
+               * Super Admin is not available here: staff can only be promoted to
                * Super Admin manually after their account is created.
                */}
               <select

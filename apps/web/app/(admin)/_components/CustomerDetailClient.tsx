@@ -1,10 +1,10 @@
 /**
- * CustomerDetailClient — client component for the admin customer detail page.
+ * CustomerDetailClient: client component for the admin customer detail page.
  * Used by: app/(admin)/admin/customers/[id]/page.tsx
  *
  * Renders the full customer view: profile header, inline editable fields,
  * and five tabs (Bookings, Certifications, Orders, Payments, Notes).
- * All data is pre-loaded — tabs switch instantly with no additional fetches.
+ * All data is pre-loaded: tabs switch instantly with no additional fetches.
  * Mutations call API routes then router.refresh() to reload server data.
  */
 "use client";
@@ -39,7 +39,7 @@ interface CustomerProfile {
   role: UserRole;
   archived: boolean;
   created_at: string;
-  /** Internal admin notes — never visible to the customer. */
+  /** Internal admin notes: never visible to the customer. */
   customer_notes: string | null;
 }
 
@@ -258,7 +258,7 @@ const labelClass = "mb-1 block text-sm font-medium text-gray-700";
 // DOM nodes and drop keyboard focus after each keystroke.
 
 interface EditableFieldProps {
-  /** HTML id / field key — used for the label's htmlFor and input id. */
+  /** HTML id / field key: used for the label's htmlFor and input id. */
   field: string;
   label: string;
   type?: string;
@@ -307,7 +307,7 @@ function EditableField({
 
 /**
  * Slide-in panel overlay with a dark backdrop and close button.
- * Purely presentational — no state from the parent is closed over.
+ * Purely presentational: no state from the parent is closed over.
  */
 function SlidePanel({
   title,
@@ -464,7 +464,7 @@ export default function CustomerDetailClient({
    * Saves the email address explicitly when the user clicks "Update Email".
    * A separate flow from other fields to prevent an accidental blur from
    * triggering a write. Updates both profiles.email and auth.users.email
-   * immediately — no confirmation email is sent (admin action).
+   * immediately: no confirmation email is sent (admin action).
    */
   async function handleSaveEmail() {
     const trimmed = emailDraft.trim();
@@ -497,7 +497,7 @@ export default function CustomerDetailClient({
   async function handleFieldBlur(field: string, value: string) {
     const original =
       profileValues[field as keyof typeof profileValues] ?? "";
-    if (value === original) return; // No change — skip the request
+    if (value === original) return; // No change: skip the request
 
     setFieldSaving(field);
     try {
@@ -738,7 +738,7 @@ export default function CustomerDetailClient({
 
   // ── Tab content renderers ─────────────────────────────────────────────────────
 
-  /** Renders the Bookings tab — upcoming, past, and cancelled sections. */
+  /** Renders the Bookings tab: upcoming, past, and cancelled sections. */
   function renderBookingsTab() {
     return (
       <div role="tabpanel" id="tab-bookings" aria-labelledby="tab-btn-bookings">
@@ -775,7 +775,7 @@ export default function CustomerDetailClient({
                         {b.class_sessions.class_types.name}
                       </p>
                       <p className="text-sm text-gray-500">
-                        {/* Class times — the shared helpers read the stored wall clock
+                        {/* Class times: the shared helpers read the stored wall clock
                             verbatim; fmtDate/fmtTime are for real instants. */}
                         {formatClassDate(b.class_sessions.starts_at, { month: "short", weekday: false })} ·{" "}
                         {formatClassTimeRange(
@@ -900,7 +900,7 @@ export default function CustomerDetailClient({
           </ul>
         )}
 
-        {/* Cancelled bookings — collapsible */}
+        {/* Cancelled bookings: collapsible */}
         {cancelledBookings.length > 0 && (
           <div>
             <button
@@ -1191,7 +1191,7 @@ export default function CustomerDetailClient({
     );
   }
 
-  /** Renders the Notes tab — staff-only internal notes with auto-save on blur. */
+  /** Renders the Notes tab: staff-only internal notes with auto-save on blur. */
   function renderNotesTab() {
     return (
       <div role="tabpanel" id="tab-notes" aria-labelledby="tab-btn-notes">
@@ -1261,7 +1261,7 @@ export default function CustomerDetailClient({
           </div>
         </div>
 
-        {/* Archive button — super admin only, only if not already archived */}
+        {/* Archive button: super admin only, only if not already archived */}
         {isSuperAdmin && !initialProfile.archived && !showArchiveConfirm && (
           <button
             onClick={() => setShowArchiveConfirm(true)}
@@ -1321,7 +1321,7 @@ export default function CustomerDetailClient({
             onBlur={(v) => handleFieldBlur("last_name", v)}
           />
 
-          {/* Email — explicit save button to prevent accidental confirmation emails */}
+          {/* Email: explicit save button to prevent accidental confirmation emails */}
           <div className="sm:col-span-2">
             <label htmlFor="email" className={labelClass}>
               Email

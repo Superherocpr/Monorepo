@@ -1,10 +1,10 @@
 /**
- * PaymentsClient — client component for the admin payments page.
+ * PaymentsClient: client component for the admin payments page.
  * Used by: app/(admin)/admin/payments/page.tsx
  *
  * Owns filter state (navigates to new URL on change), the Log Payment
  * slide-in panel, and success toast. The payment list itself is server-
- * rendered — every filter change triggers a full server fetch.
+ * rendered: every filter change triggers a full server fetch.
  */
 "use client";
 
@@ -457,7 +457,7 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
             Cash &amp; Check - This Month
           </p>
         </div>
-        {/* Failed attempts — a count, not a total. These never settled, so a
+        {/* Failed attempts: a count, not a total. These never settled, so a
             dollar figure would misread as lost revenue. Links into the
             already-existing status=failed filter. */}
         <Link
@@ -610,7 +610,7 @@ export default function PaymentsClient({ data }: { data: PaymentsPageData }) {
           </div>
         </div>
 
-        {/* Status pill buttons — always fully visible */}
+        {/* Status pill buttons: always fully visible */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-gray-700">Status:</span>
           {(

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * RaiseTeamInvoiceButton — recovers a company team booking whose invoice was
+ * RaiseTeamInvoiceButton: recovers a company team booking whose invoice was
  * never raised.
  *
  * Company-paid team bookings are invoiced automatically at creation, but that
@@ -9,11 +9,11 @@
  * outage. When it fails, `team_bookings.invoice_id` stays null and the company
  * is never asked to pay. This is the operator's way back from that.
  *
- * Shared deliberately — it appears both on the team booking card of a session
+ * Shared deliberately: it appears both on the team booking card of a session
  * (in context, on the class it belongs to) and on the Invoices page (where
  * someone chasing unbilled money will look). Both hit the same endpoint, which
- * re-reads the booking before doing anything, so pressing it twice — or racing
- * the nightly sweep — cannot bill a company twice.
+ * re-reads the booking before doing anything, so pressing it twice: or racing
+ * the nightly sweep: cannot bill a company twice.
  *
  * Used by: SessionDetailClient, InvoicesClient
  */

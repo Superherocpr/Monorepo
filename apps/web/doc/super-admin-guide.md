@@ -59,7 +59,7 @@ The 6-digit code currently active for roll call check-ins. The code is shown her
 
 ## 2. Sessions and Approvals
 
-Super admins have full session management. See the [Manager Guide — Sessions](manager-guide.md#2-sessions--viewing-all-classes) and [Approvals](manager-guide.md#3-approving-and-rejecting-sessions) sections for the full workflow — behavior is identical for super admins.
+Super admins have full session management. See the [Manager Guide — Sessions](manager-guide.md#2-sessions--viewing-all-classes) and [Instructor Requests](manager-guide.md#3-instructor-requests--session-approvals) sections for the full workflow — behavior is identical for super admins.
 
 The one difference: super admins can also edit the **class type** assigned to a session, which instructors and managers cannot change after creation.
 

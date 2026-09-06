@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * BulkCreateSessionClient — two-step form for creating multiple class sessions at once.
+ * BulkCreateSessionClient: two-step form for creating multiple class sessions at once.
  * Step 1 (form): shared settings (class type, instructor, location, duration, defaults)
  *   plus a table of per-session rows (date, start time, capacity, notes).
  * Step 2 (review): read-only summary of everything before final submission.
@@ -31,7 +31,7 @@ interface SharedSettings {
   class_type_id: string;
   instructor_id: string;
   location_id: string;
-  /** Duration in minutes — auto-filled from class type, editable. */
+  /** Duration in minutes: auto-filled from class type, editable. */
   duration_minutes: string;
   /** Default capacity pre-filled into new rows; editable per row. */
   default_capacity: string;
@@ -41,7 +41,7 @@ interface SharedSettings {
 
 /** One session row in the batch table. */
 interface SessionRow {
-  /** Stable local key for React — never sent to the server. */
+  /** Stable local key for React: never sent to the server. */
   id: string;
   /** YYYY-MM-DD */
   date: string;
@@ -60,7 +60,7 @@ interface BulkCreateSessionClientProps {
   /** Whether the viewing user is an instructor (hides instructor selector). */
   isInstructor: boolean;
   /**
-   * Full name of the logged-in user. Only provided when isInstructor is true —
+   * Full name of the logged-in user. Only provided when isInstructor is true:
    * displayed in a read-only row instead of the instructor selector.
    */
   instructorName?: string;
@@ -83,11 +83,11 @@ function durationLabel(minutes: number): string | null {
 }
 
 /**
- * Formats a YYYY-MM-DD string for display. Returns "—" for empty input.
+ * Formats a YYYY-MM-DD string for display. Returns "-" for empty input.
  * @param dateStr - YYYY-MM-DD
  */
 function formatDate(dateStr: string): string {
-  if (!dateStr) return "—";
+  if (!dateStr) return "-";
   const [y, mo, d] = dateStr.split("-").map(Number);
   return new Date(y, mo - 1, d).toLocaleDateString("en-US", {
     weekday: "short",
@@ -97,11 +97,11 @@ function formatDate(dateStr: string): string {
 }
 
 /**
- * Formats an HH:MM (24-hour) string to 12-hour display. Returns "—" for empty input.
+ * Formats an HH:MM (24-hour) string to 12-hour display. Returns "-" for empty input.
  * @param timeStr - HH:MM
  */
 function formatTime(timeStr: string): string {
-  if (!timeStr) return "—";
+  if (!timeStr) return "-";
   const [h, m] = timeStr.split(":").map(Number);
   const period = h >= 12 ? "PM" : "AM";
   const hour = h % 12 === 0 ? 12 : h % 12;
@@ -304,7 +304,7 @@ export default function BulkCreateSessionClient({
     const durationMins = Math.round(parseFloat(shared.duration_minutes) * 60);
 
     const sessions = rows.map((r) => {
-      // Stored as floating wall-clock time — no timezone conversion.
+      // Stored as floating wall-clock time: no timezone conversion.
       const starts_at = toFloatingISO(r.date, r.start_time);
       return {
         starts_at,
@@ -377,7 +377,7 @@ export default function BulkCreateSessionClient({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Review Sessions</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Check everything carefully — once submitted, sessions go to approval and cannot be edited.
+              Check everything carefully. Once submitted, sessions go to approval and cannot be edited.
             </p>
           </div>
           <button
@@ -409,11 +409,11 @@ export default function BulkCreateSessionClient({
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <div>
               <dt className="text-gray-500">Class Type</dt>
-              <dd className="text-gray-900 font-medium">{selectedClassType?.name ?? "—"}</dd>
+              <dd className="text-gray-900 font-medium">{selectedClassType?.name ?? "-"}</dd>
             </div>
             <div>
               <dt className="text-gray-500">Duration</dt>
-              <dd className="text-gray-900 font-medium">{durationHint ?? "—"}</dd>
+              <dd className="text-gray-900 font-medium">{durationHint ?? "-"}</dd>
             </div>
             <div>
               <dt className="text-gray-500">Instructor</dt>
@@ -422,15 +422,15 @@ export default function BulkCreateSessionClient({
                   ? (instructorName ?? "You")
                   : selectedInstructor
                   ? `${selectedInstructor.first_name} ${selectedInstructor.last_name}`
-                  : "—"}
+                  : "-"}
               </dd>
             </div>
             <div>
               <dt className="text-gray-500">Location</dt>
               <dd className="text-gray-900 font-medium">
                 {selectedLocation
-                  ? `${selectedLocation.name} — ${selectedLocation.city}, ${selectedLocation.state}`
-                  : "—"}
+                  ? `${selectedLocation.name}, ${selectedLocation.city}, ${selectedLocation.state}`
+                  : "-"}
               </dd>
             </div>
           </dl>
@@ -494,11 +494,11 @@ export default function BulkCreateSessionClient({
                       <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                         {!isNaN(durationMins) && durationMins > 0 && r.date && r.start_time
                           ? computeEndTime(r.date, r.start_time, durationMins)
-                          : "—"}
+                          : "-"}
                       </td>
                       <td className="px-4 py-3 text-gray-900">{r.max_capacity}</td>
                       <td className="px-4 py-3 text-gray-500 max-w-xs truncate">
-                        {r.notes.trim() || <span className="text-gray-300">—</span>}
+                        {r.notes.trim() || <span className="text-gray-300">-</span>}
                       </td>
                     </tr>
                   );
@@ -577,7 +577,7 @@ export default function BulkCreateSessionClient({
           <h2 className="text-sm font-semibold text-gray-700">
             Shared Settings
             <span className="ml-2 text-xs font-normal text-gray-400">
-              — same for every session in this batch
+              (same for every session in this batch)
             </span>
           </h2>
 
@@ -602,7 +602,7 @@ export default function BulkCreateSessionClient({
             </select>
           </div>
 
-          {/* Instructor — selector for managers; read-only for instructors */}
+          {/* Instructor: selector for managers; read-only for instructors */}
           {!isInstructor ? (
             <div className="flex flex-col gap-1.5">
               <label htmlFor="bs-instructor" className="text-sm font-medium text-gray-700">
@@ -656,13 +656,13 @@ export default function BulkCreateSessionClient({
               <option value="">Select a location…</option>
               {locationList.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.name} — {l.city}, {l.state}
+                  {l.name}, {l.city}, {l.state}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Duration + Default Capacity — side by side */}
+          {/* Duration + Default Capacity: side by side */}
           <div className="space-y-1.5">
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
@@ -703,7 +703,7 @@ export default function BulkCreateSessionClient({
             </div>
             {autoFilled && (
               <p className="text-xs text-gray-400">
-                Duration and capacity were auto-filled from the class type — edit if needed.
+                Duration and capacity were auto-filled from the class type; edit if needed.
               </p>
             )}
           </div>
@@ -712,7 +712,7 @@ export default function BulkCreateSessionClient({
           <div className="flex flex-col gap-1.5">
             <label htmlFor="bs-default-notes" className="text-sm font-medium text-gray-700">
               Default Notes{" "}
-              <span className="text-gray-400 font-normal">(optional — applied to all sessions)</span>
+              <span className="text-gray-400 font-normal">(optional, applied to all sessions)</span>
             </label>
             <textarea
               id="bs-default-notes"

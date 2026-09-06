@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PayoutSettingsPanel — payout configuration section for the admin settings page.
+ * PayoutSettingsPanel: payout configuration section for the admin settings page.
  * Lets super_admins control the platform fee percentage, payout trigger mode
  * (immediate / scheduled / manual), and the schedule interval.
  * Also exposes a "Send Payouts Now" button for on-demand manual disbursements.
@@ -83,7 +83,7 @@ const TRIGGER_OPTIONS: TriggerOption[] = [
     value: "manual",
     label: "Manual only",
     description:
-      'Earnings accumulate until you push "Send Payouts Now". Full control — nothing goes out automatically.',
+      'Earnings accumulate until you push "Send Payouts Now". Full control; nothing goes out automatically.',
     icon: <HandCoins className="h-5 w-5 text-gray-500" />,
   },
 ];
@@ -105,8 +105,8 @@ interface PayoutCreateResponse {
  * Shows what the configured platform fee actually nets after PayPal's fees, and
  * warns when the fee is set below break-even.
  *
- * Both PayPal fees come out of the platform's cut — the instructor gets their
- * full percentage of gross — so a low fee percentage can lose money on every
+ * Both PayPal fees come out of the platform's cut: the instructor gets their
+ * full percentage of gross: so a low fee percentage can lose money on every
  * booking. Break-even is higher for cheaper classes, because PayPal's fixed
  * per-transaction charge is a bigger share of a smaller sale.
  */
@@ -240,7 +240,7 @@ function BatchingCostNote({ upcoming }: { upcoming: UpcomingPayoutsData }) {
         {comparison.instructorCount} instructor
         {comparison.instructorCount === 1 ? "" : "s"} would cost about{" "}
         {formatCurrency(comparison.immediateCost)} in PayPal payout fees sent individually in
-        Immediate mode, versus {formatCurrency(comparison.batchedCost)} combined — a difference
+        Immediate mode, versus {formatCurrency(comparison.batchedCost)} combined, a difference
         of {formatCurrency(comparison.savings)}. PayPal caps its payout fee per recipient, so
         one combined payout per instructor pays that cap once instead of per booking.
       </span>
@@ -360,7 +360,7 @@ export default function PayoutSettingsPanel({
         </h2>
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
           The percentage SuperHeroCPR retains from each payment. Instructors receive the
-          remainder. This is locked in at the time each earning is recorded — changing
+          remainder. This is locked in at the time each earning is recorded; changing
           it here does not retroactively change existing earnings.
         </p>
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
@@ -438,7 +438,7 @@ export default function PayoutSettingsPanel({
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
             Payouts will be sent automatically on this interval. The cron job runs at
-            5:00 AM UTC — make sure migration 0021 is applied to your Supabase project
+            5:00 AM UTC; make sure migration 0021 is applied to your Supabase project
             to activate it.
           </p>
           <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Payout schedule interval">
@@ -489,7 +489,7 @@ export default function PayoutSettingsPanel({
         </h2>
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
           Immediately disburse all pending eligible earnings to instructors via PayPal
-          Payouts — regardless of the trigger mode above. Only instructors with a saved
+          Payouts, regardless of the trigger mode above. Only instructors with a saved
           payout email will receive funds. You can also send payouts from the{" "}
           <a href="/admin/payouts" className="text-red-600 hover:underline">Payouts page</a>.
         </p>
@@ -505,7 +505,7 @@ export default function PayoutSettingsPanel({
           </button>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
             This creates one PayPal Payouts batch grouping all instructors with pending
-            earnings. PayPal accepting the batch is not confirmation that it was delivered —
+            earnings. PayPal accepting the batch is not confirmation that it was delivered;
             track the outcome in Payout history below.
           </p>
         </div>

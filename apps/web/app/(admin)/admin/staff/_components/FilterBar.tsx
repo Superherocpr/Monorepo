@@ -19,7 +19,7 @@ const roleOptions = ["All", "Instructor", "Manager", "Super Admin", "Inspector"]
 
 /**
  * Pill button filter row for staff status and role.
- * All filtering is client-side — no network calls on filter change.
+ * All filtering is client-side: no network calls on filter change.
  * @param status - Currently active status filter value.
  * @param setStatus - Callback to update the status filter.
  * @param role - Currently active role filter value.

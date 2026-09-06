@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * AdminSidebar — role-filtered navigation sidebar for the admin area.
+ * AdminSidebar: role-filtered navigation sidebar for the admin area.
  * Desktop: fixed left sidebar 240px wide.
  * Mobile: hidden by default, toggled via hamburger button in AdminTopBar.
  * Used by: app/(admin)/layout.tsx
@@ -18,9 +18,13 @@ interface NavItem {
   roles: UserRole[];
   /** Optional section heading rendered above this item as a visual grouping label. */
   sectionLabel?: string;
+  /** Optional sub-group label rendered above this item, nested within a section. */
+  subLabel?: string;
+  /** When true, indents this item to show it belongs to the preceding subLabel group. */
+  nested?: boolean;
 }
 
-/** Full nav config — items are filtered to the current user's role at render time. */
+/** Full nav config: items are filtered to the current user's role at render time. */
 const NAV_ITEMS: NavItem[] = [
   // ── Top-level ──────────────────────────────────────────────────────────────
   {
@@ -28,23 +32,30 @@ const NAV_ITEMS: NavItem[] = [
     href: "/admin",
     roles: ["instructor", "manager", "super_admin", "inspector"],
   },
-  // Instructor-only quick-access items (no section label — small flat list)
+  // Instructor-only quick-access items (no section label: small flat list)
   { label: "My Class Sessions", href: "/admin/sessions", roles: ["instructor"] },
   { label: "Rollcall", href: "/rollcall", roles: ["instructor"] },
 
   // ── Operations ─────────────────────────────────────────────────────────────
   {
-    label: "Class Requests",
-    href: "/admin/class-requests",
+    label: "Class Sessions",
+    href: "/admin/sessions",
     roles: ["manager", "super_admin"],
     sectionLabel: "Operations",
   },
-  { label: "Class Sessions", href: "/admin/sessions", roles: ["manager", "super_admin"] },
   { label: "Customers", href: "/admin/customers", roles: ["manager", "super_admin"] },
   {
-    label: "Session Approvals",
+    label: "Customer Requests",
+    href: "/admin/class-requests",
+    roles: ["manager", "super_admin"],
+    subLabel: "Requests",
+    nested: true,
+  },
+  {
+    label: "Instructor Requests",
     href: "/admin/sessions/approvals",
     roles: ["manager", "super_admin"],
+    nested: true,
   },
 
   // ── Financial ──────────────────────────────────────────────────────────────
@@ -112,16 +123,20 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
   const navLinks = (
     <nav aria-label="Admin navigation">
       <ul className="space-y-0.5">
-        {visibleItems.map((item) => {
+        {visibleItems.map((item, index) => {
           // Exact match for dashboard, prefix match for all others
           const isActive =
             item.href === "/admin"
               ? pathname === "/admin"
               : pathname.startsWith(item.href);
 
+          // Add breathing room when stepping back out of a nested sub-group.
+          const prevItem = visibleItems[index - 1];
+          const endsNestedGroup = !item.nested && prevItem?.nested;
+
           return (
             <li key={`${item.label}-${item.href}`}>
-              {/* Section label — rendered above the first item in a new group */}
+              {/* Section label: rendered above the first item in a new group */}
               {item.sectionLabel && (
                 <div className="mt-5 mb-1 border-t border-gray-200">
                   <p className="px-4 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-gray-100">
@@ -129,14 +144,22 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
                   </p>
                 </div>
               )}
+              {/* Sub-label: lighter nested grouping within a section */}
+              {item.subLabel && (
+                <p className="px-4 pt-2 pb-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                  {item.subLabel}
+                </p>
+              )}
               <Link
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
                 onClick={() => setMobileOpen(false)}
                 className={[
-                  "flex items-center px-4 py-2.5 text-sm font-medium rounded-md transition-colors duration-100",
+                  "flex items-center py-2.5 text-sm font-medium rounded-md transition-colors duration-100",
+                  item.nested ? "px-6" : "px-4",
+                  endsNestedGroup ? "mt-1.5" : "",
                   isActive
-                    ? "border-l-4 border-red-600 text-red-600 bg-red-50 pl-3"
+                    ? `border-l-4 border-red-600 text-red-600 bg-red-50 ${item.nested ? "pl-5" : "pl-3"}`
                     : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
                 ].join(" ")}
               >

@@ -6,7 +6,7 @@
  * Saves via PATCH /api/profile/self-update.
  * Used by: InstructorSettingsClient (Account tab)
  *
- * The email field is both the contact address and the login address — the site
+ * The email field is both the contact address and the login address: the site
  * treats them as one value, which is why there is a single Email input here.
  * Changing email or password requires the current password; a "Forgot your
  * password?" link routes to the existing reset-by-email flow for anyone who
@@ -15,7 +15,7 @@
  * TODO: no outcome e2e test drives this form. Invariant #14
  * (profile_auth_email_mismatch, migration 0065) proves profiles.email and
  * auth.users.email stay in step, but nothing asserts a save actually applies
- * what the user typed — a field that silently stopped submitting would pass
+ * what the user typed: a field that silently stopped submitting would pass
  * every current signal. Deferred as a known gap; see Building/feature-health-map.md
  * under "Staff self-service account".
  */
@@ -29,7 +29,7 @@ export interface AccountSettingsSectionProps {
   initialLastName: string;
   /** Current saved phone from the DB. Empty string when never set. */
   initialPhone: string;
-  /** Current saved email from the DB — also the login address. */
+  /** Current saved email from the DB: also the login address. */
   initialEmail: string;
   /** True when this is an owner account, whose email is pinned by configuration. */
   isOwner: boolean;
@@ -74,7 +74,7 @@ const AccountSettingsSection: React.FC<AccountSettingsSectionProps> = ({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
 
-  /** The last values written to the DB — used to detect what actually changed. */
+  /** The last values written to the DB: used to detect what actually changed. */
   const [saved, setSaved] = useState({
     firstName: initialFirstName,
     lastName: initialLastName,

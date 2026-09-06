@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * CertCardDesignsTab — static preview of every cert card design used in the platform.
+ * CertCardDesignsTab: static preview of every cert card design used in the platform.
  * Renders one card per AHA cert type (from CERT_CONFIGS) plus the SuperHero CPR
- * branded card design. All cards use mock data — no DB queries or API calls.
+ * branded card design. All cards use mock data: no DB queries or API calls.
  *
  * Used by: CertificationsClient.tsx (Card Designs tab)
  */
@@ -80,7 +80,7 @@ export default function CertCardDesignsTab() {
           {/* Active variant */}
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
-              Active — CPR Awareness
+              Active: CPR Awareness
             </p>
             <div style={{ zoom: 0.65 }}>
               <SuperheroCPRCertCard
@@ -93,7 +93,7 @@ export default function CertCardDesignsTab() {
           {/* Expired variant */}
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
-              Expired — CPR Awareness
+              Expired: CPR Awareness
             </p>
             <div style={{ zoom: 0.65 }}>
               <SuperheroCPRCertCard

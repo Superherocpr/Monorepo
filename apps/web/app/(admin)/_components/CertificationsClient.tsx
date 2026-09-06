@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * CertificationsClient — admin certifications management page component.
+ * CertificationsClient: admin certifications management page component.
  * Two tabs: Certifications (list, filter, issue, edit, delete, reminders) and
  * Cert Types (add, edit, deactivate/activate).
  * Used by: app/(admin)/admin/certifications/page.tsx
@@ -98,7 +98,7 @@ function computeExpiry(issuedAt: string, validityMonths: number): string {
  * next render. Folding the derivation into the update keeps the field in step in
  * a single pass and avoids react-hooks/set-state-in-effect. It also means a
  * direct `setState` (such as pre-filling the edit panel from a saved record) no
- * longer has its stored expiry clobbered — only edits made through this wrapper
+ * longer has its stored expiry clobbered: only edits made through this wrapper
  * recompute it.
  *
  * A hand-edited expiry survives until the user next touches a trigger field,
@@ -295,7 +295,7 @@ export default function CertificationsClient({
 
   // Customer search within add cert panel
   // Results carry the query that produced them so render can tell whether they
-  // are current and whether a fetch is still pending — see the search effect.
+  // are current and whether a fetch is still pending: see the search effect.
   const [customerResults, setCustomerResults] = useState<{
     query: string;
     items: CustomerSearchResult[];
@@ -468,7 +468,7 @@ export default function CertificationsClient({
       setRemindersPaused(true);
       setPauseConfirmVisible(false);
     } catch {
-      // Non-critical — user can retry
+      // Non-critical: user can retry
     } finally {
       setPauseLoading(false);
     }
@@ -488,7 +488,7 @@ export default function CertificationsClient({
       if (!res.ok) throw new Error("Failed to resume reminders.");
       setRemindersPaused(false);
     } catch {
-      // Non-critical — user can retry
+      // Non-critical: user can retry
     } finally {
       setPauseLoading(false);
     }
@@ -646,7 +646,7 @@ export default function CertificationsClient({
       setCerts((prev) => prev.filter((c) => c.id !== deletingCertId));
       setDeletingCertId(null);
     } catch {
-      // Silently fail — the row stays visible
+      // Silently fail: the row stays visible
     } finally {
       setDeleteLoading(false);
     }
@@ -772,7 +772,7 @@ export default function CertificationsClient({
           )
         );
       } catch {
-        // Silently fail — badge stays unchanged
+        // Silently fail: badge stays unchanged
       } finally {
         setTogglingCertTypeId(null);
       }
@@ -863,7 +863,7 @@ export default function CertificationsClient({
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TAB 1 — CERTIFICATIONS
+          TAB 1: CERTIFICATIONS
          ══════════════════════════════════════════════════════════════════════ */}
       <div
         id="tabpanel-certifications"
@@ -1010,7 +1010,7 @@ export default function CertificationsClient({
           </div>
         </div>
 
-        {/* Certifications table — desktop */}
+        {/* Certifications table: desktop */}
         {filteredCerts.length === 0 ? (
           <div className="rounded-lg border border-gray-200 bg-gray-50 py-12 text-center text-sm text-gray-500">
             No certifications match the current filters.
@@ -1196,7 +1196,7 @@ export default function CertificationsClient({
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TAB 2 — CERT TYPES
+          TAB 2: CERT TYPES
          ══════════════════════════════════════════════════════════════════════ */}
       <div
         id="tabpanel-cert_types"
@@ -1270,7 +1270,7 @@ export default function CertificationsClient({
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TAB 3 — CARD DESIGNS
+          TAB 3: CARD DESIGNS
          ══════════════════════════════════════════════════════════════════════ */}
       <div
         id="tabpanel-card_designs"
@@ -1282,7 +1282,7 @@ export default function CertificationsClient({
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          SLIDE-IN PANEL — ADD CERT
+          SLIDE-IN PANEL: ADD CERT
          ══════════════════════════════════════════════════════════════════════ */}
       {showAddCertPanel && (
         <SlidePanel
@@ -1329,7 +1329,7 @@ export default function CertificationsClient({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          SLIDE-IN PANEL — EDIT CERT
+          SLIDE-IN PANEL: EDIT CERT
          ══════════════════════════════════════════════════════════════════════ */}
       {editingCert && (
         <SlidePanel
@@ -1356,7 +1356,7 @@ export default function CertificationsClient({
             showCustomerDropdown={false}
             onCustomerSelect={() => undefined}
           />
-          {/* Reminder sent checkbox — can be manually reset */}
+          {/* Reminder sent checkbox: can be manually reset */}
           <div className="mb-4 flex items-center gap-2">
             <input
               type="checkbox"
@@ -1397,7 +1397,7 @@ export default function CertificationsClient({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          SLIDE-IN PANEL — ADD CERT TYPE
+          SLIDE-IN PANEL: ADD CERT TYPE
          ══════════════════════════════════════════════════════════════════════ */}
       {showAddCertTypePanel && (
         <SlidePanel
@@ -1432,7 +1432,7 @@ export default function CertificationsClient({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          SLIDE-IN PANEL — EDIT CERT TYPE
+          SLIDE-IN PANEL: EDIT CERT TYPE
          ══════════════════════════════════════════════════════════════════════ */}
       {editingCertType && (
         <SlidePanel
@@ -1552,7 +1552,7 @@ function CertForm({
 }: CertFormProps) {
   return (
     <div className="space-y-4">
-      {/* Customer search — add mode only */}
+      {/* Customer search: add mode only */}
       {!isEdit && (
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -1644,7 +1644,7 @@ function CertForm({
         )}
       </div>
 
-      {/* Expiry date — auto-calculated but editable */}
+      {/* Expiry date: auto-calculated but editable */}
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
           Expiry Date <span className="text-red-500">*</span>
@@ -1740,7 +1740,7 @@ function CertTypeForm({ form, setForm, errors, classTypes }: CertTypeFormProps) 
           }}
           className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
         >
-          <option value="">— Select a class type (optional) —</option>
+          <option value="">Select a class type (optional)</option>
           {classTypes.map((ct) => (
             <option key={ct.id} value={ct.id}>
               {ct.name}
@@ -1816,7 +1816,7 @@ function CertTypeForm({ form, setForm, errors, classTypes }: CertTypeFormProps) 
           }
           className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
         >
-          <option value="">— None —</option>
+          <option value="">None</option>
           <option value="American Heart Association">American Heart Association</option>
           <option value="SuperHero CPR">SuperHero CPR</option>
         </select>

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ViewAsBanner — persistent bar shown while a Super Admin is viewing the admin
+ * ViewAsBanner: persistent bar shown while a Super Admin is viewing the admin
  * area as a lower role. Provides an always-available Exit button (the caller's
  * REAL role is super_admin whenever this renders, so exiting is always allowed).
  * Used by: app/(admin)/layout.tsx.
@@ -17,7 +17,7 @@ interface ViewAsBannerProps {
   effectiveRole: UserRole;
 }
 
-/** Amber banner: "Viewing as X — Exit". Rendered only while view-as is active. */
+/** Amber banner: "Viewing as X: Exit". Rendered only while view-as is active. */
 export default function ViewAsBanner({ effectiveRole }: ViewAsBannerProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -32,7 +32,7 @@ export default function ViewAsBanner({ effectiveRole }: ViewAsBannerProps) {
   return (
     <div className="bg-purple-50 border-b border-purple-200 px-6 py-2 flex items-center justify-between gap-4">
       <p className="text-sm text-purple-800 font-medium">
-        Viewing as {ROLE_LABELS[effectiveRole]} — you&apos;re seeing the admin
+        Viewing as {ROLE_LABELS[effectiveRole]}; you&apos;re seeing the admin
         area with that role&apos;s permissions.
       </p>
       <button

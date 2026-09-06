@@ -1,5 +1,5 @@
 /**
- * Admin roster import page — /admin/sessions/[id]/roster
+ * Admin roster import page: /admin/sessions/[id]/roster
  * Server component: verifies manager/super admin access, fetches session info,
  * existing roster emails (for duplicate detection), and any pending customer upload.
  * Passes all data to RosterImportClient for the interactive 4-step import flow.
@@ -42,7 +42,7 @@ export default async function RosterImportPage({ params }: PageProps) {
 
   if (!session) redirect("/admin/sessions");
 
-  // Fetch existing roster emails — used client-side for duplicate detection.
+  // Fetch existing roster emails: used client-side for duplicate detection.
   // We pass the Set as an array since props must be serialisable.
   const { data: existing } = await admin
     .from("roster_records")

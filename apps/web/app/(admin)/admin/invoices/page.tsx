@@ -23,7 +23,7 @@ import InvoicesClient, {
 async function fetchInstructors(
   adminClient: Awaited<ReturnType<typeof createAdminClient>>
 ): Promise<InstructorOption[]> {
-  // Any non-customer profile may own invoices — include all active staff roles.
+  // Any non-customer profile may own invoices: include all active staff roles.
   // Staff use 'deactivated', not 'archived' (which is for customers only).
   const { data } = await adminClient
     .from("profiles")
@@ -58,7 +58,7 @@ interface RawUninvoicedTeamBooking {
 }
 
 /**
- * Loads company-paid team bookings that still have no invoice attached — money
+ * Loads company-paid team bookings that still have no invoice attached: money
  * the business agreed to bill and has not.
  *
  * Deliberately a plain async function rather than inline page code: it reads the
@@ -113,7 +113,7 @@ async function fetchUninvoicedTeamBookings(
  * Fetches invoices (scoped by role), passes them to InvoicesClient for filtering and display.
  */
 export default async function InvoicesPage() {
-  // Auth guard — honors view-as; scoping below follows the effective role.
+  // Auth guard: honors view-as; scoping below follows the effective role.
   const actor = await getAdminActor();
   if (!actor) redirect("/signin?redirect=/admin/invoices");
 
@@ -125,7 +125,7 @@ export default async function InvoicesPage() {
 
   const admin = await createAdminClient();
 
-  // Build invoices query — instructors see only their own
+  // Build invoices query: instructors see only their own
   let query = admin
     .from("invoices")
     .select(`

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PayoutSettingsClient — interactive payout email form for instructors.
+ * PayoutSettingsClient: interactive payout email form for instructors.
  * Used by: app/(admin)/admin/profile/payment/page.tsx
  */
 

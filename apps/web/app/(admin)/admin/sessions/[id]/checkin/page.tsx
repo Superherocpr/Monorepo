@@ -1,5 +1,5 @@
 /**
- * Rollcall QR display page — /admin/sessions/[id]/checkin
+ * Rollcall QR display page: /admin/sessions/[id]/checkin
  * Server component: designed to be projected or shown to students in the
  * classroom. Shows a large QR code + the instructor's daily rollcall code,
  * plus a live-updating list of students who have verified for THIS session.
@@ -32,7 +32,7 @@ interface RosterRow {
 export default async function CheckinDisplayPage({ params }: PageProps) {
   const { id } = await params;
 
-  // Auth guard — honors view-as, same as the session detail page.
+  // Auth guard: honors view-as, same as the session detail page.
   const actor = await getAdminActor();
   if (!actor) redirect(`/signin?redirect=/admin/sessions/${id}/checkin`);
 
@@ -53,7 +53,7 @@ export default async function CheckinDisplayPage({ params }: PageProps) {
 
   if (!session) redirect("/admin/sessions");
 
-  // Only the session's own instructor may open the display — the refresh
+  // Only the session's own instructor may open the display: the refresh
   // button regenerates the caller's own daily code, which would desync the
   // QR from the class if a different user pressed it.
   if (session.instructor_id !== actor.user.id) {
@@ -61,7 +61,7 @@ export default async function CheckinDisplayPage({ params }: PageProps) {
   }
 
   // Fetch the instructor's current rollcall code. A code generated on a
-  // previous business day is expired (mirrors verify-code) — pass null so
+  // previous business day is expired (mirrors verify-code): pass null so
   // the client prompts for a fresh one instead of displaying a dead QR.
   const { data: profile } = await admin
     .from("profiles")
