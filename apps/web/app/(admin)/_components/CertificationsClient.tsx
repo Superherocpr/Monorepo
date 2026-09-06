@@ -91,6 +91,42 @@ function computeExpiry(issuedAt: string, validityMonths: number): string {
 }
 
 /**
+ * Wraps a cert-form state update so that expiry is recomputed in the same pass
+ * whenever one of `triggers` actually changes value.
+ *
+ * This replaces an effect that watched the form and wrote expiry back on the
+ * next render. Folding the derivation into the update keeps the field in step in
+ * a single pass and avoids react-hooks/set-state-in-effect. It also means a
+ * direct `setState` (such as pre-filling the edit panel from a saved record) no
+ * longer has its stored expiry clobbered — only edits made through this wrapper
+ * recompute it.
+ *
+ * A hand-edited expiry survives until the user next touches a trigger field,
+ * matching the previous behaviour.
+ *
+ * @param update - The state action the caller wanted to apply.
+ * @param certTypes - Cert types, used to look up validity months.
+ * @param triggers - Fields whose change should force an expiry recompute.
+ */
+function withComputedExpiry(
+  update: React.SetStateAction<CertFormState>,
+  certTypes: CertTypeAdminRow[],
+  triggers: ReadonlyArray<"issuedAt" | "certTypeId">
+): (prev: CertFormState) => CertFormState {
+  return (prev) => {
+    const next = typeof update === "function" ? update(prev) : update;
+    if (!triggers.some((field) => next[field] !== prev[field])) return next;
+
+    const certType = certTypes.find((t) => t.id === next.certTypeId);
+    if (!certType || !next.issuedAt) return next;
+    return {
+      ...next,
+      expiresAt: computeExpiry(next.issuedAt, certType.validity_months),
+    };
+  };
+}
+
+/**
  * Formats a date string for display (e.g. "Apr 21, 2026").
  * @param dateStr - ISO date string or yyyy-MM-dd
  */
@@ -258,8 +294,12 @@ export default function CertificationsClient({
   const [certFormError, setCertFormError] = useState<string | null>(null);
 
   // Customer search within add cert panel
-  const [customerResults, setCustomerResults] = useState<CustomerSearchResult[]>([]);
-  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
+  // Results carry the query that produced them so render can tell whether they
+  // are current and whether a fetch is still pending — see the search effect.
+  const [customerResults, setCustomerResults] = useState<{
+    query: string;
+    items: CustomerSearchResult[];
+  }>({ query: "", items: [] });
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
   // ── Edit cert panel state ──────────────────────────────────────────────────
@@ -348,56 +388,68 @@ export default function CertificationsClient({
 
   // ── Customer search (debounced) ────────────────────────────────────────────
 
+  const customerQuery = certForm.customerSearch.trim();
+  /**
+   * Only results fetched for the query currently typed are eligible to show. A
+   * query under two characters yields an empty list, which collapses the
+   * dropdown without the effect having to clear it.
+   */
+  const visibleCustomerResults =
+    customerQuery.length >= 2 && customerResults.query === customerQuery
+      ? customerResults.items
+      : [];
+  /** Results still tagged with an older query mean a fetch has not landed yet. */
+  const customerSearchLoading =
+    customerQuery.length >= 2 && customerResults.query !== customerQuery;
+
   useEffect(() => {
-    const q = certForm.customerSearch.trim();
-    if (q.length < 2) {
-      setCustomerResults([]);
-      setShowCustomerDropdown(false);
-      return;
-    }
-    setCustomerSearchLoading(true);
+    if (customerQuery.length < 2) return;
+
+    // Guards against a slow response for an abandoned query landing late.
+    let cancelled = false;
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/customers/search?q=${encodeURIComponent(q)}`
+          `/api/customers/search?q=${encodeURIComponent(customerQuery)}`
         );
         const json = await res.json();
+        if (cancelled) return;
         // The search endpoint returns { customers: [...] }
-        setCustomerResults((json.customers ?? []).slice(0, 8));
+        setCustomerResults({
+          query: customerQuery,
+          items: (json.customers ?? []).slice(0, 8),
+        });
         setShowCustomerDropdown(true);
       } catch {
-        setCustomerResults([]);
-      } finally {
-        setCustomerSearchLoading(false);
+        if (!cancelled) {
+          setCustomerResults({ query: customerQuery, items: [] });
+        }
       }
     }, 300);
-    return () => clearTimeout(timer);
-  }, [certForm.customerSearch]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [customerQuery]);
 
   // ── Auto-calculate expiry when issue date or cert type changes ─────────────
 
-  useEffect(() => {
-    if (!certForm.issuedAt || !certForm.certTypeId) return;
-    const ct = certTypes.find((t) => t.id === certForm.certTypeId);
-    if (!ct) return;
-    setCertForm((prev) => ({
-      ...prev,
-      expiresAt: computeExpiry(prev.issuedAt, ct.validity_months),
-    }));
-  }, [certForm.issuedAt, certForm.certTypeId, certTypes]);
+  /** Add form: either the issue date or the cert type recomputes expiry. */
+  const setCertFormWithExpiry = useCallback(
+    (update: React.SetStateAction<CertFormState>) =>
+      setCertForm(withComputedExpiry(update, certTypes, ["issuedAt", "certTypeId"])),
+    [certTypes]
+  );
 
-  useEffect(() => {
-    if (!editCertForm.issuedAt || !editCertForm.certTypeId) return;
-    // Only auto-update if the cert type changed (the user can manually override expiry)
-    const ct = certTypes.find((t) => t.id === editCertForm.certTypeId);
-    if (!ct) return;
-    setEditCertForm((prev) => ({
-      ...prev,
-      expiresAt: computeExpiry(prev.issuedAt, ct.validity_months),
-    }));
-  }, [editCertForm.certTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
-  // ^ Intentionally only reacts to certTypeId change, not issuedAt, for edit panel.
-  // Users can freely adjust issued_at and expiry independently on the edit form.
+  /**
+   * Edit form: only a cert-type change recomputes expiry. Users adjust issued_at
+   * and expiry independently here, so issue date is deliberately not a trigger.
+   */
+  const setEditCertFormWithExpiry = useCallback(
+    (update: React.SetStateAction<CertFormState>) =>
+      setEditCertForm(withComputedExpiry(update, certTypes, ["certTypeId"])),
+    [certTypes]
+  );
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -1239,11 +1291,11 @@ export default function CertificationsClient({
         >
           <CertForm
             form={certForm}
-            setForm={setCertForm}
+            setForm={setCertFormWithExpiry}
             errors={certFormErrors}
             isEdit={false}
             certTypes={activeCertTypes}
-            customerResults={customerResults}
+            customerResults={visibleCustomerResults}
             customerSearchLoading={customerSearchLoading}
             showCustomerDropdown={showCustomerDropdown}
             onCustomerSelect={(c) => {
@@ -1295,7 +1347,7 @@ export default function CertificationsClient({
           </div>
           <CertForm
             form={editCertForm}
-            setForm={setEditCertForm}
+            setForm={setEditCertFormWithExpiry}
             errors={editCertFormErrors}
             isEdit={true}
             certTypes={certTypes}

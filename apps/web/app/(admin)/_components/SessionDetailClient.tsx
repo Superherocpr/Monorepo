@@ -547,7 +547,6 @@ export default function SessionDetailClient({
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerSearchResult | null>(null);
   const [paypalClientToken, setPaypalClientToken] = useState<string | undefined>(undefined);
   const [paypalClientTokenError, setPaypalClientTokenError] = useState(false);
-  const [isLoadingPayPalClientToken, setIsLoadingPayPalClientToken] = useState(false);
   /**
    * Whether staging's PayPal bypass is active (see lib/mock-payments.ts).
    * `null` means not yet checked — the real client-token fetch below waits
@@ -555,6 +554,17 @@ export default function SessionDetailClient({
    * network call before this resolves.
    */
   const [mockPaymentsEnabled, setMockPaymentsEnabled] = useState<boolean | null>(null);
+  /**
+   * True exactly while the client-token fetch below is in flight. These are the
+   * same conditions that effect runs under, and it resolves by setting either
+   * the token or the error flag — so this is derived rather than tracked in its
+   * own state, which would mean setting it synchronously inside the effect.
+   */
+  const isLoadingPayPalClientToken =
+    showAddStudentModal &&
+    mockPaymentsEnabled === false &&
+    !paypalClientToken &&
+    !paypalClientTokenError;
   const [chargeAmount, setChargeAmount] = useState("");
   const [chargeDescription, setChargeDescription] = useState("");
   const [chargeNotes, setChargeNotes] = useState("");
@@ -942,7 +952,8 @@ export default function SessionDetailClient({
   useEffect(() => {
     if (!showAddStudentModal) return;
 
-    setSelectedCustomer(null);
+    // The selection is cleared where it is invalidated instead of here: opening
+    // the modal resets it, and typing in the search box clears it on change.
     const controller = new AbortController();
     const query = customerSearchQuery.trim();
     const timer = window.setTimeout(async () => {
@@ -1112,7 +1123,6 @@ export default function SessionDetailClient({
     }
 
     let cancelled = false;
-    setIsLoadingPayPalClientToken(true);
 
     fetch("/api/paypal/client-token")
       .then(async (res) => {
@@ -1130,9 +1140,6 @@ export default function SessionDetailClient({
       .catch((err: unknown) => {
         console.error("[admin/session] PayPal client token fetch failed:", err);
         if (!cancelled) setPaypalClientTokenError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingPayPalClientToken(false);
       });
 
     return () => {
@@ -1933,7 +1940,12 @@ export default function SessionDetailClient({
                   <input
                     type="search"
                     value={customerSearchQuery}
-                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setCustomerSearchQuery(e.target.value);
+                      // Typing a new search invalidates whoever was picked out
+                      // of the previous result list.
+                      setSelectedCustomer(null);
+                    }}
                     placeholder="Search by name, email, or phone"
                     className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
                   />

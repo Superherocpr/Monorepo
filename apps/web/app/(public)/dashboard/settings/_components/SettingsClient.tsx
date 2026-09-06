@@ -104,7 +104,12 @@ export default function SettingsClient({
 
   // ── Address autocomplete state ───────────────────────────────────────────
   const [addrQuery, setAddrQuery] = useState("");
-  const [addrSuggestions, setAddrSuggestions] = useState<PlaceSuggestion[]>([]);
+  // Suggestions carry the query that produced them; render discards them once
+  // the query moves on, so the effect never has to clear them synchronously.
+  const [addrSuggestions, setAddrSuggestions] = useState<{
+    query: string;
+    items: PlaceSuggestion[];
+  }>({ query: "", items: [] });
   const [addrLoading, setAddrLoading] = useState(false);
   const [addrShowSuggestions, setAddrShowSuggestions] = useState(false);
   /** Ref for the address search container — used to close dropdown on outside click. */
@@ -161,36 +166,57 @@ export default function SettingsClient({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const trimmedAddrQuery = addrQuery.trim();
+  /**
+   * Only suggestions fetched for the query currently typed are eligible to show.
+   * A query under three characters yields an empty list, which collapses the
+   * dropdown without the effect having to hide it.
+   */
+  const visibleAddrSuggestions =
+    trimmedAddrQuery.length >= 3 && addrSuggestions.query === trimmedAddrQuery
+      ? addrSuggestions.items
+      : [];
+
   // Debounce autocomplete calls while the user types in the address search box.
   useEffect(() => {
-    const q = addrQuery.trim();
-    if (q.length < 3) {
-      setAddrSuggestions([]);
-      setAddrShowSuggestions(false);
-      return;
-    }
+    if (trimmedAddrQuery.length < 3) return;
+
+    // Guards against a slow response for an abandoned query landing late.
+    let cancelled = false;
     const timer = setTimeout(async () => {
       setAddrLoading(true);
       try {
-        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        const res = await fetch(
+          `/api/places/autocomplete?q=${encodeURIComponent(trimmedAddrQuery)}`
+        );
         const json = (await res.json()) as {
           success: boolean;
           suggestions?: PlaceSuggestion[];
         };
+        if (cancelled) return;
         if (json.success && json.suggestions) {
-          setAddrSuggestions(json.suggestions);
+          setAddrSuggestions({
+            query: trimmedAddrQuery,
+            items: json.suggestions,
+          });
           setAddrShowSuggestions(json.suggestions.length > 0);
         } else {
-          setAddrSuggestions([]);
+          setAddrSuggestions({ query: trimmedAddrQuery, items: [] });
         }
       } catch {
-        setAddrSuggestions([]);
+        if (!cancelled) {
+          setAddrSuggestions({ query: trimmedAddrQuery, items: [] });
+        }
       } finally {
-        setAddrLoading(false);
+        if (!cancelled) setAddrLoading(false);
       }
     }, 300);
-    return () => clearTimeout(timer);
-  }, [addrQuery]);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [trimmedAddrQuery]);
 
   /**
    * Called when a suggestion is selected from the address autocomplete dropdown.
@@ -434,14 +460,17 @@ export default function SettingsClient({
                   placeholder="Search for your address…"
                   value={addrQuery}
                   onChange={(e) => setAddrQuery(e.target.value)}
-                  onFocus={() => addrSuggestions.length > 0 && setAddrShowSuggestions(true)}
+                  onFocus={() =>
+                    visibleAddrSuggestions.length > 0 &&
+                    setAddrShowSuggestions(true)
+                  }
                   className={`${inputClass} pl-8`}
                   autoComplete="off"
                 />
               </div>
-              {addrShowSuggestions && addrSuggestions.length > 0 && (
+              {addrShowSuggestions && visibleAddrSuggestions.length > 0 && (
                 <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg max-h-52 overflow-y-auto">
-                  {addrSuggestions.map((s) => (
+                  {visibleAddrSuggestions.map((s) => (
                     <li key={s.place_id}>
                       <button
                         type="button"
