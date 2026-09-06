@@ -3393,3 +3393,133 @@ export function teamSignupConfirmationEmail({
     `),
   };
 }
+
+// ── 37. Team booking has no invoice — super admin alert ───────────────────────
+
+/** One uninvoiced company-mode team booking, as listed in the alert email. */
+export interface TeamInvoiceAlertBooking {
+  teamBookingId: string;
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  /** Flat total the company owes, in dollars. */
+  totalPrice: number;
+  /** ISO instant the booking row was created. */
+  createdAt: string;
+  /** ISO datetime of the class, when known — drives the urgency line. */
+  classDate: string | null;
+  /** Most recent failure reason, when one is known. */
+  lastError: string | null;
+}
+
+/**
+ * Sent to all super_admins when a company-paid team booking exists with no
+ * invoice attached — money the business has agreed to bill but has not billed.
+ *
+ * This is the feature's health signal (CLAUDE.md §6). Invoice creation is
+ * non-fatal at booking time by design, so its failure mode is pure silence:
+ * the class is created, the confirmation email goes out, and nothing indicates
+ * the invoice never happened. Two real bookings were lost this way before the
+ * alert existed.
+ *
+ * Triggered by: lib/team-bookings.ts — immediately at booking time, and daily
+ * from POST /api/team-bookings/retry-invoices after a failed retry.
+ *
+ * @param bookings - Uninvoiced bookings to list, newest first.
+ * @param trigger  - 'booking' when raised at creation time, 'sweep' from the
+ *                   daily retry job; changes the explanatory wording only.
+ * @param baseUrl  - App base URL for the admin link.
+ */
+export function teamInvoiceMissingAdminEmail({
+  bookings,
+  trigger,
+  baseUrl,
+}: {
+  bookings: TeamInvoiceAlertBooking[];
+  trigger: "booking" | "sweep";
+  baseUrl: string;
+}): EmailContent {
+  const totalAtRisk = bookings.reduce((sum, b) => sum + (Number(b.totalPrice) || 0), 0);
+
+  const rows = bookings
+    .map((booking) => {
+      const amount = (Number(booking.totalPrice) || 0).toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+      });
+      const ageDays = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(booking.createdAt).getTime()) / 86_400_000)
+      );
+      const classLabel = booking.classDate
+        ? new Date(booking.classDate).toLocaleDateString("en-US", {
+            timeZone: "UTC",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })
+        : "—";
+      const cell =
+        "padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;";
+      return `
+        <tr>
+          <td style="${cell}">${escapeHtml(booking.companyName)}</td>
+          <td style="${cell}">${escapeHtml(booking.contactName)}<br /><span style="color:#6b7280;font-size:12px;">${escapeHtml(booking.contactEmail)}</span></td>
+          <td style="${cell}"><strong>${amount}</strong></td>
+          <td style="${cell}">${classLabel}</td>
+          <td style="${cell}">${ageDays}d</td>
+          <td style="${cell}">${booking.lastError ? escapeHtml(booking.lastError) : "—"}</td>
+        </tr>`;
+    })
+    .join("");
+
+  const intro =
+    trigger === "booking"
+      ? `A company-paid team booking was just created, but its invoice could not be raised. The class and the signup link exist and the contact has been told the class is booked — nobody has been asked to pay.`
+      : `These company-paid team bookings still have no invoice attached. The daily sweep retried them and could not raise one, so they need a look by hand.`;
+
+  const headerCell =
+    "padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;";
+
+  return {
+    subject: `Action needed: ${bookings.length} team booking${
+      bookings.length === 1 ? "" : "s"
+    } not invoiced (${totalAtRisk.toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+    })})`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Team Booking Not Invoiced</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">${intro}</p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        <thead>
+          <tr style="background:#fef2f2;">
+            <th style="${headerCell}">Company</th>
+            <th style="${headerCell}">Contact</th>
+            <th style="${headerCell}">Owed</th>
+            <th style="${headerCell}">Class date</th>
+            <th style="${headerCell}">Age</th>
+            <th style="${headerCell}">Last error</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <p style="margin:24px 0;">
+        <a href="${escapeHtml(baseUrl)}/admin/team-bookings?filter=uninvoiced"
+           style="display:inline-block;background:#dc2626;color:white;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:700;">
+          Retry Invoice →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        The Team Bookings page has a one-click retry for each of these. Retrying is safe —
+        it re-checks the booking first and will not raise a second invoice. If a row says an
+        invoice was raised but not linked, do NOT retry it: the company would be billed twice.
+        Check PayPal for an unsent draft before raising a new invoice by hand.
+      </p>
+    `),
+  };
+}

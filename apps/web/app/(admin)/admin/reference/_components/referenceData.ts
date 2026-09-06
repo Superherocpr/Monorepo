@@ -87,6 +87,21 @@ export const GROUPS: GroupDef[] = [
         ],
       },
       {
+        id: "team-bookings",
+        name: "Team Bookings",
+        url: "/admin/team-bookings",
+        role: "manager",
+        bullets: [
+          "See every corporate / group booking in one place, newest first — company, contact, class, price, and whether it has been invoiced",
+          "A red banner at the top counts any company-paid bookings that have no invoice, and totals the money not yet billed",
+          "\"Needs invoice\" filter shows only those bookings; alert emails link straight to it",
+          "Raise invoice button bills a company whose invoice failed when the booking was made — it re-checks first, so pressing it twice never bills them twice",
+          "Copy the signup link for any booking to re-send it to the company contact",
+          "Jump to the invoice for any booking that has one",
+          "Company bookings are invoiced automatically when created; this page is the recovery path for when that fails, and a nightly job also retries on its own and emails super admins anything it could not fix",
+        ],
+      },
+      {
         id: "sessions-approvals",
         name: "Approvals Queue",
         url: "/admin/sessions/approvals",

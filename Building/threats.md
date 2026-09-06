@@ -1054,3 +1054,47 @@ asserts no `<script>` survives.
 were interpolating the *escaped* value. Subjects are plain text, not HTML, so a
 class named "First Aid & CPR" reached the inbox as "First Aid &amp; CPR". Those
 now use the raw trimmed value while the body keeps the escaped one.
+
+---
+
+## THREAT-068 — Team invoice retry could double-bill a company on a race
+
+**Severity:** 3/10 (low)
+**File:** `apps/web/lib/team-bookings.ts` — `ensureTeamInvoice`, `createTeamInvoice`
+**Date:** 2026-09-05
+**Status:** MITIGATED
+
+**Description:** Recovering a missing team invoice is now reachable from two
+places: the "Raise invoice" button on `/admin/team-bookings`, and the nightly
+`retry-team-booking-invoices` sweep. Both call `ensureTeamInvoice()`, which
+reads `team_bookings.invoice_id`, returns early if it is set, and otherwise
+raises a PayPal invoice and writes the id back. The read and the write are not
+atomic, so two callers interleaving between them would each see a null and each
+raise a real invoice — the company receives two PayPal invoices for the same
+class, and `mark_invoice_paid` on the unlinked one would insert placeholder
+bookings and double the session headcount (the THREAT-059 mechanism).
+
+**Attack vector:** Not really an attack — this is a concurrency defect with a
+financial outcome, in the class CLAUDE.md §4 calls "repeatable ops causing
+double charge". The realistic trigger is an admin pressing the button at 13:00
+UTC while the cron sweep is mid-run, or two managers acting on the same alert
+email. It requires manager+ access, so it is not reachable by a customer.
+
+**Why 3 and not higher:** the window is the duration of one PayPal round trip,
+both entry points require staff auth, the button disables itself while a request
+is in flight, and the cron runs once a day at a fixed time. The damage is a
+duplicate invoice a human can cancel in PayPal, not lost money or data access.
+
+**Mitigation:** The link write is now a conditional claim —
+`UPDATE ... SET invoice_id = $1 WHERE id = $2 AND invoice_id IS NULL RETURNING id`.
+The loser of the race claims zero rows, and that is reported as
+`created_unlinked` rather than success: it logs a CRITICAL line naming the
+duplicate invoice id, alerts super_admins by email, and is excluded from every
+automatic retry path so nothing compounds the error. Covered by "reports a lost
+race as unlinked, never as a clean success" in
+`tests/unit/lib/team-bookings.test.ts`.
+
+This narrows the window rather than closing it — a true fix needs the claim to
+happen before the PayPal call, which requires a schema column to claim against.
+Deferred: at current volume (one company booking in production to date) the
+mitigation is proportionate, and a lost race is now loud rather than silent.

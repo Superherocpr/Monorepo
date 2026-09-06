@@ -23,7 +23,11 @@ import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClassSession, type CreateClassSessionParams } from "@/lib/session-create";
 import { createAndSendInvoice } from "@/lib/invoice-actions";
-import { teamBookingCreatedEmail } from "@/lib/emails";
+import {
+  teamBookingCreatedEmail,
+  teamInvoiceMissingAdminEmail,
+  type TeamInvoiceAlertBooking,
+} from "@/lib/emails";
 import { floatingNow } from "@/lib/business-time";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -227,9 +231,12 @@ export async function createTeamBooking(
   const teamBookingId = teamRow.id as string;
 
   // ── Company mode: raise the invoice ──────────────────────────────────────
-  // Non-fatal. The link and the class already exist; an invoice failure is
-  // recoverable by the admin from the invoices page, and blocking here would
-  // strand a created session with no way to reach it.
+  // Non-fatal by design: the link and the class already exist, and blocking here
+  // would strand a created session with no way to reach it. What is NOT
+  // optional is telling someone — a failure here means real money goes unbilled,
+  // so it alerts super_admins immediately and /admin/team-bookings offers a
+  // retry. (Before 2026-09-05 this was a bare console.error, and two company
+  // bookings went uninvoiced without anyone noticing.)
   let invoiceNumber: string | null = null;
   let invoiceError: string | undefined;
 
@@ -243,9 +250,50 @@ export async function createTeamBooking(
 
     if (invoiceResult.success) {
       invoiceNumber = invoiceResult.invoiceNumber;
+
+      if (!invoiceResult.linked) {
+        // The invoice went out but isn't attached to the booking. Left alone,
+        // mark_invoice_paid would insert placeholder bookings and double the
+        // headcount (THREAT-059), and the sweep would raise a second invoice.
+        invoiceError =
+          "The invoice was sent but could not be attached to this booking — an admin has been alerted.";
+        await notifyTeamInvoiceMissing(
+          adminClient,
+          [
+            {
+              teamBookingId,
+              companyName: details.companyName,
+              contactName: details.contactName,
+              contactEmail: details.contactEmail,
+              totalPrice: details.totalPrice ?? 0,
+              createdAt: new Date().toISOString(),
+              classDate: null,
+              lastError: `Invoice ${invoiceResult.invoiceNumber} was raised but not linked — set team_bookings.invoice_id by hand. Do NOT retry.`,
+            },
+          ],
+          "booking"
+        );
+      }
     } else {
       invoiceError = invoiceResult.error;
       console.error("[createTeamBooking] invoice creation failed (non-fatal):", invoiceResult.error);
+
+      await notifyTeamInvoiceMissing(
+        adminClient,
+        [
+          {
+            teamBookingId,
+            companyName: details.companyName,
+            contactName: details.contactName,
+            contactEmail: details.contactEmail,
+            totalPrice: details.totalPrice ?? 0,
+            createdAt: new Date().toISOString(),
+            classDate: null,
+            lastError: invoiceResult.error,
+          },
+        ],
+        "booking"
+      );
     }
   }
 
@@ -363,7 +411,10 @@ async function createTeamInvoice(
     actorId: string;
     details: TeamBookingDetails;
   }
-): Promise<{ success: true; invoiceNumber: string } | { success: false; error: string }> {
+): Promise<
+  | { success: true; invoiceId: string; invoiceNumber: string; linked: boolean }
+  | { success: false; error: string }
+> {
   const { data: session } = await adminClient
     .from("class_sessions")
     .select(
@@ -427,14 +478,33 @@ async function createTeamInvoice(
     return { success: false, error: result.error };
   }
 
-  const { error: linkError } = await adminClient
+  // The `.is("invoice_id", null)` clause makes this write a claim, not a blind
+  // overwrite. ensureTeamInvoice() checks invoice_id before calling PayPal, but
+  // that check and this write are not atomic — the admin retry button and the
+  // nightly sweep can interleave between them. Losing this race means a second
+  // invoice really was raised on PayPal, and the guard is what turns that from a
+  // silent double-bill into a loud one (THREAT-068).
+  const { data: linked, error: linkError } = await adminClient
     .from("team_bookings")
     .update({ invoice_id: result.invoiceId })
-    .eq("id", args.teamBookingId);
+    .eq("id", args.teamBookingId)
+    .is("invoice_id", null)
+    .select("id");
+
+  const lostRace = !linkError && (linked ?? []).length === 0;
+
+  if (lostRace) {
+    console.error(
+      "[createTeamInvoice] CRITICAL: raised a duplicate invoice — another caller linked one first",
+      { teamBookingId: args.teamBookingId, duplicateInvoiceId: result.invoiceId }
+    );
+  }
 
   if (linkError) {
     // The invoice exists but isn't linked — mark_invoice_paid would then insert
-    // placeholder bookings and double the headcount. Loud log for reconciliation.
+    // placeholder bookings and double the headcount (THREAT-059). Reported as
+    // linked:false rather than as a failure on purpose: the caller must alert a
+    // human, and must NOT retry, or the company gets billed twice.
     console.error("[createTeamInvoice] CRITICAL: failed to link invoice to team booking", {
       teamBookingId: args.teamBookingId,
       invoiceId: result.invoiceId,
@@ -442,7 +512,215 @@ async function createTeamInvoice(
     });
   }
 
-  return { success: true, invoiceNumber: result.invoiceNumber };
+  return {
+    success: true,
+    invoiceId: result.invoiceId,
+    invoiceNumber: result.invoiceNumber,
+    // A lost race is reported as unlinked for the same reason a failed write is:
+    // a human has to reconcile it, and nothing may retry it automatically.
+    linked: !linkError && !lostRace,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Invoice recovery
+// ---------------------------------------------------------------------------
+
+/** Outcome of an attempt to raise (or re-raise) a company-mode team invoice. */
+export type EnsureTeamInvoiceResult =
+  /** Invoice raised on PayPal, emailed to the contact, and linked to the booking. */
+  | { status: "created"; invoiceId: string; invoiceNumber: string }
+  /**
+   * Invoice raised and emailed, but the team_bookings.invoice_id write failed.
+   * Needs a human to set the link by hand — retrying would bill the company
+   * twice (THREAT-059).
+   */
+  | { status: "created_unlinked"; invoiceId: string; invoiceNumber: string }
+  /** The booking already has an invoice; nothing to do. */
+  | { status: "already_linked"; invoiceId: string }
+  /** Not a company-mode booking, or the booking no longer exists. */
+  | { status: "not_applicable"; reason: string }
+  /** The attempt failed and is safe to retry later. */
+  | { status: "failed"; error: string };
+
+/** The team_bookings columns needed to raise an invoice for a booking. */
+interface TeamBookingInvoiceRow {
+  id: string;
+  session_id: string;
+  company_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string | null;
+  payment_mode: string;
+  total_price: number | string | null;
+  invoice_id: string | null;
+}
+
+/**
+ * Raises the company invoice for a team booking that does not have one yet.
+ *
+ * Idempotent by design and safe to call repeatedly: it re-reads the booking and
+ * short-circuits when `invoice_id` is already set, so the admin retry button,
+ * the nightly sweep, and a double-click can never bill a company twice.
+ *
+ * This exists because invoice creation at booking time is deliberately
+ * non-fatal — the class and share link must survive a PayPal outage — which
+ * until 2026-09-05 left the booking permanently uninvoiced with no way to
+ * recover it. Shared by POST /api/team-bookings/invoice (admin retry) and
+ * POST /api/team-bookings/retry-invoices (daily cron sweep).
+ *
+ * Side effects (only on the "created" paths): PayPal invoice creation + send,
+ * invoices and invoice_activity_log inserts, a Resend email to the company
+ * contact, and an UPDATE on team_bookings.invoice_id.
+ *
+ * @param adminClient - Admin Supabase client (RLS-bypassing).
+ * @param args - The booking to invoice and the staff member to attribute it to.
+ * @returns What happened, discriminated so callers can tell "retry later" from
+ *          "stop and get a human" from "nothing to do".
+ */
+export async function ensureTeamInvoice(
+  adminClient: AnySupabaseClient,
+  args: { teamBookingId: string; actorId: string }
+): Promise<EnsureTeamInvoiceResult> {
+  const { data: row, error: loadError } = await adminClient
+    .from("team_bookings")
+    .select(
+      `id, session_id, company_name, contact_name, contact_email, contact_phone,
+       payment_mode, total_price, invoice_id`
+    )
+    .eq("id", args.teamBookingId)
+    .maybeSingle();
+
+  if (loadError) {
+    console.error("[ensureTeamInvoice] team_bookings lookup failed:", loadError);
+    return { status: "failed", error: "Could not load the team booking." };
+  }
+
+  if (!row) {
+    return { status: "not_applicable", reason: "Team booking not found." };
+  }
+
+  const booking = row as unknown as TeamBookingInvoiceRow;
+
+  if (booking.invoice_id) {
+    return { status: "already_linked", invoiceId: booking.invoice_id };
+  }
+
+  if (booking.payment_mode !== "company") {
+    return {
+      status: "not_applicable",
+      reason: "Employees pay individually on this booking, so there is no company invoice.",
+    };
+  }
+
+  const total = Number(booking.total_price);
+  if (!Number.isFinite(total) || total <= 0) {
+    // A company booking with no total violates team_bookings_price_shape_check,
+    // so this is corrupt data rather than a transient failure — never retryable.
+    return {
+      status: "not_applicable",
+      reason: "This company booking has no total price to invoice.",
+    };
+  }
+
+  const result = await createTeamInvoice(adminClient, {
+    teamBookingId: booking.id,
+    sessionId: booking.session_id,
+    actorId: args.actorId,
+    details: {
+      companyName: booking.company_name,
+      contactName: booking.contact_name,
+      contactEmail: booking.contact_email,
+      contactPhone: booking.contact_phone,
+      paymentMode: "company",
+      pricePerSeat: null,
+      totalPrice: total,
+    },
+  });
+
+  if (!result.success) {
+    return { status: "failed", error: result.error };
+  }
+
+  return {
+    status: result.linked ? "created" : "created_unlinked",
+    invoiceId: result.invoiceId,
+    invoiceNumber: result.invoiceNumber,
+  };
+}
+
+/**
+ * Emails every active super_admin about company-mode team bookings that still
+ * have no invoice.
+ *
+ * This is the health signal for the feature (CLAUDE.md §6). Invoice creation
+ * fails silently by construction — it is non-fatal at booking time — so without
+ * an outbound alert the only evidence is a console line nobody reads and a SQL
+ * invariant somebody has to remember to run. Called both at booking time (one
+ * booking, immediately) and by the daily sweep (a digest of whatever is still
+ * outstanding).
+ *
+ * Best-effort: a mail failure is logged and swallowed so it can never abort a
+ * booking or turn the cron run into a retry loop.
+ *
+ * Side effects: reads profiles, sends one email via Resend.
+ *
+ * @param adminClient - Admin Supabase client (RLS-bypassing).
+ * @param bookings - Uninvoiced bookings to report, newest first.
+ * @param trigger - Whether this fired at booking time or from the daily sweep;
+ *                  changes the wording only.
+ */
+export async function notifyTeamInvoiceMissing(
+  adminClient: AnySupabaseClient,
+  bookings: TeamInvoiceAlertBooking[],
+  trigger: "booking" | "sweep"
+): Promise<void> {
+  try {
+    if (bookings.length === 0) return;
+
+    if (!isEmailConfigured()) {
+      console.warn("[team-bookings] Resend not configured — skipping uninvoiced alert.");
+      return;
+    }
+
+    const { data: admins } = await adminClient
+      .from("profiles")
+      .select("email")
+      .eq("role", "super_admin")
+      .eq("archived", false)
+      .eq("deactivated", false);
+
+    const recipients = ((admins ?? []) as { email: string | null }[])
+      .map((a) => a.email)
+      .filter((email): email is string => Boolean(email));
+
+    if (recipients.length === 0) {
+      console.error("[team-bookings] No super_admin recipients for uninvoiced alert.");
+      return;
+    }
+
+    const { subject, html } = teamInvoiceMissingAdminEmail({
+      bookings,
+      trigger,
+      baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com",
+    });
+
+    await sendEmail({
+      context: "team-bookings:invoice-missing",
+      to: recipients,
+      subject,
+      html,
+      // Deduped per booking per day, so the sweep re-alerts daily until the
+      // invoice exists but a single day's retries collapse into one message.
+      idempotencyKey: `team-invoice-missing-${trigger}-${bookings
+        .map((b) => b.teamBookingId)
+        .sort()
+        .join("-")
+        .slice(0, 120)}-${new Date().toISOString().slice(0, 10)}`,
+    });
+  } catch (err) {
+    console.error("[team-bookings] Uninvoiced alert failed (non-fatal):", err);
+  }
 }
 
 // ---------------------------------------------------------------------------

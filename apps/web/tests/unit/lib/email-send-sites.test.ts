@@ -96,6 +96,7 @@ const EXPECTED_SEND_SITES: Record<string, string> = {
 
   // ── Team bookings ──────────────────────────────────────────────────────────
   "team-bookings:share-link": "lib/team-bookings.ts",
+  "team-bookings:invoice-missing": "lib/team-bookings.ts",
   "team-signup:customer": "app/api/team-bookings/[share_token]/signup/route.ts",
   "team-signup:instructor": "app/api/team-bookings/[share_token]/signup/route.ts",
 

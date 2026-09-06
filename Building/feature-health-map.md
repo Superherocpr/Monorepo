@@ -69,7 +69,7 @@ clone — so this file is the one that travels with the repo.
 | Promo codes | ✅ | — | — | ✅ | — | ✅ | Quarterly abuse audit only. No `max_uses` column exists, so there is no redemption cap to check |
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
-| **Team bookings** (0055) | ✅ | — | — | **✗** | ✅ | — | Admin surface still missing, but now has an invariant — see below |
+| **Team bookings** (0055) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — admin page, retry cron + email alert, and the root-cause PayPal bug fixed — see below |
 | **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
 
 ### Staging mock payments — a narrower fix for a bigger discovery
@@ -125,22 +125,70 @@ is valid data by design. The mitigation is an audit trail, not a check — the
 booking's `manual_booking_reason` records the charged amount alongside the
 session's list price whenever the two differ.
 
-### Team bookings — was invisible, now partially covered
+### Team bookings — was invisible, now covered
 
-Shipped 2026-08-17. It takes money via shareable group links and CSV upload. It has
-3 API routes, 1 public page (`/team/[share_token]`), 1 unit test, and **no admin page
-anywhere** — `grep` across `app/(admin)` finds no reference.
+Shipped 2026-08-17. It takes money via shareable group links and CSV upload.
+Through 2026-09-04 it had 3 API routes, 1 public page (`/team/[share_token]`),
+1 unit test, and **no admin page anywhere**.
 
-As of 2026-08-19 it has one real signal: `team_booking_company_no_invoice` in the
-nightly canary. That check earned its place immediately — it found a breach on
-staging on its first run: a $1,200 "Acme Hospital" company-mode booking from your
-2026-08-17 testing with **no invoice ever raised**. No invoice row exists for that
-session at all, so `createTeamInvoice` failed outright, logged
-`invoice creation failed (non-fatal)` to console, and returned success. Nothing
-told anyone.
+Its one signal, `team_booking_company_no_invoice` in the nightly canary, earned
+its place immediately: on its first run it found a $1,200 "Acme Hospital"
+company-mode booking on staging with **no invoice ever raised**. But detection
+without an alert is not a signal anyone is served by, and that was proven the
+hard way on **2026-09-04**, when the same thing happened in **production** —
+Bradenton Bay High School, $1,020, class four days out, confirmation email sent,
+invoice email never sent. It surfaced only because someone ran the SQL invariant
+by hand during daily maintenance.
 
-Still open: the operator cannot see group bookings anywhere in the product. That's
-a product gap, not just a monitoring one.
+**The root cause, found 2026-09-05.** Not a team-bookings bug at all.
+`createBusinessPayPalInvoice()` read `body.id` off PayPal's
+`POST /v2/invoicing/invoices` response. PayPal only returns a top-level `id`
+when the request sends `Prefer: return=representation`; its default answer is
+the minimal `{ rel, href, method }` shape, where the id is the last segment of
+`href`. The header was never sent. So every real invoice creation drew a 201,
+found no id, returned "we couldn't create the invoice in PayPal", and left an
+**unsent draft on the live merchant account**.
+
+The proof is stark: at the time of the fix the production `invoices` table held
+**zero rows**. Not one invoice had ever been successfully created in production,
+by any code path — team bookings, accept-teach auto-invoicing, or the admin
+Create Invoice form. Team bookings were simply the first path anybody drove hard
+enough to notice, and the swallowed-failure design is what kept it quiet.
+
+There was no signal that would have caught this, because every existing signal
+watched *data consistency*, and consistently-absent data looks the same as an
+idle feature.
+
+**What now exists:**
+
+| Signal | What it does |
+|---|---|
+| `tests/unit/lib/paypal-invoice-create.test.ts` | 7 tests pinning the PayPal contract: asserts the `Prefer` header is sent, and that **both** response shapes still yield an id, so a merchant account that ignores the header cannot resurrect this |
+| `tests/unit/lib/team-bookings.test.ts` (+6) | `ensureTeamInvoice()` short-circuits — an already-linked booking, a per-seat booking, and a booking with no total must never reach PayPal |
+| Cron `retry-team-booking-invoices` (0067) | Daily 13:00 UTC. Retries every breaching booking, so the common case self-heals |
+| Email alert | Fires **immediately** at booking time on failure, and daily from the sweep for anything still outstanding. This is the part that was missing |
+| `/admin/team-bookings` | The operator can finally see group bookings, with a red banner counting uninvoiced ones and their dollar total, and a one-click retry |
+
+**Two deliberate constraints on the automatic retry**, both about not making the
+cure worse than the disease:
+
+- `ensureTeamInvoice()` re-reads the booking and stops if `invoice_id` is set, so
+  the admin button, the cron, and a double-click cannot bill a company twice.
+- The sweep only auto-bills classes that have not already run (7-day grace).
+  Billing a company automatically for a class that happened weeks ago is a
+  judgement call — it may have been settled off-platform or written off. Older
+  bookings stay in the daily digest for a human to action. This also stops stale
+  test data reaching PayPal, which matters because **staging runs against the
+  live merchant account** (THREAT-065).
+
+A failure that raises the invoice but cannot link it is reported as its own
+outcome (`created_unlinked`) and is never retried automatically — that is the
+THREAT-059 double-count case, and it needs a person.
+
+**Still open:** the `invoices` table having been empty means no invoice has ever
+been marked paid in production either, so the PayPal paid-invoice webhook is
+still completely unexercised against real data. That is gap #3 below and is
+unchanged by this work.
 
 ---
 
@@ -511,7 +559,7 @@ transactional email, blog, both PayPal webhooks.
 
 | # | Gap | Why it ranks here |
 |---|---|---|
-| 1 | **Team bookings fully invisible** | Takes money, no admin surface, 2 days old, subtle capacity logic |
+| 1 | ~~**Team bookings fully invisible**~~ | ✅ Closed 2026-09-05 — admin page, retry cron, email alert, and the root-cause PayPal `Prefer` bug fixed |
 | 2 | **PayPal payouts webhook** | May be inert entirely; real money already went DENIED once |
 | 3 | **PayPal invoice webhook** | Silent failure = invoices never mark paid = revenue leak |
 | 4 | **No booking completes in any test** | The primary revenue path |
@@ -540,9 +588,9 @@ Not more tests — better ones. Use `rollcall.spec.ts` as the template. Requires
 clearing the two blockers in `qa-todo.md` first: staging admin credentials and
 the blank PayPal client ID. Sandbox PayPal makes a real booking assertable.
 
-**Team bookings admin surface** (#1)
-Arguably a product gap, not just a monitoring one — the operator can't see group
-bookings at all today.
+**Team bookings admin surface** (#1) — ✅ shipped 2026-09-05
+`/admin/team-bookings` now lists every group booking, flags the uninvoiced ones,
+and offers a one-click retry. It is backed by a real alert, not just the page.
 
 **CLAUDE.md rule** (prevents recurrence)
 Shipping a feature includes declaring its health signal. This is the fix for the

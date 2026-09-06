@@ -598,8 +598,12 @@ export default function CreateSessionClient({
               role="alert"
               className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm"
             >
-              The booking was created, but the invoice could not be sent: {created.invoiceError} You
-              can raise it manually from the Invoices page.
+              The booking was created, but the invoice could not be sent: {created.invoiceError} A
+              super admin has been alerted, and you can retry it from the{" "}
+              <a href="/admin/team-bookings?filter=uninvoiced" className="underline font-medium">
+                Team Bookings page
+              </a>
+              .
             </div>
           )}
 
