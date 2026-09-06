@@ -27,6 +27,31 @@
 --   `Prefer: return=representation`. It did not, so every real invoice creation
 --   silently found no id. No migration is needed for that part.
 --
+-- ⚠️  CRON STATUS AS OF 2026-09-05: NOT SCHEDULED IN EITHER ENVIRONMENT.
+--
+--   Sections 1 and 2 are applied to staging AND production. Section 3 was
+--   applied and then deliberately unscheduled in both. Two separate reasons:
+--
+--   STAGING — PERMANENT EXCLUSION. Staging inherits the LIVE PayPal merchant
+--     credentials from app-level Amplify env vars (THREAT-065), so a test
+--     company booking with a future class date would have this sweep raise a
+--     REAL invoice on the real merchant account. Never schedule it here. Same
+--     spirit as migration 0053's staging exclusion. Staging still gets the admin
+--     page and its manual retry button.
+--
+--   PRODUCTION — TEMPORARY, PENDING TWO THINGS:
+--     1. The app code must be deployed first. Until it is, /api/admin/team-
+--        bookings/retry-invoices 404s, which writes no heartbeat row and would
+--        make cron_health() report the job overdue in the daily digest.
+--     2. The Bradenton Bay booking (67abad1b-8aba-4d8b-92ee-8e926b95e7d9) must
+--        be reconciled first. Its invoice already exists in PayPal as an UNSENT
+--        DRAFT — created by the failed 2026-09-04 attempt, which is exactly the
+--        bug this migration accompanies. Enabling the sweep before that booking
+--        has its invoice_id set would raise a SECOND invoice for the same class.
+--
+--   TO ENABLE IN PRODUCTION once both are done, run section 3 of this file
+--   against production only.
+--
 -- BEFORE RUNNING:
 --   1. Enable pg_net  in the Supabase dashboard → Database → Extensions.
 --   2. Enable pg_cron in the Supabase dashboard → Database → Extensions.

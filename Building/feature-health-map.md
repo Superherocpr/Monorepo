@@ -165,7 +165,7 @@ idle feature.
 |---|---|
 | `tests/unit/lib/paypal-invoice-create.test.ts` | 7 tests pinning the PayPal contract: asserts the `Prefer` header is sent, and that **both** response shapes still yield an id, so a merchant account that ignores the header cannot resurrect this |
 | `tests/unit/lib/team-bookings.test.ts` (+6) | `ensureTeamInvoice()` short-circuits — an already-linked booking, a per-seat booking, and a booking with no total must never reach PayPal |
-| Cron `retry-team-booking-invoices` (0067) | Daily 13:00 UTC. Retries every breaching booking, so the common case self-heals |
+| Cron `retry-team-booking-invoices` (0067) | Daily 13:00 UTC. Retries every breaching booking, so the common case self-heals. **⚠️ Written and applied but NOT YET SCHEDULED in either environment** — see below |
 | Email alert | Fires **immediately** at booking time on failure, and daily from the sweep for anything still outstanding. This is the part that was missing |
 | `/admin/team-bookings` | The operator can finally see group bookings, with a red banner counting uninvoiced ones and their dollar total, and a one-click retry |
 
@@ -185,10 +185,33 @@ A failure that raises the invoice but cannot link it is reported as its own
 outcome (`created_unlinked`) and is never retried automatically — that is the
 THREAT-059 double-count case, and it needs a person.
 
+**Honest status of the cron, 2026-09-05.** It is written, tested, and its
+migration is applied to both environments, but the schedule itself is **off in
+both**, so today the live signal is the immediate booking-time alert and the
+admin page — not the sweep.
+
+- **Staging: off permanently.** Staging uses the LIVE PayPal merchant account
+  (THREAT-065), so a test company booking would have the sweep raise a real
+  invoice. Not acceptable while the account is under review for Payouts
+  verification.
+- **Production: off until two things are true.** The app code has to ship first
+  (until then the route 404s, writes no heartbeat, and would show as an overdue
+  job in the daily digest); and the Bradenton Bay booking has to be reconciled,
+  because **its invoice already exists in PayPal as an unsent draft** — created
+  by the very failure this work fixes. Enabling the sweep first would raise a
+  second invoice for the same class. Section 3 of migration 0067 is the enable
+  step.
+
 **Still open:** the `invoices` table having been empty means no invoice has ever
 been marked paid in production either, so the PayPal paid-invoice webhook is
 still completely unexercised against real data. That is gap #3 below and is
 unchanged by this work.
+
+**Also still open:** production `team_bookings` row
+`67abad1b-8aba-4d8b-92ee-8e926b95e7d9` (Bradenton Bay, $1,020) still has
+`invoice_id = null`. The company was invoiced outside the system, so the money is
+not at risk, but the SQL invariant will keep reporting it until the row is
+reconciled. That is a data task, not a code one.
 
 ---
 
