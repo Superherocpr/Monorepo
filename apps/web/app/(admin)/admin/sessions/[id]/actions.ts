@@ -15,7 +15,7 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor, type AdminActor } from "@/lib/auth/effective-role";
 import { bookingCancelledEmail } from "@/lib/emails";
-import { sendContactLinksForApprovedSessions } from "@/lib/team-bookings";
+import { sendContactLinksForApprovedSessions, notifyTeamClassUpdated } from "@/lib/team-bookings";
 import type { UserRole } from "@/types/users";
 import { floatingNow } from "@/lib/business-time";
 import { getS3BucketName, getS3Region } from "@/lib/s3";
@@ -156,10 +156,21 @@ export interface SessionEditFields {
 
 /**
  * Updates editable fields on a class session.
- * If the session was previously approved, resets approval_status to 'pending_approval'
- * so the session must be re-reviewed before returning to the public schedule.
+ *
+ * For an ordinary class, editing an already-approved session resets
+ * approval_status to 'pending_approval' so it must be re-reviewed before
+ * returning to the public schedule. Team-booking classes are exempt from that
+ * reset and from the instructor "not yet approved" gate: they are never on the
+ * public schedule, and the whole point is that the instructor managing the
+ * company relationship (or a manager) can correct the date, time, location, or
+ * certification at any time without interrupting people already using the
+ * signup link. If any of those four fields actually change on a team-booking
+ * class, everyone currently signed up is emailed the corrected details — see
+ * notifyTeamClassUpdated().
+ *
  * Auth: manager/super_admin for any session; instructors only for their own
- * not-yet-approved sessions, and they may not reassign the instructor.
+ * sessions (not yet approved, unless it is a team booking), and they may not
+ * reassign the instructor.
  * @param sessionId - UUID of the class_sessions record to update.
  * @param fields - The fields to update.
  * @param wasApproved - Pass true if the session's current approval_status is 'approved'.
@@ -176,18 +187,30 @@ export async function updateSession(
 
   const admin = await createAdminClient();
 
-  // Instructor constraints: mirror the UI's canEdit logic server-side:
-  // own session only, not yet approved, and no reassigning to someone else.
+  const { data: current } = await admin
+    .from("class_sessions")
+    .select(
+      `instructor_id, approval_status, class_type_id, location_id, starts_at, ends_at,
+       team_bookings ( id, company_name )`
+    )
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (!current) return "Class session not found.";
+
+  const teamBooking = Array.isArray(current.team_bookings)
+    ? current.team_bookings[0]
+    : current.team_bookings;
+  const isTeamBooking = teamBooking != null;
+
+  // Instructor constraints: mirror the UI's canEdit logic server-side: own
+  // session only, no reassigning to someone else, and — for an ordinary class
+  // only — not yet approved.
   if (actor.effectiveRole === "instructor") {
-    const { data: current } = await admin
-      .from("class_sessions")
-      .select("instructor_id, approval_status")
-      .eq("id", sessionId)
-      .single();
-    if (!current || current.instructor_id !== actor.user.id) {
+    if (current.instructor_id !== actor.user.id) {
       return "You may only edit your own sessions.";
     }
-    if (current.approval_status === "approved") {
+    if (!isTeamBooking && current.approval_status === "approved") {
       return "Approved sessions can only be edited by a manager.";
     }
     if (fields.instructor_id !== actor.user.id) {
@@ -206,8 +229,11 @@ export async function updateSession(
     notes: fields.notes || null,
   };
 
-  // Editing an approved session removes it from the public schedule until re-approved
-  if (wasApproved) {
+  // Editing an approved session removes it from the public schedule until
+  // re-approved. Team bookings are exempt: they are never on the public
+  // schedule, and resetting approval would close the signup link on every edit.
+  const resetsApproval = wasApproved && !isTeamBooking;
+  if (resetsApproval) {
     update.approval_status = "pending_approval";
   }
 
@@ -219,10 +245,33 @@ export async function updateSession(
   revalidatePath(`/admin/sessions/${sessionId}`);
   revalidatePath("/admin/sessions");
   // If approval was reset, remove the session from public pages immediately
-  if (wasApproved) {
+  if (resetsApproval) {
     revalidatePath("/book");
     revalidatePath("/");
   }
+
+  // ── Notify existing signups of a team-booking class change ────────────────
+  // Best-effort: the class is already saved; a mail failure must not surface
+  // as a failed edit. Scoped to the fields that actually change what someone
+  // signed up for — capacity, discount, and notes don't warrant re-notifying.
+  if (isTeamBooking) {
+    const changedWhatTheySignedUpFor =
+      fields.class_type_id !== current.class_type_id ||
+      fields.location_id !== current.location_id ||
+      fields.starts_at !== current.starts_at ||
+      fields.ends_at !== current.ends_at;
+
+    if (changedWhatTheySignedUpFor) {
+      await notifyTeamClassUpdated(admin, {
+        sessionId,
+        companyName: teamBooking.company_name as string,
+        classTypeId: fields.class_type_id,
+        locationId: fields.location_id,
+        startsAt: fields.starts_at,
+      });
+    }
+  }
+
   return null;
 }
 

@@ -134,6 +134,9 @@ export const GROUPS: GroupDef[] = [
           "That panel also says whether the contact has been emailed the link yet, and the date it went out",
           { text: "If a flat company-paid team class was never invoiced, that panel says so in red and gives you a Raise invoice button; it re-checks first, so pressing it twice never bills the company twice", role: "manager" },
           { text: "A per-signup team class shows Not invoiced yet with a Raise invoice button. That is normal before the class: it bills automatically the day after, or you can raise it early for whoever has signed up so far", role: "manager" },
+          "Team / corporate classes can be edited at any time, including after approval: unlike an ordinary class, saving a change never pulls it off the schedule or requires re-approval, so the signup link stays open throughout",
+          "If you change a team class's certification, date, time, or location, everyone already signed up is automatically emailed the corrected details",
+          { text: "Ordinary classes you created can only be edited before they're approved; once approved, only a manager can edit them", role: "instructor" },
           "Log a payment for a student manually",
           "Add Student: search customers by name, email, or phone, or create an account on the spot for a walk-in who isn't in the system yet",
           {

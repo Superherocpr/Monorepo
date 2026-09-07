@@ -69,7 +69,7 @@ clone — so this file is the one that travels with the repo.
 | Promo codes | ✅ | — | — | ✅ | — | ✅ | Quarterly abuse audit only. No `max_uses` column exists, so there is no redemption cap to check |
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
-| **Team bookings** (0055, 0067, 0068) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — surfaced on the session and invoices pages, retry cron + email alert, root-cause PayPal bug fixed. 2026-09-06: third payment mode (bill the company per signup) + the signup link now emails the contact automatically — see below |
+| **Team bookings** (0055, 0067, 0068) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — surfaced on the session and invoices pages, retry cron + email alert, root-cause PayPal bug fixed. 2026-09-06: third payment mode (bill the company per signup), the signup link auto-emails the contact, and the class can be edited (date/time/location/certification) at any time with attendees notified instead of a re-approval gate — see below |
 | **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
 
 ### Staging mock payments — a narrower fix for a bigger discovery
@@ -283,6 +283,59 @@ unchanged by this work.
 `invoice_id = null`. The company was invoiced outside the system, so the money is
 not at risk, but the SQL invariant will keep reporting it until the row is
 reconciled. That is a data task, not a code one.
+
+### Team bookings — unrestricted editing, with a notification in place of re-approval (2026-09-06)
+
+Editing an ordinary class after it's approved resets it to `pending_approval`
+and pulls it off the public schedule until a manager re-reviews it — the
+review step exists because the public sees the listing. Team-booking classes
+are never on the public schedule, but `updateSession()` applied the same reset
+to them anyway, and enforced the stricter instructor rule on top of it
+("approved sessions can only be edited by a manager"). In practice that meant
+an instructor managing their own company relationship could not correct a
+typo'd date or swap the certification without a manager stepping in, and doing
+so would have silently closed the live signup link.
+
+Both are now conditional on whether the session carries a team booking.
+`updateSession()` looks up `team_bookings` for the session in the same query
+that already fetches `approval_status`, and when one exists: the instructor
+"not yet approved" gate is skipped (own-session and no-self-reassignment still
+apply), and the approval-reset-on-edit step is skipped entirely, so the link
+never goes dark. The client-side warning modal that used to say "this will
+reset approval and pull it off the schedule" is suppressed for the same reason:
+it would otherwise tell the editor something false.
+
+**The tradeoff, and what replaces it.** Removing the re-approval checkpoint
+removes the one thing that would have caught someone signed up for a class that
+just quietly became a different class. `notifyTeamClassUpdated()` is the
+replacement: whenever a save changes the class type, start time, end time, or
+location on a team-booking session, every currently active attendee (their
+`bookings` row, not cancelled) gets emailed the corrected details immediately.
+Capacity, discount, and notes don't trigger it — those don't change what
+someone signed up for.
+
+Deliberately best-effort and per-attendee, not a single batch email: a missing
+address on one profile is skipped and logged rather than aborting the whole
+send, and the edit itself is never rolled back or reported as failed if the
+mail does not go out — the class_sessions write already succeeded by that
+point.
+
+**Health signal:** 5 new unit tests in `tests/unit/lib/team-bookings.test.ts`
+(48 total) for `notifyTeamClassUpdated` — no-op when Resend isn't configured,
+no-op with zero active attendees, one email per attendee carrying the NEW
+class type name and address (not the old one), a missing-email profile is
+skipped without blocking the rest, and a lookup failure resolves cleanly
+instead of throwing. `emails-render` and `email-send-sites` both caught the new
+template and send site as intended (failed until registered).
+
+**Gap, stated honestly:** there is no signal that would catch this
+notification silently failing to fire — same shape of gap as the contact-link
+send noted above. Nothing asserts that an edited team class's attendees were
+actually notified; it's provable only by reading the Resend logs for the
+`team-bookings:class-updated` context. Bundling both gaps into one future
+canary check (last-edited-at vs. last-notified-at, or a `class_edit_log`) is
+the natural fix, not attempted here to keep this change scoped to what was
+asked.
 
 ---
 

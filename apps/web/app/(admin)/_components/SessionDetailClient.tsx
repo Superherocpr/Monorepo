@@ -1455,7 +1455,9 @@ export default function SessionDetailClient({
    * Otherwise, shows the edit form directly.
    */
   function handleEditClick() {
-    if (session.approval_status === "approved") {
+    // Team bookings never reset to pending approval on edit (see updateSession),
+    // so the warning about losing the public-schedule slot would be false here.
+    if (session.approval_status === "approved" && session.team_booking === null) {
       setShowApproveEditWarning(true);
     } else {
       setShowEditForm(true);
@@ -1544,12 +1546,16 @@ export default function SessionDetailClient({
   }
 
   // ── Can edit logic ────────────────────────────────────────────────────────
+  // Team-booking classes are exempt from the "not yet approved" gate: editing
+  // one never resets its approval or closes the signup link (see
+  // updateSession's server-side mirror of this), so the instructor who set it
+  // up can correct the date, time, location, or certification at any time.
 
   const canEdit =
     isManager ||
     (isInstructor &&
       isOwnSession &&
-      session.approval_status !== "approved");
+      (session.team_booking !== null || session.approval_status !== "approved"));
 
   // ── Session add-ons ─────────────────────────────────────────────────────────
 
@@ -2879,6 +2885,13 @@ export default function SessionDetailClient({
             <h2 className="text-sm font-semibold text-gray-900">
               Edit Class Session
             </h2>
+            {session.team_booking !== null && (
+              <p className="text-xs text-indigo-800/80 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-2">
+                This is a team booking, so saving takes effect immediately: no re-approval, and
+                the signup link stays open. If you change the class type, date, time, or
+                location, everyone already signed up is emailed the corrected details.
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Class type */}
               <div>

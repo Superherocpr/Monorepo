@@ -3627,3 +3627,77 @@ export function teamInvoiceMissingAdminEmail({
     `),
   };
 }
+
+// ── 38. Team booking class updated — notify people already signed up ──────────
+
+/**
+ * Sent to one person already signed up for a team-booking class when the class
+ * itself changes: certification, date/time, or location.
+ *
+ * Team-booking classes can be edited by their instructor or a manager at any
+ * time, including after signups exist, with no re-approval step in between
+ * (unlike an ordinary class, which drops back to pending_approval and off the
+ * public schedule on any edit). This email is what replaces that review step
+ * for the people it actually affects: whoever already has a seat gets the
+ * corrected details the moment the change is saved, rather than finding out on
+ * class day.
+ *
+ * Triggered by: notifyTeamClassUpdated() in lib/team-bookings.ts, called from
+ * updateSession() in app/(admin)/admin/sessions/[id]/actions.ts whenever the
+ * saved class type, start time, end time, or location differs from what was
+ * there before.
+ *
+ * @param firstName       - The attendee's first name.
+ * @param companyName     - The company that arranged the class.
+ * @param className       - The class's new (post-edit) class type name.
+ * @param startsAt        - The class's new floating wall-clock start time.
+ * @param locationName    - The class's new venue name.
+ * @param locationAddress - The class's new full street address, already joined.
+ */
+export function teamClassUpdatedEmail({
+  firstName,
+  companyName,
+  className,
+  startsAt,
+  locationName,
+  locationAddress,
+}: {
+  firstName: string | null;
+  companyName: string;
+  className: string;
+  startsAt: string;
+  locationName: string;
+  locationAddress: string;
+}): EmailContent {
+  const safeFirst   = escapeHtml(firstName?.trim() ?? "there");
+  const safeCompany = escapeHtml(companyName.trim());
+  const safeClass   = escapeHtml(className.trim());
+  const safeLoc     = escapeHtml(locationName.trim());
+  const safeAddress = escapeHtml(locationAddress.trim());
+
+  const formattedDate = formatClassDate(startsAt);
+  const formattedTime = formatClassTime(startsAt);
+
+  return {
+    subject: `Updated: your ${className.trim()} class details have changed`,
+    html: wrapEmail(`
+      <h1>Your Class Details Have Changed</h1>
+      <p>Hi ${safeFirst},</p>
+      <p>The CPR class arranged by <strong>${safeCompany}</strong> that you signed up for has been
+      updated. Here are the current, correct details:</p>
+      <table cellpadding="6" style="margin:16px 0;">
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Class</td><td><strong>${safeClass}</strong></td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Date</td><td>${formattedDate}</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Time</td><td>${formattedTime} ET</td></tr>
+        <tr><td style="color:#6b7280;font-size:14px;padding-right:16px;">Location</td><td>${safeLoc}${
+          safeAddress ? `<br /><span style="color:#6b7280;font-size:13px;">${safeAddress}</span>` : ""
+        }</td></tr>
+      </table>
+      <p style="font-size:14px;color:#374151;">Your spot is still reserved: there is nothing you need
+      to do. Please double-check these details against your calendar.</p>
+      <p style="font-size:14px;color:#374151;">If the new date or time no longer works for you, give us a
+      call so we can help you find another option.</p>
+      <p>- The SuperHeroCPR Team</p>
+    `),
+  };
+}

@@ -9,12 +9,13 @@
  *   - the cancellation phone follows the creator, per the agreed behaviour
  * The Supabase client is mocked; no real DB access.
  */
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   validateTeamPricing,
   generateShareToken,
   getTeamBookingByShareToken,
   ensureTeamInvoice,
+  notifyTeamClassUpdated,
   MAIN_CANCELLATION_PHONE,
   type TeamBookingDetails,
 } from "@/lib/team-bookings";
@@ -480,9 +481,16 @@ vi.mock("@/lib/invoice-actions", () => ({
   createAndSendInvoice: (...args: unknown[]) => createAndSendInvoiceMock(...args),
 }));
 
+/**
+ * Real send-email module state, defaulting to "not configured" so it stays
+ * a no-op in describe blocks that never touch it. notifyTeamClassUpdated's
+ * tests flip emailConfigured to exercise the actual send path, then restore it.
+ */
+const sendEmailMock = vi.fn().mockResolvedValue({ sent: true, id: "email-1" });
+let emailConfigured = false;
 vi.mock("@/lib/send-email", () => ({
-  sendEmail: vi.fn().mockResolvedValue({ sent: true, id: "email-1" }),
-  isEmailConfigured: () => false,
+  sendEmail: (...args: unknown[]) => sendEmailMock(...args),
+  isEmailConfigured: () => emailConfigured,
 }));
 
 /** A company-mode team_bookings row as ensureTeamInvoice() reads it. */
@@ -816,5 +824,112 @@ describe("ensureTeamInvoice", () => {
 
     expect(result).toEqual({ status: "already_linked", invoiceId: "already-there" });
     expect(createAndSendInvoiceMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// notifyTeamClassUpdated
+// ---------------------------------------------------------------------------
+// Team-booking classes can be edited (date/time/location/certification) at any
+// time, with no re-approval step to catch anyone's attention. This function is
+// what replaces that review for the one audience it actually matters to —
+// these tests pin who gets emailed and who is safely skipped.
+
+describe("notifyTeamClassUpdated", () => {
+  const args = {
+    sessionId: SESSION_ID,
+    companyName: "Acme Hospital",
+    classTypeId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    locationId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    startsAt: "2026-10-01T09:00:00",
+  };
+
+  beforeEach(() => {
+    sendEmailMock.mockClear();
+    emailConfigured = true;
+  });
+
+  afterEach(() => {
+    // Restore the default other describe blocks in this file rely on.
+    emailConfigured = false;
+  });
+
+  test("does nothing when Resend is not configured", async () => {
+    emailConfigured = false;
+    const supabase = mockSupabase({
+      bookings: [{ profiles: { first_name: "Dana", email: "dana@example.com" } }],
+      class_types: { name: "BLS Provider" },
+      locations: { name: "Acme HQ" },
+    });
+
+    await notifyTeamClassUpdated(supabase as never, args);
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  test("does nothing when nobody is currently signed up", async () => {
+    const supabase = mockSupabase({
+      bookings: [],
+      class_types: { name: "BLS Provider" },
+      locations: { name: "Acme HQ" },
+    });
+
+    await notifyTeamClassUpdated(supabase as never, args);
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  test("emails every active attendee with the new class details", async () => {
+    const supabase = mockSupabase({
+      bookings: [
+        { profiles: { first_name: "Dana", email: "dana@example.com" } },
+        { profiles: { first_name: "Ray", email: "ray@example.com" } },
+      ],
+      class_types: { name: "ACLS Provider" },
+      locations: {
+        name: "Acme HQ",
+        address: "1 Main St",
+        city: "Tampa",
+        state: "FL",
+        zip: "33602",
+      },
+    });
+
+    await notifyTeamClassUpdated(supabase as never, args);
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(2);
+    const [firstCall, secondCall] = sendEmailMock.mock.calls.map((c) => c[0]);
+    expect(firstCall).toMatchObject({
+      context: "team-bookings:class-updated",
+      to: "dana@example.com",
+    });
+    expect(secondCall).toMatchObject({ to: "ray@example.com" });
+    // The new certification name must actually reach the email, not the old one.
+    expect(firstCall.subject).toMatch(/ACLS Provider/);
+    expect(firstCall.html).toContain("Acme Hospital");
+    expect(firstCall.html).toContain("1 Main St");
+  });
+
+  test("skips an attendee with no email on file, without failing the others", async () => {
+    const supabase = mockSupabase({
+      bookings: [
+        { profiles: { first_name: "Dana", email: null } },
+        { profiles: { first_name: "Ray", email: "ray@example.com" } },
+      ],
+      class_types: { name: "BLS Provider" },
+      locations: { name: "Acme HQ" },
+    });
+
+    await notifyTeamClassUpdated(supabase as never, args);
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0].to).toBe("ray@example.com");
+  });
+
+  test("never throws, even if the lookup itself fails", async () => {
+    const supabase = mockSupabase({}, { bookings: { message: "boom" } });
+
+    await expect(notifyTeamClassUpdated(supabase as never, args)).resolves.toBeUndefined();
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });

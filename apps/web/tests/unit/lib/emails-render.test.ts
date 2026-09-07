@@ -64,6 +64,7 @@ import {
   dailySummaryEmail,
   teamBookingCreatedEmail,
   teamContactShareLinkEmail,
+  teamClassUpdatedEmail,
   teamSignupConfirmationEmail,
   teamInvoiceMissingAdminEmail,
 } from "@/lib/emails";
@@ -776,6 +777,28 @@ const FIXTURES: Record<string, Fixture> = {
         pricePerSeat: 75,
         priceLabel: "$75.00 per seat",
         supportPhone: "(813) 966-3969",
+      }),
+  },
+
+  teamClassUpdatedEmail: {
+    full: () =>
+      teamClassUpdatedEmail({
+        firstName: "Dana",
+        companyName: "Tampa General",
+        className: "ACLS Provider",
+        startsAt: ISO,
+        locationName: "HQ",
+        locationAddress: "1 Main St, Tampa, FL, 33602",
+      }),
+    // No first name and no address on file.
+    sparse: () =>
+      teamClassUpdatedEmail({
+        firstName: null,
+        companyName: "Tampa General",
+        className: "BLS Provider",
+        startsAt: ISO,
+        locationName: "HQ",
+        locationAddress: "",
       }),
   },
 

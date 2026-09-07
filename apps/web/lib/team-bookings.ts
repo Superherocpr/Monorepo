@@ -31,6 +31,7 @@ import { createClassSession, type CreateClassSessionParams } from "@/lib/session
 import { createAndSendInvoice } from "@/lib/invoice-actions";
 import {
   teamBookingCreatedEmail,
+  teamClassUpdatedEmail,
   teamContactShareLinkEmail,
   teamInvoiceMissingAdminEmail,
   type TeamInvoiceAlertBooking,
@@ -1103,6 +1104,96 @@ export async function notifyTeamInvoiceMissing(
     });
   } catch (err) {
     console.error("[team-bookings] Uninvoiced alert failed (non-fatal):", err);
+  }
+}
+
+/**
+ * Emails everyone currently signed up for a team-booking class when the class
+ * itself changes: certification, date/time, or location.
+ *
+ * Team-booking classes can be edited by their instructor or a manager at any
+ * time, including after an edit that would normally send an ordinary class
+ * back to pending_approval and off the public schedule — team bookings are
+ * exempt from that reset (see updateSession()), since the entire point is that
+ * corrections should not interrupt people actively using the signup link. This
+ * email is the substitute for that review step: it tells the one audience the
+ * change actually affects, at the moment it happens, rather than letting
+ * someone show up to find a different class than they signed up for.
+ *
+ * Best-effort: called after class_sessions is already saved, so a mail failure
+ * must never be surfaced as a failed edit.
+ *
+ * Side effects: reads bookings + profiles + class_types + locations, sends one
+ * Resend email per active attendee.
+ *
+ * @param adminClient - Admin Supabase client (RLS-bypassing).
+ * @param args - The session, its company name, and the NEW (just-saved) class
+ *               type, location, and times.
+ */
+export async function notifyTeamClassUpdated(
+  adminClient: AnySupabaseClient,
+  args: {
+    sessionId: string;
+    companyName: string;
+    classTypeId: string;
+    locationId: string;
+    startsAt: string;
+  }
+): Promise<void> {
+  try {
+    if (!isEmailConfigured()) return;
+
+    const [{ data: bookingRows }, { data: classType }, { data: location }] = await Promise.all([
+      adminClient
+        .from("bookings")
+        .select("profiles!bookings_customer_id_fkey ( first_name, email )")
+        .eq("session_id", args.sessionId)
+        .eq("cancelled", false),
+      adminClient.from("class_types").select("name").eq("id", args.classTypeId).maybeSingle(),
+      adminClient
+        .from("locations")
+        .select("name, address, city, state, zip")
+        .eq("id", args.locationId)
+        .maybeSingle(),
+    ]);
+
+    if (!bookingRows || bookingRows.length === 0) return;
+
+    const className = (classType as { name: string } | null)?.name ?? "CPR Class";
+    const locationName = (location as { name: string } | null)?.name ?? "";
+    const locationAddress = [
+      (location as { address?: string } | null)?.address,
+      (location as { city?: string } | null)?.city,
+      (location as { state?: string } | null)?.state,
+      (location as { zip?: string } | null)?.zip,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    type ProfileRef = { first_name: string | null; email: string | null };
+
+    for (const row of bookingRows as unknown as { profiles: ProfileRef | ProfileRef[] | null }[]) {
+      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      if (!profile?.email) continue;
+
+      const { subject, html } = teamClassUpdatedEmail({
+        firstName: profile.first_name,
+        companyName: args.companyName,
+        className,
+        startsAt: args.startsAt,
+        locationName,
+        locationAddress,
+      });
+
+      await sendEmail({
+        context: "team-bookings:class-updated",
+        to: profile.email,
+        subject,
+        html,
+      });
+    }
+  } catch (err) {
+    console.error("[notifyTeamClassUpdated] Failed (non-fatal):", err);
   }
 }
 
