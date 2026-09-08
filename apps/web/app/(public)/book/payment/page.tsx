@@ -55,6 +55,18 @@ export default function BookPaymentPage(): ReactElement {
     return s.sessionId && (s.customerId || s.customerDetails) ? s : null;
   });
 
+  // sessionStorage doesn't exist during SSR, so the server always renders as if
+  // store were null. The client's first hydration pass runs this same component
+  // with the real sessionStorage value already available, which would make that
+  // pass's output diverge from the server's and throw a hydration error. Gating
+  // on `mounted` (flipped true only after hydration completes, via the effect
+  // below) keeps the first client render identical to the server's.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  const displayStore = mounted ? store : null;
+
   // Tracks the authenticated user id — starts from store for existing customers,
   // set reactively after new-customer account creation.
   const [customerId, setCustomerId] = useState<string | null>(() => getBookingStore().customerId);
@@ -541,7 +553,7 @@ export default function BookPaymentPage(): ReactElement {
             )}
 
             {/* Payment action */}
-            {!isFullError && store?.sessionDetails && (
+            {!isFullError && displayStore?.sessionDetails && (
               <div>
                 {isFreeWithPromo ? (
                   /* Free booking (100% promo) — password section first, then the button it unlocks */
@@ -669,14 +681,14 @@ export default function BookPaymentPage(): ReactElement {
             )}
 
             {/* Loading state while booking store hydrates */}
-            {!store && (
+            {!displayStore && (
               <div className="h-14 w-full bg-gray-100 animate-pulse rounded-lg" />
             )}
 
             {/* DEV ONLY: skip payment button */}
             {process.env.NODE_ENV === "development" &&
               !isFullError &&
-              store?.sessionDetails && (
+              displayStore?.sessionDetails && (
                 <div className="mt-6 border border-dashed border-yellow-400 rounded-lg p-4 bg-yellow-50">
                   <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">
                     Dev only — skip payment
@@ -705,13 +717,13 @@ export default function BookPaymentPage(): ReactElement {
               Your Booking
             </h2>
             <OrderSummary
-              details={store?.sessionDetails ?? null}
+              details={displayStore?.sessionDetails ?? null}
               appliedPromoCode={appliedPromo}
               selectedAddons={selectedAddons}
             />
 
             {/* Add-ons — only shown when the instructor enabled at least one */}
-            {!isFullError && store?.sessionDetails && availableAddons.length > 0 && (
+            {!isFullError && displayStore?.sessionDetails && availableAddons.length > 0 && (
               <div className="mt-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Add-ons <span className="text-gray-400 font-normal">(optional)</span>
@@ -746,7 +758,7 @@ export default function BookPaymentPage(): ReactElement {
             )}
 
             {/* Promo code input */}
-            {!isFullError && store?.sessionDetails && (
+            {!isFullError && displayStore?.sessionDetails && (
               <div className="mt-6">
                 {appliedPromo ? (
                   <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">

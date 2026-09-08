@@ -36,6 +36,15 @@ export default function BookSignInPage() {
     if (!getBookingStore().sessionId) router.replace("/book");
   }, [router]);
 
+  // sessionStorage doesn't exist during SSR, so the server always renders
+  // OrderSummary's loading skeleton. Gating on `mounted` (set only after
+  // hydration completes) keeps the client's first render identical to the
+  // server's, avoiding a hydration mismatch once real session details exist.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   /**
    * Submits sign-in credentials to Supabase.
    * On success, updates the booking store and routes to payment.
@@ -169,7 +178,7 @@ export default function BookSignInPage() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Your Selection
             </h2>
-            <OrderSummary details={sessionDetails} />
+            <OrderSummary details={mounted ? sessionDetails : null} />
           </div>
         </div>
       </div>

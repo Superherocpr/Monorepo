@@ -50,6 +50,15 @@ export default function BookDetailsPage() {
     if (!getBookingStore().sessionId) router.replace("/book");
   }, [router]);
 
+  // sessionStorage doesn't exist during SSR, so the server always renders
+  // OrderSummary's loading skeleton. Gating on `mounted` (set only after
+  // hydration completes) keeps the client's first render identical to the
+  // server's, avoiding a hydration mismatch once real session details exist.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   /** Updates a single form field and clears its error. */
   function handleChange(e: React.ChangeEvent<HTMLInputElement>): void {
     const { name, value } = e.target;
@@ -206,7 +215,7 @@ export default function BookDetailsPage() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Your Selection
             </h2>
-            <OrderSummary details={sessionDetails} />
+            <OrderSummary details={mounted ? sessionDetails : null} />
           </div>
         </div>
       </div>
