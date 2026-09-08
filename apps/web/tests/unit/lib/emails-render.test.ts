@@ -63,6 +63,9 @@ import {
   instructorBookingNotificationEmail,
   dailySummaryEmail,
   teamBookingCreatedEmail,
+  teamContactShareLinkEmail,
+  teamClassUpdatedEmail,
+  teamClassUpdateFailedAdminEmail,
   teamSignupConfirmationEmail,
   teamInvoiceMissingAdminEmail,
 } from "@/lib/emails";
@@ -743,6 +746,81 @@ const FIXTURES: Record<string, Fixture> = {
         priceLabel: "$75 per seat",
         invoiceNumber: null,
         pendingApproval: true,
+      }),
+  },
+
+  teamContactShareLinkEmail: {
+    full: () =>
+      teamContactShareLinkEmail({
+        contactName: "Dana Scully",
+        companyName: "Tampa General",
+        className: "BLS Provider",
+        startsAt: ISO,
+        locationName: "HQ",
+        locationAddress: "1 Main St, Tampa, FL, 33602",
+        shareUrl: `${BASE_URL}/team/abc123`,
+        paymentMode: "company_per_signup",
+        pricePerSeat: 80,
+        priceLabel: "$80.00 per person who signs up, billed to the company",
+        supportPhone: "(813) 555-0100",
+      }),
+    // Per-seat, no address on file: the branch where employees pay themselves.
+    sparse: () =>
+      teamContactShareLinkEmail({
+        contactName: "Dana Scully",
+        companyName: "Tampa General",
+        className: "BLS Provider",
+        startsAt: ISO,
+        locationName: "HQ",
+        locationAddress: "",
+        shareUrl: `${BASE_URL}/team/abc123`,
+        paymentMode: "per_seat",
+        pricePerSeat: 75,
+        priceLabel: "$75.00 per seat",
+        supportPhone: "(813) 966-3969",
+      }),
+  },
+
+  teamClassUpdatedEmail: {
+    full: () =>
+      teamClassUpdatedEmail({
+        firstName: "Dana",
+        companyName: "Tampa General",
+        className: "ACLS Provider",
+        startsAt: ISO,
+        locationName: "HQ",
+        locationAddress: "1 Main St, Tampa, FL, 33602",
+      }),
+    // No first name and no address on file.
+    sparse: () =>
+      teamClassUpdatedEmail({
+        firstName: null,
+        companyName: "Tampa General",
+        className: "BLS Provider",
+        startsAt: ISO,
+        locationName: "HQ",
+        locationAddress: "",
+      }),
+  },
+
+  teamClassUpdateFailedAdminEmail: {
+    full: () =>
+      teamClassUpdateFailedAdminEmail({
+        companyName: "Tampa General",
+        className: "ACLS Provider",
+        startsAt: ISO,
+        failures: [
+          { attendee: "Dana Scully (dana@example.com)", reason: "Resend rejected the message" },
+          { attendee: "an attendee", reason: "No email address on file" },
+        ],
+      }),
+    // A single failure: exercises the singular "1 person" subject branch.
+    sparse: () =>
+      teamClassUpdateFailedAdminEmail({
+        companyName: "Tampa General",
+        className: "BLS Provider",
+        startsAt: ISO,
+        failures: [{ attendee: "Ray Holt (ray@example.com)", reason: "No email address on file" }],
       }),
   },
 

@@ -100,8 +100,8 @@ const EMPTY_FORM: SessionForm = {
   notes: "",
 };
 
-/** How a team booking is paid for. */
-type TeamPaymentMode = "company" | "per_seat";
+/** How a team booking is paid for. Mirrors TeamPaymentMode in lib/team-bookings.ts. */
+type TeamPaymentMode = "company" | "per_seat" | "company_per_signup";
 
 /** Company contact and pricing fields, only used when the team toggle is on. */
 interface TeamForm {
@@ -110,7 +110,10 @@ interface TeamForm {
   contact_email: string;
   contact_phone: string;
   payment_mode: TeamPaymentMode;
-  /** Flat total in company mode, per-seat price in per_seat mode. */
+  /**
+   * Flat total in company mode; the per-head rate in the other two (what the
+   * employee pays in per_seat, what the company owes per signup otherwise).
+   */
   price: string;
 }
 
@@ -169,11 +172,11 @@ export default function CreateSessionClient({
   const [copied, setCopied] = useState(false);
   /**
    * Shown after validation passes on a team-booking submit, before it actually
-   * goes out: the share-link email fires immediately, so this is the last
-   * point to remind the creator they still have to forward it themselves.
+   * goes out: submitting emails the company contact directly, so this is the
+   * last point to catch a wrong address before a customer is mailed.
    */
   const [showTeamReminder, setShowTeamReminder] = useState(false);
-  /** The validated request body, held while the reminder is up. */
+  /** The validated request body, held while the confirmation is up. */
   const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
   /** IDs of add-ons selected to offer on this session: narrowed to the selected class type's eligibility. */
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
@@ -381,12 +384,19 @@ export default function CreateSessionClient({
         setError(
           teamForm.payment_mode === "company"
             ? "Please enter the total price the company is paying."
-            : "Please enter the price each employee pays."
+            : teamForm.payment_mode === "company_per_signup"
+              ? "Please enter the rate the company pays for each signup."
+              : "Please enter the price each employee pays."
         );
         return;
       }
       if (teamForm.payment_mode === "company" && teamPrice <= 0) {
         setError("The company total must be greater than zero.");
+        return;
+      }
+      // A zero rate would invoice the company nothing however many people came.
+      if (teamForm.payment_mode === "company_per_signup" && teamPrice <= 0) {
+        setError("The rate per signup must be greater than zero.");
         return;
       }
     }
@@ -428,10 +438,11 @@ export default function CreateSessionClient({
       if (classRequestId) payload.class_request_id = classRequestId;
     }
 
-    // Team bookings pause here for a confirmation: creating this immediately
-    // emails the creator the share link (not the company contact: the creator
-    // has to forward it themselves), and for a manager/super admin the class
-    // goes live right away. Regular sessions submit straight through as before.
+    // Team bookings pause here for a confirmation: creating this emails the
+    // signup link straight to the company contact (or, for an instructor's
+    // booking, queues it for the moment a manager approves), and for a
+    // manager/super admin the class goes live right away. Regular sessions
+    // submit straight through as before.
     if (isTeam) {
       setPendingPayload(payload);
       setShowTeamReminder(true);
@@ -577,8 +588,13 @@ export default function CreateSessionClient({
             <div>
               <h1 className="text-xl font-bold text-gray-900">Team booking created</h1>
               <p className="text-sm text-gray-500 mt-0.5">
-                Send this link to {teamForm.contact_name.trim() || "the company contact"}; they
-                share it with their own staff.
+                {created.autoApproved
+                  ? `The signup link has been emailed to ${
+                      teamForm.contact_name.trim() || "the company contact"
+                    }. Here it is if you need it again.`
+                  : `${
+                      teamForm.contact_name.trim() || "The company contact"
+                    } gets the link automatically once this class is approved.`}
               </p>
             </div>
           </div>
@@ -588,8 +604,9 @@ export default function CreateSessionClient({
               role="status"
               className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm"
             >
-              This class still needs manager approval before the link will accept signups. Hold off
-              on sending it until it&apos;s approved.
+              This class still needs manager approval before the link will accept signups. Nothing
+              has been sent to the contact yet; the link is emailed to them the moment a manager
+              approves it.
             </div>
           )}
 
@@ -600,9 +617,9 @@ export default function CreateSessionClient({
             >
               The booking was created, but the invoice could not be sent: {created.invoiceError} A
               super admin has been alerted, and you can retry it from the{" "}
-              <a href="/admin/invoices" className="underline font-medium">
+              <Link href="/admin/invoices" className="underline font-medium">
                 Invoices page
-              </a>
+              </Link>
               .
             </div>
           )}
@@ -815,7 +832,7 @@ export default function CreateSessionClient({
             {/* Payment mode: decides who gets billed and what employees see */}
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-gray-700">Who is paying?</span>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {(
                   [
                     {
@@ -826,7 +843,12 @@ export default function CreateSessionClient({
                     {
                       mode: "company" as const,
                       title: "The company",
-                      blurb: "Invoiced a flat total",
+                      blurb: "Invoiced a flat total now",
+                    },
+                    {
+                      mode: "company_per_signup" as const,
+                      title: "Company, per signup",
+                      blurb: "Invoiced after class, per person",
                     },
                   ]
                 ).map(({ mode, title, blurb }) => (
@@ -857,7 +879,11 @@ export default function CreateSessionClient({
 
             <div className="flex flex-col gap-1.5">
               <label htmlFor="cs-team-price" className="text-sm font-medium text-gray-700">
-                {teamForm.payment_mode === "company" ? "Total Price" : "Price Per Seat"}{" "}
+                {teamForm.payment_mode === "company"
+                  ? "Total Price"
+                  : teamForm.payment_mode === "company_per_signup"
+                    ? "Rate Per Signup"
+                    : "Price Per Seat"}{" "}
                 <span className="text-red-500">*</span>
               </label>
               <div className="flex items-center gap-2">
@@ -870,13 +896,16 @@ export default function CreateSessionClient({
                   value={teamForm.price}
                   onChange={(e) => setTeamField("price", e.target.value)}
                   placeholder={teamForm.payment_mode === "company" ? "e.g. 1200.00" : "e.g. 80.00"}
+                  aria-describedby="cs-team-price-help"
                   className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
-              <p className="text-xs text-gray-400">
+              <p id="cs-team-price-help" className="text-xs text-gray-400">
                 {teamForm.payment_mode === "company"
                   ? "The company is invoiced this flat amount. Employees sign up free, and can do so before it's paid."
-                  : "What each employee pays at signup. This replaces the standard class price. Promo codes still apply."}
+                  : teamForm.payment_mode === "company_per_signup"
+                    ? "The company is billed this much for each person who signs up. Employees sign up free. The invoice goes out after the class, or whenever you raise it from the class page."
+                    : "What each employee pays at signup. This replaces the standard class price. Promo codes still apply."}
               </p>
             </div>
           </div>
@@ -1335,30 +1364,33 @@ export default function CreateSessionClient({
         />
       )}
 
-      {/* Team-booking submit reminder: the share-link email fires immediately
-          on creation, and it goes to the creator, not the company contact, so
-          this is the last chance to remind them they still have to forward it. */}
+      {/* Team-booking submit confirmation. The signup link is emailed to the
+          company contact automatically, so this is the checkpoint before a real
+          customer is mailed: it is the last chance to fix a wrong address. */}
       {showTeamReminder && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full space-y-3">
             <h2 className="text-base font-semibold text-gray-900">
-              Don&apos;t forget to send the link
+              {isTeam && isInstructor
+                ? "Ready to create this booking?"
+                : "This emails the contact now"}
             </h2>
             <p className="text-sm text-gray-600">
               {isTeam && isInstructor ? (
                 <>
-                  You&apos;ll get an email with this class&apos;s signup link. Look for it in
-                  your inbox. We don&apos;t send it to the company contact automatically, so
-                  forward it to them yourself. This class still needs manager approval
-                  before anyone can sign up, so don&apos;t send it out until it&apos;s
-                  approved.
+                  This class needs manager approval before anyone can sign up, so{" "}
+                  {teamForm.contact_name.trim() || "the contact"} is not emailed yet. The
+                  signup link is sent to {teamForm.contact_email.trim() || "them"}{" "}
+                  automatically as soon as it&apos;s approved. You&apos;ll get your own copy
+                  of the link either way.
                 </>
               ) : (
                 <>
-                  You&apos;ll get an email with this class&apos;s signup link. Look for it in
-                  your inbox. We don&apos;t send it to the company contact automatically, so
-                  forward it to them yourself. This class goes live as soon as you submit,
-                  so people can start signing up the moment you send it.
+                  The signup link goes straight to{" "}
+                  {teamForm.contact_name.trim() || "the company contact"} at{" "}
+                  {teamForm.contact_email.trim() || "their address"} as soon as you submit,
+                  and their people can start signing up right away. Check that address is
+                  right before you continue.
                 </>
               )}
             </p>

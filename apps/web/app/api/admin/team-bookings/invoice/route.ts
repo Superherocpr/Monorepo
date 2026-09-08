@@ -1,13 +1,16 @@
 /**
  * POST /api/admin/team-bookings/invoice
- * Called by: TeamBookingsClient (/admin/team-bookings) — the "Raise invoice" button
+ * Called by: RaiseTeamInvoiceButton, on /admin/sessions/[id] and /admin/invoices
  * Auth: manager or super_admin session
  *
- * Raises the flat company invoice for a team booking that does not have one,
- * for the case where invoice creation failed at booking time. Delegates to
- * ensureTeamInvoice(), which re-reads the booking first and refuses to raise a
- * second invoice, so a double-click or a race with the nightly sweep cannot
- * bill the company twice.
+ * Raises the company invoice for a team booking that does not have one. Two
+ * cases reach here: a flat 'company' booking whose invoice failed at booking
+ * time, and a 'company_per_signup' booking being billed on demand rather than
+ * waiting for the post-class sweep (its amount is the signups so far).
+ *
+ * Delegates to ensureTeamInvoice(), which re-reads the booking first and refuses
+ * to raise a second invoice, so a double-click or a race with the nightly sweep
+ * cannot bill the company twice.
  *
  * Instructors are deliberately excluded even though they can create team
  * bookings: re-raising an invoice sends live money email to a company contact,
@@ -87,6 +90,15 @@ export async function POST(request: Request): Promise<Response> {
         status: result.status,
         invoiceId: result.invoiceId,
         message: "This booking already has an invoice.",
+      });
+
+    case "nothing_to_bill":
+      // Not an error: a per-signup booking nobody has signed up for owes
+      // nothing yet. Staff can press the button again once people have joined.
+      return NextResponse.json({
+        success: true,
+        status: result.status,
+        message: result.reason,
       });
 
     case "not_applicable":

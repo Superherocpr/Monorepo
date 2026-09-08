@@ -87,9 +87,13 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const paymentMode = body.payment_mode;
-  if (paymentMode !== "company" && paymentMode !== "per_seat") {
+  if (
+    paymentMode !== "company" &&
+    paymentMode !== "per_seat" &&
+    paymentMode !== "company_per_signup"
+  ) {
     return NextResponse.json(
-      { error: "payment_mode must be 'company' or 'per_seat'." },
+      { error: "payment_mode must be 'company', 'per_seat', or 'company_per_signup'." },
       { status: 400 }
     );
   }

@@ -8,8 +8,11 @@
  *
  * Two paths, decided by the team booking's payment mode (read from the DB,
  * never from the request):
- *   - 'company'  → the company already covers the class. Reserve the spot via
- *                  book_spot and record a $0 payment. No PayPal involved.
+ *   - 'company' and 'company_per_signup'
+ *                → the company covers the class. Reserve the spot via book_spot
+ *                  and record a $0 payment. No PayPal involved. (Per-signup
+ *                  bookings are invoiced to the company later, counting exactly
+ *                  the bookings this path creates.)
  *   - 'per_seat' → capture payment first, then reserve. Mirrors the ordering of
  *                  /api/bookings/confirm exactly: re-price server-side,
  *                  re-validate the promo code, capture, require a settled
@@ -23,7 +26,7 @@
  */
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { getTeamBookingByShareToken } from "@/lib/team-bookings";
+import { getTeamBookingByShareToken, isCompanyBilled } from "@/lib/team-bookings";
 import { getSessionPricing } from "@/lib/session-pricing";
 import { resolvePromoDiscount } from "@/lib/promo-codes";
 import {
@@ -167,7 +170,11 @@ export async function POST(
   const { sessionId } = team;
 
   // ── Company-paid: no money changes hands here ───────────────────────────
-  if (team.paymentMode === "company") {
+  // Covers both company modes. In 'company_per_signup' this booking is itself
+  // what the company is billed for later, which makes routing it down the
+  // per-seat path a double charge: the employee would pay for a seat their
+  // employer is also invoiced for.
+  if (isCompanyBilled(team.paymentMode)) {
     const { data: bookingId, error: rpcError } = await supabase.rpc("book_spot", {
       p_session_id: sessionId,
       p_customer_id: user.id,
@@ -568,7 +575,7 @@ async function finaliseSignup(
       locationState: team.locationState,
       locationZip: team.locationZip,
       amountPaid: args.amount,
-      companyPaid: team.paymentMode === "company",
+      companyPaid: isCompanyBilled(team.paymentMode),
       instructorName: team.instructorName,
       cancellationPhone: team.cancellationPhone,
     });

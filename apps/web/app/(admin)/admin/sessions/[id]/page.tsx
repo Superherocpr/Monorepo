@@ -40,10 +40,16 @@ function normalizeTeamBooking(raw: unknown): SessionDetailData["team_booking"] {
     contact_name: row.contact_name as string,
     contact_email: row.contact_email as string,
     contact_phone: (row.contact_phone as string | null) ?? null,
-    payment_mode: row.payment_mode === "company" ? "company" : "per_seat",
+    payment_mode:
+      row.payment_mode === "company"
+        ? "company"
+        : row.payment_mode === "company_per_signup"
+          ? "company_per_signup"
+          : "per_seat",
     price_per_seat: row.price_per_seat == null ? null : Number(row.price_per_seat),
     total_price: row.total_price == null ? null : Number(row.total_price),
     invoice_id: (row.invoice_id as string | null) ?? null,
+    contact_link_sent_at: (row.contact_link_sent_at as string | null) ?? null,
     // Built here rather than in the browser so the field renders the same on
     // server and client. Same source as the share-link email in lib/team-bookings.
     share_url: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com"}/team/${row.share_token as string}`,
@@ -103,7 +109,8 @@ export default async function SessionDetailPage({ params }: PageProps) {
       ),
       team_bookings (
         id, company_name, contact_name, contact_email, contact_phone,
-        payment_mode, price_per_seat, total_price, invoice_id, share_token, created_at
+        payment_mode, price_per_seat, total_price, invoice_id, share_token,
+        contact_link_sent_at, created_at
       )
     `
     )

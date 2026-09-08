@@ -1,13 +1,18 @@
 "use client";
 
 /**
- * RaiseTeamInvoiceButton: recovers a company team booking whose invoice was
- * never raised.
+ * RaiseTeamInvoiceButton: bills a company team booking that has no invoice.
  *
- * Company-paid team bookings are invoiced automatically at creation, but that
- * step is non-fatal by design: the class and share link must survive a PayPal
- * outage. When it fails, `team_bookings.invoice_id` stays null and the company
- * is never asked to pay. This is the operator's way back from that.
+ * Two situations reach this button:
+ *   - A flat 'company' booking is invoiced automatically at creation, but that
+ *     step is non-fatal by design: the class and share link must survive a
+ *     PayPal outage. When it fails, `team_bookings.invoice_id` stays null and
+ *     the company is never asked to pay. This is the way back from that.
+ *   - A 'company_per_signup' booking is billed for however many people signed
+ *     up, normally by the sweep after the class. This raises it early, for
+ *     whoever has signed up so far.
+ *
+ * Pressing it sends a real PayPal invoice to the company contact.
  *
  * Shared deliberately: it appears both on the team booking card of a session
  * (in context, on the class it belongs to) and on the Invoices page (where
@@ -43,7 +48,10 @@ export default function RaiseTeamInvoiceButton({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  /** True once an invoice actually exists, which retires the button. */
   const [ok, setOk] = useState(false);
+  /** How to colour the result line: an outcome that billed nothing is neutral. */
+  const [tone, setTone] = useState<"success" | "error" | "neutral">("neutral");
 
   const handleClick = useCallback(async (): Promise<void> => {
     setPending(true);
@@ -63,7 +71,13 @@ export default function RaiseTeamInvoiceButton({
       >;
       const succeeded = response.ok && record.success === true;
 
-      setOk(succeeded);
+      // "Nothing to bill" is a successful call that raised no invoice: a
+      // per-signup booking nobody has joined yet. The button must stay live, or
+      // staff would have to reload the page to bill it once people sign up.
+      const nothingToBill = record.status === "nothing_to_bill";
+
+      setOk(succeeded && !nothingToBill);
+      setTone(nothingToBill ? "neutral" : succeeded ? "success" : "error");
       setMessage(
         typeof record.message === "string"
           ? record.message
@@ -76,9 +90,10 @@ export default function RaiseTeamInvoiceButton({
 
       // Raising an invoice changes the row's badge and removes this button, so
       // the server state is re-fetched rather than patched locally.
-      if (succeeded) router.refresh();
+      if (succeeded && !nothingToBill) router.refresh();
     } catch {
       setOk(false);
+      setTone("error");
       setMessage("Could not reach the server. Please try again.");
     } finally {
       setPending(false);
@@ -109,9 +124,11 @@ export default function RaiseTeamInvoiceButton({
           role="status"
           className={[
             "text-xs rounded-md px-2.5 py-1.5 border",
-            ok
+            tone === "success"
               ? "bg-green-50 border-green-200 text-green-800"
-              : "bg-red-50 border-red-200 text-red-700",
+              : tone === "neutral"
+                ? "bg-gray-50 border-gray-200 text-gray-700"
+                : "bg-red-50 border-red-200 text-red-700",
           ].join(" ")}
         >
           {message}

@@ -69,7 +69,7 @@ clone — so this file is the one that travels with the repo.
 | Promo codes | ✅ | — | — | ✅ | — | ✅ | Quarterly abuse audit only. No `max_uses` column exists, so there is no redemption cap to check |
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
-| **Team bookings** (0055) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — surfaced on the session and invoices pages, retry cron + email alert, root-cause PayPal bug fixed — see below |
+| **Team bookings** (0055, 0067, 0068) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — surfaced on the session and invoices pages, retry cron + email alert, root-cause PayPal bug fixed. 2026-09-06: third payment mode (bill the company per signup), the signup link auto-emails the contact, and the class can be edited (date/time/location/certification) at any time with attendees notified instead of a re-approval gate — see below |
 | **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
 
 ### Staging mock payments — a narrower fix for a bigger discovery
@@ -202,6 +202,77 @@ admin page — not the sweep.
   second invoice for the same class. Section 3 of migration 0067 is the enable
   step.
 
+### Team bookings — third payment mode and automatic contact link (2026-09-06)
+
+Two changes on top of the invoice work above, both driven by how the feature is
+actually sold.
+
+**1. `company_per_signup`, a third payment mode (migration 0068).** The two
+original modes forced a bad choice for the common corporate arrangement of "bill
+us for however many of our people come": `company` means quoting a flat total on
+the phone and eating the difference, and `per_seat` bills the employees rather
+than the company. The new mode bills the company `price_per_seat x signups`.
+
+The billable number is **signups, not attendance** (agreed explicitly), counted
+as live `bookings` rows carrying the `team_booking_id`, and there is no minimum.
+The amount is therefore not knowable until people have signed up, which is why
+this mode is invoiced late rather than at creation:
+
+| Trigger | When |
+|---|---|
+| Nightly sweep (`retry-team-booking-invoices`) | Once the class has **ended**. Skipped silently before that: an uninvoiced per-signup booking is correct, not a breach |
+| Raise invoice button | Any time, on the class page or the invoices page. Bills whoever has signed up at that moment |
+
+Two things this mode needed that the flat one did not:
+
+- **A zero-signup outcome that is not a fault.** A class nobody joined owes
+  nothing, and a $0 PayPal invoice is invalid anyway. That returns
+  `nothing_to_bill`, a distinct status from `not_applicable`, precisely so the
+  sweep does not email super_admins about the same empty class every day
+  forever. The button treats it the same way: neutral, and it stays clickable.
+- **The uninvoiced band had to learn the difference.** `/admin/invoices` only
+  lists per-signup bookings once their class is over, and shows their *rate*
+  rather than a total, since the total does not exist yet. The band's dollar
+  headline deliberately sums flat totals only: adding a rate into that figure
+  would state an amount the business is not owed.
+
+Also fixed while in here: `/api/team-bookings/[share_token]/signup` branched on
+`payment_mode === "company"` to decide whether an employee pays. Left alone, a
+per-signup employee would have fallen through to the paid path and been charged
+for a seat their employer is also invoiced for. Both company modes now route
+through one `isCompanyBilled()` helper.
+
+**2. The signup link is emailed to the company contact automatically.** It was
+previously mailed only to the staff creator, who had to forward it by hand — a
+step that can simply be forgotten, with no trace when it is. It now goes to the
+contact directly.
+
+The one real constraint is that an instructor-created class is not approved yet,
+and an unapproved link **actively refuses signups**. Mailing it on creation would
+send contacts to a page that turns their people away, so the send is held and
+fires from `approveSession` / `bulkApproveSession` instead. Exactly-once is
+enforced by claiming `team_bookings.contact_link_sent_at` with a conditional
+UPDATE *before* sending, not by Resend's idempotency key: approve → edit (which
+resets the class to `pending_approval`) → re-approve days later would otherwise
+mail the same contact twice, and a duplicate to a customer is worse than a missed
+one that staff can resend from the class page. A send that demonstrably failed
+releases the claim so a later approval can retry.
+
+**Health signals for both:** 12 new unit tests in
+`tests/unit/lib/team-bookings.test.ts` (43 total) covering the per-signup
+arithmetic including cent rounding, the zero-signup guard, the missing-rate
+guard, the still-enforced double-invoice refusal, and the new phone precedence;
+plus the two email registries (`emails-render`, `email-send-sites`), which both
+failed until the new template and send site were registered — working as
+intended.
+
+**Gap, stated honestly:** there is no signal that would catch the contact link
+silently never being sent. `contact_link_sent_at` makes it *visible* (the class
+page says whether and when it went out), but nothing asserts it. A booking whose
+class is approved and imminent with `contact_link_sent_at` still null is a clean
+SQL invariant and is the obvious next addition. `// TODO:` noted here rather than
+in code, since it belongs to the canary, not to a function.
+
 **Still open:** the `invoices` table having been empty means no invoice has ever
 been marked paid in production either, so the PayPal paid-invoice webhook is
 still completely unexercised against real data. That is gap #3 below and is
@@ -212,6 +283,78 @@ unchanged by this work.
 `invoice_id = null`. The company was invoiced outside the system, so the money is
 not at risk, but the SQL invariant will keep reporting it until the row is
 reconciled. That is a data task, not a code one.
+
+### Team bookings — unrestricted editing, with a notification in place of re-approval (2026-09-06)
+
+Editing an ordinary class after it's approved resets it to `pending_approval`
+and pulls it off the public schedule until a manager re-reviews it — the
+review step exists because the public sees the listing. Team-booking classes
+are never on the public schedule, but `updateSession()` applied the same reset
+to them anyway, and enforced the stricter instructor rule on top of it
+("approved sessions can only be edited by a manager"). In practice that meant
+an instructor managing their own company relationship could not correct a
+typo'd date or swap the certification without a manager stepping in, and doing
+so would have silently closed the live signup link.
+
+Both are now conditional on whether the session carries a team booking.
+`updateSession()` looks up `team_bookings` for the session in the same query
+that already fetches `approval_status`, and when one exists: the instructor
+"not yet approved" gate is skipped (own-session and no-self-reassignment still
+apply), and the approval-reset-on-edit step is skipped entirely, so the link
+never goes dark. The client-side warning modal that used to say "this will
+reset approval and pull it off the schedule" is suppressed for the same reason:
+it would otherwise tell the editor something false.
+
+**The tradeoff, and what replaces it.** Removing the re-approval checkpoint
+removes the one thing that would have caught someone signed up for a class that
+just quietly became a different class. `notifyTeamClassUpdated()` is the
+replacement: whenever a save changes the class type, start time, end time, or
+location on a team-booking session, every currently active attendee (their
+`bookings` row, not cancelled) gets emailed the corrected details immediately.
+Capacity, discount, and notes don't trigger it — those don't change what
+someone signed up for.
+
+Deliberately best-effort and per-attendee, not a single batch email: one
+attendee's send failing does not abort the rest of the loop, and the edit
+itself is never rolled back or reported as failed if a notification does not
+go out — the class_sessions write already succeeded by that point.
+
+**2026-09-07 — closed the silent-failure gap.** The first cut of this feature
+shipped with a known hole: a missing address or a rejected Resend send was only
+`console.error`'d, which CLAUDE.md §6 explicitly disqualifies as a health
+signal ("an admin page where someone *could* notice is not a health signal").
+Nothing would have told anyone that an attendee never learned their class
+changed.
+
+`notifyTeamClassUpdated()` now tracks every attendee it could not reach — no
+email on file, or `sendEmail()` came back `{ sent: false }` — and if that list
+is non-empty, immediately emails every active super_admin
+(`notifyTeamClassUpdateFailed()`, `teamClassUpdateFailedAdminEmail`) naming
+who was missed and why. There is deliberately no retry: a second automated
+attempt at the same address that just failed is unlikely to succeed, and the
+actual fix is a human calling or texting the person directly, which the alert
+is written to prompt.
+
+**Health signal:** `tests/unit/lib/team-bookings.test.ts` (50 total) covers
+both the happy path and the failure path for `notifyTeamClassUpdated` — no-op
+when Resend isn't configured, no-op with zero active attendees, one email per
+attendee carrying the NEW class details, a missing-email attendee now
+triggers the admin alert (not just a skip), a Resend rejection triggers the
+same alert naming the right person and reason while leaving successful sends
+out of it, the alert itself no-ops cleanly when there are no super_admins to
+reach, and a lookup failure resolves without throwing. `emails-render` and
+`email-send-sites` both caught the new template and send site as intended
+(failed until registered).
+
+**Gap, stated honestly:** the alert email to super_admins is itself sent
+through the same best-effort `sendEmail()` and is not independently retried or
+invariant-checked — if Resend is down for everyone, both the attendee
+notification and the alert about it can fail together. This is the same
+stopping point every other admin-alert path in this file accepts (e.g.
+`notifyTeamInvoiceMissing`), rather than building a self-referential alert on
+the alert. A full fix would be an infrastructure-level Resend health check
+shared across every feature that alerts, not something scoped to team
+bookings.
 
 ---
 
