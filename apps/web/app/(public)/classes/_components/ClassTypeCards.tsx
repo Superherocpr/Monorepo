@@ -8,23 +8,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { ClassType } from "@/types/schedule";
-
-/**
- * Formats a duration in minutes to a human-readable string.
- * e.g. 120 → "2 hours", 90 → "1 hr 30 min"
- * @param minutes - Duration in minutes.
- */
-function formatDuration(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (mins === 0) return `${hours} hour${hours !== 1 ? "s" : ""}`;
-  return `${hours} hr ${mins} min`;
-}
-
-/** Converts a class type name to a URL-safe slug for anchor links. */
-function toSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-}
+import { toSlug } from "@/lib/class-slug";
+import { formatDuration, formatPrice } from "@/lib/class-display";
 
 /**
  * Renders a vertical stack of class type cards fetched from the database.
@@ -94,13 +79,7 @@ export default async function ClassTypeCards() {
                   Up to {classType.max_capacity} students
                 </span>
                 <span className="bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-full">
-                  {classType.price.toLocaleString("en-US", {
-                    style: "currency",
-                    currency: "USD",
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  per person
+                  {formatPrice(classType.price)} per person
                 </span>
               </div>
 

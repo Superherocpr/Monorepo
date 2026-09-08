@@ -446,6 +446,8 @@ export const GROUPS: GroupDef[] = [
         role: "manager",
         bullets: [
           "View all private class requests submitted by customers through the public site",
+          "Requests arrive from two places: the Request a Class form, and the public class finder at /find-a-class when it recommends a course with no dates on the schedule",
+          "A rise in requests for one course usually means that course needs more dates on the calendar, since the finder only sends people here when it finds none",
           "Filter by status using tabs: All, Pending, Approved, Instructor Assigned, Rejected",
           "Request cards show: class type, customer name and email, preferred date, venue, group size, travel fee, and submitted date",
           "Pending count badge displayed when viewing the All tab",
@@ -530,6 +532,7 @@ export const GROUPS: GroupDef[] = [
           "Account tab: changing your email or password requires entering your current password first",
           { text: "General tab: toggle public nav pages on/off: Classes, Schedule, Merch, Blog, About, Contact", role: "super" },
           { text: "Class Types tab: create, edit, delete, or deactivate class types; set name, description, duration, price, capacity, AHA certified flag (auto-set when a cert type is selected), linked certification type, and eligible add-ons", role: "super" },
+          { text: "Class Types tab: renaming a class type changes the link the public class finder uses to recommend it. The finder falls back to the request form rather than breaking, but tell a developer after a rename so the course stays recommendable", role: "super" },
           { text: "Grades tab: configure preset grade values and labels used in the Grading Tool", role: "super" },
           { text: "Zoho tab: connect or disconnect a Zoho Mail account for replying to contact form submissions", role: "super" },
           { text: "Social tab: manually trigger a sync of the Facebook social feed cache", role: "super" },

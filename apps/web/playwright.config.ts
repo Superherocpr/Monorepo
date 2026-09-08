@@ -57,7 +57,7 @@ export default defineConfig({
     {
       name: "guest",
       testMatch:
-        /e2e\/(public-pages|auth|contact-form|rollcall|submit-roster|merch)\.spec\.ts/,
+        /e2e\/(public-pages|auth|contact-form|rollcall|submit-roster|merch|find-a-class)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
 

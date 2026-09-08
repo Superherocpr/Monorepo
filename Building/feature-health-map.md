@@ -365,12 +365,44 @@ bookings.
 | Sessions & scheduling | ✅✅ | ○ smoke | ✅ | ✅ | ✅✅ | — | Cron covers unclaimed escalation only |
 | **Class time correctness** | ✅✅ | — | — | ✅ | — | — | ⚠️ Unit-only; call-site gap fired 2026-08-23 — see note below |
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
+| **Class finder walkthrough** | ✅✅ | **● outcome** | — | ✅ | — | — | ✅ Shipped 2026-09-08. Every branch asserted to its terminal destination; the course name only renders when a mapped slug resolved against the live catalog, so slug drift fails the suite. See note below |
 | **Rollcall / check-in** | ✅✅ | **● outcome** | ✅ | ✅ | — | — | ✅ **The one feature tested properly** — asserts `roster_record` confirmed and realtime broadcast. 2026-09-04: wired the branded welcome email (`rollcallWelcomeEmail`, previously dead code — dropped in a 2026-07-15 refactor) into `checkin-by-profile`, fired only on first confirmation, not the idempotent re-check-in path; covered by `tests/unit/api/rollcall-checkin-by-profile.test.ts` |
 | Roster upload / submit | ✅ | ○ lookup | — | ✅ | — | — | Parse tested; submission path not |
 | Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on + price-vs-UpdatePanel guard + auto-submit on Mark-as-submitted, all 2026-08-24; unit coverage for all four |
 | **Student documents / photos** | — | — | ✅ | ✅ | — | — | Bookmarklet injects merged PDFs into Enrollware via AjaxUpload1; cron purges DB rows at 30 days; S3 lifecycle rule handles file expiry |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
 | Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
+
+### Class finder walkthrough (added 2026-09-08)
+
+`/find-a-class` walks a visitor to the course they need and hands off to either
+`/book?class=<slug>` or `/request-class`. The decision table is
+`apps/web/lib/class-recommendations.ts`; the page guide is
+[`PageGuides/find-a-class-page.md`](PageGuides/find-a-class-page.md).
+
+**The failure mode worth watching is a wrong answer, not a crash.** Recommending
+Heartsaver to someone whose employer requires BLS produces a card their hospital
+will reject, and neither they nor we find out until they are turned away. The
+unit tests therefore assert the clinical branches specifically, not just that
+something is returned.
+
+**The second failure mode is silent orphaning.** Courses are matched by slug
+derived from `class_types.name`, which staff edit in the admin. A rename would
+point a mapping at nothing. Mitigations, in order:
+
+1. Each course lists known name variants and resolves to the first that exists.
+2. If none match, the result panel degrades to the request path rather than
+   rendering a broken card.
+3. `tests/e2e/find-a-class.spec.ts` asserts the course *name* renders, which is
+   only true when a slug matched a live, active class type.
+
+That third signal is real: on its first run it caught production and staging
+having genuinely different course names (`Basic Life Support (BLS) Renewals`
+versus `Basic Life Support (BLS)`), which is what motivated the variant lists.
+
+Not covered: nothing measures whether the walkthrough actually reduces phone
+calls. That is the point of the feature and it is currently invisible. If call
+volume matters, instrument which recommendation each visitor lands on.
 
 ### Class time correctness (added 2026-08-22)
 

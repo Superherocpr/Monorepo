@@ -9,6 +9,7 @@
 
 import type { Metadata } from "next";
 import HeroSection from "./_components/home/HeroSection";
+import FindAClassCta from "./_components/home/FindAClassCta";
 import WhyChooseUsSection from "./_components/home/WhyChooseUsSection";
 import ClassTypesSection from "./_components/home/ClassTypesSection";
 import TestimonialsSection from "./_components/home/TestimonialsSection";
@@ -36,6 +37,7 @@ export default async function HomePage() {
   return (
     <main>
       <HeroSection />
+      <FindAClassCta />
       <WhyChooseUsSection />
       <ClassTypesSection />
       <TestimonialsSection />

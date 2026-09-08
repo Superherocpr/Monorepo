@@ -24,6 +24,12 @@ export interface ClassTypeOption {
 
 interface Props {
   classTypes: ClassTypeOption[];
+  /**
+   * A class type to pre-select in the form, resolved server-side from a
+   * ?class= slug (e.g. the "Request this class" link on /find-a-class). Null
+   * when there was no such param or it did not match an active class type.
+   */
+  preSelectedClassTypeId: string | null;
 }
 
 type View = "form" | "auth" | "success";
@@ -91,15 +97,22 @@ const STRENGTH_COLORS = {
 /**
  * Renders the full request-a-class flow: form → (optional auth gate) → success.
  * @param classTypes - Active class types fetched server-side for the dropdown.
+ * @param preSelectedClassTypeId - Class type to pre-select, from a ?class= slug.
  */
-export default function RequestClassWizard({ classTypes }: Props) {
+export default function RequestClassWizard({
+  classTypes,
+  preSelectedClassTypeId,
+}: Props) {
   const [view, setView] = useState<View>("form");
   const [authMode, setAuthMode] = useState<AuthMode>("create");
   const [loading, setLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
   // ── Request form state ─────────────────────────────────────────────────────
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>({
+    ...EMPTY_FORM,
+    class_type_id: preSelectedClassTypeId ?? "",
+  });
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof FormState, string>>>({});
 
   // ── Create account state ───────────────────────────────────────────────────
