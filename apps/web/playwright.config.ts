@@ -57,14 +57,14 @@ export default defineConfig({
     {
       name: "guest",
       testMatch:
-        /e2e\/(public-pages|auth|contact-form|rollcall|submit-roster|merch)\.spec\.ts/,
+        /e2e\/(public-pages|auth|contact-form|rollcall|submit-roster|merch|find-a-class)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
 
     // ── Customer tests: uses saved customer session ──────────────────────────
     {
       name: "customer",
-      testMatch: /e2e\/(booking-flow|customer-dashboard)\.spec\.ts/,
+      testMatch: /e2e\/(booking-flow|customer-dashboard|request-class-venue)\.spec\.ts/,
       dependencies: ["setup-customer"],
       use: {
         ...devices["Desktop Chrome"],

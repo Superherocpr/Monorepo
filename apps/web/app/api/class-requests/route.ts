@@ -6,8 +6,15 @@
  *           Authenticated customers see only their own requests.
  * POST Auth: Any authenticated user (customer or staff).
  *
+ * POST accepts two venue shapes (types/class-requests.ts VenueMode):
+ *   customer_venue — a freeform address, travel_fee = 65 (existing behaviour).
+ *   home_base      — an existing is_home_base location picked by id,
+ *                     travel_fee = 0. venue_city/venue_state are copied from
+ *                     the location so every downstream reader (admin views,
+ *                     both emails below) keeps working without a join.
+ *
  * POST side effects:
- *   1. Inserts a class_requests row (status = 'pending', travel_fee = 65)
+ *   1. Inserts a class_requests row (status = 'pending')
  *   2. Emails all super_admin and manager profiles (admin notification)
  *   3. Emails the submitting customer (confirmation)
  */
@@ -20,7 +27,7 @@ import {
   classRequestCustomerConfirmEmail,
 } from "@/lib/emails";
 import { PREFERRED_TIME_LABELS } from "@/types/class-requests";
-import type { PreferredTimeOfDay } from "@/types/class-requests";
+import type { PreferredTimeOfDay, VenueMode } from "@/types/class-requests";
 
 /** Valid US state abbreviations. */
 const VALID_STATES = new Set([
@@ -67,6 +74,7 @@ export async function GET(): Promise<Response> {
     .select(`
       id, customer_id, class_type_id, preferred_date,
       preferred_time_of_day, group_size, contact_phone,
+      venue_mode, venue_location_id,
       venue_name, venue_address, venue_city, venue_state, venue_zip,
       notes, status, rejection_reason, travel_fee, session_id, created_at,
       class_types ( id, name, duration_minutes, price ),
@@ -114,18 +122,13 @@ export async function POST(request: Request): Promise<Response> {
 
   const b = body as Record<string, unknown>;
 
-  // ── Validate required fields ───────────────────────────────────────────────
+  // ── Validate fields common to both venue shapes ────────────────────────────
   const {
     class_type_id,
     preferred_date,
     preferred_time_of_day,
     group_size,
     contact_phone,
-    venue_name,
-    venue_address,
-    venue_city,
-    venue_state,
-    venue_zip,
     notes,
   } = b;
 
@@ -135,17 +138,89 @@ export async function POST(request: Request): Promise<Response> {
     typeof preferred_time_of_day !== "string" ||
     !VALID_TIMES.has(preferred_time_of_day as PreferredTimeOfDay) ||
     typeof group_size !== "number" || !Number.isInteger(group_size) || group_size < 1 ||
-    typeof contact_phone !== "string" || !contact_phone.trim() ||
-    typeof venue_name !== "string" || !venue_name.trim() ||
-    typeof venue_address !== "string" || !venue_address.trim() ||
-    typeof venue_city !== "string" || !venue_city.trim() ||
-    typeof venue_state !== "string" || !VALID_STATES.has(venue_state) ||
-    typeof venue_zip !== "string" || !venue_zip.trim()
+    typeof contact_phone !== "string" || !contact_phone.trim()
   ) {
     return NextResponse.json(
       { data: null, error: "Missing or invalid required fields" },
       { status: 400 }
     );
+  }
+
+  // ── Validate the venue shape ────────────────────────────────────────────────
+  // customer_venue: a freeform address, validated the same way as before.
+  // home_base: only an id, resolved against the live locations table below —
+  // the client never gets to assert the city/state/name itself.
+  const venueMode: VenueMode = b.venue_mode === "home_base" ? "home_base" : "customer_venue";
+
+  const admin = await createAdminClient();
+
+  let venueName: string | null = null;
+  let venueAddress: string | null = null;
+  let venueCity: string;
+  let venueState: string;
+  let venueZip: string | null = null;
+  let venueLocationId: string | null = null;
+  let travelFee: number;
+  /** Real, staff-facing label — shown to admins/instructors, never to the customer. */
+  let staffVenueLabel: string;
+  /** Customer-facing label — generic for home_base, so an internal location name never leaks into an email. */
+  let customerVenueLabel: string;
+
+  if (venueMode === "home_base") {
+    const locationId = b.venue_location_id;
+    if (typeof locationId !== "string" || !locationId.trim()) {
+      return NextResponse.json(
+        { data: null, error: "A location must be selected" },
+        { status: 400 }
+      );
+    }
+
+    // Re-verify against the live table rather than trusting the client — a
+    // location can be un-marked as a home base between page load and submit.
+    const { data: location } = await admin
+      .from("locations")
+      .select("id, name, city, state")
+      .eq("id", locationId.trim())
+      .eq("is_home_base", true)
+      .maybeSingle();
+
+    if (!location) {
+      return NextResponse.json(
+        { data: null, error: "Selected location is no longer available. Please choose another." },
+        { status: 400 }
+      );
+    }
+
+    venueCity = location.city;
+    venueState = location.state;
+    venueLocationId = location.id;
+    travelFee = 0;
+    staffVenueLabel = location.name;
+    customerVenueLabel = `Our ${location.city} location`;
+  } else {
+    const { venue_name, venue_address, venue_city, venue_state, venue_zip } = b;
+
+    if (
+      typeof venue_name !== "string" || !venue_name.trim() ||
+      typeof venue_address !== "string" || !venue_address.trim() ||
+      typeof venue_city !== "string" || !venue_city.trim() ||
+      typeof venue_state !== "string" || !VALID_STATES.has(venue_state) ||
+      typeof venue_zip !== "string" || !venue_zip.trim()
+    ) {
+      return NextResponse.json(
+        { data: null, error: "Missing or invalid required fields" },
+        { status: 400 }
+      );
+    }
+
+    venueName = venue_name.trim();
+    venueAddress = venue_address.trim();
+    venueCity = venue_city.trim();
+    venueState = venue_state.trim();
+    venueZip = venue_zip.trim();
+    travelFee = 65;
+    staffVenueLabel = venueName;
+    customerVenueLabel = venueName;
   }
 
   // Preferred date must be at least 7 days from today
@@ -160,8 +235,6 @@ export async function POST(request: Request): Promise<Response> {
       { status: 400 }
     );
   }
-
-  const admin = await createAdminClient();
 
   // Verify class_type exists and is active
   const { data: classType } = await admin
@@ -199,14 +272,16 @@ export async function POST(request: Request): Promise<Response> {
       preferred_time_of_day: preferred_time_of_day as PreferredTimeOfDay,
       group_size: group_size,
       contact_phone: (contact_phone as string).trim(),
-      venue_name: venue_name.trim(),
-      venue_address: venue_address.trim(),
-      venue_city: venue_city.trim(),
-      venue_state: venue_state.trim(),
-      venue_zip: venue_zip.trim(),
+      venue_mode: venueMode,
+      venue_location_id: venueLocationId,
+      venue_name: venueName,
+      venue_address: venueAddress,
+      venue_city: venueCity,
+      venue_state: venueState,
+      venue_zip: venueZip,
       notes: typeof notes === "string" && notes.trim() ? notes.trim() : null,
       status: "pending",
-      travel_fee: 65,
+      travel_fee: travelFee,
     })
     .select("id")
     .single();
@@ -248,9 +323,9 @@ export async function POST(request: Request): Promise<Response> {
     preferredDate: preferred_date.trim(),
     preferredTimeLabel: timeLabel,
     groupSize: group_size,
-    venueName: venue_name.trim(),
-    venueCity: venue_city.trim(),
-    venueState: venue_state.trim(),
+    venueName: staffVenueLabel,
+    venueCity: venueCity,
+    venueState: venueState,
     requestId: newRequest.id,
     baseUrl,
   });
@@ -259,7 +334,7 @@ export async function POST(request: Request): Promise<Response> {
     firstName: profile.first_name,
     className: classType.name,
     preferredDate: preferred_date.trim(),
-    venueName: venue_name.trim(),
+    venueName: customerVenueLabel,
   });
 
   await sendEmails([

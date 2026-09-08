@@ -23,7 +23,9 @@ export interface ClassType {
 
 /**
  * A class venue from the `locations` table.
- * Only one location may have is_home_base = true at a time.
+ * Any number of locations may have is_home_base = true — e.g. an instructor's
+ * own address. Every home-base location is offered as a venue option on the
+ * public /request-class page.
  */
 export interface Location {
   id: string;

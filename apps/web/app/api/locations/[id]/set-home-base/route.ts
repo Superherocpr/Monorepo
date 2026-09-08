@@ -1,18 +1,23 @@
 /**
  * PATCH /api/locations/[id]/set-home-base
- * Called by: LocationsClient.tsx ("Set as Home Base" button)
+ * Called by: LocationsClient.tsx ("Set as Home Base" / "Remove Home Base" buttons)
  * Auth: manager and super_admin only
- * Atomically clears is_home_base on all locations, then sets it on the target.
- * This ensures exactly one home base at all times.
+ *
+ * Toggles is_home_base on the target location only. Multiple locations may be
+ * a home base at once — instructors who teach from their own address each mark
+ * their address as a home base, and all of them appear as venue options on the
+ * public /request-class page.
+ *
+ * Body: { is_home_base: boolean }
  */
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 
-/** Sets the target location as the sole home base. */
+/** Sets or clears is_home_base on the target location. */
 export async function PATCH(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -20,7 +25,25 @@ export async function PATCH(
   // ── Auth & access check ────────────────────────────────────────────────────
   const authResult = await requireApiRole(["manager", "super_admin"]);
   if ("error" in authResult) return authResult.error;
-  const { actor } = authResult;
+
+  // ── Input validation ───────────────────────────────────────────────────────
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { success: false, error: "Invalid request body." },
+      { status: 400 }
+    );
+  }
+
+  const isHomeBase = (body as Record<string, unknown> | null)?.is_home_base;
+  if (typeof isHomeBase !== "boolean") {
+    return NextResponse.json(
+      { success: false, error: "is_home_base must be a boolean." },
+      { status: 400 }
+    );
+  }
 
   const adminClient = await createAdminClient();
 
@@ -38,30 +61,16 @@ export async function PATCH(
     );
   }
 
-  // ── Clear all home bases ───────────────────────────────────────────────────
-  const { error: clearError } = await adminClient
-    .from("locations")
-    .update({ is_home_base: false })
-    .neq("id", "00000000-0000-0000-0000-000000000000"); // matches all rows
-
-  if (clearError) {
-    console.error("[PATCH set-home-base] clear all", clearError);
-    return NextResponse.json(
-      { success: false, error: "Failed to update home base." },
-      { status: 500 }
-    );
-  }
-
-  // ── Set the target location as home base ───────────────────────────────────
+  // ── Update the target only — every other location's flag is untouched ─────
   const { error: setError } = await adminClient
     .from("locations")
-    .update({ is_home_base: true })
+    .update({ is_home_base: isHomeBase })
     .eq("id", id);
 
   if (setError) {
-    console.error("[PATCH set-home-base] set target", setError);
+    console.error("[PATCH set-home-base]", setError);
     return NextResponse.json(
-      { success: false, error: "Failed to set home base." },
+      { success: false, error: "Failed to update home base." },
       { status: 500 }
     );
   }

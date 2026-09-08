@@ -14,6 +14,15 @@ export const PREFERRED_TIME_LABELS: Record<PreferredTimeOfDay, string> = {
   flexible: "Flexible / No preference",
 };
 
+/**
+ * How a class request's venue was specified.
+ * `customer_venue`: a freeform address the customer typed in — approval
+ * creates a new `locations` row from it.
+ * `home_base`: an existing `locations` row (is_home_base = true) picked from
+ * a dropdown — approval reuses it, and no travel fee applies.
+ */
+export type VenueMode = "customer_venue" | "home_base";
+
 /** Valid status values for a class request. */
 export type ClassRequestStatus =
   | "pending"
@@ -40,11 +49,16 @@ export interface ClassRequest {
   preferred_date: string;
   preferred_time_of_day: PreferredTimeOfDay;
   group_size: number;
-  venue_name: string;
-  venue_address: string;
+  venue_mode: VenueMode;
+  /** Set only when venue_mode = "home_base". */
+  venue_location_id: string | null;
+  /** Null when venue_mode = "home_base" — the address is on the linked location instead. */
+  venue_name: string | null;
+  venue_address: string | null;
+  /** Always populated in both modes — customer input, or copied from the chosen home base. */
   venue_city: string;
   venue_state: string;
-  venue_zip: string;
+  venue_zip: string | null;
   notes: string | null;
   status: ClassRequestStatus;
   rejection_reason: string | null;
@@ -59,17 +73,31 @@ export interface ClassRequest {
   profiles: { id: string; first_name: string; last_name: string; email: string } | null;
 }
 
-/** Payload for creating a new class request (POST /api/class-requests). */
-export interface CreateClassRequestBody {
+/** Fields common to both venue shapes of a new class request. */
+interface CreateClassRequestBodyBase {
   class_type_id: string;
   preferred_date: string;
   preferred_time_of_day: PreferredTimeOfDay;
   group_size: number;
   contact_phone: string;
+  notes?: string;
+}
+
+/** A freeform venue the customer typed in themselves. */
+export interface CustomerVenueRequestBody extends CreateClassRequestBodyBase {
+  venue_mode: "customer_venue";
   venue_name: string;
   venue_address: string;
   venue_city: string;
   venue_state: string;
   venue_zip: string;
-  notes?: string;
 }
+
+/** One of our existing home-base locations, picked by id. No travel fee. */
+export interface HomeBaseRequestBody extends CreateClassRequestBodyBase {
+  venue_mode: "home_base";
+  venue_location_id: string;
+}
+
+/** Payload for creating a new class request (POST /api/class-requests). */
+export type CreateClassRequestBody = CustomerVenueRequestBody | HomeBaseRequestBody;
