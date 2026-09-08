@@ -1,0 +1,80 @@
+# Migration manifest — every .sql file in this directory must appear here exactly once.
+# The CI check (apps/migrations/check-migrations.mjs) validates:
+#   1. This list matches the directory contents exactly.
+#   2. Numbered migrations (NNNN_*.sql) form a gap-free sequence with no new duplicates.
+#
+# When you add a migration: add its filename to this list in sorted order, then commit
+# both the migration file and this manifest together.
+#
+# KNOWN HISTORICAL DUPLICATE: 0009 exists twice (0009_bio_credentials.sql and
+# 0009_roster_address_fields.sql). Both are deployed. The check script grandfathers
+# this specific number; all other duplicates are still caught.
+
+0004_payment_routing.sql
+0005_payment_routing_note.sql
+0006_daily_access_code_cron.sql
+0007_social_feed_cron.sql
+0008_staff_bio_fields.sql
+0009_bio_credentials.sql
+0009_roster_address_fields.sql
+0010_bio_stats.sql
+0011_aha_cert_types.sql
+0012_class_type_aha_update.sql
+0013_atomic_concurrency.sql
+0014_book_spot_paid_exclusion.sql
+0015_staff_bio_published.sql
+0016_mark_invoice_paid_atomic.sql
+0017_book_spot_booking_source_cast.sql
+0018_pears_acls_ep.sql
+0019_cert_type_card_design.sql
+0020_instructor_payouts.sql
+0021_payout_settings.sql
+0022_superherocpr_cert_type.sql
+0023_enable_rls.sql
+0024_production_catchup.sql
+0025_customer_class_requests.sql
+0026_open_opportunities.sql
+0027_class_requests_rls.sql
+0028_discount_percent_catchup.sql
+0029_unclaimed_escalation_schedule.sql
+0030_promo_codes.sql
+0031_promo_scope.sql
+0032_profiles_archived_at.sql
+0033_class_assistants.sql
+0034_unique_access_code.sql
+0035_addons.sql
+0036_session_addons.sql
+0037_booking_addons.sql
+0038_prevent_duplicate_online_booking.sql
+0039_roster_ccf_compression.sql
+0040_session_additional_hours.sql
+0041_blog.sql
+0042_contact_notes_called.sql
+0043_contact_notes_table.sql
+0044_contact_notes_rls.sql
+0045_revoke_anon_security_definer.sql
+0046_revoke_stock_rpc_anon.sql
+0047_fix_trigger_search_path.sql
+0048_payout_tracking.sql
+0049_revoke_public_execute_security_definer.sql
+0050_payout_stuck_alert.sql
+0051_cert_reminder_milestones.sql
+0052_class_type_is_aha.sql
+0053_daily_summary_cron.sql
+0054_class_request_contact_phone.sql
+0055_team_bookings.sql
+0056_health_invariants.sql
+0057_cron_heartbeat.sql
+0058_credential_probes.sql
+0059_drop_duplicate_indexes.sql
+0060_floating_session_times.sql
+0061_instructor_charge_and_book_invariant.sql
+0062_student_documents.sql
+0063_student_documents_cleanup_cron.sql
+0064_phone_not_null.sql
+0065_profile_auth_email_sync_invariant.sql
+0066_schema_conversions_rls.sql
+0067_team_invoice_retry_cron.sql
+0068_team_booking_per_signup.sql
+0069_class_request_venue_mode.sql
+replace-user-uuid.sql

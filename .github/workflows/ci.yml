@@ -28,6 +28,16 @@ defaults:
     working-directory: apps/web
 
 jobs:
+  migrations:
+    name: check-migrations
+    runs-on: ubuntu-latest
+    # No Node install needed — uses the system Node that ships with ubuntu-latest.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check migration manifest and sequence
+        run: node apps/migrations/check-migrations.mjs
+
   ci:
     name: ci
     runs-on: ubuntu-latest
