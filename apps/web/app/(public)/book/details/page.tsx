@@ -115,7 +115,10 @@ export default function BookDetailsPage() {
       return;
     }
 
-    // New customer — save details and go straight to payment.
+    // New customer — save details and go straight to payment. Clear any
+    // customerId left over from earlier in this session (e.g. a prior sign-in
+    // or account creation for different details); otherwise the payment page
+    // would treat this fresh identity as already having an account.
     setBookingStore({
       customerDetails: {
         firstName: form.firstName.trim(),
@@ -124,6 +127,7 @@ export default function BookDetailsPage() {
         phone: normalizedPhone,
       },
       isNewCustomer: true,
+      customerId: null,
     });
     router.push("/book/payment");
   }
