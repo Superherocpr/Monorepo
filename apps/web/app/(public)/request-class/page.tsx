@@ -7,13 +7,21 @@
  * Accepts an optional ?class= slug, set by the "Request this class" links on
  * /find-a-class, so a visitor who was already told which course they need does
  * not have to pick it again from the dropdown.
+ *
+ * Also offers our own home-base locations (locations.is_home_base = true) as
+ * a no-travel-fee venue option. Only id/city/state are fetched for that list —
+ * never the full address — so a location's street address never reaches the
+ * page HTML even though the server itself has service-role access to it.
  */
 
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
 import { toSlug } from "@/lib/class-slug";
 import RequestClassWizard from "./_components/RequestClassWizard";
-import type { ClassTypeOption } from "./_components/RequestClassWizard";
+import type {
+  ClassTypeOption,
+  HomeBaseLocationOption,
+} from "./_components/RequestClassWizard";
 
 export const metadata: Metadata = {
   // The root layout appends "| SuperHeroCPR" via its title template.
@@ -34,13 +42,23 @@ export default async function RequestClassPage({
 }: RequestClassPageProps): Promise<React.ReactElement> {
   const params = await searchParams;
   const admin = await createAdminClient();
-  const { data: rawClassTypes } = await admin
-    .from("class_types")
-    .select("id, name, duration_minutes")
-    .eq("active", true)
-    .order("name");
+
+  const [{ data: rawClassTypes }, { data: rawHomeBases }] = await Promise.all([
+    admin
+      .from("class_types")
+      .select("id, name, duration_minutes")
+      .eq("active", true)
+      .order("name"),
+    admin
+      .from("locations")
+      .select("id, city, state")
+      .eq("is_home_base", true)
+      .order("city"),
+  ]);
 
   const classTypes: ClassTypeOption[] = (rawClassTypes ?? []) as ClassTypeOption[];
+  const homeBaseLocations: HomeBaseLocationOption[] =
+    (rawHomeBases ?? []) as HomeBaseLocationOption[];
 
   const preSelectedClassTypeId =
     (params.class &&
@@ -52,6 +70,7 @@ export default async function RequestClassPage({
       <RequestClassWizard
         classTypes={classTypes}
         preSelectedClassTypeId={preSelectedClassTypeId}
+        homeBaseLocations={homeBaseLocations}
       />
     </div>
   );

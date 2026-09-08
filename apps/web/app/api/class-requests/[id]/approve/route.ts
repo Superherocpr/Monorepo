@@ -5,9 +5,14 @@
  *
  * Approves a pending class request by:
  *   1. Fetching the request, customer profile, and class type
- *   2. Creating a new locations row from the request's venue fields
+ *   2. Resolving a session location — either a NEW locations row created from
+ *      the request's venue fields (venue_mode = customer_venue), or the
+ *      EXISTING home-base location it already points at (venue_mode =
+ *      home_base). The home_base branch never creates a location: reusing the
+ *      original is the whole point, otherwise every approval would leave
+ *      behind a near-duplicate of the same address.
  *   3. Creating a class_sessions row (approval_status='approved', instructor_id=NULL,
- *      travel_fee=65, class_request_id=request.id)
+ *      travel_fee=request's travel_fee, class_request_id=request.id)
  *   4. Updating class_requests: status='approved', session_id=newSession.id
  *   5. Emailing the customer that their request was approved
  *   6. Emailing all active instructors with the class opportunity (first-come-first-serve)
@@ -24,7 +29,7 @@ import {
   instructorClassOpportunityEmail,
 } from "@/lib/emails";
 import { PREFERRED_TIME_LABELS } from "@/types/class-requests";
-import type { PreferredTimeOfDay } from "@/types/class-requests";
+import type { PreferredTimeOfDay, VenueMode } from "@/types/class-requests";
 
 /** Route handler params from the dynamic [id] segment. */
 interface Params {
@@ -48,7 +53,8 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
     .from("class_requests")
     .select(`
       id, status, preferred_date, preferred_time_of_day,
-      group_size, venue_name, venue_address, venue_city, venue_state, venue_zip,
+      group_size, venue_mode, venue_location_id,
+      venue_name, venue_address, venue_city, venue_state, venue_zip,
       travel_fee, customer_id, class_type_id,
       class_types ( id, name, duration_minutes, max_capacity, price ),
       profiles ( id, first_name, last_name, email )
@@ -93,27 +99,75 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
     );
   }
 
-  // ── 1. Create a location row from the venue fields ─────────────────────────
-  const { data: newLocation, error: locationError } = await admin
-    .from("locations")
-    .insert({
-      name: classRequest.venue_name,
-      address: classRequest.venue_address,
-      city: classRequest.venue_city,
-      state: classRequest.venue_state,
-      zip: classRequest.venue_zip,
-      is_home_base: false,
-      notes: null,
-    })
-    .select("id")
-    .single();
+  // ── 1. Resolve the session location ─────────────────────────────────────────
+  // home_base: reuse the existing location the customer picked — never create
+  // a second copy of it. customer_venue: create a new location from the
+  // freeform address, exactly as before.
+  let sessionLocationId: string;
+  /** Real, staff-facing venue name — shown to instructors, never to the customer. */
+  let staffVenueLabel: string;
+  /** Only set (and only rolled back) when this call created a brand-new location. */
+  let createdLocationId: string | null = null;
 
-  if (locationError || !newLocation) {
-    console.error("[class-requests/approve] Failed to create location:", locationError);
-    return NextResponse.json(
-      { data: null, error: "Failed to create location" },
-      { status: 500 }
-    );
+  if ((classRequest.venue_mode as VenueMode) === "home_base") {
+    if (!classRequest.venue_location_id) {
+      return NextResponse.json(
+        {
+          data: null,
+          error:
+            "The home base location for this request no longer exists. It may have been deleted.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const { data: homeBaseLocation } = await admin
+      .from("locations")
+      .select("id, name")
+      .eq("id", classRequest.venue_location_id)
+      .maybeSingle();
+
+    if (!homeBaseLocation) {
+      return NextResponse.json(
+        {
+          data: null,
+          error:
+            "The home base location for this request no longer exists. It may have been deleted.",
+        },
+        { status: 409 }
+      );
+    }
+
+    sessionLocationId = homeBaseLocation.id;
+    staffVenueLabel = homeBaseLocation.name;
+  } else {
+    const { data: newLocation, error: locationError } = await admin
+      .from("locations")
+      .insert({
+        name: classRequest.venue_name,
+        address: classRequest.venue_address,
+        city: classRequest.venue_city,
+        state: classRequest.venue_state,
+        zip: classRequest.venue_zip,
+        is_home_base: false,
+        notes: null,
+      })
+      .select("id")
+      .single();
+
+    if (locationError || !newLocation) {
+      console.error("[class-requests/approve] Failed to create location:", locationError);
+      return NextResponse.json(
+        { data: null, error: "Failed to create location" },
+        { status: 500 }
+      );
+    }
+
+    sessionLocationId = newLocation.id;
+    createdLocationId = newLocation.id;
+    // customer_venue rows always carry a real venue_name — enforced by the
+    // class_requests_venue_shape_check constraint.
+    staffVenueLabel = classRequest.venue_name as string;
   }
 
   // ── 2. Create a class_sessions row ─────────────────────────────────────────
@@ -126,7 +180,7 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
     .from("class_sessions")
     .insert({
       class_type_id: classRequest.class_type_id,
-      location_id: newLocation.id,
+      location_id: sessionLocationId,
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
       max_capacity: classType.max_capacity,
@@ -142,8 +196,11 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
 
   if (sessionError || !newSession) {
     console.error("[class-requests/approve] Failed to create session:", sessionError);
-    // Roll back the location to avoid orphaned rows
-    await admin.from("locations").delete().eq("id", newLocation.id);
+    // Roll back only a location this call created — a home base is reused,
+    // never ours to delete.
+    if (createdLocationId) {
+      await admin.from("locations").delete().eq("id", createdLocationId);
+    }
     return NextResponse.json(
       { data: null, error: "Failed to create class session" },
       { status: 500 }
@@ -175,11 +232,18 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
     PREFERRED_TIME_LABELS[classRequest.preferred_time_of_day as PreferredTimeOfDay] ??
     classRequest.preferred_time_of_day;
 
+  // customer_venue rows already carry a real venue_name; home_base rows never
+  // reveal the location's internal name to the customer.
+  const customerVenueLabel =
+    (classRequest.venue_mode as VenueMode) === "home_base"
+      ? `Our ${classRequest.venue_city} location`
+      : (classRequest.venue_name as string);
+
   const approvedEmail = classRequestApprovedCustomerEmail({
     firstName: customer.first_name,
     className: classType.name,
     confirmedDate: classRequest.preferred_date,
-    venueName: classRequest.venue_name,
+    venueName: customerVenueLabel,
   });
 
   const opportunityEmail = instructorClassOpportunityEmail({
@@ -187,7 +251,7 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
     confirmedDate: classRequest.preferred_date,
     preferredTimeLabel: timeLabel,
     groupSize: classRequest.group_size,
-    venueName: classRequest.venue_name,
+    venueName: staffVenueLabel,
     venueCity: classRequest.venue_city,
     venueState: classRequest.venue_state,
     sessionId: newSession.id,

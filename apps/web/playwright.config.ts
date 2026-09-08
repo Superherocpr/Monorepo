@@ -64,7 +64,7 @@ export default defineConfig({
     // ── Customer tests: uses saved customer session ──────────────────────────
     {
       name: "customer",
-      testMatch: /e2e\/(booking-flow|customer-dashboard)\.spec\.ts/,
+      testMatch: /e2e\/(booking-flow|customer-dashboard|request-class-venue)\.spec\.ts/,
       dependencies: ["setup-customer"],
       use: {
         ...devices["Desktop Chrome"],

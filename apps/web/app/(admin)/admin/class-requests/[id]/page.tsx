@@ -32,7 +32,8 @@ export default async function ClassRequestDetailPage({ params }: PageProps) {
     .from("class_requests")
     .select(`
       id, customer_id, class_type_id, preferred_date, preferred_time_of_day,
-      group_size, venue_name, venue_address, venue_city, venue_state, venue_zip,
+      group_size, venue_mode, venue_location_id,
+      venue_name, venue_address, venue_city, venue_state, venue_zip,
       notes, status, rejection_reason, travel_fee, session_id, created_at,
       class_types ( id, name, duration_minutes, price ),
       profiles ( id, first_name, last_name, email )
@@ -43,6 +44,27 @@ export default async function ClassRequestDetailPage({ params }: PageProps) {
   if (!raw) redirect("/admin/class-requests");
 
   const request = raw as unknown as ClassRequest;
+
+  // For a home_base request, staff see the real location — name and full
+  // address — since they already manage every location. Null when the
+  // location was since deleted (venue_location_id nulled by ON DELETE SET NULL).
+  let venueLocation: {
+    id: string;
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+  } | null = null;
+
+  if (request.venue_mode === "home_base" && request.venue_location_id) {
+    const { data: loc } = await admin
+      .from("locations")
+      .select("id, name, address, city, state, zip")
+      .eq("id", request.venue_location_id)
+      .maybeSingle();
+    venueLocation = loc ?? null;
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -56,7 +78,7 @@ export default async function ClassRequestDetailPage({ params }: PageProps) {
         <h1 className="text-2xl font-bold text-gray-900">Class Request Detail</h1>
       </div>
 
-      <ClassRequestDetailClient request={request} />
+      <ClassRequestDetailClient request={request} venueLocation={venueLocation} />
     </div>
   );
 }

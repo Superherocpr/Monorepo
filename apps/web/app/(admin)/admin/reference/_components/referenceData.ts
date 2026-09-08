@@ -537,6 +537,7 @@ export const GROUPS: GroupDef[] = [
           { text: "Zoho tab: connect or disconnect a Zoho Mail account for replying to contact form submissions", role: "super" },
           { text: "Social tab: manually trigger a sync of the Facebook social feed cache", role: "super" },
           { text: "Locations tab: create, edit, or delete training locations; set address, notes, and home-base flag", role: "manager" },
+          { text: "Locations tab: any number of locations can be a home base at once, e.g. an instructor's own address. Every home-base location appears as a venue choice on the public Request a Class page, with no travel fee", role: "manager" },
           "Enrollware tab: generate or revoke your personal Enrollware bookmarklet API key",
           { text: "Payouts tab: set the platform fee percentage, payout trigger mode, and payout schedule", role: "super" },
           { text: "Payouts tab: shows what each platform fee percentage actually nets after PayPal's fees, and warns if the fee is set below break-even", role: "super" },
