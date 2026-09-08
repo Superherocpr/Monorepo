@@ -314,28 +314,47 @@ location on a team-booking session, every currently active attendee (their
 Capacity, discount, and notes don't trigger it — those don't change what
 someone signed up for.
 
-Deliberately best-effort and per-attendee, not a single batch email: a missing
-address on one profile is skipped and logged rather than aborting the whole
-send, and the edit itself is never rolled back or reported as failed if the
-mail does not go out — the class_sessions write already succeeded by that
-point.
+Deliberately best-effort and per-attendee, not a single batch email: one
+attendee's send failing does not abort the rest of the loop, and the edit
+itself is never rolled back or reported as failed if a notification does not
+go out — the class_sessions write already succeeded by that point.
 
-**Health signal:** 5 new unit tests in `tests/unit/lib/team-bookings.test.ts`
-(48 total) for `notifyTeamClassUpdated` — no-op when Resend isn't configured,
-no-op with zero active attendees, one email per attendee carrying the NEW
-class type name and address (not the old one), a missing-email profile is
-skipped without blocking the rest, and a lookup failure resolves cleanly
-instead of throwing. `emails-render` and `email-send-sites` both caught the new
-template and send site as intended (failed until registered).
+**2026-09-07 — closed the silent-failure gap.** The first cut of this feature
+shipped with a known hole: a missing address or a rejected Resend send was only
+`console.error`'d, which CLAUDE.md §6 explicitly disqualifies as a health
+signal ("an admin page where someone *could* notice is not a health signal").
+Nothing would have told anyone that an attendee never learned their class
+changed.
 
-**Gap, stated honestly:** there is no signal that would catch this
-notification silently failing to fire — same shape of gap as the contact-link
-send noted above. Nothing asserts that an edited team class's attendees were
-actually notified; it's provable only by reading the Resend logs for the
-`team-bookings:class-updated` context. Bundling both gaps into one future
-canary check (last-edited-at vs. last-notified-at, or a `class_edit_log`) is
-the natural fix, not attempted here to keep this change scoped to what was
-asked.
+`notifyTeamClassUpdated()` now tracks every attendee it could not reach — no
+email on file, or `sendEmail()` came back `{ sent: false }` — and if that list
+is non-empty, immediately emails every active super_admin
+(`notifyTeamClassUpdateFailed()`, `teamClassUpdateFailedAdminEmail`) naming
+who was missed and why. There is deliberately no retry: a second automated
+attempt at the same address that just failed is unlikely to succeed, and the
+actual fix is a human calling or texting the person directly, which the alert
+is written to prompt.
+
+**Health signal:** `tests/unit/lib/team-bookings.test.ts` (50 total) covers
+both the happy path and the failure path for `notifyTeamClassUpdated` — no-op
+when Resend isn't configured, no-op with zero active attendees, one email per
+attendee carrying the NEW class details, a missing-email attendee now
+triggers the admin alert (not just a skip), a Resend rejection triggers the
+same alert naming the right person and reason while leaving successful sends
+out of it, the alert itself no-ops cleanly when there are no super_admins to
+reach, and a lookup failure resolves without throwing. `emails-render` and
+`email-send-sites` both caught the new template and send site as intended
+(failed until registered).
+
+**Gap, stated honestly:** the alert email to super_admins is itself sent
+through the same best-effort `sendEmail()` and is not independently retried or
+invariant-checked — if Resend is down for everyone, both the attendee
+notification and the alert about it can fail together. This is the same
+stopping point every other admin-alert path in this file accepts (e.g.
+`notifyTeamInvoiceMissing`), rather than building a self-referential alert on
+the alert. A full fix would be an infrastructure-level Resend health check
+shared across every feature that alerts, not something scoped to team
+bookings.
 
 ---
 

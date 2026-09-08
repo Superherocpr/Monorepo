@@ -910,7 +910,9 @@ describe("notifyTeamClassUpdated", () => {
     expect(firstCall.html).toContain("1 Main St");
   });
 
-  test("skips an attendee with no email on file, without failing the others", async () => {
+  test("skips an attendee with no email on file, but still alerts admins about the miss", async () => {
+    // Nobody automatically retries a missed notification, so a person with no
+    // address on file must surface just as loudly as a rejected send.
     const supabase = mockSupabase({
       bookings: [
         { profiles: { first_name: "Dana", email: null } },
@@ -918,12 +920,64 @@ describe("notifyTeamClassUpdated", () => {
       ],
       class_types: { name: "BLS Provider" },
       locations: { name: "Acme HQ" },
+      profiles: [{ email: "admin@example.com" }],
     });
 
     await notifyTeamClassUpdated(supabase as never, args);
 
+    expect(sendEmailMock).toHaveBeenCalledTimes(2);
+    const [rayCall, alertCall] = sendEmailMock.mock.calls.map((c) => c[0]);
+    expect(rayCall.to).toBe("ray@example.com");
+    expect(alertCall).toMatchObject({
+      context: "team-bookings:class-updated-failed",
+      to: ["admin@example.com"],
+    });
+    expect(alertCall.html).toContain("Dana");
+    expect(alertCall.html).toContain("No email address on file");
+  });
+
+  test("alerts admins when Resend rejects a notification", async () => {
+    sendEmailMock
+      .mockResolvedValueOnce({ sent: true, id: "e1" }) // Dana: succeeds
+      .mockResolvedValueOnce({ sent: false, reason: "failed", error: "Resend rejected the message" }); // Ray: fails
+
+    const supabase = mockSupabase({
+      bookings: [
+        { profiles: { first_name: "Dana", email: "dana@example.com" } },
+        { profiles: { first_name: "Ray", email: "ray@example.com" } },
+      ],
+      class_types: { name: "ACLS Provider" },
+      locations: { name: "Acme HQ" },
+      profiles: [{ email: "admin@example.com" }],
+    });
+
+    await notifyTeamClassUpdated(supabase as never, args);
+
+    // Dana's send, Ray's failed send, and the resulting admin alert.
+    expect(sendEmailMock).toHaveBeenCalledTimes(3);
+    const alertCall = sendEmailMock.mock.calls[2][0];
+    expect(alertCall.context).toBe("team-bookings:class-updated-failed");
+    expect(alertCall.subject).toMatch(/1 person/);
+    expect(alertCall.html).toContain("Ray");
+    expect(alertCall.html).toContain("Resend rejected the message");
+    // Dana succeeded and must not appear as a miss.
+    expect(alertCall.html).not.toContain("Dana");
+  });
+
+  test("logs but does not throw when there are no super_admin recipients to alert", async () => {
+    sendEmailMock.mockResolvedValueOnce({ sent: false, reason: "failed", error: "boom" });
+
+    const supabase = mockSupabase({
+      bookings: [{ profiles: { first_name: "Dana", email: "dana@example.com" } }],
+      class_types: { name: "BLS Provider" },
+      locations: { name: "Acme HQ" },
+      // No `profiles` rows configured: the admin lookup comes back empty.
+    });
+
+    await expect(notifyTeamClassUpdated(supabase as never, args)).resolves.toBeUndefined();
+    // Only the failed attendee send: notifyTeamClassUpdateFailed bails out
+    // before calling sendEmail again when there is nobody to alert.
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
-    expect(sendEmailMock.mock.calls[0][0].to).toBe("ray@example.com");
   });
 
   test("never throws, even if the lookup itself fails", async () => {

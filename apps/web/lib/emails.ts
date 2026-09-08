@@ -3701,3 +3701,84 @@ export function teamClassUpdatedEmail({
     `),
   };
 }
+
+// ── 39. Team class updated — some attendees could not be notified ─────────────
+
+/**
+ * Sent to every active super_admin when notifyTeamClassUpdated() could not
+ * reach one or more attendees after a team-booking class changed.
+ *
+ * This is the entire safety net for unrestricted team-booking editing: nothing
+ * else tells anyone that a signed-up attendee never learned their class became
+ * a different one. Lists exactly who was missed and why (no address on file,
+ * or Resend rejected the send), because the fix is a human calling or texting
+ * them, not a retry, since nothing here retries automatically.
+ *
+ * Triggered by: notifyTeamClassUpdateFailed() in lib/team-bookings.ts.
+ *
+ * @param companyName - The company that arranged the class.
+ * @param className   - The class's new (post-edit) class type name.
+ * @param startsAt    - The class's new floating wall-clock start time.
+ * @param failures    - Who was not reached and why, one entry per attendee.
+ */
+export function teamClassUpdateFailedAdminEmail({
+  companyName,
+  className,
+  startsAt,
+  failures,
+}: {
+  companyName: string;
+  className: string;
+  startsAt: string;
+  failures: { attendee: string; reason: string }[];
+}): EmailContent {
+  const safeCompany = escapeHtml(companyName.trim());
+  const safeClass = escapeHtml(className.trim());
+  const formattedDate = formatClassDate(startsAt);
+  const formattedTime = formatClassTime(startsAt);
+
+  const rows = failures
+    .map(
+      (f) => `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${escapeHtml(f.attendee)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${escapeHtml(f.reason)}</td>
+        </tr>`
+    )
+    .join("");
+
+  const headerCell =
+    "padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;border-bottom:1px solid #fecaca;";
+
+  return {
+    subject: `Action needed: ${failures.length} ${
+      failures.length === 1 ? "person" : "people"
+    } not told about a class change (${companyName.trim()})`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Some Attendees Were Not Notified</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">
+        The <strong>${safeClass}</strong> class arranged by <strong>${safeCompany}</strong> was just
+        changed to ${formattedDate} at ${formattedTime} ET (or a different location), and the automatic
+        email telling people about it did not reach everyone below. Nothing retries this
+        automatically: please contact them directly.
+      </p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        <thead>
+          <tr style="background:#fef2f2;">
+            <th style="${headerCell}">Attendee</th>
+            <th style="${headerCell}">Why it failed</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        Everyone not listed here was emailed successfully. This alert only covers the class's
+        certification, date, time, and location changing; capacity, discount, and notes changes
+        never trigger a notification.
+      </p>
+    `),
+  };
+}

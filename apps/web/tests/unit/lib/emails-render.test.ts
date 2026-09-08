@@ -65,6 +65,7 @@ import {
   teamBookingCreatedEmail,
   teamContactShareLinkEmail,
   teamClassUpdatedEmail,
+  teamClassUpdateFailedAdminEmail,
   teamSignupConfirmationEmail,
   teamInvoiceMissingAdminEmail,
 } from "@/lib/emails";
@@ -799,6 +800,27 @@ const FIXTURES: Record<string, Fixture> = {
         startsAt: ISO,
         locationName: "HQ",
         locationAddress: "",
+      }),
+  },
+
+  teamClassUpdateFailedAdminEmail: {
+    full: () =>
+      teamClassUpdateFailedAdminEmail({
+        companyName: "Tampa General",
+        className: "ACLS Provider",
+        startsAt: ISO,
+        failures: [
+          { attendee: "Dana Scully (dana@example.com)", reason: "Resend rejected the message" },
+          { attendee: "an attendee", reason: "No email address on file" },
+        ],
+      }),
+    // A single failure: exercises the singular "1 person" subject branch.
+    sparse: () =>
+      teamClassUpdateFailedAdminEmail({
+        companyName: "Tampa General",
+        className: "BLS Provider",
+        startsAt: ISO,
+        failures: [{ attendee: "Ray Holt (ray@example.com)", reason: "No email address on file" }],
       }),
   },
 

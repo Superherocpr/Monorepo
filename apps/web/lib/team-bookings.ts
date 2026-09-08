@@ -32,6 +32,7 @@ import { createAndSendInvoice } from "@/lib/invoice-actions";
 import {
   teamBookingCreatedEmail,
   teamClassUpdatedEmail,
+  teamClassUpdateFailedAdminEmail,
   teamContactShareLinkEmail,
   teamInvoiceMissingAdminEmail,
   type TeamInvoiceAlertBooking,
@@ -1172,9 +1173,20 @@ export async function notifyTeamClassUpdated(
 
     type ProfileRef = { first_name: string | null; email: string | null };
 
+    // Anyone who ends up here has NOT learned their class changed. This is the
+    // entire safety net left after unrestricted editing removed the
+    // re-approval review step (see updateSession()), so a failure here cannot
+    // be allowed to just fall off the end of a for-loop unnoticed.
+    const failures: { attendee: string; reason: string }[] = [];
+
     for (const row of bookingRows as unknown as { profiles: ProfileRef | ProfileRef[] | null }[]) {
       const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-      if (!profile?.email) continue;
+      const displayName = profile?.first_name?.trim() || "an attendee";
+
+      if (!profile?.email) {
+        failures.push({ attendee: displayName, reason: "No email address on file" });
+        continue;
+      }
 
       const { subject, html } = teamClassUpdatedEmail({
         firstName: profile.first_name,
@@ -1185,15 +1197,96 @@ export async function notifyTeamClassUpdated(
         locationAddress,
       });
 
-      await sendEmail({
+      const result = await sendEmail({
         context: "team-bookings:class-updated",
         to: profile.email,
         subject,
         html,
       });
+
+      if (!result.sent) {
+        failures.push({
+          attendee: `${displayName} (${profile.email})`,
+          reason: result.error ?? result.reason,
+        });
+      }
+    }
+
+    if (failures.length > 0) {
+      await notifyTeamClassUpdateFailed(adminClient, {
+        companyName: args.companyName,
+        className,
+        startsAt: args.startsAt,
+        failures,
+      });
     }
   } catch (err) {
     console.error("[notifyTeamClassUpdated] Failed (non-fatal):", err);
+  }
+}
+
+/**
+ * Alerts super_admins that one or more people signed up for a team-booking
+ * class were NOT told about a change to it.
+ *
+ * notifyTeamClassUpdated() is the entire replacement for the re-approval
+ * review step that unrestricted team-booking editing removes (see
+ * updateSession()). A silent failure there would leave someone signed up for
+ * a class that quietly became a different one, with no one aware — this is
+ * what makes that failure loud instead of a swallowed log line. It names
+ * exactly who was not reached and why, so a human can call or text them
+ * directly rather than relying on a second automated attempt that does not
+ * exist: nothing retries a failed notification.
+ *
+ * Best-effort: a failure here is logged and swallowed, never allowed to affect
+ * the class edit that triggered it.
+ *
+ * Side effects: reads profiles, sends one Resend email to super_admins.
+ *
+ * @param adminClient - Admin Supabase client (RLS-bypassing).
+ * @param args - The class that changed and who could not be reached, with why.
+ */
+async function notifyTeamClassUpdateFailed(
+  adminClient: AnySupabaseClient,
+  args: {
+    companyName: string;
+    className: string;
+    startsAt: string;
+    failures: { attendee: string; reason: string }[];
+  }
+): Promise<void> {
+  try {
+    const { data: admins } = await adminClient
+      .from("profiles")
+      .select("email")
+      .eq("role", "super_admin")
+      .eq("archived", false)
+      .eq("deactivated", false);
+
+    const recipients = ((admins ?? []) as { email: string | null }[])
+      .map((a) => a.email)
+      .filter((email): email is string => Boolean(email));
+
+    if (recipients.length === 0) {
+      console.error("[notifyTeamClassUpdateFailed] No super_admin recipients.");
+      return;
+    }
+
+    const { subject, html } = teamClassUpdateFailedAdminEmail({
+      companyName: args.companyName,
+      className: args.className,
+      startsAt: args.startsAt,
+      failures: args.failures,
+    });
+
+    await sendEmail({
+      context: "team-bookings:class-updated-failed",
+      to: recipients,
+      subject,
+      html,
+    });
+  } catch (err) {
+    console.error("[notifyTeamClassUpdateFailed] Failed (non-fatal):", err);
   }
 }
 

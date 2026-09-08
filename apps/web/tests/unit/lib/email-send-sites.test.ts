@@ -98,6 +98,7 @@ const EXPECTED_SEND_SITES: Record<string, string> = {
   "team-bookings:share-link": "lib/team-bookings.ts",
   "team-bookings:contact-link": "lib/team-bookings.ts",
   "team-bookings:class-updated": "lib/team-bookings.ts",
+  "team-bookings:class-updated-failed": "lib/team-bookings.ts",
   "team-bookings:invoice-missing": "lib/team-bookings.ts",
   "team-signup:customer": "app/api/team-bookings/[share_token]/signup/route.ts",
   "team-signup:instructor": "app/api/team-bookings/[share_token]/signup/route.ts",
