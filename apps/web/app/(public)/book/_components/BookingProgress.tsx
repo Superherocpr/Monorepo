@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * BookingProgress — horizontal step indicator for the 5-step booking wizard.
+ * BookingProgress — horizontal step indicator for the 4-step booking wizard.
  * Displays step labels with active/complete/pending states.
  * Used by: all pages under app/(public)/book/
  */
@@ -9,20 +9,19 @@
 import { Check } from "lucide-react";
 
 interface BookingProgressProps {
-  /** Which step the customer is currently on (1–5) */
-  currentStep: 1 | 2 | 3 | 4 | 5;
+  /** Which step the customer is currently on (1–4) */
+  currentStep: 1 | 2 | 3 | 4;
 }
 
 const STEPS = [
   { label: "Select" },
-  { label: "Details" },
-  { label: "Account" },
+  { label: "Info" },
   { label: "Payment" },
   { label: "Done" },
 ];
 
 /**
- * Renders a horizontal 5-step progress bar for the booking wizard.
+ * Renders a horizontal 4-step progress bar for the booking wizard.
  * Completed steps show a checkmark; the active step is highlighted in red.
  */
 export default function BookingProgress({ currentStep }: BookingProgressProps) {
@@ -33,10 +32,9 @@ export default function BookingProgress({ currentStep }: BookingProgressProps) {
     >
       <ol className="flex items-center justify-center max-w-2xl mx-auto">
         {STEPS.map((step, index) => {
-          const stepNumber = (index + 1) as 1 | 2 | 3 | 4 | 5;
+          const stepNumber = (index + 1) as 1 | 2 | 3 | 4;
           const isComplete = stepNumber < currentStep;
           const isActive = stepNumber === currentStep;
-          const isPending = stepNumber > currentStep;
 
           return (
             <li key={step.label} className="flex items-center">
@@ -79,11 +77,9 @@ export default function BookingProgress({ currentStep }: BookingProgressProps) {
                   aria-hidden="true"
                   className={[
                     "h-0.5 w-10 sm:w-16 mx-1 sm:mx-2 transition-colors duration-150",
-                    isPending && !isActive
-                      ? "bg-gray-200"
-                      : stepNumber < currentStep
-                        ? "bg-red-600"
-                        : "bg-gray-200",
+                    stepNumber < currentStep
+                      ? "bg-red-600"
+                      : "bg-gray-200",
                   ].join(" ")}
                 />
               )}

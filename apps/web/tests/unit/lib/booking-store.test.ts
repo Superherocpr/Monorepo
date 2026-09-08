@@ -76,10 +76,6 @@ describe("setBookingStore", () => {
       lastName: "Smith",
       email: "alice@example.com",
       phone: "555-1234",
-      address: "1 Main St",
-      city: "Tampa",
-      state: "FL",
-      zip: "33601",
     };
     setBookingStore({ customerDetails: customer });
     expect(getBookingStore().customerDetails).toEqual(customer);

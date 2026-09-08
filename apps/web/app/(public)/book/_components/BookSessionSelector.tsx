@@ -233,14 +233,14 @@ export default function BookSessionSelector({
       },
     });
 
-    // Check if already authenticated — if so, skip sign-in/details steps
+    // Check if already authenticated — if so, skip info and payment steps
     const supabase = createClient();
     const { data } = await supabase.auth.getUser();
     if (data.user) {
       setBookingStore({ customerId: data.user.id, isNewCustomer: false });
       router.push("/book/payment");
     } else {
-      router.push("/book/signin");
+      router.push("/book/details");
     }
   }
 

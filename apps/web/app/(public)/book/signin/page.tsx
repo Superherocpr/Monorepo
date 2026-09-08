@@ -1,14 +1,16 @@
 "use client";
 
 /**
- * /book/signin — Step 2a of the booking wizard: existing customer sign-in.
+ * /book/signin — Step 2 of the booking wizard: existing customer sign-in.
  * Authenticates via Supabase, writes customerId to the booking store,
  * and routes to /book/payment on success.
- * Used by: booking flow when a non-authenticated user selects a session.
+ * Reached when /book/details detects the entered email or phone belongs to
+ * an existing account. The email is passed via ?email= param for pre-fill.
+ * Used by: booking flow when a non-authenticated user has an existing account.
  */
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getBookingStore, setBookingStore } from "@/lib/booking-store";
@@ -19,9 +21,11 @@ import type { BookingStore } from "@/lib/booking-store";
 /** Renders the sign-in step of the booking wizard. */
 export default function BookSignInPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   // Initialize session details from store on first render (avoids set-state-in-effect).
   const [sessionDetails] = useState<BookingStore["sessionDetails"]>(() => getBookingStore().sessionDetails);
-  const [email, setEmail] = useState("");
+  // Pre-populate email from the ?email= param set by /book/details on duplicate detection.
+  const [email, setEmail] = useState(() => searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -32,12 +36,21 @@ export default function BookSignInPage() {
     if (!getBookingStore().sessionId) router.replace("/book");
   }, [router]);
 
+  // sessionStorage doesn't exist during SSR, so the server always renders
+  // OrderSummary's loading skeleton. Gating on `mounted` (set only after
+  // hydration completes) keeps the client's first render identical to the
+  // server's, avoiding a hydration mismatch once real session details exist.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   /**
    * Submits sign-in credentials to Supabase.
    * On success, updates the booking store and routes to payment.
    * On failure, shows an inline error without clearing the form.
    */
-  async function handleSignIn(e: React.FormEvent) {
+  async function handleSignIn(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -65,11 +78,11 @@ export default function BookSignInPage() {
       <div className="max-w-5xl mx-auto px-4 pb-16">
         <div className="flex flex-col lg:flex-row gap-10">
 
-          {/* ── Left: sign-in form ── */}
+          {/* Left: sign-in form */}
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Sign In</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome Back</h1>
             <p className="text-gray-500 text-sm mb-8">
-              Already have an account? Sign in to continue booking.
+              It looks like you already have an account. Sign in to continue booking.
             </p>
 
             <form onSubmit={handleSignIn} noValidate className="flex flex-col gap-5">
@@ -132,6 +145,12 @@ export default function BookSignInPage() {
                     )}
                   </button>
                 </div>
+                <Link
+                  href="/book/forgot-password"
+                  className="text-xs text-gray-400 hover:text-red-600 self-end transition-colors duration-150"
+                >
+                  Forgot password?
+                </Link>
               </div>
 
               <button
@@ -144,22 +163,22 @@ export default function BookSignInPage() {
             </form>
 
             <p className="mt-6 text-sm text-gray-500">
-              Don&apos;t have an account?{" "}
+              Not you?{" "}
               <Link
                 href="/book/details"
                 className="text-red-600 hover:text-red-700 font-medium transition-colors duration-150"
               >
-                Continue as new customer
+                Go back and use a different email
               </Link>
             </p>
           </div>
 
-          {/* ── Right: order summary ── */}
+          {/* Right: order summary */}
           <div className="w-full lg:w-80 shrink-0">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Your Selection
             </h2>
-            <OrderSummary details={sessionDetails} />
+            <OrderSummary details={mounted ? sessionDetails : null} />
           </div>
         </div>
       </div>
