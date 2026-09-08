@@ -2,7 +2,7 @@
  * Admin Feature Reference
  * Route: /admin/reference
  * Called by: Admin Settings page (all staff roles), admin nav.
- * Auth: instructor, manager, and super_admin — content filtered to each role's accessible features.
+ * Auth: instructor, manager, and super_admin: content filtered to each role's accessible features.
  * Inspectors are redirected to /admin.
  */
 

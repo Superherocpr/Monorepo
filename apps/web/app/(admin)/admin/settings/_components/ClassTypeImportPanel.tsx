@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * ClassTypeImportPanel — slide-out panel for bulk-importing class types from a
+ * ClassTypeImportPanel: slide-out panel for bulk-importing class types from a
  * CSV or XLSX file.
  * Accepts files in the Enrollware course export format. Required column: Name.
  * Optional columns imported: Description, Class Price.
- * Duration and max capacity default to 60 min / 20 seats after import — the
+ * Duration and max capacity default to 60 min / 20 seats after import: the
  * user edits individual records to adjust these values.
  * Used by: SettingsClient (admin/settings → Class Types tab).
  *
@@ -25,7 +25,7 @@ interface ParsedRow {
   description: string;
   /** Price as a number, parsed from "Class Price" column (e.g. "$25.00" → 25). */
   price: number | null;
-  /** Display string for preview — keeps the raw value visible if parsing fails. */
+  /** Display string for preview: keeps the raw value visible if parsing fails. */
   priceDisplay: string;
   /** True when the row will be skipped because Name is empty. */
   skip: boolean;
@@ -83,7 +83,7 @@ function mapRow(row: SpreadsheetRow): ParsedRow {
     name,
     description,
     price,
-    priceDisplay: rawPrice || "—",
+    priceDisplay: rawPrice || "-",
     skip: !name,
   };
 }
@@ -161,7 +161,7 @@ export default function ClassTypeImportPanel({
             .map((r) => ({
               name: r.name,
               description: r.description || undefined,
-              // Send null price as 0 — user edits to correct value after import
+              // Send null price as 0: user edits to correct value after import
               price: r.price ?? 0,
             })),
         }),
@@ -227,7 +227,7 @@ export default function ClassTypeImportPanel({
               <code className="font-mono">Name</code> column. Optional:{" "}
               <code className="font-mono">Description</code>,{" "}
               <code className="font-mono">Class Price</code>. Duration and
-              capacity default to 60 min / 20 seats — edit each class type
+              capacity default to 60 min / 20 seats; edit each class type
               after import to adjust.
             </p>
           </div>
@@ -287,7 +287,7 @@ export default function ClassTypeImportPanel({
           {rows.length > 0 && !result && (
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">
-                Preview —{" "}
+                Preview:{" "}
                 <span className="text-gray-900">{importableCount}</span> will
                 be imported
                 {skippedCount > 0 && (
@@ -328,7 +328,7 @@ export default function ClassTypeImportPanel({
                           )}
                         </td>
                         <td className="px-3 py-2 text-gray-500 max-w-[160px] truncate">
-                          {row.description || "—"}
+                          {row.description || "-"}
                         </td>
                         <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                           {row.price !== null
@@ -354,7 +354,7 @@ export default function ClassTypeImportPanel({
         {/* Footer */}
         <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-3">
           <p className="text-xs text-gray-400">
-            Duration and capacity default to 60 min / 20 seats — edit each
+            Duration and capacity default to 60 min / 20 seats; edit each
             class type after import.
           </p>
           <div className="flex gap-2 shrink-0">

@@ -1,12 +1,12 @@
 /**
- * CreateInvoiceClient — 3-step invoice creation wizard.
+ * CreateInvoiceClient: 3-step invoice creation wizard.
  * Used by: /admin/invoices/new
  *
  * Step 1: Select a class session
  * Step 2: Fill in invoice details (recipient, students, price, notes)
  * Step 3: Review and send
  *
- * Handles success state inline — replaces the form with a confirmation screen
+ * Handles success state inline: replaces the form with a confirmation screen
  * after the invoice is sent without navigating away.
  */
 
@@ -140,7 +140,7 @@ export default function CreateInvoiceClient({
   // State
   // ---------------------------------------------------------------------------
 
-  // Wizard step — skip to step 2 if a session was pre-selected via query param
+  // Wizard step: skip to step 2 if a session was pre-selected via query param
   const [step, setStep] = useState<Step>(preSelected ? 2 : 1);
 
   // Step 1: selected session
@@ -177,11 +177,11 @@ export default function CreateInvoiceClient({
     ? selectedSession.class_types.price * studentCount
     : 0;
 
-  /** The authoritative total to invoice — custom or calculated. */
+  /** The authoritative total to invoice: custom or calculated. */
   const totalAmount = useCustomPrice ? customAmount : calculatedTotal;
 
   /**
-   * Amount per student — used for DB record.
+   * Amount per student: used for DB record.
    * For custom prices, divides evenly; for standard, uses class type price.
    */
   const amountPerStudent = useCustomPrice
@@ -389,7 +389,7 @@ export default function CreateInvoiceClient({
               {spotsLabel(selectedSession.spotsRemaining)}
             </p>
           </div>
-          {/* Only show "Change class" in Step 2 — Step 3 has its own "Edit Details" button */}
+          {/* Only show "Change class" in Step 2: Step 3 has its own "Edit Details" button */}
           {step === 2 && (
             <button
               onClick={() => setStep(1)}
@@ -514,7 +514,7 @@ export default function CreateInvoiceClient({
             </div>
           </div>
 
-          {/* Recipient fields — label changes based on type */}
+          {/* Recipient fields: label changes based on type */}
           {invoiceType === "group" && (
             <div>
               <label
@@ -916,7 +916,7 @@ export default function CreateInvoiceClient({
   // Main render
   // ---------------------------------------------------------------------------
 
-  // Super admin without an instructor context — show instructor selector instead of wizard.
+  // Super admin without an instructor context: show instructor selector instead of wizard.
   if (!instructorId) {
     return renderInstructorSelector();
   }

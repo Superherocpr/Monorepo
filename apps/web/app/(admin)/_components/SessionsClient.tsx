@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SessionsClient — client-side filter and render for the admin sessions list.
+ * SessionsClient: client-side filter and render for the admin sessions list.
  * Receives all sessions from the server component; handles filtering locally.
  * Used by: app/(admin)/admin/sessions/page.tsx
  */
@@ -18,7 +18,7 @@ interface SessionsClientProps {
   sessions: SessionWithMeta[];
   instructors: InstructorOption[];
   userRole: UserRole;
-  /** The logged-in user's profile id — used to gate Grade button for instructors. */
+  /** The logged-in user's profile id: used to gate Grade button for instructors. */
   userId: string;
 }
 
@@ -49,7 +49,7 @@ const STATUS_BADGES: Record<SessionStatus, { label: string; classes: string }> =
 
 /**
  * Formats a class time as a readable date + range, e.g. "Mon, Jun 12 · 9:00 AM – 11:00 AM".
- * timeZone is pinned to UTC because class times are floating wall-clock values —
+ * timeZone is pinned to UTC because class times are floating wall-clock values:
  * see lib/business-time.ts.
  * @param startsAt - Stored class start timestamp
  * @param endsAt - Stored class end timestamp
@@ -115,7 +115,7 @@ export default function SessionsClient({
         body: JSON.stringify({ status: "in_progress" }),
       });
       if (res.ok) {
-        // Optimistic update — badge changes immediately
+        // Optimistic update: badge changes immediately
         setSessionStatuses((prev) => ({ ...prev, [sessionId]: "in_progress" }));
         // Refresh server-side props so the card reflects the new state fully
         router.refresh();
@@ -262,7 +262,7 @@ export default function SessionsClient({
             <option value="rejected">Rejected</option>
           </select>
 
-          {/* Instructor filter — manager/super admin only */}
+          {/* Instructor filter: manager/super admin only */}
           {isManager && instructors.length > 0 && (
             <select
               value={filterInstructor}
@@ -436,7 +436,7 @@ export default function SessionsClient({
                         </div>
                       </div>
 
-                      {/* ── Rejection reason — instructor view only ── */}
+                      {/* ── Rejection reason: instructor view only ── */}
                       {isRejected && session.rejection_reason && (
                         <div className="mt-3 pt-3 border-t border-red-100">
                           <p className="text-sm text-red-700">

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PromoCodesClient — interactive promo codes management table with create/edit/delete.
+ * PromoCodesClient: interactive promo codes management table with create/edit/delete.
  * Supports three scope modes: all sessions, specific class types, or specific sessions.
  * Used by: /admin/promo-codes (super_admin only)
  */
@@ -393,7 +393,7 @@ export default function PromoCodesClient({ initialCodes, sessions, classTypes }:
               </button>
             </div>
 
-            {/* Modal body — scrollable */}
+            {/* Modal body: scrollable */}
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
               {/* Code */}
@@ -458,7 +458,7 @@ export default function PromoCodesClient({ initialCodes, sessions, classTypes }:
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Expiry date{" "}
-                  <span className="text-gray-400 text-xs font-normal">(optional — blank = no expiry)</span>
+                  <span className="text-gray-400 text-xs font-normal">(optional; blank = no expiry)</span>
                 </label>
                 <input
                   type="date"
@@ -497,7 +497,7 @@ export default function PromoCodesClient({ initialCodes, sessions, classTypes }:
                 </div>
               </div>
 
-              {/* Class type picker — shown when scope = session_type */}
+              {/* Class type picker: shown when scope = session_type */}
               {form.scope === "session_type" && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -529,7 +529,7 @@ export default function PromoCodesClient({ initialCodes, sessions, classTypes }:
                 </div>
               )}
 
-              {/* Session picker — shown when scope = session */}
+              {/* Session picker: shown when scope = session */}
               {form.scope === "session" && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">

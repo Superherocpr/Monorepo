@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SessionDetailClient — full interactive UI for the admin session detail page.
+ * SessionDetailClient: full interactive UI for the admin session detail page.
  * Handles approval, rejection, editing, cancellation, CSV export, and all inline forms.
  * Used by: app/(admin)/admin/sessions/[id]/page.tsx
  */
@@ -36,6 +36,7 @@ import {
   type SessionEditFields,
   type StudentDocumentRecord,
 } from "@/app/(admin)/admin/sessions/[id]/actions";
+import RaiseTeamInvoiceButton from "@/app/(admin)/_components/RaiseTeamInvoiceButton";
 import { PayPalProvider } from "@paypal/react-paypal-js/sdk-v6";
 import { CardPaymentSection } from "@/app/_components/PayPalCardPaymentSection";
 import { MockCardPaymentSection } from "@/app/_components/MockCardPaymentSection";
@@ -200,6 +201,43 @@ export interface SessionDetailData {
   roster_records: SessionRosterRecord[];
   invoices: SessionInvoice[];
   roster_uploads: SessionRosterUpload[];
+  /** The corporate booking this class was created for, or null for a normal class. */
+  team_booking: SessionTeamBooking | null;
+}
+
+/**
+ * The team/corporate booking attached to a session. Its signup link is the whole
+ * point of the booking: staff hand it to the company contact, who distributes
+ * it to their own employees: so the detail page surfaces it prominently rather
+ * than burying it.
+ */
+export interface SessionTeamBooking {
+  id: string;
+  company_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string | null;
+  /**
+   * 'company' = flat total invoiced up front; 'per_seat' = employees pay;
+   * 'company_per_signup' = company billed per head after the class.
+   */
+  payment_mode: "company" | "per_seat" | "company_per_signup";
+  price_per_seat: number | null;
+  total_price: number | null;
+  /**
+   * Null in per_seat mode, when a per-signup booking has not been billed yet,
+   * or when invoice creation failed and needs retrying.
+   */
+  invoice_id: string | null;
+  /** When the signup link was emailed to the contact. Null until it is sent. */
+  contact_link_sent_at: string | null;
+  /**
+   * The full public signup URL. Built server-side from NEXT_PUBLIC_BASE_URL:
+   * the same source the share-link email uses: so it renders identically on
+   * server and client and needs no post-mount origin lookup.
+   */
+  share_url: string;
+  created_at: string;
 }
 
 /** A class type option for the edit form dropdown. */
@@ -243,7 +281,7 @@ interface Props {
   classTypes: ClassTypeOption[];
   locations: LocationOption[];
   instructors: InstructorOption[];
-  /** Add-ons eligible for this session's class type — empty if the class type has none. */
+  /** Add-ons eligible for this session's class type: empty if the class type has none. */
   eligibleAddons: AddonOption[];
 }
 
@@ -322,14 +360,31 @@ function invoiceStatusBadgeClass(status: string): string {
  * Formats a class timestamp for display. Returns e.g. "Mon, Apr 21, 2026, 9:00 AM".
  *
  * Class times are floating wall-clock values (migration 0060), not real
- * instants — the stored "9:00 AM" carries no timezone meaning and must render
+ * instants: the stored "9:00 AM" carries no timezone meaning and must render
  * back out verbatim. timeZone: "UTC" pins that, matching the FLOATING constant
  * every formatClass* helper in lib/business-time.ts spreads in for the same
  * reason. Without it, toLocaleString reinterprets the value in the browser's
- * local timezone — a class stored as 9:00 AM Eastern would display as 5:00 AM
+ * local timezone: a class stored as 9:00 AM Eastern would display as 5:00 AM
  * (EDT) or 4:00 AM (EST) to anyone west of UTC.
  * @param iso - Stored class timestamp.
  */
+/**
+ * Formats a real timestamptz (an actual instant, e.g. when an email was sent)
+ * as a plain date in the reader's own timezone.
+ *
+ * Deliberately does NOT pin timeZone: "UTC" the way formatDateTime does. That
+ * pinning exists for floating class times, which carry no timezone; this value
+ * is a genuine instant, so converting it to local time is the correct reading.
+ * @param iso - A real UTC timestamp.
+ */
+function formatInstantDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
     timeZone: "UTC",
@@ -378,7 +433,7 @@ export default function SessionDetailClient({
   // ── Live-updating Verified column ─────────────────────────────────────────
   // When a student completes rollcall, the API broadcasts on a channel scoped
   // to this session so the instructor's page can refresh without a manual
-  // reload. Only wired up for sessions where a check-in could still happen —
+  // reload. Only wired up for sessions where a check-in could still happen:
   // completed/cancelled sessions get no new roster activity.
   useEffect(() => {
     if (session.status !== "scheduled" && session.status !== "in_progress") {
@@ -394,7 +449,7 @@ export default function SessionDetailClient({
       .subscribe();
 
     // Fallback in case the websocket drops silently (laptop sleep, wifi
-    // blip) — keeps the page converging even without a live broadcast.
+    // blip): keeps the page converging even without a live broadcast.
     const pollInterval = setInterval(() => {
       router.refresh();
     }, 45_000);
@@ -420,7 +475,7 @@ export default function SessionDetailClient({
   // Who may open the "Add Student to Class" modal at all.
   const canAddStudents = isManager || (isInstructor && isOwnSession);
 
-  // Who may upload/delete student photos — matches the server-side check in
+  // Who may upload/delete student photos: matches the server-side check in
   // uploadStudentDocument/deleteStudentDocument (any manager, or the owning instructor).
   const canManagePhotos = isManager || (isInstructor && isOwnSession);
 
@@ -431,15 +486,15 @@ export default function SessionDetailClient({
    * independent actions. Instructors deliberately cannot: for them the only
    * route to a new booking is a settled card charge, enforced server-side by
    * /api/sessions/[id]/charge-and-book. The modal is otherwise identical for
-   * both — this flag only removes the standalone "Add" action and switches
+   * both: this flag only removes the standalone "Add" action and switches
    * which endpoint the card form submits to.
    */
   const canAddWithoutCharging = isManager;
 
   /**
    * The session's own price (class type price less any instructor discount),
-   * used to prefill the charge amount. The amount stays editable — walk-in and
-   * negotiated rates differ from the catalog — so this is a convenience only.
+   * used to prefill the charge amount. The amount stays editable: walk-in and
+   * negotiated rates differ from the catalog: so this is a convenience only.
    */
   const sessionListPrice = useMemo(() => {
     const base = session.class_types?.price;
@@ -473,10 +528,10 @@ export default function SessionDetailClient({
   const [claimError, setClaimError] = useState<string | null>(null);
 
   // ── Manual verified toggle state ──────────────────────────────────────────
-  // confirmedOverrides: keyed by roster_record id — optimistic updates for
+  // confirmedOverrides: keyed by roster_record id: optimistic updates for
   // both roster rows and booking rows that have a matching roster_record.
   const [confirmedOverrides, setConfirmedOverrides] = useState<Record<string, boolean>>({});
-  // bookingVerifiedOverrides: keyed by booking id — for students who booked
+  // bookingVerifiedOverrides: keyed by booking id: for students who booked
   // online but never went through rollcall (no roster_record exists yet).
   const [bookingVerifiedOverrides, setBookingVerifiedOverrides] = useState<Record<string, boolean>>({});
   // Set of keys currently being toggled (mix of roster_record ids and "b-{booking_id}").
@@ -509,7 +564,7 @@ export default function SessionDetailClient({
   const [additionalHoursError, setAdditionalHoursError] = useState<string | null>(null);
 
   // ── Edit customer info modal state ────────────────────────────────────────
-  // Scoped to roster_records only — never the customer's account-wide profile.
+  // Scoped to roster_records only: never the customer's account-wide profile.
   // See /api/sessions/[id]/customer-info for why this is enough for Enrollware.
   const [editingCustomer, setEditingCustomer] = useState<{
     key: string; // roster_record id, or `booking-${booking.id}` when no roster_record exists yet
@@ -524,7 +579,7 @@ export default function SessionDetailClient({
   const [contactOverrides, setContactOverrides] = useState<Record<string, ContactFormValues>>({});
 
   // ── Student documents (photos) modal state ────────────────────────────────
-  // No local override list — the document list always reads from session.bookings /
+  // No local override list: the document list always reads from session.bookings /
   // session.roster_records, so a router.refresh() after upload/delete is enough
   // (same approach handleRemoveStudent already uses for roster/booking rows).
   const [photosModalTarget, setPhotosModalTarget] = useState<{
@@ -549,7 +604,7 @@ export default function SessionDetailClient({
   const [paypalClientTokenError, setPaypalClientTokenError] = useState(false);
   /**
    * Whether staging's PayPal bypass is active (see lib/mock-payments.ts).
-   * `null` means not yet checked — the real client-token fetch below waits
+   * `null` means not yet checked: the real client-token fetch below waits
    * for an explicit `false` so mock mode is never raced by a real PayPal
    * network call before this resolves.
    */
@@ -557,7 +612,7 @@ export default function SessionDetailClient({
   /**
    * True exactly while the client-token fetch below is in flight. These are the
    * same conditions that effect runs under, and it resolves by setting either
-   * the token or the error flag — so this is derived rather than tracked in its
+   * the token or the error flag: so this is derived rather than tracked in its
    * own state, which would mean setting it synchronously inside the effect.
    */
   const isLoadingPayPalClientToken =
@@ -572,7 +627,7 @@ export default function SessionDetailClient({
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [chargeSuccessMessage, setChargeSuccessMessage] = useState<string | null>(null);
 
-  // Inline "student has no account yet" form inside the add-student modal —
+  // Inline "student has no account yet" form inside the add-student modal:
   // the walk-in at the door is usually not in the system.
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
   const [newCustomerForm, setNewCustomerForm] = useState(EMPTY_NEW_CUSTOMER_FORM);
@@ -596,6 +651,26 @@ export default function SessionDetailClient({
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>(session.addon_ids);
   const [isSavingAddons, setIsSavingAddons] = useState(false);
   const [addonsError, setAddonsError] = useState<string | null>(null);
+
+  // ── Team booking share link ───────────────────────────────────────────────
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+
+  /**
+   * Copies the public /team/<token> signup link to the clipboard.
+   * The company contact distributes this to their own employees, so it is the
+   * single thing staff most often need off this page for a corporate class.
+   * Side effect: writes to the system clipboard.
+   */
+  async function handleCopyShareLink(): Promise<void> {
+    if (!session.team_booking) return;
+    try {
+      await navigator.clipboard.writeText(session.team_booking.share_url);
+      setShareLinkCopied(true);
+      setTimeout(() => setShareLinkCopied(false), 2000);
+    } catch {
+      // Clipboard permission denied: the full link stays visible and selectable.
+    }
+  }
 
   // ── Remove student state ──────────────────────────────────────────────────
   // removingStudentIds: set of booking IDs or roster_record IDs currently being removed.
@@ -630,7 +705,7 @@ export default function SessionDetailClient({
    * For booking rows: cancels the booking (soft delete).
    * For roster record rows: deletes the roster_record.
    * Side effect: triggers page refresh on success.
-   * @param type - 'booking' or 'roster' — determines which action is called.
+   * @param type - 'booking' or 'roster': determines which action is called.
    * @param id - The booking ID or roster_record ID to remove.
    */
   async function handleRemoveStudent(type: "booking" | "roster", id: string): Promise<void> {
@@ -772,7 +847,7 @@ export default function SessionDetailClient({
   /**
    * Set of lowercase emails whose roster_record has confirmed=true.
    * confirmed is only set when the student actively taps "This is correct"
-   * (or saves edits) on the rollcall info screen — not from roster imports
+   * (or saves edits) on the rollcall info screen: not from roster imports
    * or the password sign-in path.
    */
   const verifiedEmailSet = useMemo(() => {
@@ -841,11 +916,11 @@ export default function SessionDetailClient({
         const json = await res.json().catch(() => ({}));
         console.error("[additional-hours] Save failed:", json.error ?? res.status);
         setAdditionalHours(previous);
-        setAdditionalHoursError("Failed to save — please try again.");
+        setAdditionalHoursError("Failed to save. Please try again.");
       }
     } catch {
       setAdditionalHours(previous);
-      setAdditionalHoursError("Failed to save — please try again.");
+      setAdditionalHoursError("Failed to save. Please try again.");
     } finally {
       setIsSavingAdditionalHours(false);
     }
@@ -910,7 +985,7 @@ export default function SessionDetailClient({
 
   /**
    * Saves the customer-info form for the student currently open in the modal.
-   * Updates roster_records only — see /api/sessions/[id]/customer-info.
+   * Updates roster_records only: see /api/sessions/[id]/customer-info.
    * Side effect: PATCH request, local optimistic override on success.
    */
   async function handleSaveContactInfo(): Promise<void> {
@@ -1037,7 +1112,7 @@ export default function SessionDetailClient({
         return;
       }
 
-      // Select the new student immediately — the point of creating them here
+      // Select the new student immediately: the point of creating them here
       // is to charge them in the next click.
       setSelectedCustomer({
         ...json.customer,
@@ -1098,7 +1173,7 @@ export default function SessionDetailClient({
         if (!cancelled) setMockPaymentsEnabled(!!data.mock);
       })
       .catch((err: unknown) => {
-        // Fail toward the real PayPal UI, never toward the mock stub — an
+        // Fail toward the real PayPal UI, never toward the mock stub: an
         // unreachable status check must not accidentally hide a real charge.
         console.error("[admin/session] Mock-payments status check failed:", err);
         if (!cancelled) setMockPaymentsEnabled(false);
@@ -1112,7 +1187,7 @@ export default function SessionDetailClient({
   useEffect(() => {
     // Waits for an explicit `false` (not just falsy `null`) so this can never
     // fire a real PayPal network call before the mock-status check above has
-    // actually resolved — see mockPaymentsEnabled's declaration.
+    // actually resolved: see mockPaymentsEnabled's declaration.
     if (
       !showAddStudentModal ||
       mockPaymentsEnabled !== false ||
@@ -1192,7 +1267,7 @@ export default function SessionDetailClient({
         return;
       }
 
-      // Managers capture the charge on its own — adding the student is a
+      // Managers capture the charge on its own: adding the student is a
       // separate button. Instructors post to charge-and-book, which creates
       // the booking in the same request and refunds if that step fails, so
       // they can never end up with a student added but not paid.
@@ -1230,7 +1305,7 @@ export default function SessionDetailClient({
         return;
       }
 
-      const mockSuffix = result.mock ? " (mock — no real charge was made)" : "";
+      const mockSuffix = result.mock ? " (mock; no real charge was made)" : "";
 
       if (canAddWithoutCharging) {
         setChargeSuccessMessage(`Charge recorded successfully.${mockSuffix}`);
@@ -1380,7 +1455,9 @@ export default function SessionDetailClient({
    * Otherwise, shows the edit form directly.
    */
   function handleEditClick() {
-    if (session.approval_status === "approved") {
+    // Team bookings never reset to pending approval on edit (see updateSession),
+    // so the warning about losing the public-schedule slot would be false here.
+    if (session.approval_status === "approved" && session.team_booking === null) {
       setShowApproveEditWarning(true);
     } else {
       setShowEditForm(true);
@@ -1469,21 +1546,25 @@ export default function SessionDetailClient({
   }
 
   // ── Can edit logic ────────────────────────────────────────────────────────
+  // Team-booking classes are exempt from the "not yet approved" gate: editing
+  // one never resets its approval or closes the signup link (see
+  // updateSession's server-side mirror of this), so the instructor who set it
+  // up can correct the date, time, location, or certification at any time.
 
   const canEdit =
     isManager ||
     (isInstructor &&
       isOwnSession &&
-      session.approval_status !== "approved");
+      (session.team_booking !== null || session.approval_status !== "approved"));
 
   // ── Session add-ons ─────────────────────────────────────────────────────────
 
-  /** Add-ons may be managed regardless of approval status — same reasoning as the assistant below. */
+  /** Add-ons may be managed regardless of approval status: same reasoning as the assistant below. */
   const canManageAddons = isManager || (isInstructor && isOwnSession);
 
   // ── Assistant assignment (documentation only, no pay impact) ───────────────
 
-  /** Assistant may be managed regardless of approval status — it's not part of the reviewed edit fields. */
+  /** Assistant may be managed regardless of approval status: it's not part of the reviewed edit fields. */
   const canManageAssistant = isManager || (isInstructor && isOwnSession);
   const hasAssistant = session.assistant_instructor_id !== null || session.assistant_name !== null;
   const ASSISTANT_THRESHOLD = 9;
@@ -1491,7 +1572,7 @@ export default function SessionDetailClient({
     session.class_types?.requires_assistant_at_capacity === true &&
     activeBookings >= ASSISTANT_THRESHOLD &&
     !hasAssistant;
-  /** Instructors selectable as assistant — excludes whoever is already teaching the session. */
+  /** Instructors selectable as assistant: excludes whoever is already teaching the session. */
   const assistantInstructorOptions = instructors.filter((inst) => inst.id !== session.instructor_id);
 
   /**
@@ -1654,7 +1735,7 @@ export default function SessionDetailClient({
     session.status !== "cancelled" &&
     (isManager || (isInstructor && isOwnSession));
 
-  // Instructors cannot cancel online within 48 hours of the class starting —
+  // Instructors cannot cancel online within 48 hours of the class starting:
   // they're directed to call the owner directly instead. Managers/super_admins
   // are never restricted by this window.
   // msUntilClass measures against the business wall clock, matching the identical
@@ -1713,7 +1794,7 @@ export default function SessionDetailClient({
               <p className="text-sm text-gray-500">{editingCustomer.name}</p>
             </div>
             <p className="text-xs text-gray-500">
-              Updates this student&apos;s info for this class only — for Enrollware
+              Updates this student&apos;s info for this class only, for Enrollware
               submission accuracy. Does not change their SuperheroCPR account.
             </p>
 
@@ -2090,10 +2171,10 @@ export default function SessionDetailClient({
                               {customer.first_name} {customer.last_name}
                             </td>
                             <td className="px-4 py-3 text-gray-600">
-                              {customer.email ?? "—"}
+                              {customer.email ?? "-"}
                             </td>
                             <td className="px-4 py-3 text-gray-600">
-                              {customer.phone ?? "—"}
+                              {customer.phone ?? "-"}
                             </td>
                             <td className="px-4 py-3 text-gray-600">
                               {customer.totalBookingsCount}
@@ -2237,7 +2318,7 @@ export default function SessionDetailClient({
       {isOpenOpportunity && (
         <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-5 space-y-3">
           <h2 className="text-base font-bold text-amber-900">
-            ⚡ This Class Is Open — First Come, First Serve
+            ⚡ This Class Is Open: First Come, First Serve
           </h2>
           <p className="text-sm text-amber-800">
             This class was cancelled by its previous instructor and needs a new one. Choose the
@@ -2274,7 +2355,7 @@ export default function SessionDetailClient({
           <div className="flex items-start gap-4">
             <div className="flex-1">
               <h2 className="text-base font-bold text-amber-900 mb-1">
-                ⚡ This Class Needs an Instructor — First Come, First Serve
+                ⚡ This Class Needs an Instructor: First Come, First Serve
               </h2>
               <p className="text-sm text-amber-800">
                 A customer requested this class at their location. The first instructor to accept
@@ -2307,7 +2388,7 @@ export default function SessionDetailClient({
             </h2>
             <p className="text-sm text-amber-800">
               This class has {activeBookings} paid students. Classes of this size require an
-              in-room assistant — add one below before class day.
+              in-room assistant; add one below before class day.
             </p>
           </div>
         </div>
@@ -2354,6 +2435,11 @@ export default function SessionDetailClient({
             {session.discount_percent != null && session.discount_percent > 0 && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                 {session.discount_percent}% OFF
+              </span>
+            )}
+            {session.team_booking && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                Team Booking
               </span>
             )}
             {session.enrollware_submitted && (
@@ -2461,12 +2547,119 @@ export default function SessionDetailClient({
           )}
         </div>
 
+        {/* ── Team booking: the signup link staff hand to the company ── */}
+        {session.team_booking && (
+          <div className="border-2 border-indigo-300 bg-indigo-50/60 rounded-lg p-5 space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-indigo-900">
+                  Team booking: {session.team_booking.company_name}
+                </p>
+                <p className="text-xs text-indigo-800/80 mt-0.5">
+                  {session.team_booking.contact_name} · {session.team_booking.contact_email}
+                  {session.team_booking.contact_phone
+                    ? ` · ${session.team_booking.contact_phone}`
+                    : ""}
+                </p>
+              </div>
+              <p className="text-xs font-medium text-indigo-900 shrink-0">
+                {session.team_booking.payment_mode === "company"
+                  ? `$${Number(session.team_booking.total_price ?? 0).toFixed(2)} total, billed to the company`
+                  : session.team_booking.payment_mode === "company_per_signup"
+                    ? `$${Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} per signup, billed to the company`
+                    : `$${Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} per seat, paid by each employee`}
+              </p>
+            </div>
+
+            {/* The whole reason this card is here: staff send this link on. */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="team-share-url"
+                className="block text-xs font-medium text-indigo-900 uppercase tracking-wide"
+              >
+                Signup link
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  id="team-share-url"
+                  type="text"
+                  readOnly
+                  value={session.team_booking.share_url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="flex-1 min-w-0 text-sm bg-white border border-indigo-300 rounded-md px-3 py-2 text-gray-800 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleCopyShareLink()}
+                  className="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700 transition-colors"
+                >
+                  {shareLinkCopied ? "Copied!" : "Copy signup link"}
+                </button>
+              </div>
+              <p className="text-xs text-indigo-800/80">
+                {session.team_booking.contact_link_sent_at
+                  ? `Emailed to ${session.team_booking.contact_name} on ${formatInstantDate(
+                      session.team_booking.contact_link_sent_at
+                    )}. Their staff each sign up with a real account, so RollCall shows correct names.`
+                  : `${session.team_booking.contact_name} is emailed this link automatically once the class is approved. Their staff each sign up with a real account, so RollCall shows correct names.`}
+              </p>
+            </div>
+
+            {/* Flat company mode with no invoice: money agreed but never billed.
+                This is a fault, so it reads as one. */}
+            {session.team_booking.payment_mode === "company" &&
+              !session.team_booking.invoice_id &&
+              isManager && (
+                <div className="border-t border-indigo-200 pt-3 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-red-700">No invoice has been raised</p>
+                    <p className="text-xs text-red-700/80 mt-0.5">
+                      The company was told the class is booked but has never been asked to pay.
+                      Raising it is safe; it re-checks first and will not bill them twice.
+                    </p>
+                  </div>
+                  <RaiseTeamInvoiceButton teamBookingId={session.team_booking.id} />
+                </div>
+              )}
+
+            {/* Per-signup mode with no invoice: normal until the class has run,
+                so this is neutral and explains when billing happens by itself. */}
+            {session.team_booking.payment_mode === "company_per_signup" &&
+              !session.team_booking.invoice_id &&
+              isManager && (
+                <div className="border-t border-indigo-200 pt-3 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-indigo-900">Not invoiced yet</p>
+                    <p className="text-xs text-indigo-800/80 mt-0.5">
+                      The company is billed $
+                      {Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} for each person
+                      who signs up. This goes out automatically after the class, or you can raise it
+                      now for whoever has signed up so far.
+                    </p>
+                  </div>
+                  <RaiseTeamInvoiceButton teamBookingId={session.team_booking.id} />
+                </div>
+              )}
+
+            {session.team_booking.invoice_id && (
+              <div className="border-t border-indigo-200 pt-3">
+                <Link
+                  href={`/admin/invoices/${session.team_booking.invoice_id}`}
+                  className="text-sm font-medium text-indigo-700 hover:underline"
+                >
+                  View company invoice →
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Assistant assignment (documentation only, no pay impact) ── */}
         {canManageAssistant && session.class_types?.requires_assistant_at_capacity && (
           <div className="border border-gray-200 rounded-md p-4 space-y-3">
             <p className="text-sm font-semibold text-gray-800">Class Assistant</p>
             <p className="text-xs text-gray-500">
-              For documentation only — does not affect instructor pay. Assign a platform
+              For documentation only, does not affect instructor pay. Assign a platform
               instructor or enter the name of someone outside the platform.
             </p>
 
@@ -2640,7 +2833,7 @@ export default function SessionDetailClient({
           </div>
         )}
 
-        {/* Rejection reason — shown when session is rejected */}
+        {/* Rejection reason: shown when session is rejected */}
         {session.approval_status === "rejected" && session.rejection_reason && (
           <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">
             <p className="font-medium">This session was not approved.</p>
@@ -2692,6 +2885,13 @@ export default function SessionDetailClient({
             <h2 className="text-sm font-semibold text-gray-900">
               Edit Class Session
             </h2>
+            {session.team_booking !== null && (
+              <p className="text-xs text-indigo-800/80 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-2">
+                This is a team booking, so saving takes effect immediately: no re-approval, and
+                the signup link stays open. If you change the class type, date, time, or
+                location, everyone already signed up is emailed the corrected details.
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Class type */}
               <div>
@@ -2711,7 +2911,7 @@ export default function SessionDetailClient({
                 </select>
               </div>
 
-              {/* Instructor — manager/super admin only can change */}
+              {/* Instructor: manager/super admin only can change */}
               {isManager && (
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -2889,7 +3089,7 @@ export default function SessionDetailClient({
         {!showEditForm && !showApproveEditWarning && (
           <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
 
-            {/* Approval actions — manager/super admin only, pending sessions only */}
+            {/* Approval actions: manager/super admin only, pending sessions only */}
             {isManager && session.approval_status === "pending_approval" && (
               <>
                 <button
@@ -2913,7 +3113,7 @@ export default function SessionDetailClient({
               </>
             )}
 
-            {/* Start Class button — approved + scheduled sessions only */}
+            {/* Start Class button: approved + scheduled sessions only */}
             {canStartClass && (
               <button
                 type="button"
@@ -2925,7 +3125,7 @@ export default function SessionDetailClient({
               </button>
             )}
 
-            {/* Show QR Page — classroom rollcall display. Own sessions only:
+            {/* Show QR Page: classroom rollcall display. Own sessions only:
                 the display's refresh action regenerates the viewer's own code. */}
             {isOwnSession &&
               session.approval_status === "approved" &&
@@ -2950,7 +3150,7 @@ export default function SessionDetailClient({
               </button>
             )}
 
-            {/* Cancel session — manager/super_admin any time; instructor on their
+            {/* Cancel session: manager/super_admin any time; instructor on their
                 own session, but blocked within 48hrs of start (see modal) */}
             {canCancel && (
               <button
@@ -3015,7 +3215,7 @@ export default function SessionDetailClient({
             </h3>
             <p className="text-sm text-red-700">
               This class becomes an open opportunity for other instructors to claim. Booked
-              students are only notified once a new instructor picks it up — not now.
+              students are only notified once a new instructor picks it up, not now.
             </p>
             <textarea
               value={cancelReason}
@@ -3061,7 +3261,7 @@ export default function SessionDetailClient({
                   ({totalStudents})
                 </span>
               </h2>
-              {/* Student management actions — managers, plus instructors on
+              {/* Student management actions: managers, plus instructors on
                   their own class (charge-to-add only, see canAddWithoutCharging) */}
               {canAddStudents && (
                 <div className="flex items-center gap-4">
@@ -3074,7 +3274,7 @@ export default function SessionDetailClient({
                       setCustomerSearchError(null);
                       setAddStudentError(null);
                       setSelectedCustomer(null);
-                      // Prefill the class price for the charge-to-add flow —
+                      // Prefill the class price for the charge-to-add flow:
                       // still editable, since walk-in rates vary. Managers keep
                       // the blank field their register has always had.
                       setChargeAmount(
@@ -3097,7 +3297,7 @@ export default function SessionDetailClient({
                   >
                     Add Student
                   </button>
-                  {/* Roster import is manager+ only — the page itself redirects
+                  {/* Roster import is manager+ only: the page itself redirects
                       instructors, so don't offer them the link. */}
                   {isManager && (
                     <Link
@@ -3263,7 +3463,7 @@ export default function SessionDetailClient({
                           )}
                         </tr>
                       ))}
-                    {/* Rows from roster records — deduplicated against booking emails */}
+                    {/* Rows from roster records: deduplicated against booking emails */}
                     {uniqueRosterRecords.map((r) => (
                       <tr key={`roster-${r.id}`} className="hover:bg-gray-50">
                         <td className="px-6 py-2.5 font-medium text-gray-800">
@@ -3414,7 +3614,7 @@ export default function SessionDetailClient({
                 </a>
               </div>
 
-              {/* CSV Export — super admin only, completed sessions only */}
+              {/* CSV Export: super admin only, completed sessions only */}
               {isSuperAdmin && (
                 <div className="space-y-1">
                   <span className="text-sm font-medium text-gray-700">

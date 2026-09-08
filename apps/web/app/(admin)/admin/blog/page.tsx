@@ -1,5 +1,5 @@
 /**
- * Admin Blog Page — /admin/blog
+ * Admin Blog Page: /admin/blog
  * Lists all blog posts (draft + published) with status badges and quick actions.
  * Auth: super_admin only.
  */
@@ -111,7 +111,7 @@ export default async function AdminBlogPage(): Promise<React.ReactElement> {
                       day: "numeric",
                       year: "numeric",
                     })
-                  : "—";
+                  : "-";
 
                 return (
                   <tr key={post.id} className="hover:bg-gray-50 transition-colors">

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SubmissionsClient — client component for the admin contact submissions page.
+ * SubmissionsClient: client component for the admin contact submissions page.
  * Renders the filter bar, the grouped submission list (unanswered / replied),
  * per-submission expand/collapse accordion, Zoho email thread display, and
  * the reply form. Used by: app/(admin)/admin/contact/page.tsx
@@ -142,7 +142,7 @@ export default function ContactSubmissionsClient({
   const [searchQuery, setSearchQuery] = useState("");
 
   // Sync filter inputs when the server re-renders with new filter props after
-  // router.push() — useState only initializes from props on first mount.
+  // router.push(): useState only initializes from props on first mount.
   // Adjusted during render rather than in an effect so React re-renders with the
   // new values before painting, instead of showing the stale ones for a frame.
   const [syncedFilters, setSyncedFilters] = useState(filters);
@@ -248,7 +248,7 @@ export default function ContactSubmissionsClient({
         return;
       }
 
-      // Expanding a new submission — reset reply form
+      // Expanding a new submission: reset reply form
       setExpandedId(sub.id);
       setReplySubject(`Re: ${sub.inquiry_type} inquiry from ${sub.name}`);
       setReplyBody("");
@@ -289,7 +289,7 @@ export default function ContactSubmissionsClient({
   /**
    * Submits the reply form. Sends the email via Zoho (POST /api/contact/reply)
    * and updates the local submission list to reflect the replied status.
-   * Attachments are included if S3 upload is configured — see TODO below.
+   * Attachments are included if S3 upload is configured: see TODO below.
    * @param submissionId - The ID of the submission being replied to.
    */
   async function handleSendReply(submissionId: string) {
@@ -366,7 +366,7 @@ export default function ContactSubmissionsClient({
   }
 
   // ── Client-side search filtering ────────────────────────────────────────────
-  // Matches name, email, phone, and message body — case-insensitive.
+  // Matches name, email, phone, and message body: case-insensitive.
   const displayedSubmissions = searchQuery.trim()
     ? submissions.filter((s) => {
         const q = searchQuery.toLowerCase();
@@ -395,7 +395,7 @@ export default function ContactSubmissionsClient({
 
   return (
     <div className="space-y-5">
-      {/* Zoho not connected — setup prompt */}
+      {/* Zoho not connected: setup prompt */}
       {!isZohoConnected && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <Mail className="h-5 w-5 shrink-0 text-amber-500" />
@@ -681,7 +681,7 @@ function SubmissionRow({
 }: SubmissionRowProps) {
   return (
     <div className={accentClass}>
-      {/* Summary row — always visible */}
+      {/* Summary row: always visible */}
       <button
         type="button"
         onClick={onToggle}

@@ -1,5 +1,5 @@
 /**
- * Admin Locations — redirects to /admin/settings where the Locations tab now lives.
+ * Admin Locations: redirects to /admin/settings where the Locations tab now lives.
  * Kept as a redirect so bookmarked URLs continue to work.
  */
 

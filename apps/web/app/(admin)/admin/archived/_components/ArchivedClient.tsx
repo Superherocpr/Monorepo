@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ArchivedClient — interactive list of archived customer accounts.
+ * ArchivedClient: interactive list of archived customer accounts.
  * Handles client-side search filtering and inline restore confirmation.
  * Used by: app/(admin)/admin/archived/page.tsx
  */
@@ -145,7 +145,7 @@ const ArchivedClient: React.FC<ArchivedClientProps> = ({ customers: initial }) =
 
       {/* ── Content ──────────────────────────────────────────────────────────── */}
       {customers.length === 0 ? (
-        /* Empty state — no archived accounts at all */
+        /* Empty state: no archived accounts at all */
         <div className="text-center py-16 border border-gray-200 rounded-lg bg-white">
           <CheckCircle2
             className="mx-auto text-green-500 mb-3"

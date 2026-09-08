@@ -3,9 +3,9 @@
  * Route: /admin/settings
  * Called by: Admin sidebar nav
  * Auth:
- *   - super_admin — full settings panel (class types, grades, Zoho, locations, etc.)
- *   - manager     — locations panel only
- *   - instructor  — Account (own name/phone/email/password), Enrollware, About Page
+ *   - super_admin: full settings panel (class types, grades, Zoho, locations, etc.)
+ *   - manager    : locations panel only
+ *   - instructor : Account (own name/phone/email/password), Enrollware, About Page
  * All other roles are redirected to /admin.
  * Fetches class types and preset grades server-side, then passes them to
  * SettingsClient which owns all interactive state and mutations.
@@ -39,7 +39,7 @@ export interface ClassType {
   max_capacity: number;
   price: number;
   active: boolean;
-  /** FK to cert_types.id — nullable for non-certifying sessions. */
+  /** FK to cert_types.id: nullable for non-certifying sessions. */
   cert_type_id: string | null;
   /** True when this class is an AHA-certified course. */
   is_aha: boolean;
@@ -70,7 +70,7 @@ export interface PresetGrade {
 }
 
 /**
- * Server component — fetches settings data and passes it to SettingsClient.
+ * Server component: fetches settings data and passes it to SettingsClient.
  * Redirects non-super-admins to /admin.
  */
 export default async function SettingsPage({
@@ -85,7 +85,7 @@ export default async function SettingsPage({
 
   if (!user) redirect("/signin?redirect=/admin/settings");
 
-  // Role check — instructors see a restricted view, only super_admins see full settings
+  // Role check: instructors see a restricted view, only super_admins see full settings
   // Own-row lookup: safe with session client via profiles_auth_read_own RLS policy.
   const { data: profile } = await supabase
     .from("profiles")
@@ -195,7 +195,7 @@ export default async function SettingsPage({
   // ── Super admin view: full settings panel ────────────────────────────────
 
   // Fetch class types, preset grades, bookmarklet status, and locations in parallel.
-  // class_types is fetched without the addon_class_types join here — kept in its own
+  // class_types is fetched without the addon_class_types join here: kept in its own
   // defensive fetch below, so the Class Types list can't be broken by migration 0035
   // not being applied yet (same reasoning as the payout settings fallback below).
   const [{ data: classTypeRows }, { data: certTypeRows }, { data: presetGrades }, { data: locationRaw }] =
@@ -226,7 +226,7 @@ export default async function SettingsPage({
     ]);
 
   // Add-on catalog + per-class-type eligibility (migration 0035). Fetched separately and
-  // defensively — if the migration hasn't been applied yet, fall back to empty so the rest
+  // defensively: if the migration hasn't been applied yet, fall back to empty so the rest
   // of the settings page still renders.
   let addons: Addon[] = [];
   let addonIdsByClassType = new Map<string, string[]>();
@@ -242,7 +242,7 @@ export default async function SettingsPage({
     }
     addonIdsByClassType = byClassType;
   } catch {
-    // Suppress — defaults above are safe
+    // Suppress: defaults above are safe
   }
 
   const classTypes: ClassType[] = (classTypeRows ?? []).map((ct) => ({
@@ -300,7 +300,7 @@ export default async function SettingsPage({
       ...NAV_PAGES.map((page) => getSetting(NAV_SETTING_KEY[page])),
     ]);
 
-  // Build nav visibility — absent or non-"false" = enabled (default on)
+  // Build nav visibility: absent or non-"false" = enabled (default on)
   const initialNavVisibility = Object.fromEntries(
     NAV_PAGES.map((page, i) => [page, navFlags[i] !== "false"])
   ) as Record<NavPage, boolean>;
@@ -330,7 +330,7 @@ export default async function SettingsPage({
       ? (rawSchedule as PayoutSchedule)
       : "daily";
   } catch {
-    // Suppress — defaults above are safe
+    // Suppress: defaults above are safe
   }
 
   // Payout tracking data for the Payouts tab. Wrapped defensively for the same

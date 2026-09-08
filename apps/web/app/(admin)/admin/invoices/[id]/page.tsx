@@ -12,7 +12,7 @@ import InvoiceDetailClient, {
   type InvoiceDetail,
 } from "../../../_components/InvoiceDetailClient";
 
-/** Page props — Next.js provides params as a Promise in App Router. */
+/** Page props: Next.js provides params as a Promise in App Router. */
 interface PageProps {
   params: Promise<{ id: string }>;
 }
@@ -25,7 +25,7 @@ interface PageProps {
 export default async function InvoiceDetailPage({ params }: PageProps) {
   const { id } = await params;
 
-  // Auth guard — honors view-as; instructor ownership check below uses the
+  // Auth guard: honors view-as; instructor ownership check below uses the
   // effective role so a downgraded super admin sees instructor-level scoping.
   const actor = await getAdminActor();
   if (!actor) redirect(`/signin?redirect=/admin/invoices/${id}`);

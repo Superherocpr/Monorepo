@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * GradingClient — interactive grading tool for a single class session.
+ * GradingClient: interactive grading tool for a single class session.
  * Shows all roster_record students for the session with preset grade buttons and a custom grade input.
  * Grades auto-save individually on selection. Shows green checkmark for 2s after save.
  * CCF Compression column is hidden by default; a toggle button in the header reveals it for all students.
@@ -128,7 +128,7 @@ export default function GradingClient({ session, students, presetGrades }: Props
   /**
    * Saves a grade for a single roster_record via the server API route.
    * The direct Supabase client update was silently failing because roster_records
-   * has no UPDATE RLS policy — the API route uses the admin client to bypass RLS.
+   * has no UPDATE RLS policy: the API route uses the admin client to bypass RLS.
    * Shows a green checkmark for 2 seconds on success.
    * @param studentId - The roster_record id.
    * @param grade - The integer grade value to save.
@@ -295,7 +295,7 @@ export default function GradingClient({ session, students, presetGrades }: Props
                 All done!
               </span>
             )}
-            {/* CCF Compression toggle — shown when there are students to grade */}
+            {/* CCF Compression toggle: shown when there are students to grade */}
             {total > 0 && (
               <button
                 type="button"
@@ -418,7 +418,7 @@ export default function GradingClient({ session, students, presetGrades }: Props
                       <span className="font-semibold text-gray-900">
                         {student.first_name} {student.last_name}
                       </span>
-                      {/* Green checkmark — shown for 2s after successful grade save */}
+                      {/* Green checkmark: shown for 2s after successful grade save */}
                       {justSaved && (
                         <svg
                           className="h-4 w-4 text-green-500 shrink-0"
@@ -437,7 +437,7 @@ export default function GradingClient({ session, students, presetGrades }: Props
                       )}
                       {hasError && (
                         <span className="text-xs text-red-600 font-medium">
-                          Save failed — try again
+                          Save failed, try again
                         </span>
                       )}
                       {isSaving && (
@@ -504,7 +504,7 @@ export default function GradingClient({ session, students, presetGrades }: Props
                       />
                     </div>
 
-                    {/* CCF Compression row — only visible when toggled on */}
+                    {/* CCF Compression row: only visible when toggled on */}
                     {showCcf && (
                       <div className="flex items-center gap-2">
                         <label

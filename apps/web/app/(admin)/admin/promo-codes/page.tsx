@@ -1,5 +1,5 @@
 /**
- * Admin Promo Codes Page — /admin/promo-codes
+ * Admin Promo Codes Page: /admin/promo-codes
  * Auth: super_admin only.
  * Fetches all promo codes, upcoming sessions, and class types server-side,
  * then passes them to PromoCodesClient which handles create/edit/delete interactions.
@@ -106,7 +106,7 @@ export default async function PromoCodesPage() {
     return {
       id: s.id,
       startsAt: s.starts_at,
-      label: `${name}${loc ? ` — ${loc}` : ""} · ${date}`,
+      label: `${name}${loc ? `, ${loc}` : ""} · ${date}`,
     };
   });
 

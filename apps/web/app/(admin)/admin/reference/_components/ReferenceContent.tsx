@@ -59,7 +59,7 @@ function getVisibleBullets(bullets: Bullet[], userRole: string): string[] {
 }
 
 /**
- * Returns whether a section matches the query — checked against name, URL, and the
+ * Returns whether a section matches the query: checked against name, URL, and the
  * user's visible bullets only (role-filtered so hidden content doesn't surface in search).
  * @param query - Lowercase trimmed search string.
  * @param userRole - The authenticated user's effective role.
@@ -79,7 +79,7 @@ function sectionMatches(
 // ── Main component ──────────────────────────────────────────────────────────
 
 interface ReferenceContentProps {
-  /** The authenticated user's effective role — used to filter visible sections. */
+  /** The authenticated user's effective role: used to filter visible sections. */
   userRole: string;
 }
 
@@ -91,11 +91,12 @@ export default function ReferenceContent({
   userRole,
 }: ReferenceContentProps): React.ReactElement {
   const [rawQuery, setRawQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleKey | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const query = rawQuery.trim().toLowerCase();
 
-  // Pre-filter to sections this user can actually access — the base list before search.
+  // Pre-filter to sections this user can actually access: the base list before search.
   const accessibleGroups = useMemo(
     () =>
       GROUPS.map((group) => ({
@@ -110,32 +111,41 @@ export default function ReferenceContent({
     [accessibleGroups]
   );
 
-  // Role key types that actually appear in the accessible sections — for the legend.
+  // Role key types that actually appear in the accessible sections: for the legend.
   const visibleRoleKeys = useMemo<RoleKey[]>(() => {
     const seen = new Set<RoleKey>();
     accessibleGroups.forEach((g) => g.sections.forEach((s) => seen.add(s.role)));
     return (Object.keys(ROLE_LABELS) as RoleKey[]).filter((k) => seen.has(k));
   }, [accessibleGroups]);
 
-  // Apply search on top of the role-filtered list.
+  // Apply the access-level pill filter and search query on top of the role-filtered list.
   const filteredGroups = useMemo(() => {
-    if (!query) return accessibleGroups;
+    if (!query && !roleFilter) return accessibleGroups;
     return accessibleGroups
       .map((group) => ({
         ...group,
-        sections: group.sections.filter((s) => sectionMatches(s, query, userRole)),
+        sections: group.sections.filter((s) => {
+          if (roleFilter && s.role !== roleFilter) return false;
+          if (query && !sectionMatches(s, query, userRole)) return false;
+          return true;
+        }),
       }))
       .filter((group) => group.sections.length > 0);
     // userRole is read via sectionMatches. It is currently redundant with
     // accessibleGroups (which is memoized on userRole), but declaring it keeps
     // the dependency list honest and lets React Compiler optimize this.
-  }, [query, accessibleGroups, userRole]);
+  }, [query, roleFilter, accessibleGroups, userRole]);
 
   const matchCount = filteredGroups.reduce((n, g) => n + g.sections.length, 0);
 
   const clearSearch = useCallback(() => {
     setRawQuery("");
     inputRef.current?.focus();
+  }, []);
+
+  /** Toggles a role pill: selecting it filters to that access level, re-clicking clears it. */
+  const toggleRoleFilter = useCallback((key: RoleKey) => {
+    setRoleFilter((prev) => (prev === key ? null : key));
   }, []);
 
   return (
@@ -152,23 +162,51 @@ export default function ReferenceContent({
           </h1>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-xl">
             {userRole === "super_admin"
-              ? "A page-by-page guide to every section of the admin dashboard — what it does and who can access it."
+              ? "A page-by-page guide to every section of the admin dashboard: what it does and who can access it."
               : "A guide to every admin page available to your role."}
           </p>
 
-          {/* Role legend — only show types present in this user's accessible sections */}
+          {/* Role legend: only show types present in this user's accessible sections.
+              Doubles as a filter: click a pill to show only that access level. */}
           {visibleRoleKeys.length > 1 && (
-            <div className="mt-4 flex flex-wrap gap-3">
-              {visibleRoleKeys.map((key) => (
-                <span
-                  key={key}
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${ROLE_CLASSES[key]}`}
+            <div
+              className="mt-4 flex flex-wrap items-center gap-3"
+              role="group"
+              aria-label="Filter by access level"
+            >
+              {visibleRoleKeys.map((key) => {
+                const isActive = roleFilter === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleRoleFilter(key)}
+                    aria-pressed={isActive}
+                    className={[
+                      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all cursor-pointer",
+                      ROLE_CLASSES[key],
+                      isActive
+                        ? "ring-2 ring-offset-1 ring-gray-900 dark:ring-white dark:ring-offset-gray-900"
+                        : roleFilter
+                        ? "opacity-50 hover:opacity-100"
+                        : "hover:opacity-80",
+                    ].join(" ")}
+                  >
+                    {ROLE_LABELS[key]}
+                  </button>
+                );
+              })}
+              {roleFilter && (
+                <button
+                  type="button"
+                  onClick={() => setRoleFilter(null)}
+                  className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline underline-offset-2"
                 >
-                  {ROLE_LABELS[key]}
-                </span>
-              ))}
+                  Reset
+                </button>
+              )}
               <span className="text-xs text-gray-400 dark:text-gray-500 self-center">
-                — access level required
+                (access level required)
               </span>
             </div>
           )}
@@ -212,11 +250,15 @@ export default function ReferenceContent({
             )}
           </div>
 
-          {/* Result count */}
-          {query && (
+          {/* Result count: reflects the search query and/or the active role-filter pill */}
+          {(query || roleFilter) && (
             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
               {matchCount === 0 ? (
-                <>No results for &ldquo;{rawQuery.trim()}&rdquo;</>
+                <>
+                  No results
+                  {query && <> for &ldquo;{rawQuery.trim()}&rdquo;</>}
+                  {roleFilter && <> in {ROLE_LABELS[roleFilter]}</>}
+                </>
               ) : (
                 <>
                   {matchCount} of {totalAccessible} section
@@ -235,16 +277,21 @@ export default function ReferenceContent({
             {filteredGroups.length === 0 ? (
               <div className="py-16 text-center">
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                  No sections match &ldquo;{rawQuery.trim()}&rdquo;
+                  No sections match
+                  {query && <> &ldquo;{rawQuery.trim()}&rdquo;</>}
+                  {roleFilter && <> in {ROLE_LABELS[roleFilter]}</>}
                 </p>
                 <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                  Try a different keyword, a URL fragment, or a role name.
+                  Try a different keyword, a URL fragment, or a different access level.
                 </p>
                 <button
-                  onClick={clearSearch}
+                  onClick={() => {
+                    clearSearch();
+                    setRoleFilter(null);
+                  }}
                   className="mt-4 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline underline-offset-2"
                 >
-                  Clear search
+                  Clear filters
                 </button>
               </div>
             ) : (
@@ -288,7 +335,7 @@ export default function ReferenceContent({
                           </span>
                         </div>
 
-                        {/* Bullet list — filtered to this user's role */}
+                        {/* Bullet list: filtered to this user's role */}
                         <ul className="px-5 py-3.5 space-y-1.5">
                           {getVisibleBullets(section.bullets, userRole).map((bullet, i) => (
                             <li
@@ -311,7 +358,7 @@ export default function ReferenceContent({
             )}
           </main>
 
-          {/* ── Sticky TOC — desktop only ──────────────────────────────────── */}
+          {/* ── Sticky TOC: desktop only ──────────────────────────────────── */}
           <aside className="hidden lg:block">
             <nav className="sticky top-8" aria-label="Page sections">
               <p className="text-[0.62rem] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">

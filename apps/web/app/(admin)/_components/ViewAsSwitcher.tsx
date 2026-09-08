@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ViewAsSwitcher — dropdown letting a Super Admin switch their effective role
+ * ViewAsSwitcher: dropdown letting a Super Admin switch their effective role
  * to Manager, Instructor, or Inspector (or back). Rendered by AdminTopBar only
  * when the user's REAL role is super_admin; the server actions re-verify that
  * regardless. Used by: app/(admin)/_components/AdminTopBar.tsx.

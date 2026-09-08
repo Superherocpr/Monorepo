@@ -1,5 +1,5 @@
 /**
- * InstructorDashboard — dashboard view for the instructor role.
+ * InstructorDashboard: dashboard view for the instructor role.
  * Shows: today's classes, sessions needing grades, pending invoices, and daily rollcall code.
  * Used by: app/(admin)/page.tsx
  */

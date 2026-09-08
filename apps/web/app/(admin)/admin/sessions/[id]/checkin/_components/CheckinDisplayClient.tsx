@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * CheckinDisplayClient — classroom-facing rollcall display.
+ * CheckinDisplayClient: classroom-facing rollcall display.
  * Renders a full-viewport branded page (covers the admin chrome) with a large
  * QR code, the plaintext rollcall code, check-in instructions, and a live
  * list of students who have verified for this session. The list updates via
@@ -121,7 +121,7 @@ export default function CheckinDisplayClient({
     };
   }, [sessionId, router]);
 
-  /** Server list ∪ broadcast list, deduped — server order first, newest broadcasts last. */
+  /** Server list ∪ broadcast list, deduped: server order first, newest broadcasts last. */
   const verified = useMemo(() => {
     const seen = new Set<string>();
     const merged: VerifiedStudent[] = [];
@@ -161,14 +161,14 @@ export default function CheckinDisplayClient({
     : `${origin}/rollcall`;
 
   return (
-    // Fixed full-viewport layer — covers the admin sidebar/top bar so the
+    // Fixed full-viewport layer: covers the admin sidebar/top bar so the
     // projected page is clean. Always light regardless of admin dark mode:
     // QR codes need a light background to scan reliably.
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto flex flex-col">
       {/* Brand accent stripe */}
       <div className="h-2 w-full shrink-0" style={{ backgroundColor: "#CC1122" }} />
 
-      {/* Header — text logo + session info + back link */}
+      {/* Header: text logo + session info + back link */}
       <header className="flex items-center justify-between px-6 sm:px-10 py-4 border-b border-gray-100 shrink-0">
         <div className="flex items-center gap-6">
           <p className="flex items-baseline gap-0.5 leading-none select-none">
@@ -197,7 +197,7 @@ export default function CheckinDisplayClient({
         </Link>
       </header>
 
-      {/* Main content — QR panel + verified list, side by side on wide screens */}
+      {/* Main content: QR panel + verified list, side by side on wide screens */}
       <div className="flex-1 flex flex-col lg:flex-row gap-8 px-6 sm:px-10 py-8 max-w-7xl w-full mx-auto">
 
         {/* ── QR + code panel ── */}
@@ -221,9 +221,9 @@ export default function CheckinDisplayClient({
             </div>
           )}
 
-          {/* Plaintext code — for anyone who can't scan */}
+          {/* Plaintext code: for anyone who can't scan */}
           <p className="text-6xl sm:text-7xl font-mono font-bold tracking-widest text-gray-900 mt-8">
-            {code ?? "——————"}
+            {code ?? "------"}
           </p>
 
           <p className="text-gray-500 text-lg mt-4 max-w-md leading-relaxed">

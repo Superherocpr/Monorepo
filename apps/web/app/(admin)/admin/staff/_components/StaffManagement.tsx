@@ -58,7 +58,7 @@ interface Toast {
  * Owns filter state, toast state, and invite panel visibility.
  * Refreshes staff data via router.refresh() after any mutation.
  * @param staffMembers - All staff profiles fetched server-side.
- * @param ownerEmails - Protected owner emails — action buttons are hidden for these members.
+ * @param ownerEmails - Protected owner emails: action buttons are hidden for these members.
  * @param currentUserId - The logged-in super admin's user ID (prevents self-demotion).
  */
 const StaffManagement: React.FC<StaffManagementProps> = ({
@@ -71,7 +71,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
   const [roleFilter, setRoleFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [invitePanelOpen, setInvitePanelOpen] = useState(false);
-  // The staff member whose bio is being edited — null means the panel is closed
+  // The staff member whose bio is being edited: null means the panel is closed
   const [bioPanelMember, setBioPanelMember] = useState<StaffMember | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
 
@@ -96,7 +96,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
     router.refresh();
   }
 
-  // Client-side filter — all staff data is already loaded from the server.
+  // Client-side filter: all staff data is already loaded from the server.
   // Search matches against full name, email, and phone (case-insensitive).
   const filtered = staffMembers.filter((staff) => {
     const statusMatch =
@@ -136,7 +136,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
         </button>
       </div>
 
-      {/* Search bar — filters by name, email, or phone client-side */}
+      {/* Search bar: filters by name, email, or phone client-side */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
@@ -166,7 +166,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
         setRole={setRoleFilter}
       />
 
-      {/* Staff list — table on desktop, cards on mobile */}
+      {/* Staff list: table on desktop, cards on mobile */}
       <StaffList
         staff={filtered}
         ownerEmails={ownerEmails}
@@ -180,7 +180,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
         onEditBio={(member) => setBioPanelMember(member)}
       />
 
-      {/* Bio edit slide-in panel — opens when an instructor's Edit Bio is clicked */}
+      {/* Bio edit slide-in panel: opens when an instructor's Edit Bio is clicked */}
       <BioEditPanel
         member={bioPanelMember}
         onClose={() => setBioPanelMember(null)}
@@ -211,7 +211,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({
         onError={(msg) => showToast("error", msg)}
       />
 
-      {/* Toast notification — bottom-right, auto-dismisses on success */}
+      {/* Toast notification: bottom-right, auto-dismisses on success */}
       {toast && (
         <div
           className={`fixed bottom-4 right-4 z-50 max-w-sm w-full rounded-lg shadow-lg p-4 flex items-start gap-3 border ${

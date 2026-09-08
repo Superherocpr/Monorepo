@@ -1,5 +1,5 @@
 /**
- * Admin New Blog Post Page — /admin/blog/new
+ * Admin New Blog Post Page: /admin/blog/new
  * Renders BlogEditorClient pre-loaded with all tags and no existing post data.
  * Auth: super_admin only.
  */

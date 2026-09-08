@@ -1,5 +1,5 @@
 /**
- * Admin Customer Management page — `/admin/customers`
+ * Admin Customer Management page: `/admin/customers`
  * Access: manager and super_admin only.
  * Loads the first 50 customers (ordered by last name, includes archived) on the
  * server, then hands off to CustomersClient for search, filters, and creation.
@@ -14,7 +14,7 @@ import {
 } from "@/lib/cert-utils";
 import CustomersClient, { CustomerWithMeta } from "@/app/(admin)/_components/CustomersClient";
 
-/** Server component — handles auth, access check, and initial data fetch. */
+/** Server component: handles auth, access check, and initial data fetch. */
 export default async function CustomersPage() {
   // Only managers and super admins may access this page (honors view-as).
   const actor = await getAdminActor();
@@ -24,7 +24,7 @@ export default async function CustomersPage() {
 
   const admin = await createAdminClient();
 
-  // ── Initial data fetch — first 50 customers ordered by last name ──────────
+  // ── Initial data fetch: first 50 customers ordered by last name ──────────
   // Use explicit FK hints on bookings because the bookings table has three FKs
   // back to profiles (customer_id, created_by, cancelled_by). Without the hint
   // PostgREST cannot resolve the join and the query returns no data.

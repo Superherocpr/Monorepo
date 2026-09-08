@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ChartTooltip — custom Recharts tooltip styled to the admin design system.
+ * ChartTooltip: custom Recharts tooltip styled to the admin design system.
  * White background, subtle border, clean typography. Used across all charts.
  * Used by: AnalyticsClient.tsx (all Recharts chart components)
  */

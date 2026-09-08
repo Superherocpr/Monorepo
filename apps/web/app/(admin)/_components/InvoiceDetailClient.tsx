@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * InvoiceDetailClient — Interactive invoice detail view for /admin/invoices/[id].
+ * InvoiceDetailClient: Interactive invoice detail view for /admin/invoices/[id].
  * Handles Mark as Paid, Resend, and Cancel Invoice actions inline.
  * Used by: InvoiceDetailPage (admin/invoices/[id]/page.tsx)
  */
@@ -291,7 +291,7 @@ export default function InvoiceDetailClient({
                 </div>
                 <div>
                   <dt className="text-gray-500">Date &amp; Time</dt>
-                  {/* Class time — formatClassDateTimeLong, not formatDateTime, which is
+                  {/* Class time: formatClassDateTimeLong, not formatDateTime, which is
                       for real instants like created_at. See lib/business-time.ts. */}
                   <dd className="text-gray-900">{formatClassDateTimeLong(session.starts_at)}</dd>
                 </div>
@@ -321,10 +321,10 @@ export default function InvoiceDetailClient({
                 <dt className="text-gray-500">Students</dt>
                 <dd className="text-gray-900">
                   {/* Team-booking invoices carry student_count = 0 on purpose so
-                      they never reserve seats — employees book themselves through
+                      they never reserve seats: employees book themselves through
                       the signup link. Showing "0 students" would read as a bug. */}
                   {invoice.student_count === 0
-                    ? "Flat rate — attendees register individually"
+                    ? "Flat rate: attendees register individually"
                     : `${invoice.student_count} student${invoice.student_count !== 1 ? "s" : ""}`}
                 </dd>
               </div>
@@ -420,7 +420,7 @@ export default function InvoiceDetailClient({
           <div className="bg-white border border-gray-200 rounded-lg p-5 space-y-4">
             <h2 className="text-sm font-semibold text-gray-900">Actions</h2>
 
-            {/* Status: sent — show all actions if canAct */}
+            {/* Status: sent: show all actions if canAct */}
             {currentStatus === "sent" && canAct && actionMode === "idle" && (
               <div className="space-y-2">
                 <button
@@ -545,14 +545,14 @@ export default function InvoiceDetailClient({
               </div>
             )}
 
-            {/* Status: paid — no actions */}
+            {/* Status: paid: no actions */}
             {currentStatus === "paid" && (
               <p className="text-sm text-green-700 font-medium">
                 This invoice has been paid.
               </p>
             )}
 
-            {/* Status: cancelled — no actions, offer re-issue link */}
+            {/* Status: cancelled: no actions, offer re-issue link */}
             {currentStatus === "cancelled" && (
               <div className="space-y-3">
                 <p className="text-sm text-gray-500">This invoice has been cancelled.</p>
@@ -567,7 +567,7 @@ export default function InvoiceDetailClient({
               </div>
             )}
 
-            {/* Managers — view only notice */}
+            {/* Managers: view only notice */}
             {isManager && currentStatus === "sent" && (
               <p className="text-xs text-gray-400">
                 Managers can view invoices but cannot take actions. Contact the instructor or super admin.

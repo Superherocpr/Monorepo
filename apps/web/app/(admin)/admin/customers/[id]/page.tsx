@@ -1,5 +1,5 @@
 /**
- * Admin Customer Detail page — `/admin/customers/[id]`
+ * Admin Customer Detail page: `/admin/customers/[id]`
  * Access: manager and super_admin only.
  * Fetches all customer data (profile, bookings, certs, orders, payments,
  * available sessions, cert types) in a single Promise.all and passes
@@ -14,12 +14,12 @@ import CustomerDetailClient, {
 } from "@/app/(admin)/_components/CustomerDetailClient";
 import { floatingNow } from "@/lib/business-time";
 
-/** Page props — Next.js 15+ provides params as a Promise in App Router. */
+/** Page props: Next.js 15+ provides params as a Promise in App Router. */
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-/** Server component — handles auth, access, and the full data fetch. */
+/** Server component: handles auth, access, and the full data fetch. */
 export default async function CustomerDetailPage({ params }: PageProps) {
   const { id: customerId } = await params;
 
@@ -166,7 +166,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
   // If the profile doesn't exist or isn't a customer, redirect back.
   if (!profileResult.data || profileResult.data.role !== "customer") {
     console.error(
-      `[CustomerDetail] redirect — customerId="${customerId}" data=${JSON.stringify(profileResult.data)} error=${JSON.stringify(profileResult.error)}`
+      `[CustomerDetail] redirect: customerId="${customerId}" data=${JSON.stringify(profileResult.data)} error=${JSON.stringify(profileResult.error)}`
     );
     redirect("/admin/customers");
   }

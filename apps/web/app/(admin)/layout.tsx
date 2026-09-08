@@ -67,9 +67,9 @@ export default async function AdminLayout({
           effectiveRole={effectiveRole}
           isViewingAs={isViewingAs}
         />
-        {/* View-as indicator — always visible while a super admin is downgraded */}
+        {/* View-as indicator: always visible while a super admin is downgraded */}
         {isViewingAs && <ViewAsBanner effectiveRole={effectiveRole} />}
-        {/* Instructor onboarding banner — shown until a payout email is saved */}
+        {/* Instructor onboarding banner: shown until a payout email is saved */}
         {showPaymentBanner && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center justify-between gap-4">
             <p className="text-sm text-amber-800 font-medium">

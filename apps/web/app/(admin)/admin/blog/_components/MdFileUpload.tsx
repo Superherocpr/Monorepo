@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * MdFileUpload — drag/click to upload a .md file into the blog editor.
+ * MdFileUpload: drag/click to upload a .md file into the blog editor.
  * Extracts the title from the first # heading and populates the body field.
  * Used by BlogEditorClient.
  */
@@ -43,7 +43,7 @@ export default function MdFileUpload({ onImport }: MdFileUploadProps): React.Rea
       const firstHeadingMatch = content.match(/^#\s+(.+)$/m);
       const title = firstHeadingMatch?.[1]?.trim() ?? "";
 
-      // Body is the full content — the editor will show it with the heading intact.
+      // Body is the full content: the editor will show it with the heading intact.
       onImport(title, content.trim());
       setError(null);
     };
@@ -72,7 +72,7 @@ export default function MdFileUpload({ onImport }: MdFileUploadProps): React.Rea
         onDragOver={(e) => e.preventDefault()}
         className="w-full py-2 px-3 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-red-400 hover:text-red-600 transition-colors text-left"
       >
-        Import .md file — drag here or click to browse
+        Import .md file: drag here or click to browse
       </button>
       <input
         ref={inputRef}

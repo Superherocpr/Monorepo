@@ -1,5 +1,5 @@
 /**
- * Admin Blog Tags Page — /admin/blog/tags
+ * Admin Blog Tags Page: /admin/blog/tags
  * Lists all tags with post counts, and allows creating or deleting tags.
  * Auth: super_admin only.
  */

@@ -1,5 +1,5 @@
 /**
- * Admin Certifications page — `/admin/certifications`
+ * Admin Certifications page: `/admin/certifications`
  * Access: super_admin only.
  * Fetches all certifications (with customer, cert type, and session joins),
  * all cert types (with active flag), and the current reminders-paused setting,
@@ -13,7 +13,7 @@ import { getAdminActor } from "@/lib/auth/effective-role";
 import CertificationsClient from "@/app/(admin)/_components/CertificationsClient";
 import type { CertificationAdminRecord, CertTypeAdminRow } from "@/types/certifications";
 
-/** Server component — handles auth, data fetching, and data shaping. */
+/** Server component: handles auth, data fetching, and data shaping. */
 export default async function CertificationsPage() {
   // Certifications management is super_admin only (honors view-as)
   const actor = await getAdminActor();
@@ -79,7 +79,7 @@ export default async function CertificationsPage() {
 
   // ── Build cert types with issue counts ────────────────────────────────────
   // Compute how many certifications exist per cert type from the already-fetched
-  // certs array — avoids a separate aggregation query.
+  // certs array: avoids a separate aggregation query.
   const countByTypeId = rawCerts.reduce<Record<string, number>>((acc, cert) => {
     const typeId = cert.cert_types.id;
     acc[typeId] = (acc[typeId] ?? 0) + 1;

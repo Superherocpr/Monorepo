@@ -1,5 +1,5 @@
 /**
- * ApprovalsEmptyState — Empty state for /admin/sessions/approvals.
+ * ApprovalsEmptyState: Empty state for /admin/sessions/approvals.
  * Shown when no sessions are pending approval.
  * Used by: ApprovalsPage (approvals/page.tsx)
  */

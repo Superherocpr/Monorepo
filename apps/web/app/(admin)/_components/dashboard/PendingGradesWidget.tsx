@@ -1,5 +1,5 @@
 /**
- * PendingGradesWidget — card showing completed sessions where the instructor
+ * PendingGradesWidget: card showing completed sessions where the instructor
  * still has ungraded roster students. Links to the grading page for each session.
  * Used by: InstructorDashboard.tsx, SuperAdminDashboard.tsx
  */

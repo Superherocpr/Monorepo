@@ -1,5 +1,5 @@
 /**
- * POST /admin/analytics — server shell
+ * POST /admin/analytics: server shell
  * Access: super_admin only.
  * Fetches initial analytics data for the default range (last 90 days)
  * and passes it to AnalyticsClient for interactive filtering.

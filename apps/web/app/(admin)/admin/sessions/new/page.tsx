@@ -5,7 +5,7 @@
  * Fetches the option lists needed to populate the create-session form:
  * active class types, all locations, and active staff profiles (for
  * manager/super admin instructor selector). Instructors always create
- * sessions for themselves — the instructor selector is hidden for them.
+ * sessions for themselves: the instructor selector is hidden for them.
  * Renders the form via CreateSessionClient.
  */
 
@@ -25,11 +25,11 @@ import CreateSessionClient, {
 const ALLOWED_ROLES: UserRole[] = ["instructor", "manager", "super_admin"];
 
 /**
- * Server component — authenticates the user, fetches form option data,
+ * Server component: authenticates the user, fetches form option data,
  * and renders the CreateSessionClient form.
  */
 export default async function NewSessionPage() {
-  // Auth guard — honors view-as: a downgraded super admin gets the instructor
+  // Auth guard: honors view-as: a downgraded super admin gets the instructor
   // variant of the form (own name locked in, no instructor selector).
   const actor = await getAdminActor();
   if (!actor || !ALLOWED_ROLES.includes(actor.effectiveRole)) {
@@ -41,7 +41,7 @@ export default async function NewSessionPage() {
 
   const admin = await createAdminClient();
 
-  // The instructor's own full name — passed to the form so it can display a
+  // The instructor's own full name: passed to the form so it can display a
   // read-only "Instructor" row in place of the selector when isInstructor is true.
   const instructorName = isInstructor
     ? `${profile.first_name as string} ${profile.last_name as string}`.trim()
@@ -76,7 +76,7 @@ export default async function NewSessionPage() {
     }
     addonIdsByClassType = byClassType;
   } catch {
-    // Suppress — defaults above are safe
+    // Suppress: defaults above are safe
   }
 
   const classTypes: ClassTypeOption[] = (rawClassTypes ?? []).map((t) => ({

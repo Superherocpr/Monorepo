@@ -1,5 +1,5 @@
 /**
- * Enrollware Tool page — /admin/enrollware-tool
+ * Enrollware Tool page: /admin/enrollware-tool
  * Allows instructors to generate and manage their Enrollware autofill bookmarklet,
  * and shows today's class sessions with student counts as a quick reference.
  * Used by: instructors, managers, and super admins (inspector role excluded).
@@ -12,7 +12,7 @@ import { localDayWindow } from "@/lib/enrollware-api-auth";
 import BookmarkletSetup from "./_components/BookmarkletSetup";
 import type { UserRole } from "@/types/users";
 
-/** Roles permitted to use the Enrollware tool. Inspectors are excluded — they
+/** Roles permitted to use the Enrollware tool. Inspectors are excluded: they
  *  review sessions but do not submit them to Enrollware. */
 const ALLOWED_ROLES: UserRole[] = ["instructor", "manager", "super_admin"];
 
@@ -31,7 +31,7 @@ interface TodaySession {
 async function getTodaysSessions(profileId: string): Promise<TodaySession[]> {
   const admin = await createAdminClient();
 
-  // "Today" must be the business's local day, not UTC — otherwise after 8pm
+  // "Today" must be the business's local day, not UTC: otherwise after 8pm
   // Eastern the window rolls forward and the day's classes disappear.
   const { startIso, endIso } = localDayWindow(null);
 
@@ -68,7 +68,7 @@ async function getTodaysSessions(profileId: string): Promise<TodaySession[]> {
 /** Returns true if the instructor has an active enrollware-bookmarklet API key. */
 async function hasBookmarkletKey(profileId: string): Promise<boolean> {
   const admin = await createAdminClient();
-  // maybeSingle() — avoids a spurious "no rows" error log for users who have
+  // maybeSingle(): avoids a spurious "no rows" error log for users who have
   // never generated a bookmarklet.
   const { data } = await admin
     .from("api_keys")
@@ -89,7 +89,7 @@ function formatTime(iso: string): string {
 }
 
 export default async function EnrollwareToolPage() {
-  // Auth guard — honors view-as, so a downgraded super admin gets the
+  // Auth guard: honors view-as, so a downgraded super admin gets the
   // effective role's access.
   const actor = await getAdminActor();
   if (!actor || !ALLOWED_ROLES.includes(actor.effectiveRole)) {

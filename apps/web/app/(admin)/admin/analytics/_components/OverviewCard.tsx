@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * OverviewCard — a single metric card in the overview strip.
+ * OverviewCard: a single metric card in the overview strip.
  * Shows a large value, label, and trend indicator vs previous period.
  * Used by: AnalyticsClient.tsx (overview section)
  */
@@ -24,7 +24,7 @@ interface Props {
 export function OverviewCard({ label, card, currency = false }: Props) {
   const { value, previousValue } = card;
 
-  // Trend calculation — avoid division by zero
+  // Trend calculation: avoid division by zero
   const hasPrev = previousValue > 0;
   const changePct = hasPrev
     ? Math.round(((value - previousValue) / previousValue) * 100)

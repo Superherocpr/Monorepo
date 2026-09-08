@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PayoutsClient — page shell for /admin/payouts.
+ * PayoutsClient: page shell for /admin/payouts.
  *
  * Owns the page heading and the "Send Pending Payouts" action, then delegates all
  * display to the two shared panels also used by Settings → Payouts. Sync, deny,

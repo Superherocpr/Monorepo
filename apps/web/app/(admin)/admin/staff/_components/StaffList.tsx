@@ -18,7 +18,7 @@ interface StaffListProps {
   staff: StaffMember[];
   ownerEmails: string[];
   currentUserId: string;
-  /** Called with a success message on any successful mutation — also triggers list refresh. */
+  /** Called with a success message on any successful mutation: also triggers list refresh. */
   onSuccess: (message: string) => void;
   /** Called with an error message on any failed mutation. */
   onError: (message: string) => void;
@@ -71,8 +71,8 @@ function formatDeactivatedDate(dateStr: string): string {
  * Action buttons are hidden entirely for the owner email. The delete action
  * is also hidden on the logged-in user's own row (prevents self-deletion).
  * @param staff - Filtered staff members to display.
- * @param ownerEmails - Protected owner emails — no action buttons shown for these rows.
- * @param currentUserId - Logged-in user's ID — change-role and delete hidden on own row.
+ * @param ownerEmails - Protected owner emails: no action buttons shown for these rows.
+ * @param currentUserId - Logged-in user's ID: change-role and delete hidden on own row.
  * @param onSuccess - Callback to show success toast and refresh the list.
  * @param onError - Callback to show an error toast.
  * @param onInvite - Callback to open the invite panel (used in empty state).
@@ -191,7 +191,7 @@ const StaffList: React.FC<StaffListProps> = ({
     }
   }
 
-  // Empty state — shown when no staff match the current filters
+  // Empty state: shown when no staff match the current filters
   if (staff.length === 0) {
     return (
       <div className="bg-white border border-gray-200 rounded-lg text-center py-16">
@@ -210,7 +210,7 @@ const StaffList: React.FC<StaffListProps> = ({
     );
   }
 
-  // Shared inline change-role UI — rendered in both table and mobile card
+  // Shared inline change-role UI: rendered in both table and mobile card
   function renderChangeRoleUI(member: StaffMember, fullName: string) {
     const isLoading = loadingAction === member.id;
     const isChangingRole = changingRoleFor === member.id;
@@ -263,7 +263,7 @@ const StaffList: React.FC<StaffListProps> = ({
     );
   }
 
-  // Shared deactivate / reactivate UI — rendered in both table and mobile card
+  // Shared deactivate / reactivate UI: rendered in both table and mobile card
   function renderDeactivateUI(member: StaffMember, fullName: string) {
     const isLoading = loadingAction === member.id;
     const isDeactivating = deactivatingFor === member.id;
@@ -431,7 +431,7 @@ const StaffList: React.FC<StaffListProps> = ({
   /**
    * Renders a "Resend Invite" button for active (non-deactivated) staff members.
    * Regenerates the password setup link and re-sends the invitation email.
-   * Hidden for deactivated accounts — they cannot log in regardless.
+   * Hidden for deactivated accounts: they cannot log in regardless.
    * @param member - The staff member row.
    * @param fullName - Full display name used in the success message.
    */
@@ -569,7 +569,7 @@ const StaffList: React.FC<StaffListProps> = ({
    * Renders a delete confirmation UI for a staff member.
    * Shows a "Delete" trigger link when closed; expands to a destructive confirmation.
    * The API route will block deletion if the member has class sessions on record.
-   * Not rendered for owner rows or the current user's own row — guarded in the caller.
+   * Not rendered for owner rows or the current user's own row: guarded in the caller.
    * @param member - The staff member row.
    * @param fullName - Full display name shown in the confirmation warning.
    */
@@ -747,7 +747,7 @@ const StaffList: React.FC<StaffListProps> = ({
                 )}
               </div>
 
-              {/* Action buttons — Edit Bio available to all; role/deactivate/delete hidden for owner */}
+              {/* Action buttons: Edit Bio available to all; role/deactivate/delete hidden for owner */}
               <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-1.5 items-center">
                 {renderEditBioButton(member)}
                 {!isOwner && renderEditContactUI(member, fullName)}

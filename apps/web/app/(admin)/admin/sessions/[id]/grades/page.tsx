@@ -1,5 +1,5 @@
 /**
- * Admin grading tool page — /admin/sessions/[id]/grades
+ * Admin grading tool page: /admin/sessions/[id]/grades
  * Server component: verifies access, fetches session info, roster records, and preset grades.
  * Access: instructor (own session) and super admin only. No other roles.
  * Auth guard provided by app/(admin)/layout.tsx.
@@ -23,7 +23,7 @@ interface PageProps {
 export default async function GradesPage({ params }: PageProps) {
   const { id } = await params;
 
-  // Auth guard — honors view-as; ownership check below uses the effective role.
+  // Auth guard: honors view-as; ownership check below uses the effective role.
   const actor = await getAdminActor();
   if (!actor) redirect(`/signin?redirect=/admin/sessions/${id}/grades`);
 
@@ -63,7 +63,7 @@ export default async function GradesPage({ params }: PageProps) {
     locations: rawSession.locations as unknown as { name: string } | null,
   };
 
-  // Fetch roster records — grading source is roster_records only, not bookings
+  // Fetch roster records: grading source is roster_records only, not bookings
   const { data: rawStudents } = await admin
     .from("roster_records")
     .select("id, first_name, last_name, email, employer, grade, ccf_compression")

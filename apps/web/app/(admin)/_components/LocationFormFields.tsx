@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * LocationFormFields — reusable labeled inputs for a location form.
+ * LocationFormFields: reusable labeled inputs for a location form.
  * Also exports the shared LocationFormState type, US_STATES list,
  * blank-form factory, and validation helper.
  * Used by: LocationsClient (inline edit), AddLocationPanel (add flow).
@@ -57,7 +57,7 @@ export function validateLocationForm(
 interface LocationFormFieldsProps {
   form: LocationFormState;
   errors: Partial<Record<keyof LocationFormState, string>>;
-  /** Called on any field change — receives field key and new string value. */
+  /** Called on any field change: receives field key and new string value. */
   onChange: (field: keyof LocationFormState, value: string) => void;
   /** Prefix for element IDs to prevent collisions when used multiple times per page. */
   idPrefix: string;

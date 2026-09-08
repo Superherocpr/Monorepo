@@ -1,6 +1,6 @@
 /**
- * RollcallCodeWidget — displays the instructor's rollcall code with auto-refresh.
- * The code is valid for the whole business day (Eastern) it was generated on —
+ * RollcallCodeWidget: displays the instructor's rollcall code with auto-refresh.
+ * The code is valid for the whole business day (Eastern) it was generated on:
  * matches /api/rollcall/verify-code. Auto-refreshes via
  * POST /api/rollcall/refresh-my-code at the midnight rollover, and supports
  * manual refresh as well.
@@ -21,7 +21,7 @@ interface Props {
 }
 
 /**
- * True when the code is no longer valid — i.e. it was generated on a previous
+ * True when the code is no longer valid: i.e. it was generated on a previous
  * business day (or never). Mirrors the server-side check in verify-code.
  * @param generatedAt - ISO timestamp the code was generated
  */
@@ -103,14 +103,14 @@ export default function RollcallCodeWidget({ initialCode, initialGeneratedAt }: 
         <p className="text-gray-400 text-sm">No code generated yet.</p>
       )}
 
-      {/* Validity note — only shown when a code exists and we have a timestamp */}
+      {/* Validity note: only shown when a code exists and we have a timestamp */}
       {code && generatedAt && (
         <p className="text-xs mt-1 text-gray-400">
           {refreshing
             ? "Refreshing…"
             : expired
-              ? "Expired — refreshing…"
-              : "Valid all day — expires at midnight (ET)"}
+              ? "Expired, refreshing…"
+              : "Valid all day; expires at midnight (ET)"}
         </p>
       )}
 
@@ -122,7 +122,7 @@ export default function RollcallCodeWidget({ initialCode, initialGeneratedAt }: 
         to check in.
       </p>
 
-      {/* Quick link to Enrollware class list — useful when teaching a class */}
+      {/* Quick link to Enrollware class list: useful when teaching a class */}
       <a
         href="https://www.enrollware.com/admin/class-edit.aspx?ret=class-list.aspx&id=new"
         target="_blank"

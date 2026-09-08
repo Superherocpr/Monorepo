@@ -321,14 +321,14 @@ export async function fetchAnalyticsData(
       .select("id, first_name, last_name, role")
       .in("role", ["instructor", "manager", "super_admin"]),
 
-    // Instructor earnings created in range — feeds the Payouts analytics section
+    // Instructor earnings created in range: feeds the Payouts analytics section
     supabase
       .from("instructor_earnings")
       .select("instructor_id, gross_amount, platform_fee_amount, instructor_amount, status, created_at")
       .gte("created_at", rangeStart)
       .lte("created_at", rangeEnd),
 
-    // Payout batches created in range — for batch success/failure rate
+    // Payout batches created in range: for batch success/failure rate
     supabase
       .from("instructor_payout_batches")
       .select("id, status, total_amount, item_count, created_at")
@@ -490,7 +490,7 @@ export async function fetchAnalyticsData(
 
   // ── New vs returning students ─────────────────────────────────────────────
   // We need profile created_at for customers who booked in range
-  // We already have bookings with customer_id — fetch profile created_at
+  // We already have bookings with customer_id: fetch profile created_at
   const uniqueCustomerIds = Array.from(trainedCustomerIds);
   let newCount = 0;
   let returningCount = 0;
@@ -509,7 +509,7 @@ export async function fetchAnalyticsData(
   }
 
   // ── Cert renewal rate ─────────────────────────────────────────────────────
-  // Certs expiring in range — how many renewed within 90 days of expiry?
+  // Certs expiring in range: how many renewed within 90 days of expiry?
   let certRenewalRate: { renewed: number; total: number } | null = null;
   if (safeCertifications.length > 0) {
     const renewalWindowMs = 90 * 24 * 60 * 60 * 1000;
@@ -641,7 +641,7 @@ export async function fetchAnalyticsData(
 
   // ── Payout batch stats ────────────────────────────────────────────────────
   // Batch statuses since migration 0048: pending, assumed_complete, completed,
-  // denied, failed, needs_review. A denial is a failure — counting only "failed"
+  // denied, failed, needs_review. A denial is a failure: counting only "failed"
   // here would hide every payout PayPal returned after accepting it.
   const payoutBatchStats: PayoutBatchStats = {
     totalBatches: safePayoutBatches.length,

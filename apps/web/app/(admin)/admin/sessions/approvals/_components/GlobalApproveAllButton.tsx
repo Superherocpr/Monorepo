@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * GlobalApproveAllButton — approves every pending session in the queue in one action.
+ * GlobalApproveAllButton: approves every pending session in the queue in one action.
  * Sits at the bottom of the approvals page as a shortcut when the manager wants to
  * clear the entire queue without reviewing each card individually.
- * On success, router.refresh() re-renders the page — if the queue is now empty the
+ * On success, router.refresh() re-renders the page: if the queue is now empty the
  * empty state is shown; any sessions approved individually beforehand are already gone.
  * Used by: approvals/page.tsx
  */

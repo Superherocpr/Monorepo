@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * CoverImageUpload — S3 cover image upload control for the blog editor.
+ * CoverImageUpload: S3 cover image upload control for the blog editor.
  * Shows current image preview if set, a "Choose image" button, and a remove button.
  * Used by BlogEditorClient.
  */

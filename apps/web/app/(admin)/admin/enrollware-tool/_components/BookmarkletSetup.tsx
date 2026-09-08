@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * BookmarkletSetup client component — /admin/enrollware-tool
+ * BookmarkletSetup client component: /admin/enrollware-tool
  * Handles the "Generate Bookmarklet" flow: calls the generate-key API,
  * displays the resulting bookmarklet code, and shows setup instructions
  * for both desktop and mobile browsers.
@@ -21,7 +21,7 @@ interface BookmarkletSetupProps {
 /**
  * Builds the complete bookmark JavaScript string for the given API key and
  * site URL. The key is embedded directly in the bookmark so the bookmarklet
- * is self-contained — no login required when running on enrollware.com.
+ * is self-contained: no login required when running on enrollware.com.
  */
 function buildBookmarkletCode(apiKey: string, siteUrl: string): string {
   const fetchUrl = `${siteUrl}/api/enrollware/bookmarklet`;
@@ -67,7 +67,7 @@ export default function BookmarkletSetup({
 
   /**
    * Calls the generate-key endpoint, then builds and stores the bookmarklet code.
-   * The raw API key is only available in this response — it is never retrievable again.
+   * The raw API key is only available in this response: it is never retrievable again.
    */
   async function handleGenerate() {
     setLoading(true);
@@ -99,7 +99,7 @@ export default function BookmarkletSetup({
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      // Clipboard API may be blocked on some mobile browsers — the textarea is still selectable
+      // Clipboard API may be blocked on some mobile browsers: the textarea is still selectable
     }
   }
 
@@ -116,8 +116,8 @@ export default function BookmarkletSetup({
             You already have an active bookmarklet key. Generating a new one will{" "}
             <span className="font-medium text-gray-700">
               invalidate your existing saved bookmark
-            </span>{" "}
-            — you will need to re-save the new one.
+            </span>
+            ; you will need to re-save the new one.
           </p>
         )}
 
@@ -148,7 +148,7 @@ export default function BookmarkletSetup({
         )}
       </div>
 
-      {/* Bookmarklet code + instructions — shown after generation */}
+      {/* Bookmarklet code + instructions: shown after generation */}
       {bookmarkletCode && (
         <>
           {/* The code */}

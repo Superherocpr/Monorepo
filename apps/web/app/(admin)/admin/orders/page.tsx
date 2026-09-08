@@ -1,8 +1,8 @@
 /**
- * Admin Orders page — `/admin/orders`
+ * Admin Orders page: `/admin/orders`
  * Access: super_admin only.
  *
- * Server component — resolves URL search params to build a filtered,
+ * Server component: resolves URL search params to build a filtered,
  * paginated query against the orders table. Passes result to OrdersAdminClient.
  *
  * Filter params: status, from, to, customer, page
@@ -16,12 +16,12 @@ import OrdersAdminClient, {
 } from "@/app/(admin)/_components/OrdersAdminClient";
 import type { AdminOrderRecord } from "@/types/orders";
 
-/** Valid order status values — used to sanitise the filter param. */
+/** Valid order status values: used to sanitise the filter param. */
 const VALID_STATUSES = new Set(["pending", "paid", "shipped", "delivered", "cancelled"]);
 
 const PAGE_SIZE = 50;
 
-/** Next.js 15+ — searchParams is a Promise. */
+/** Next.js 15+: searchParams is a Promise. */
 interface PageProps {
   searchParams: Promise<{
     status?: string;
@@ -32,7 +32,7 @@ interface PageProps {
   }>;
 }
 
-/** Server component — handles auth, filtering, and pagination. */
+/** Server component: handles auth, filtering, and pagination. */
 export default async function AdminOrdersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
 
@@ -79,7 +79,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
   const orders = (rawOrders ?? []) as unknown as AdminOrderRecord[];
 
   // Customer filter is applied post-fetch since it requires searching joined profile fields.
-  // For large datasets this should move to a DB function — acceptable at current scale.
+  // For large datasets this should move to a DB function: acceptable at current scale.
   const filteredOrders = customerFilter
     ? orders.filter((o) => {
         const name = `${o.profiles.first_name} ${o.profiles.last_name}`.toLowerCase();

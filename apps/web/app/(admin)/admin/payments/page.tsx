@@ -1,8 +1,8 @@
 /**
- * Admin Payments page — `/admin/payments`
+ * Admin Payments page: `/admin/payments`
  * Access: manager and super_admin only.
  *
- * Server component — resolves URL search params to build a filtered,
+ * Server component: resolves URL search params to build a filtered,
  * paginated query against the payments table. Passes result + summary
  * stats + available instructors to PaymentsClient.
  *
@@ -16,7 +16,7 @@ import PaymentsClient, {
   type PaymentsPageData,
 } from "@/app/(admin)/_components/PaymentsClient";
 
-/** Allowed payment_type values — used for filtering. */
+/** Allowed payment_type values: used for filtering. */
 const VALID_TYPES = new Set([
   "online",
   "cash",
@@ -25,12 +25,12 @@ const VALID_TYPES = new Set([
   "invoice",
 ]);
 
-/** Allowed status values — used for filtering. */
+/** Allowed status values: used for filtering. */
 const VALID_STATUSES = new Set(["completed", "pending", "failed"]);
 
 const PAGE_SIZE = 50;
 
-/** Page props — Next.js 15+ provides searchParams as a Promise. */
+/** Page props: Next.js 15+ provides searchParams as a Promise. */
 interface PageProps {
   searchParams: Promise<{
     type?: string;
@@ -43,7 +43,7 @@ interface PageProps {
   }>;
 }
 
-/** Server component — handles auth, filtering, pagination, and summary stats. */
+/** Server component: handles auth, filtering, pagination, and summary stats. */
 export default async function PaymentsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
 
@@ -70,9 +70,9 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
 
   // ── Main paginated query ───────────────────────────────────────────────────
   // FK hints required:
-  //   profiles!customer_id — payments.customer_id → profiles
-  //   bookings!booking_id  — payments.booking_id → bookings
-  //   profiles!logged_by   — payments.logged_by → profiles
+  //   profiles!customer_id: payments.customer_id → profiles
+  //   bookings!booking_id : payments.booking_id → bookings
+  //   profiles!logged_by  : payments.logged_by → profiles
   // The instructor filter is applied via the session's instructor_id after fetch
   // because Supabase doesn't support deep-join filters server-side cleanly.
   let query = admin
@@ -107,7 +107,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
   if (fromFilter) query = query.gte("created_at", fromFilter);
   if (toFilter) query = query.lte("created_at", `${toFilter}T23:59:59`);
 
-  // Customer name/email search — filter by customer_id via subquery isn't
+  // Customer name/email search: filter by customer_id via subquery isn't
   // supported, so we fetch with ilike on the join. We filter post-fetch for
   // customer and instructor since PostgREST can't filter on nested columns.
   const { data: rawPayments, count } = await query;
@@ -141,7 +141,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
 
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE);
 
-  // ── Monthly summary stats (unfiltered — this month only) ───────────────────
+  // ── Monthly summary stats (unfiltered: this month only) ───────────────────
   const startOfMonth = new Date(
     new Date().getFullYear(),
     new Date().getMonth(),
@@ -167,7 +167,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
     )
     .reduce((sum, p) => sum + Number(p.amount), 0);
 
-  // Failed online payment attempts this month. Counted, not summed — a failed
+  // Failed online payment attempts this month. Counted, not summed: a failed
   // attempt never settled, so a dollar total would read as lost revenue when
   // most of these are simply customers retrying with a different card.
   const { count: failedCount } = await admin

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * AddLocationPanel — slide-out panel for creating a new location.
+ * AddLocationPanel: slide-out panel for creating a new location.
  * Reusable across admin pages that need inline location creation.
  * Used by: LocationsClient (admin/locations), CreateSessionClient (admin/sessions/new).
  *
@@ -83,7 +83,7 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
   const [searchError, setSearchError] = useState<string | null>(null);
   /** Controls suggestion dropdown visibility. */
   const [showSuggestions, setShowSuggestions] = useState(false);
-  /** Ref for the search container — used to close suggestions on outside click. */
+  /** Ref for the search container: used to close suggestions on outside click. */
   const searchRef = useRef<HTMLDivElement>(null);
 
   // Close the suggestions dropdown when the user clicks outside the search box.
@@ -131,12 +131,12 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
           setSuggestions({ query: trimmedQuery, items: json.suggestions });
           setShowSuggestions(json.suggestions.length > 0);
         } else {
-          // Show the error subtly — user can still fill the form manually.
+          // Show the error subtly: user can still fill the form manually.
           setSearchError(json.error ?? null);
           setSuggestions({ query: trimmedQuery, items: [] });
         }
       } catch {
-        // Silent fail — user can fill the address form below manually.
+        // Silent fail: user can fill the address form below manually.
         if (!cancelled) setSuggestions({ query: trimmedQuery, items: [] });
       } finally {
         if (!cancelled) setSearchLoading(false);
@@ -182,7 +182,7 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
         }));
       }
     } catch {
-      // Silent fail — form fields remain editable so the user can correct manually.
+      // Silent fail: form fields remain editable so the user can correct manually.
     } finally {
       setSearchLoading(false);
     }
@@ -255,7 +255,7 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
 
   return (
     <>
-      {/* Dimmed backdrop — click to close */}
+      {/* Dimmed backdrop: click to close */}
       <div
         className="fixed inset-0 z-40 bg-black/30"
         onClick={onClose}
@@ -284,7 +284,7 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
           onSubmit={handleSubmit}
           className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
         >
-          {/* Address search — type to find a real address and auto-fill the fields below */}
+          {/* Address search: type to find a real address and auto-fill the fields below */}
           <div ref={searchRef} className="relative">
             <label
               htmlFor="add-loc-search"
@@ -333,7 +333,7 @@ export default function AddLocationPanel({ onClose, onAdded }: AddLocationPanelP
             )}
           </div>
 
-          {/* Manual entry fields — auto-populated by the search above, editable */}
+          {/* Manual entry fields: auto-populated by the search above, editable */}
           <div className="border-t border-gray-100 pt-1">
             <p className="mb-3 text-xs text-gray-400">Or fill in the fields below manually:</p>
             <LocationFormFields

@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * PayoutHistoryPanel — every payout batch the system has attempted, what PayPal
+ * PayoutHistoryPanel: every payout batch the system has attempted, what PayPal
  * did with it, and the recovery actions available.
  *
  * The central idea: a batch PayPal accepted is shown as "assumed complete", never
  * "paid". PayPal can deny a batch hours after accepting it and return the funds
  * without telling the app through the API, so this panel lets a super_admin
- * record that denial and resend, while making it hard to do so by accident —
+ * record that denial and resend, while making it hard to do so by accident:
  * marking a delivered payout denied is what allows a double payment.
  *
  * Used by: app/(admin)/admin/payouts/page.tsx and
@@ -164,7 +164,7 @@ function DenyDialog({
     : `this entire ${formatCurrency(target.amount)} batch`;
 
   const confirmationMatches = typed.trim() === target.senderBatchId;
-  const reason = detail.trim() ? `${preset} — ${detail.trim()}` : preset;
+  const reason = detail.trim() ? `${preset}: ${detail.trim()}` : preset;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -296,7 +296,7 @@ function ItemRow({
         </span>
         {item.status === "unclaimed" && item.unclaimedExpiresAt ? (
           <span className="mt-0.5 block text-xs text-purple-700 dark:text-purple-300">
-            Not claimed yet — PayPal returns it on {formatDateTime(item.unclaimedExpiresAt)}
+            Not claimed yet; PayPal returns it on {formatDateTime(item.unclaimedExpiresAt)}
           </span>
         ) : null}
         {item.errorMessage ? (
@@ -313,7 +313,7 @@ function ItemRow({
         </span>
       </td>
       <td className="px-4 py-2.5 text-right text-xs text-gray-600 dark:text-gray-400">
-        {item.paypalFeeAmount === null ? "—" : formatCurrency(item.paypalFeeAmount)}
+        {item.paypalFeeAmount === null ? "-" : formatCurrency(item.paypalFeeAmount)}
       </td>
       <td className="px-4 py-2.5 text-right text-xs font-medium text-gray-700 dark:text-gray-300">
         {formatCurrency(item.amount)}
@@ -435,8 +435,8 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
       } else if (failed > 0) {
         text =
           synced > 0
-            ? `Checked ${synced} payout item(s). ${failed} batch(es) could not be reached and were skipped — try again shortly.`
-            : `Could not reach PayPal for ${failed} batch(es) — nothing was confirmed. Try again shortly.`;
+            ? `Checked ${synced} payout item(s). ${failed} batch(es) could not be reached and were skipped. Try again shortly.`
+            : `Could not reach PayPal for ${failed} batch(es); nothing was confirmed. Try again shortly.`;
       } else {
         text = `Checked ${synced} payout item(s) against PayPal. No denials found.`;
       }
@@ -554,7 +554,7 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
           <span>
             {staleCount} batch{staleCount === 1 ? "" : "es"} {staleCount === 1 ? "has" : "have"}{" "}
             been unconfirmed for more than {STALE_ASSUMED_HOURS} hours. Run Sync status, or check
-            PayPal directly — this is the window where a denial goes unnoticed.
+            PayPal directly; this is the window where a denial goes unnoticed.
           </span>
         </div>
       ) : null}
@@ -665,7 +665,7 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
 
                       <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">
                         {batch.paypalFeeTotal === null
-                          ? "—"
+                          ? "-"
                           : formatCurrency(batch.paypalFeeTotal)}
                       </td>
 

@@ -1,5 +1,5 @@
 /**
- * PromoCodesWidget — displays all currently active promo codes.
+ * PromoCodesWidget: displays all currently active promo codes.
  * Shown on the instructor dashboard so instructors can quickly confirm whether
  * a code a student mentions is valid without navigating to the admin panel.
  * Shows the code, discount, what it applies to, and its expiry.
@@ -17,7 +17,7 @@ export interface ActivePromoCode {
   class_type_names: string[];
   /**
    * Populated when scope = 'session': short labels for each applicable session,
-   * e.g. "Adult CPR — Tampa · Jul 15, 9:00 AM". Capped at 3; remainder in overflow_count.
+   * e.g. "Adult CPR: Tampa · Jul 15, 9:00 AM". Capped at 3; remainder in overflow_count.
    */
   session_labels: string[];
   /** Number of sessions beyond the first 3 (only relevant when scope = 'session'). */
@@ -62,7 +62,7 @@ function appliesTo(c: ActivePromoCode): { summary: string; detail: string[] } {
   }
   if (c.scope === "session_type") {
     return {
-      summary: c.class_type_names.length > 0 ? c.class_type_names.join(", ") : "—",
+      summary: c.class_type_names.length > 0 ? c.class_type_names.join(", ") : "-",
       detail: [],
     };
   }
@@ -112,7 +112,7 @@ export default function PromoCodesWidget({ codes }: Props) {
                   )}
                 </p>
 
-                {/* Session detail lines — only for session scope */}
+                {/* Session detail lines: only for session scope */}
                 {detail.length > 0 && (
                   <ul className="mt-1 space-y-0.5">
                     {detail.map((label, i) => (

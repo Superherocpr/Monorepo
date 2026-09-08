@@ -5,7 +5,7 @@
  * Slide-in panel for adding or editing an add-on catalog entry.
  * Pre-fills all fields when editing; empty when adding.
  * Calls POST /api/settings/addons (new) or PATCH /api/settings/addons/[id] (edit).
- * Used by: SettingsClient (Class Types tab — Add-ons section)
+ * Used by: SettingsClient (Class Types tab: Add-ons section)
  */
 
 import React, { useState, useEffect, useRef } from "react";
@@ -52,7 +52,7 @@ const AddonPanel: React.FC<AddonPanelProps> = ({ open, addon, onClose, onSaved, 
   // Populate fields when opening in edit mode, or reset when opening for add.
   // Adjusted during render, keyed on which add-on the panel is open for, so the
   // fields are right on the first painted frame instead of being written back on
-  // a second pass. Closing only clears the key — the hidden fields are left as
+  // a second pass. Closing only clears the key: the hidden fields are left as
   // they are and get repopulated on the next open.
   const openKey = open ? (addon?.id ?? "new") : null;
   const [syncedOpenKey, setSyncedOpenKey] = useState<string | null>(null);
