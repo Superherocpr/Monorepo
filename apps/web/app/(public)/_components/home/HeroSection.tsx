@@ -125,27 +125,17 @@ export default async function HeroSection() {
         </p>
 
         {/*
-         * Button group: two primary CTAs side-by-side, then a full-width secondary below.
-         * items-stretch makes the bottom button fill the same horizontal span as the top row.
+         * Button group: primary CTA, then a full-width secondary below.
          * "Book a Class" routes through /find-a-class rather than straight to /book — most
-         * first-time visitors don't yet know which course they need. "View Schedule" stays on
-         * /book for the visitor who already does.
+         * first-time visitors don't yet know which course they need.
          */}
         <div className="flex flex-col items-stretch gap-3 mt-2 w-full sm:w-auto">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Link
-              href="/find-a-class"
-              className="bg-red-600 hover:bg-red-700 text-white font-semibold px-8 py-3.5 rounded-lg transition-colors duration-150 text-base text-center"
-            >
-              Book a Class
-            </Link>
-            <Link
-              href="/book"
-              className="border-2 border-white text-white font-semibold px-8 py-3.5 rounded-lg hover:bg-white/10 transition-colors duration-150 text-base text-center"
-            >
-              View Schedule
-            </Link>
-          </div>
+          <Link
+            href="/find-a-class"
+            className="bg-red-600 hover:bg-red-700 text-white font-semibold px-[63px] py-3.5 rounded-lg transition-colors duration-150 text-base text-center"
+          >
+            Book a Class
+          </Link>
           <Link
             href="/contact"
             className="border-2 border-white/60 text-white font-semibold py-3.5 rounded-lg hover:bg-white/10 transition-colors duration-150 text-base text-center"

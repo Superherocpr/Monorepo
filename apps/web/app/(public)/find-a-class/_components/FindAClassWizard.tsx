@@ -321,8 +321,7 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
                           recommendation: {
                             primaryCandidates: [c.slug],
                             alternates: [],
-                            rationale:
-                              "You picked this course yourself, so here is what we have scheduled for it.",
+                            rationale: "You picked this course yourself.",
                           },
                         },
                         c.name
@@ -632,8 +631,8 @@ function ResultPanel({
         ) : (
           <>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
-              Send us a request with the dates that suit you and we will schedule
-              it.
+              No classes are currently scheduled. Request this class and we will
+              contact you within 24 hours.
             </p>
             <Link
               href={`/request-class?class=${primary.slug}`}
