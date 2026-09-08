@@ -40,16 +40,12 @@ export interface BookingStore {
     price: number;
     spotsRemaining: number;
   } | null;
-  /** Step 2b form data — persisted so back navigation pre-populates the form */
+  /** Step 2 form data — persisted so back navigation pre-populates the form */
   customerDetails: {
     firstName: string;
     lastName: string;
     email: string;
     phone: string;
-    address: string;
-    city: string;
-    state: string;
-    zip: string;
   } | null;
   /** true = new customer went through steps 2b/3; false = existing customer signed in via 2a */
   isNewCustomer: boolean;

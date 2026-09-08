@@ -33,7 +33,7 @@ export default function BookConfirmationPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <BookingProgress currentStep={5} />
+      <BookingProgress currentStep={4} />
 
       <div className="max-w-2xl mx-auto px-4 pb-16 text-center">
 
