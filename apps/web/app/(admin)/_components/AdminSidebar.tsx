@@ -207,6 +207,11 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
           <span className="block text-xs text-gray-400 mt-0.5">Admin</span>
         </div>
         <div className="flex-1 overflow-y-auto py-4 px-2">{navLinks}</div>
+        <div className="px-4 py-3 border-t border-gray-100">
+          <span className="text-[10px] text-gray-400 font-mono select-all">
+            {process.env.NEXT_PUBLIC_APP_VERSION ?? "dev"}
+          </span>
+        </div>
       </aside>
 
       {/* ── Desktop sidebar ── */}
@@ -216,6 +221,11 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
           <span className="block text-xs text-gray-400 mt-0.5">Admin</span>
         </div>
         <div className="flex-1 overflow-y-auto py-4 px-2">{navLinks}</div>
+        <div className="px-4 py-3 border-t border-gray-100">
+          <span className="text-[10px] text-gray-400 font-mono select-all">
+            {process.env.NEXT_PUBLIC_APP_VERSION ?? "dev"}
+          </span>
+        </div>
       </aside>
     </>
   );

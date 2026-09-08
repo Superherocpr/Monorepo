@@ -1,6 +1,21 @@
 import type { NextConfig } from "next";
+import { execSync } from "child_process";
+import { version } from "./package.json";
+
+/** Short git SHA baked in at build time — falls back to "dev" in local environments without git. */
+function gitShortSha(): string {
+  try {
+    return execSync("git rev-parse --short HEAD").toString().trim();
+  } catch {
+    return "dev";
+  }
+}
 
 const nextConfig: NextConfig = {
+  env: {
+    // e.g. "v1.0.0 (abc1234)" — visible in the admin sidebar footer
+    NEXT_PUBLIC_APP_VERSION: `v${version} (${gitShortSha()})`,
+  },
   images: {
     remotePatterns: [
       {
