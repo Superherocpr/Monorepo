@@ -24,9 +24,11 @@ async function openJobBranch(page: Page): Promise<void> {
 }
 
 test.describe("Find a class walkthrough", () => {
-  test("home page sends visitors into the walkthrough", async ({ page }) => {
+  test("home page Book a Class button sends visitors into the walkthrough", async ({
+    page,
+  }) => {
     await page.goto("/");
-    await page.getByRole("link", { name: /find my class/i }).click();
+    await page.getByRole("link", { name: /^book a class$/i }).click();
     await expect(page).toHaveURL(/\/find-a-class/);
     await expect(
       page.getByRole("heading", { name: /which class do i need/i })

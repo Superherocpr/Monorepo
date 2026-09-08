@@ -257,14 +257,30 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
                     className="shrink-0 mt-0.5 text-gray-300 dark:text-gray-600 group-hover:text-red-500 transition-colors duration-150"
                   />
                 </Link>
-              </div>
-
-              <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
+                {/*
+                 * The escape hatch for anyone who does not want the walkthrough at
+                 * all. Same size and shape as the two options above it, with the
+                 * usual title color swapped to red — the subtitle stays the same
+                 * gray hint color as the other buttons — so it reads as the "skip
+                 * this" option rather than a third equal choice.
+                 */}
                 <Link
                   href="/book"
-                  className="text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors duration-150"
+                  className="group w-full text-left border border-gray-200 dark:border-gray-700 rounded-xl px-5 py-4 bg-white dark:bg-gray-900 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50/40 dark:hover:bg-red-950/20 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 flex items-start gap-4"
                 >
-                  I already know what I need, show me the schedule
+                  <span className="flex-1">
+                    <span className="block font-semibold text-red-600 dark:text-red-400">
+                      I already know what I need
+                    </span>
+                    <span className="block text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                      Show me the schedule
+                    </span>
+                  </span>
+                  <ChevronRight
+                    size={20}
+                    aria-hidden="true"
+                    className="shrink-0 mt-0.5 text-gray-300 dark:text-gray-600 group-hover:text-red-500 transition-colors duration-150"
+                  />
                 </Link>
               </div>
             </>

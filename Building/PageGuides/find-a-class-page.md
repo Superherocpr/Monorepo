@@ -27,11 +27,18 @@ to Request a Class is a success, not a failure.
 
 ## The decision tree
 
-Entry is a CTA on the home page (`_components/home/FindAClassCta.tsx`), directly
-under the hero.
+Entry is the home page hero's "Book a Class" button (`_components/home/HeroSection.tsx`),
+which now routes to /find-a-class instead of straight to /book — most first-time
+visitors don't yet know which course they need. The hero's "View Schedule" button
+stays on /book for the visitor who does. There is no separate homepage CTA section
+for the finder; a dedicated one (FindAClassCta.tsx) existed briefly and was removed
+in favor of just repointing the existing button.
 
 ```
-"I already know what I need"            -> /book
+"I already know what I need, show me the schedule"   -> /book
+    (styled and sized identically to the two options above it, but with the
+    title/subtitle colors inverted — red title, black subtitle — so it reads
+    as "skip this" rather than a third equal choice)
 
 Q1  Who is this class for?
 ├── A group or workplace                -> /request-class   (terminal, one click)

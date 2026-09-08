@@ -26,10 +26,14 @@
  */
 @variant dark (&:where(.dark, .dark *));
 
-/* Smooth scroll for anchor links — e.g. /classes#bls from the home page */
-html {
-  scroll-behavior: smooth;
-}
+/*
+ * scroll-behavior: smooth was here globally for anchor links like /classes#bls,
+ * but it also hijacks Next.js's own scroll-to-top on every page navigation —
+ * turning an instant reset into an animated one that a still-rendering page can
+ * interrupt partway, so the scrollbar is left wherever it happened to stop
+ * rather than at the top. Removed; anchor jumps are now instant instead of
+ * animated, which is the tradeoff for full-page navigation resetting reliably.
+ */
 
 body {
   @apply bg-white text-gray-900 antialiased;

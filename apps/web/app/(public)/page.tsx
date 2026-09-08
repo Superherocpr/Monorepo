@@ -9,7 +9,6 @@
 
 import type { Metadata } from "next";
 import HeroSection from "./_components/home/HeroSection";
-import FindAClassCta from "./_components/home/FindAClassCta";
 import WhyChooseUsSection from "./_components/home/WhyChooseUsSection";
 import ClassTypesSection from "./_components/home/ClassTypesSection";
 import TestimonialsSection from "./_components/home/TestimonialsSection";
@@ -20,7 +19,8 @@ import LegacySitePage from "./_components/legacy/LegacySitePage";
 import { getSetting } from "@/lib/zoho";
 
 export const metadata: Metadata = {
-  title: "CPR Certification Classes — Hillsborough, Manatee & Sarasota Counties | SuperHeroCPR",
+  // The root layout appends "| SuperHeroCPR" via its title template.
+  title: "CPR Certification Classes — Hillsborough, Manatee & Sarasota Counties",
   description:
     "American Heart Association CPR certification classes across Hillsborough, Manatee, and Sarasota Counties. On-location training from a licensed AHA instructor with thousands of real-world patients.",
 };
@@ -37,7 +37,6 @@ export default async function HomePage() {
   return (
     <main>
       <HeroSection />
-      <FindAClassCta />
       <WhyChooseUsSection />
       <ClassTypesSection />
       <TestimonialsSection />
