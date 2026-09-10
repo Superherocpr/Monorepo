@@ -7,7 +7,7 @@
  * Used by: booking flow after /api/bookings/confirm returns success.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle, Clock, MapPin, User } from "lucide-react";
@@ -31,9 +31,20 @@ export default function BookConfirmationPage() {
     clearBookingStore();
   }, [details, router]);
 
+  // sessionStorage doesn't exist during SSR, so the server always renders
+  // with details=null. useSyncExternalStore is the hydration-safe way to read
+  // a client-only value: the server snapshot (false) renders first, then the
+  // real value swaps in, avoiding a hydration mismatch.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const displayDetails = mounted ? details : null;
+
   return (
     <div className="min-h-screen bg-white">
-      <BookingProgress currentStep={5} />
+      <BookingProgress currentStep={4} />
 
       <div className="max-w-2xl mx-auto px-4 pb-16 text-center">
 
@@ -53,48 +64,48 @@ export default function BookConfirmationPage() {
         </p>
 
         {/* Booking summary card */}
-        {details && (
+        {displayDetails && (
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-left mb-10 flex flex-col gap-4">
-            <h2 className="text-lg font-bold text-gray-900">{details.className}</h2>
+            <h2 className="text-lg font-bold text-gray-900">{displayDetails.className}</h2>
 
             <div className="flex items-start gap-3 text-sm text-gray-700">
               <Clock size={16} className="text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
               <div>
-                <p className="font-medium">{formatClassDate(details.startsAt)}</p>
-                <p className="text-gray-500">{formatClassTimeRange(details.startsAt, details.endsAt)}</p>
+                <p className="font-medium">{formatClassDate(displayDetails.startsAt)}</p>
+                <p className="text-gray-500">{formatClassTimeRange(displayDetails.startsAt, displayDetails.endsAt)}</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3 text-sm text-gray-700">
               <MapPin size={16} className="text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
               <address className="not-italic leading-relaxed">
-                <span className="font-medium">{details.locationName}</span>
+                <span className="font-medium">{displayDetails.locationName}</span>
                 <br />
-                {details.locationAddress}
+                {displayDetails.locationAddress}
                 <br />
-                {details.locationCity}, {details.locationState} {details.locationZip}
+                {displayDetails.locationCity}, {displayDetails.locationState} {displayDetails.locationZip}
               </address>
             </div>
 
             <div className="flex items-start gap-3 text-sm text-gray-700">
               <User size={16} className="text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
               <div className="leading-relaxed">
-                <p className="font-medium">{details.instructorName}</p>
-                {details.instructorEmail && (
+                <p className="font-medium">{displayDetails.instructorName}</p>
+                {displayDetails.instructorEmail && (
                   <a
-                    href={`mailto:${details.instructorEmail}`}
+                    href={`mailto:${displayDetails.instructorEmail}`}
                     className="text-red-600 hover:text-red-700 transition-colors duration-150"
                   >
-                    {details.instructorEmail}
+                    {displayDetails.instructorEmail}
                   </a>
                 )}
-                {details.instructorPhone && (
+                {displayDetails.instructorPhone && (
                   <p className="text-gray-500">
                     <a
-                      href={`tel:${details.instructorPhone}`}
+                      href={`tel:${displayDetails.instructorPhone}`}
                       className="hover:text-red-600 transition-colors duration-150"
                     >
-                      {details.instructorPhone}
+                      {displayDetails.instructorPhone}
                     </a>
                   </p>
                 )}
@@ -104,7 +115,7 @@ export default function BookConfirmationPage() {
             <p className="text-sm text-gray-500 border-t border-gray-200 pt-4">
               Paid:{" "}
               <span className="font-semibold text-gray-900">
-                {details.price.toLocaleString("en-US", {
+                {displayDetails.price.toLocaleString("en-US", {
                   style: "currency",
                   currency: "USD",
                   minimumFractionDigits: 0,

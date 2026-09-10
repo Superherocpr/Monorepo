@@ -21,13 +21,29 @@ const STATUS_STYLES: Record<string, string> = {
   instructor_assigned: "bg-green-100 text-green-800 border-green-200",
 };
 
+/** Full location details for a home_base request — staff-only, never sent to the customer. */
+interface VenueLocation {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+}
+
 interface Props {
   /** The class request to display. */
   request: ClassRequest;
+  /**
+   * The linked location, when request.venue_mode = "home_base". Null when the
+   * request used a customer venue, or when the linked location has since been
+   * deleted.
+   */
+  venueLocation: VenueLocation | null;
 }
 
 /** Renders full details and Approve/Reject controls for a class request. */
-export default function ClassRequestDetailClient({ request }: Props) {
+export default function ClassRequestDetailClient({ request, venueLocation }: Props) {
   const router = useRouter();
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -193,19 +209,48 @@ export default function ClassRequestDetailClient({ request }: Props) {
       {/* Venue */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Venue</h2>
-        <dl className="space-y-2">
-          <div className="flex gap-3">
-            <dt className="text-sm text-gray-500 w-24 shrink-0">Venue Name</dt>
-            <dd className="text-sm font-medium text-gray-900">{request.venue_name}</dd>
-          </div>
-          <div className="flex gap-3">
-            <dt className="text-sm text-gray-500 w-24 shrink-0">Address</dt>
-            <dd className="text-sm text-gray-900">
-              {request.venue_address}<br />
-              {request.venue_city}, {request.venue_state} {request.venue_zip}
-            </dd>
-          </div>
-        </dl>
+        {request.venue_mode === "home_base" ? (
+          venueLocation ? (
+            <dl className="space-y-2">
+              <div className="flex gap-3">
+                <dt className="text-sm text-gray-500 w-24 shrink-0">Location</dt>
+                <dd className="text-sm font-medium text-gray-900">
+                  {venueLocation.name}
+                  <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                    Home base — no travel fee
+                  </span>
+                </dd>
+              </div>
+              <div className="flex gap-3">
+                <dt className="text-sm text-gray-500 w-24 shrink-0">Address</dt>
+                <dd className="text-sm text-gray-900">
+                  {venueLocation.address}<br />
+                  {venueLocation.city}, {venueLocation.state} {venueLocation.zip}
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="text-sm text-amber-700">
+              This request was for one of our locations in {request.venue_city},{" "}
+              {request.venue_state}, but that location has since been deleted.
+              Confirm a venue with the customer before approving.
+            </p>
+          )
+        ) : (
+          <dl className="space-y-2">
+            <div className="flex gap-3">
+              <dt className="text-sm text-gray-500 w-24 shrink-0">Venue Name</dt>
+              <dd className="text-sm font-medium text-gray-900">{request.venue_name}</dd>
+            </div>
+            <div className="flex gap-3">
+              <dt className="text-sm text-gray-500 w-24 shrink-0">Address</dt>
+              <dd className="text-sm text-gray-900">
+                {request.venue_address}<br />
+                {request.venue_city}, {request.venue_state} {request.venue_zip}
+              </dd>
+            </div>
+          </dl>
+        )}
       </div>
 
       {/* Notes */}
@@ -271,8 +316,9 @@ export default function ClassRequestDetailClient({ request }: Props) {
                   team: "1",
                   request_id: request.id,
                   // Class requests have no company field; venue_name is what a
-                  // corporate caller fills in (their own facility).
-                  company: request.venue_name ?? "",
+                  // corporate caller fills in (their own facility). A home_base
+                  // request has no venue_name, so fall back to the location's.
+                  company: request.venue_name ?? venueLocation?.name ?? "",
                   contact: customer ? `${customer.first_name} ${customer.last_name}`.trim() : "",
                   email: customer?.email ?? "",
                   phone: request.contact_phone ?? "",

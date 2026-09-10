@@ -12,7 +12,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { PreferredTimeOfDay, CreateClassRequestBody } from "@/types/class-requests";
+import type {
+  PreferredTimeOfDay,
+  CreateClassRequestBody,
+  VenueMode,
+} from "@/types/class-requests";
 import { PREFERRED_TIME_LABELS } from "@/types/class-requests";
 
 /** A class type option as fetched by the parent server component. */
@@ -22,8 +26,23 @@ export interface ClassTypeOption {
   duration_minutes: number;
 }
 
+/** A home-base location offered as a no-travel-fee venue choice. Never carries a street address. */
+export interface HomeBaseLocationOption {
+  id: string;
+  city: string;
+  state: string;
+}
+
 interface Props {
   classTypes: ClassTypeOption[];
+  /**
+   * A class type to pre-select in the form, resolved server-side from a
+   * ?class= slug (e.g. the "Request this class" link on /find-a-class). Null
+   * when there was no such param or it did not match an active class type.
+   */
+  preSelectedClassTypeId: string | null;
+  /** Our own locations offered as a venue choice, in place of a customer address. */
+  homeBaseLocations: HomeBaseLocationOption[];
 }
 
 type View = "form" | "auth" | "success";
@@ -35,6 +54,9 @@ interface FormState {
   preferred_time_of_day: PreferredTimeOfDay | "";
   group_size: string;
   contact_phone: string;
+  venue_mode: VenueMode;
+  /** Selected when venue_mode = "home_base". */
+  venue_location_id: string;
   venue_name: string;
   venue_address: string;
   venue_city: string;
@@ -49,6 +71,8 @@ const EMPTY_FORM: FormState = {
   preferred_time_of_day: "",
   group_size: "",
   contact_phone: "",
+  venue_mode: "customer_venue",
+  venue_location_id: "",
   venue_name: "",
   venue_address: "",
   venue_city: "",
@@ -91,15 +115,24 @@ const STRENGTH_COLORS = {
 /**
  * Renders the full request-a-class flow: form → (optional auth gate) → success.
  * @param classTypes - Active class types fetched server-side for the dropdown.
+ * @param preSelectedClassTypeId - Class type to pre-select, from a ?class= slug.
+ * @param homeBaseLocations - Our own locations, offered as a no-fee venue choice.
  */
-export default function RequestClassWizard({ classTypes }: Props) {
+export default function RequestClassWizard({
+  classTypes,
+  preSelectedClassTypeId,
+  homeBaseLocations,
+}: Props) {
   const [view, setView] = useState<View>("form");
   const [authMode, setAuthMode] = useState<AuthMode>("create");
   const [loading, setLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
   // ── Request form state ─────────────────────────────────────────────────────
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>({
+    ...EMPTY_FORM,
+    class_type_id: preSelectedClassTypeId ?? "",
+  });
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof FormState, string>>>({});
 
   // ── Create account state ───────────────────────────────────────────────────
@@ -143,11 +176,17 @@ export default function RequestClassWizard({ classTypes }: Props) {
     if (!form.group_size || isNaN(size) || size < 1)
       errors.group_size = "Please enter an estimated group size of at least 1.";
     if (!form.contact_phone.trim()) errors.contact_phone = "Phone number is required.";
-    if (!form.venue_name.trim()) errors.venue_name = "Venue name is required.";
-    if (!form.venue_address.trim()) errors.venue_address = "Street address is required.";
-    if (!form.venue_city.trim()) errors.venue_city = "City is required.";
-    if (!form.venue_state) errors.venue_state = "State is required.";
-    if (!form.venue_zip.trim()) errors.venue_zip = "ZIP code is required.";
+
+    if (form.venue_mode === "home_base") {
+      if (!form.venue_location_id) errors.venue_location_id = "Please choose a location.";
+    } else {
+      if (!form.venue_name.trim()) errors.venue_name = "Venue name is required.";
+      if (!form.venue_address.trim()) errors.venue_address = "Street address is required.";
+      if (!form.venue_city.trim()) errors.venue_city = "City is required.";
+      if (!form.venue_state) errors.venue_state = "State is required.";
+      if (!form.venue_zip.trim()) errors.venue_zip = "ZIP code is required.";
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -160,19 +199,31 @@ export default function RequestClassWizard({ classTypes }: Props) {
    * Throws on API error so callers can set a global error message.
    */
   async function submitRequest(): Promise<void> {
-    const payload: CreateClassRequestBody = {
+    const base = {
       class_type_id: form.class_type_id,
       preferred_date: form.preferred_date,
       preferred_time_of_day: form.preferred_time_of_day as PreferredTimeOfDay,
       group_size: parseInt(form.group_size, 10),
       contact_phone: form.contact_phone.trim(),
-      venue_name: form.venue_name.trim(),
-      venue_address: form.venue_address.trim(),
-      venue_city: form.venue_city.trim(),
-      venue_state: form.venue_state,
-      venue_zip: form.venue_zip.trim(),
       ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
     };
+
+    const payload: CreateClassRequestBody =
+      form.venue_mode === "home_base"
+        ? {
+            ...base,
+            venue_mode: "home_base",
+            venue_location_id: form.venue_location_id,
+          }
+        : {
+            ...base,
+            venue_mode: "customer_venue",
+            venue_name: form.venue_name.trim(),
+            venue_address: form.venue_address.trim(),
+            venue_city: form.venue_city.trim(),
+            venue_state: form.venue_state,
+            venue_zip: form.venue_zip.trim(),
+          };
 
     const res = await fetch("/api/class-requests", {
       method: "POST",
@@ -817,134 +868,201 @@ export default function RequestClassWizard({ classTypes }: Props) {
             Venue / Location
           </h2>
           <p className="text-sm text-gray-500 mb-4">
-            Where would you like the class held? A{" "}
-            <strong>$65 travel &amp; setup fee</strong> applies to all
-            customer-requested classes.
+            {form.venue_mode === "home_base"
+              ? "A no-travel-fee class at one of our own locations."
+              : "Where would you like the class held? A $65 travel & setup fee applies."}
           </p>
-          <div className="space-y-4">
+
+          {homeBaseLocations.length > 0 && (
+            <div className="flex border border-gray-200 rounded-lg overflow-hidden mb-4 max-w-md">
+              <button
+                type="button"
+                onClick={() =>
+                  setForm((prev) => ({ ...prev, venue_mode: "customer_venue" }))
+                }
+                className={`flex-1 py-2.5 text-sm font-medium transition-colors duration-150 ${
+                  form.venue_mode === "customer_venue"
+                    ? "bg-red-600 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                Come to my location
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setForm((prev) => ({ ...prev, venue_mode: "home_base" }))
+                }
+                className={`flex-1 py-2.5 text-sm font-medium transition-colors duration-150 ${
+                  form.venue_mode === "home_base"
+                    ? "bg-red-600 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                One of your locations
+              </button>
+            </div>
+          )}
+
+          {form.venue_mode === "home_base" ? (
             <div>
               <label
-                htmlFor="venue_name"
+                htmlFor="venue_location_id"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                Venue / Facility Name <span className="text-red-500">*</span>
+                City <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                id="venue_name"
-                name="venue_name"
-                value={form.venue_name}
+              <select
+                id="venue_location_id"
+                name="venue_location_id"
+                value={form.venue_location_id}
                 onChange={handleFormChange}
-                placeholder="e.g. Acme Corp. Office, Community Center"
-                className={`block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                  formErrors.venue_name ? "border-red-400" : "border-gray-300"
+                className={`block w-full max-w-xs border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  formErrors.venue_location_id ? "border-red-400" : "border-gray-300"
                 }`}
-              />
-              {formErrors.venue_name && (
-                <p className="text-red-500 text-xs mt-1">{formErrors.venue_name}</p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="venue_address"
-                className="block text-sm font-medium text-gray-700 mb-1"
               >
-                Street Address <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="venue_address"
-                name="venue_address"
-                value={form.venue_address}
-                onChange={handleFormChange}
-                placeholder="123 Main St"
-                className={`block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                  formErrors.venue_address ? "border-red-400" : "border-gray-300"
-                }`}
-              />
-              {formErrors.venue_address && (
-                <p className="text-red-500 text-xs mt-1">{formErrors.venue_address}</p>
+                <option value="">Select a city…</option>
+                {homeBaseLocations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.city}, {loc.state}
+                  </option>
+                ))}
+              </select>
+              {formErrors.venue_location_id && (
+                <p className="text-red-500 text-xs mt-1">
+                  {formErrors.venue_location_id}
+                </p>
               )}
+              <p className="text-xs text-gray-400 mt-2">
+                The exact address is confirmed once your request is approved.
+              </p>
             </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div className="col-span-2 sm:col-span-1">
+          ) : (
+            <div className="space-y-4">
+              <div>
                 <label
-                  htmlFor="venue_city"
+                  htmlFor="venue_name"
                   className="block text-sm font-medium text-gray-700 mb-1"
                 >
-                  City <span className="text-red-500">*</span>
+                  Venue / Facility Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  id="venue_city"
-                  name="venue_city"
-                  value={form.venue_city}
+                  id="venue_name"
+                  name="venue_name"
+                  value={form.venue_name}
                   onChange={handleFormChange}
-                  placeholder="Tampa"
+                  placeholder="e.g. Acme Corp. Office, Community Center"
                   className={`block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                    formErrors.venue_city ? "border-red-400" : "border-gray-300"
+                    formErrors.venue_name ? "border-red-400" : "border-gray-300"
                   }`}
                 />
-                {formErrors.venue_city && (
-                  <p className="text-red-500 text-xs mt-1">{formErrors.venue_city}</p>
+                {formErrors.venue_name && (
+                  <p className="text-red-500 text-xs mt-1">{formErrors.venue_name}</p>
                 )}
               </div>
 
               <div>
                 <label
-                  htmlFor="venue_state"
+                  htmlFor="venue_address"
                   className="block text-sm font-medium text-gray-700 mb-1"
                 >
-                  State <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="venue_state"
-                  name="venue_state"
-                  value={form.venue_state}
-                  onChange={handleFormChange}
-                  className={`block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                    formErrors.venue_state ? "border-red-400" : "border-gray-300"
-                  }`}
-                >
-                  <option value="">State</option>
-                  {US_STATES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                {formErrors.venue_state && (
-                  <p className="text-red-500 text-xs mt-1">{formErrors.venue_state}</p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="venue_zip"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  ZIP <span className="text-red-500">*</span>
+                  Street Address <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  id="venue_zip"
-                  name="venue_zip"
-                  value={form.venue_zip}
+                  id="venue_address"
+                  name="venue_address"
+                  value={form.venue_address}
                   onChange={handleFormChange}
-                  placeholder="33602"
-                  maxLength={10}
+                  placeholder="123 Main St"
                   className={`block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                    formErrors.venue_zip ? "border-red-400" : "border-gray-300"
+                    formErrors.venue_address ? "border-red-400" : "border-gray-300"
                   }`}
                 />
-                {formErrors.venue_zip && (
-                  <p className="text-red-500 text-xs mt-1">{formErrors.venue_zip}</p>
+                {formErrors.venue_address && (
+                  <p className="text-red-500 text-xs mt-1">{formErrors.venue_address}</p>
                 )}
               </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <label
+                    htmlFor="venue_city"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    City <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="venue_city"
+                    name="venue_city"
+                    value={form.venue_city}
+                    onChange={handleFormChange}
+                    placeholder="Tampa"
+                    className={`block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                      formErrors.venue_city ? "border-red-400" : "border-gray-300"
+                    }`}
+                  />
+                  {formErrors.venue_city && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.venue_city}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="venue_state"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    State <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="venue_state"
+                    name="venue_state"
+                    value={form.venue_state}
+                    onChange={handleFormChange}
+                    className={`block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                      formErrors.venue_state ? "border-red-400" : "border-gray-300"
+                    }`}
+                  >
+                    <option value="">State</option>
+                    {US_STATES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.venue_state && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.venue_state}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="venue_zip"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    ZIP <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="venue_zip"
+                    name="venue_zip"
+                    value={form.venue_zip}
+                    onChange={handleFormChange}
+                    placeholder="33602"
+                    maxLength={10}
+                    className={`block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                      formErrors.venue_zip ? "border-red-400" : "border-gray-300"
+                    }`}
+                  />
+                  {formErrors.venue_zip && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.venue_zip}</p>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </section>
 
         {/* ── Additional notes ── */}
@@ -968,14 +1086,25 @@ export default function RequestClassWizard({ classTypes }: Props) {
         </section>
 
         {/* ── Fee callout ── */}
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3">
-          <span className="text-amber-600 text-lg leading-none mt-0.5">ℹ️</span>
-          <p className="text-sm text-amber-800">
-            A <strong>$65 travel &amp; setup fee</strong> is applied to all
-            customer-requested classes. This is a flat fee in addition to the
-            per-student class price.
-          </p>
-        </div>
+        {form.venue_mode === "home_base" ? (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex gap-3">
+            <span className="text-green-600 text-lg leading-none mt-0.5">✓</span>
+            <p className="text-sm text-green-800">
+              <strong>No travel fee.</strong> Classes at one of our own
+              locations have no travel & setup charge, only the per-student
+              class price.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3">
+            <span className="text-amber-600 text-lg leading-none mt-0.5">ℹ️</span>
+            <p className="text-sm text-amber-800">
+              A <strong>$65 travel &amp; setup fee</strong> is applied to all
+              customer-requested classes. This is a flat fee in addition to the
+              per-student class price.
+            </p>
+          </div>
+        )}
 
         {globalError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">

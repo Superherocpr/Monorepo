@@ -72,7 +72,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
   const admin = await createAdminClient();
 
   // Fetch the full session with all related data needed to render the detail page
-  const { data: raw } = await admin
+  const { data: raw, error } = await admin
     .from("class_sessions")
     .select(
       `
@@ -116,6 +116,18 @@ export default async function SessionDetailPage({ params }: PageProps) {
     )
     .eq("id", id)
     .single();
+
+  // A genuine query failure must never be mistaken for "session not found".
+  // Selecting a column the database does not have fails the ENTIRE select, so
+  // swallowing the error here turns a schema mismatch into a silent bounce back
+  // to the list with nothing in any log -- exactly how a missing migration took
+  // every session detail page down in production on 2026-09-08. PostgREST
+  // reports "no rows matched" for .single() as PGRST116; anything else is a
+  // fault and should surface as a 500 we can actually see.
+  if (error && error.code !== "PGRST116") {
+    console.error(`[SessionDetail] session query failed for id="${id}":`, error);
+    throw new Error(`Failed to load session ${id}: ${error.message}`);
+  }
 
   // Session not found: send back to list
   if (!raw) redirect("/admin/sessions");

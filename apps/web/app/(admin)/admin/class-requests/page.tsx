@@ -44,6 +44,18 @@ function formatDate(iso: string): string {
   });
 }
 
+/**
+ * One-line venue summary for the request list.
+ * home_base requests have no venue_name/address (see types/class-requests.ts
+ * VenueMode) — the exact location is on the detail page, not the list.
+ */
+function venueSummary(req: ClassRequest): string {
+  if (req.venue_mode === "home_base") {
+    return `Our location — ${req.venue_city}, ${req.venue_state}`;
+  }
+  return `${req.venue_name}, ${req.venue_city}, ${req.venue_state}`;
+}
+
 /** Admin class request list page. */
 export default async function ClassRequestsAdminPage({ searchParams }: PageProps) {
   const params = await searchParams;
@@ -63,7 +75,7 @@ export default async function ClassRequestsAdminPage({ searchParams }: PageProps
     .from("class_requests")
     .select(`
       id, preferred_date, group_size,
-      venue_name, venue_city, venue_state,
+      venue_mode, venue_name, venue_city, venue_state,
       status, travel_fee, created_at,
       class_types ( id, name ),
       profiles ( id, first_name, last_name, email )
@@ -161,9 +173,7 @@ export default async function ClassRequestsAdminPage({ searchParams }: PageProps
                       <span>
                         📅 {formatDate(req.preferred_date)}
                       </span>
-                      <span>
-                        📍 {req.venue_name}, {req.venue_city}, {req.venue_state}
-                      </span>
+                      <span>📍 {venueSummary(req)}</span>
                       <span>
                         👥 ~{req.group_size} attendees
                       </span>

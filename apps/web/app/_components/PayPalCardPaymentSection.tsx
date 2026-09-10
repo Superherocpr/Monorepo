@@ -4,7 +4,7 @@
  * Shared PayPal card-payment section used by the public booking page and
  * admin manual charge register.
  */
-import { useState, useEffect, useRef, useCallback, type ReactElement } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactElement, type ReactNode } from "react";
 import {
   PayPalCardFieldsProvider,
   PayPalCardNumberField,
@@ -55,7 +55,19 @@ interface CardPaymentFormProps {
   onApprove: (data: { orderId: string }) => Promise<void>;
   onError: (message: string) => void;
   amount: number;
+  /** Disables the name-on-card input and the pay button (e.g. while submitting). */
   disabled: boolean;
+  /**
+   * Disables only the pay button without touching the card field inputs.
+   * Use this to block submission (e.g. a required pre-step is incomplete)
+   * while still letting the buyer fill in their card details.
+   */
+  submitDisabled?: boolean;
+  /**
+   * Optional content rendered between the card fields and the pay button —
+   * e.g. a required pre-step like account password creation.
+   */
+  beforeSubmit?: ReactNode;
   validity: CardFieldsValidity;
   /**
    * Shown when card payment is genuinely unusable (SDK init/eligibility
@@ -74,6 +86,8 @@ function CardPaymentForm({
   onError,
   amount,
   disabled,
+  submitDisabled = false,
+  beforeSubmit,
   validity,
   unavailableMessage = DEFAULT_UNAVAILABLE_MESSAGE,
 }: CardPaymentFormProps): ReactElement {
@@ -307,10 +321,12 @@ function CardPaymentForm({
         </p>
       )}
 
+      {beforeSubmit}
+
       <button
         type="button"
         onClick={handlePay}
-        disabled={isSubmitting || disabled}
+        disabled={isSubmitting || disabled || submitDisabled}
         className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors"
       >
         {isSubmitting ? "Processing…" : `Charge ${formattedAmount}`}

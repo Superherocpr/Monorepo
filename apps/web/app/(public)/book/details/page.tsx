@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * /book/details — Step 2b of the booking wizard: new customer enters their info.
- * Collects personal details, checks for duplicate email accounts, persists to store,
- * and routes to /book/create-account.
- * Used by: booking flow for new customers who don't have an account.
+ * /book/details — Step 2 of the booking wizard: collect name, email, and phone.
+ * Checks whether the email or phone belongs to an existing account. If so,
+ * redirects to /book/signin (passing their email as a URL param for pre-fill).
+ * New customers are stored and routed directly to /book/payment.
+ * Used by: booking flow for all non-authenticated users.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -16,23 +17,11 @@ import BookingProgress from "../_components/BookingProgress";
 import OrderSummary from "../_components/OrderSummary";
 import type { BookingStore } from "@/lib/booking-store";
 
-/** US state abbreviations for the state dropdown. */
-const US_STATES = [
-  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
-  "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
-  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
-  "VA","WA","WV","WI","WY","DC",
-];
-
 interface DetailsForm {
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
 }
 
 const EMPTY_FORM: DetailsForm = {
@@ -40,19 +29,19 @@ const EMPTY_FORM: DetailsForm = {
   lastName: "",
   email: "",
   phone: "",
-  address: "",
-  city: "",
-  state: "",
-  zip: "",
 };
 
-/** Renders the customer details form for new customers (Step 2b). */
+/** Renders the customer info form (Step 2) — collects name, email, and phone. */
 export default function BookDetailsPage() {
   const router = useRouter();
-  // Initialize from store on first render; pre-populate form if navigating back from Step 3.
+  // Initialize from store on first render so back-navigation pre-populates.
   const [sessionDetails] = useState<BookingStore["sessionDetails"]>(() => getBookingStore().sessionDetails);
-  const [form, setForm] = useState<DetailsForm>(() => getBookingStore().customerDetails ?? EMPTY_FORM);
-  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<DetailsForm>(() => {
+    const stored = getBookingStore().customerDetails;
+    return stored
+      ? { firstName: stored.firstName, lastName: stored.lastName, email: stored.email, phone: stored.phone }
+      : EMPTY_FORM;
+  });
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof DetailsForm, string>>>({});
   const [loading, setLoading] = useState(false);
 
@@ -61,59 +50,87 @@ export default function BookDetailsPage() {
     if (!getBookingStore().sessionId) router.replace("/book");
   }, [router]);
 
-  /** Updates a single form field. */
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+  // sessionStorage doesn't exist during SSR, so the server always renders
+  // OrderSummary's loading skeleton. useSyncExternalStore is the hydration-safe
+  // way to read a client-only value: the server snapshot (false) renders
+  // first, then the real value swaps in, avoiding a hydration mismatch.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+
+  /** Updates a single form field and clears its error. */
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>): void {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-    // Clear field-level error when user edits
     setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
   }
 
-  /** Validates the form and returns true if all required fields are filled. */
+  /** Returns true when all required fields pass basic validation. */
   function validate(): boolean {
     const errors: Partial<Record<keyof DetailsForm, string>> = {};
     if (!form.firstName.trim()) errors.firstName = "First name is required.";
     if (!form.lastName.trim()) errors.lastName = "Last name is required.";
     if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) errors.email = "A valid email is required.";
     if (!form.phone.trim()) errors.phone = "Phone number is required.";
-    if (!form.address.trim()) errors.address = "Address is required.";
-    if (!form.city.trim()) errors.city = "City is required.";
-    if (!form.state) errors.state = "State is required.";
-    if (!form.zip.trim()) errors.zip = "ZIP code is required.";
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   }
 
   /**
-   * Validates the form, checks for duplicate email, then stores details and routes forward.
-   * Shows an inline message with a sign-in link if the email is already registered.
+   * Validates the form, then checks for an existing account by email (primary)
+   * and phone (secondary). If a match is found, redirects to /book/signin with
+   * the email pre-filled. Otherwise saves details and routes to /book/payment.
    */
-  async function handleContinue(e: React.FormEvent) {
+  async function handleContinue(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     if (!validate()) return;
 
-    setError(null);
     setLoading(true);
-
     const supabase = createClient();
-    const { data: existing } = await supabase
+    const normalizedEmail = form.email.trim().toLowerCase();
+    const normalizedPhone = form.phone.trim();
+
+    // Primary check: email
+    const { data: byEmail } = await supabase
       .from("profiles")
       .select("id")
-      .eq("email", form.email.trim().toLowerCase())
+      .eq("email", normalizedEmail)
       .maybeSingle();
 
-    if (existing) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        email: "An account with this email already exists.",
-      }));
-      setError("duplicate");
-      setLoading(false);
+    if (byEmail) {
+      router.push(`/book/signin?email=${encodeURIComponent(normalizedEmail)}`);
       return;
     }
 
-    setBookingStore({ customerDetails: form, isNewCustomer: true });
-    router.push("/book/create-account");
+    // Secondary check: phone
+    const { data: byPhone } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("phone", normalizedPhone)
+      .maybeSingle();
+
+    if (byPhone) {
+      router.push(`/book/signin?email=${encodeURIComponent(normalizedEmail)}`);
+      return;
+    }
+
+    // New customer — save details and go straight to payment. Clear any
+    // customerId left over from earlier in this session (e.g. a prior sign-in
+    // or account creation for different details); otherwise the payment page
+    // would treat this fresh identity as already having an account.
+    setBookingStore({
+      customerDetails: {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: normalizedEmail,
+        phone: normalizedPhone,
+      },
+      isNewCustomer: true,
+      customerId: null,
+    });
+    router.push("/book/payment");
   }
 
   return (
@@ -123,22 +140,12 @@ export default function BookDetailsPage() {
       <div className="max-w-5xl mx-auto px-4 pb-16">
         <div className="flex flex-col lg:flex-row gap-10">
 
-          {/* ── Left: details form ── */}
+          {/* Left: details form */}
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Your Details</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Your Information</h1>
             <p className="text-gray-500 text-sm mb-8">
-              We&apos;ll use this information to create your account and issue your certification.
+              Enter your name and contact info to reserve your spot.
             </p>
-
-            {/* Duplicate email banner */}
-            {error === "duplicate" && (
-              <div role="alert" className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm mb-6">
-                An account with this email already exists.{" "}
-                <Link href="/book/signin" className="font-semibold underline hover:text-amber-900">
-                  Please sign in instead.
-                </Link>
-              </div>
-            )}
 
             <form onSubmit={handleContinue} noValidate className="flex flex-col gap-5">
 
@@ -188,69 +195,6 @@ export default function BookDetailsPage() {
                 placeholder="(555) 000-0000"
               />
 
-              <FormField
-                id="address"
-                label="Street address"
-                value={form.address}
-                onChange={handleChange}
-                error={fieldErrors.address}
-                required
-                autoComplete="street-address"
-                hint="Used for your certification record"
-              />
-
-              {/* City / State / ZIP row */}
-              <div className="flex flex-col sm:flex-row gap-4">
-                <FormField
-                  id="city"
-                  label="City"
-                  value={form.city}
-                  onChange={handleChange}
-                  error={fieldErrors.city}
-                  required
-                  autoComplete="address-level2"
-                />
-
-                <div className="flex flex-col gap-1.5 flex-1">
-                  <label htmlFor="state" className="text-sm font-medium text-gray-700">
-                    State <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    id="state"
-                    name="state"
-                    value={form.state}
-                    onChange={handleChange}
-                    required
-                    aria-required="true"
-                    autoComplete="address-level1"
-                    className={[
-                      "border rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent",
-                      fieldErrors.state ? "border-red-400" : "border-gray-300",
-                    ].join(" ")}
-                  >
-                    <option value="">Select…</option>
-                    {US_STATES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                  {fieldErrors.state && (
-                    <p role="alert" className="text-xs text-red-600 mt-0.5">{fieldErrors.state}</p>
-                  )}
-                </div>
-
-                <FormField
-                  id="zip"
-                  label="ZIP"
-                  value={form.zip}
-                  onChange={handleChange}
-                  error={fieldErrors.zip}
-                  required
-                  autoComplete="postal-code"
-                  placeholder="33601"
-                  className="max-w-[110px]"
-                />
-              </div>
-
               <button
                 type="submit"
                 disabled={loading}
@@ -271,12 +215,12 @@ export default function BookDetailsPage() {
             </p>
           </div>
 
-          {/* ── Right: order summary ── */}
+          {/* Right: order summary */}
           <div className="w-full lg:w-80 shrink-0">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Your Selection
             </h2>
-            <OrderSummary details={sessionDetails} />
+            <OrderSummary details={mounted ? sessionDetails : null} />
           </div>
         </div>
       </div>
@@ -296,14 +240,9 @@ interface FormFieldProps {
   type?: string;
   autoComplete?: string;
   placeholder?: string;
-  hint?: string;
-  className?: string;
 }
 
-/**
- * Renders a labeled text input with optional error message and hint text.
- * Used internally by the details form.
- */
+/** Labeled text input with optional error message. */
 function FormField({
   id,
   label,
@@ -314,15 +253,12 @@ function FormField({
   type = "text",
   autoComplete,
   placeholder,
-  hint,
-  className = "",
 }: FormFieldProps) {
   return (
-    <div className={`flex flex-col gap-1.5 flex-1 ${className}`}>
+    <div className="flex flex-col gap-1.5 flex-1">
       <label htmlFor={id} className="text-sm font-medium text-gray-700">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      {hint && <p className="text-xs text-gray-400 -mt-1">{hint}</p>}
       <input
         id={id}
         name={id}

@@ -19,7 +19,8 @@ import LegacySitePage from "./_components/legacy/LegacySitePage";
 import { getSetting } from "@/lib/zoho";
 
 export const metadata: Metadata = {
-  title: "CPR Certification Classes — Hillsborough, Manatee & Sarasota Counties | SuperHeroCPR",
+  // The root layout appends "| SuperHeroCPR" via its title template.
+  title: "CPR Certification Classes — Hillsborough, Manatee & Sarasota Counties",
   description:
     "American Heart Association CPR certification classes across Hillsborough, Manatee, and Sarasota Counties. On-location training from a licensed AHA instructor with thousands of real-world patients.",
 };

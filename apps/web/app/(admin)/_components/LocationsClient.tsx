@@ -407,16 +407,21 @@ export default function LocationsClient({
   }
 
   /**
-   * Sets a location as the home base via PATCH /api/locations/[id]/set-home-base.
-   * @param id - The location ID to promote to home base.
+   * Toggles a location's home-base flag via PATCH /api/locations/[id]/set-home-base.
+   * Multiple locations may be a home base at once, so this only ever touches
+   * the target location's own flag.
+   * @param id - The location ID to toggle.
+   * @param next - The new is_home_base value.
    */
-  const handleSetHomeBase = useCallback(async (id: string) => {
+  const handleToggleHomeBase = useCallback(async (id: string, next: boolean) => {
     setHomeBaseLoading(id);
     setHomeBaseError(null);
 
     try {
       const res = await fetch(`/api/locations/${id}/set-home-base`, {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_home_base: next }),
       });
 
       const json = (await res.json()) as { success: boolean; error?: string };
@@ -427,7 +432,7 @@ export default function LocationsClient({
 
       const applyHomeBase = (prev: LocationWithCount[]) =>
         prev
-          .map((l) => ({ ...l, is_home_base: l.id === id }))
+          .map((l) => (l.id === id ? { ...l, is_home_base: next } : l))
           .sort(
             (a, b) =>
               Number(b.is_home_base) - Number(a.is_home_base) ||
@@ -759,14 +764,22 @@ export default function LocationsClient({
                         </button>
 
                         {loc.is_home_base ? (
-                          <span className="text-xs text-gray-400">
-                            Current home base
-                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${loc.name} as a home base`}
+                            onClick={() => handleToggleHomeBase(loc.id, false)}
+                            disabled={homeBaseLoading === loc.id}
+                            className="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            {homeBaseLoading === loc.id
+                              ? "Updating…"
+                              : "Remove Home Base"}
+                          </button>
                         ) : (
                           <button
                             type="button"
-                            aria-label={`Set ${loc.name} as home base`}
-                            onClick={() => handleSetHomeBase(loc.id)}
+                            aria-label={`Set ${loc.name} as a home base`}
+                            onClick={() => handleToggleHomeBase(loc.id, true)}
                             disabled={homeBaseLoading === loc.id}
                             className="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
                           >

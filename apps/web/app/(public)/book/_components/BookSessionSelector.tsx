@@ -13,6 +13,7 @@ import { Calendar, ChevronDown, Loader2, MapPin, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { setBookingStore } from "@/lib/booking-store";
 import { formatClassDate, formatClassTimeRange, floatingNow } from "@/lib/business-time";
+import { toSlug } from "@/lib/class-slug";
 import BookingProgress from "./BookingProgress";
 import PrivateSessionCta from "./PrivateSessionCta";
 import type { ScheduleSession, ClassTypeOption } from "@/types/schedule";
@@ -25,11 +26,6 @@ interface BookSessionSelectorProps {
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
-
-/** Converts a class type name to a URL-safe slug, matching /classes page anchors. */
-function toSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-}
 
 /** The radius used for zip code proximity filtering, in miles. */
 const ZIP_RADIUS_MILES = 50;
@@ -237,14 +233,14 @@ export default function BookSessionSelector({
       },
     });
 
-    // Check if already authenticated — if so, skip sign-in/details steps
+    // Check if already authenticated — if so, skip info and payment steps
     const supabase = createClient();
     const { data } = await supabase.auth.getUser();
     if (data.user) {
       setBookingStore({ customerId: data.user.id, isNewCustomer: false });
       router.push("/book/payment");
     } else {
-      router.push("/book/signin");
+      router.push("/book/details");
     }
   }
 

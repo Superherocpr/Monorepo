@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import BookSessionSelector from "./_components/BookSessionSelector";
 import type { ScheduleSession, ClassTypeOption } from "@/types/schedule";
 import { floatingNow } from "@/lib/business-time";
+import { computeSpotsRemaining } from "@/lib/class-availability";
 
 export const metadata: Metadata = {
   title: "Book a Class — SuperHeroCPR",
@@ -103,11 +104,11 @@ export default async function BookPage({ searchParams }: BookPageProps) {
     const profile = (Array.isArray(raw.profiles) ? raw.profiles[0] : raw.profiles) as ScheduleSession["profiles"];
     const location = (Array.isArray(raw.locations) ? raw.locations[0] : raw.locations) as ScheduleSession["locations"];
 
-    const activeBookings = (raw.bookings ?? []).filter((b) => !b.cancelled).length;
-    const invoiceStudents = (raw.invoices ?? [])
-      .filter((inv) => inv.status !== "cancelled")
-      .reduce((sum, inv) => sum + inv.student_count, 0);
-    const spotsRemaining = session.max_capacity - activeBookings - invoiceStudents;
+    const spotsRemaining = computeSpotsRemaining(
+      session.max_capacity,
+      raw.bookings ?? [],
+      raw.invoices ?? []
+    );
 
     return {
       id: session.id,
@@ -119,7 +120,8 @@ export default async function BookPage({ searchParams }: BookPageProps) {
       class_types: classType,
       profiles: profile,
       locations: location,
-      spotsRemaining: Math.max(0, spotsRemaining),
+      // computeSpotsRemaining already floors at 0, so a 0 here means full.
+      spotsRemaining,
       isFull: spotsRemaining <= 0,
     };
   });

@@ -198,7 +198,7 @@
 | state | text | NN | |
 | zip | text | NN | |
 | notes | text | | Parking info, access instructions etc. |
-| is_home_base | boolean | NN | Default: false. Only one location true at a time. |
+| is_home_base | boolean | NN | Default: false. Any number of locations may be true at once — e.g. an instructor's own address. Offered as venue options on public /request-class. |
 | created_at | timestamptz | NN | Default: now() |
 
 ---
@@ -248,17 +248,26 @@
 | preferred_date | date | NN | Must be ≥7 days from submission date |
 | preferred_time_of_day | text | NN | `morning` `afternoon` `evening` `flexible` |
 | group_size | int | NN | Min 1 |
-| venue_name | text | NN | Customer-provided venue/facility name |
-| venue_address | text | NN | |
-| venue_city | text | NN | |
-| venue_state | text | NN | |
-| venue_zip | text | NN | |
+| venue_mode | text | NN | `customer_venue` `home_base` — default: customer_venue. See below. |
+| venue_location_id | uuid | FK | → locations.id, ON DELETE SET NULL. Set only when venue_mode = home_base. |
+| venue_name | text | | Customer-provided venue/facility name. NULL when venue_mode = home_base. |
+| venue_address | text | | NULL when venue_mode = home_base. |
+| venue_city | text | NN | Always populated — customer input, or copied from the chosen home base. |
+| venue_state | text | NN | Always populated, same as venue_city. |
+| venue_zip | text | | NULL when venue_mode = home_base. |
 | notes | text | | Optional additional context from customer |
 | status | text | NN | `pending` `approved` `rejected` `instructor_assigned` — default: pending |
 | rejection_reason | text | | Set when status = rejected |
-| travel_fee | numeric | NN | Default: 65. Flat $65 travel & setup fee applied to customer-requested sessions. |
+| travel_fee | numeric | NN | Default: 65. $0 when venue_mode = home_base — no travel is required to reach our own location. |
 | session_id | uuid | FK | → class_sessions.id. Set when admin approves and creates the session. |
 | created_at | timestamptz | NN | Default: now() |
+
+**venue_mode:** `customer_venue` is a customer's own address, entered by hand — approval
+creates a new `locations` row from it. `home_base` is one of our own locations (typically
+an instructor's home, see `locations.is_home_base`) picked from a dropdown on
+`/request-class` — approval reuses that existing location rather than creating a
+duplicate, and no travel fee applies. A CHECK constraint enforces the two shapes:
+customer_venue rows always have venue_name/address/zip; home_base rows never do.
 
 ---
 

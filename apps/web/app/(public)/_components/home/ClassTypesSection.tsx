@@ -7,19 +7,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { ClassType } from "@/types/schedule";
-
-/** Converts a class type name to a URL-safe anchor slug. */
-function toSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-}
-
-/** Formats duration in minutes to a human-readable string. */
-function formatDuration(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (mins === 0) return `${hours} hour${hours !== 1 ? "s" : ""}`;
-  return `${hours} hr ${mins} min`;
-}
+import { toSlug } from "@/lib/class-slug";
+import { formatDuration } from "@/lib/class-display";
 
 /**
  * Renders class type cards from the database.

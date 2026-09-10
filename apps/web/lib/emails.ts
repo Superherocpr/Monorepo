@@ -185,7 +185,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                             <td align="center" valign="top" style="padding:0;Margin:0;width:560px">
                               <table cellpadding="0" cellspacing="0" width="100%" role="presentation">
                                 <tr>
-                                  <td align="center" style="padding:0;Margin:0"><a target="_blank" href="https://youtu.be/JeIjJqi6WuM" style="text-decoration:underline;color:#333333;font-size:14px"><img class="adapt-img" src="https://obwshc.stripocdn.email/content/guids/videoImgGuid/images/93271603261079653.png" alt="Welcome New Heroes!" width="560" title="Welcome New Heroes!" height="315" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
+                                  <td align="center" style="padding:0;Margin:0"><a target="_blank" href="https://youtu.be/JeIjJqi6WuM" style="text-decoration:underline;color:#333333;font-size:14px"><img class="adapt-img" src="https://superherocpr-assets-prod.s3.us-east-2.amazonaws.com/email-assets/welcome-hero/93271603261079653.png" alt="Welcome New Heroes!" width="560" title="Welcome New Heroes!" height="315" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
                                 </tr>
                               </table>
                             </td>
@@ -210,7 +210,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                             <td class="es-m-p20b" align="left" style="padding:0;Margin:0;width:270px">
                               <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
                                 <tr>
-                                  <td align="center" style="padding:0;Margin:0;font-size:0px"><img class="adapt-img" src="https://superherocpr.com/wp-content/uploads/2015/10/chest-and-hands.jpg" alt style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="270" height="280"></td>
+                                  <td align="center" style="padding:0;Margin:0;font-size:0px"><img class="adapt-img" src="https://superherocpr-assets-prod.s3.us-east-2.amazonaws.com/email-assets/welcome-hero/chest-and-hands.jpg" alt style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="270" height="280"></td>
                                 </tr>
                                 <tr>
                                   <td align="left" style="padding:0;Margin:0;padding-bottom:10px;padding-top:15px"><h3 style="Margin:0;line-height:24px;font-size:20px;color:#e1261d"><strong style="color:#e1261d">Our Instructors</strong></h3></td>
@@ -228,7 +228,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                                 <td class="es-m-p20b" align="left" style="padding:0;Margin:0;width:270px">
                                   <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
                                     <tr>
-                                      <td align="center" style="padding:0;Margin:0;font-size:0px"><img class="adapt-img" src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/29811603252019707.jpg" alt style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="270" height="188"></td>
+                                      <td align="center" style="padding:0;Margin:0;font-size:0px"><img class="adapt-img" src="https://superherocpr-assets-prod.s3.us-east-2.amazonaws.com/email-assets/welcome-hero/29811603252019707.jpg" alt style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="270" height="188"></td>
                                     </tr>
                                     <tr>
                                       <td align="left" style="padding:0;Margin:0;padding-bottom:10px;padding-top:15px"><h3 style="Margin:0;line-height:24px;font-size:20px;color:#e1261d"><strong style="color:#e1261d">The JUST - US League</strong></h3></td>
@@ -265,7 +265,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                             <td align="left" style="padding:0;Margin:0;width:125px">
                               <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
                                 <tr style="border-collapse:collapse">
-                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/11491603258010118.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
+                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://superherocpr-assets-prod.s3.us-east-2.amazonaws.com/email-assets/welcome-hero/11491603258010118.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
                                 </tr>
                               </table>
                             </td>
@@ -273,7 +273,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                             <td align="left" style="padding:0;Margin:0;width:125px">
                               <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
                                 <tr style="border-collapse:collapse">
-                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/22921603258025841.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
+                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://superherocpr-assets-prod.s3.us-east-2.amazonaws.com/email-assets/welcome-hero/22921603258025841.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
                                 </tr>
                               </table>
                             </td>
@@ -282,7 +282,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                             <td align="left" style="padding:0;Margin:0;width:125px">
                               <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
                                 <tr style="border-collapse:collapse">
-                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/1251603258042066.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
+                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://superherocpr-assets-prod.s3.us-east-2.amazonaws.com/email-assets/welcome-hero/1251603258042066.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
                                 </tr>
                               </table>
                             </td>
@@ -290,7 +290,7 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                             <td align="left" style="padding:0;Margin:0;width:125px">
                               <table width="100%" cellspacing="0" cellpadding="0" role="presentation">
                                 <tr style="border-collapse:collapse">
-                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://obwshc.stripocdn.email/content/guids/CABINET_c143c7474ec05d89e957df59017bdab5/images/18391603258153322.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
+                                  <td align="center" style="padding:0;Margin:0;padding-bottom:20px;font-size:0px"><img src="https://superherocpr-assets-prod.s3.us-east-2.amazonaws.com/email-assets/welcome-hero/18391603258153322.jpg" alt class="adapt-img" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic" width="125" height="88"></td>
                                 </tr>
                               </table>
                             </td>
@@ -339,8 +339,8 @@ a[x-apple-data-detectors] { color:inherit!important; text-decoration:none!import
                                   <td align="center" style="padding:0;Margin:0;padding-top:10px;padding-bottom:10px;font-size:0px">
                                     <table class="es-table-not-adapt es-social" cellspacing="0" cellpadding="0" role="presentation">
                                       <tr>
-                                        <td valign="top" align="center" style="padding:0;Margin:0;padding-right:20px"><a href="https://www.facebook.com/1HeroWay/" style="text-decoration:underline;color:#FFFFFF;font-size:14px"><img title="Facebook" src="https://obwshc.stripocdn.email/content/assets/img/social-icons/logo-gray/facebook-logo-gray.png" alt="Fb" width="32" height="32" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
-                                        <td valign="top" align="center" style="padding:0;Margin:0"><a href="https://www.youtube.com/channel/UCuRG_ZiO1WoOXZxyRzgTDxA" style="text-decoration:underline;color:#FFFFFF;font-size:14px"><img title="Youtube" src="https://obwshc.stripocdn.email/content/assets/img/social-icons/logo-gray/youtube-logo-gray.png" alt="Yt" width="32" height="32" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
+                                        <td valign="top" align="center" style="padding:0;Margin:0;padding-right:20px"><a href="https://www.facebook.com/1HeroWay/" style="text-decoration:underline;color:#FFFFFF;font-size:14px"><img title="Facebook" src="https://superherocpr-assets-prod.s3.us-east-2.amazonaws.com/email-assets/welcome-hero/facebook-logo-gray.png" alt="Fb" width="32" height="32" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
+                                        <td valign="top" align="center" style="padding:0;Margin:0"><a href="https://www.youtube.com/channel/UCuRG_ZiO1WoOXZxyRzgTDxA" style="text-decoration:underline;color:#FFFFFF;font-size:14px"><img title="Youtube" src="https://superherocpr-assets-prod.s3.us-east-2.amazonaws.com/email-assets/welcome-hero/youtube-logo-gray.png" alt="Yt" width="32" height="32" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic"></a></td>
                                       </tr>
                                     </table>
                                   </td>
