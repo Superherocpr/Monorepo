@@ -216,6 +216,17 @@ export const JOB_ROLES: JobRole[] = [
     target: { kind: "heartsaver" },
   },
   {
+    id: "boat-captain",
+    label: "Boat captain",
+    examples: "USCG-licensed captain, charter or tow boat operator",
+    target: {
+      kind: "class",
+      course: HEARTSAVER_COMBINED,
+      rationale:
+        "Boat captains are required to hold Heartsaver First Aid and CPR. Upon completion you will receive USCG Form Amerha-216, which you will need for your license.",
+    },
+  },
+  {
     id: "body-art",
     label: "Body art or cosmetology",
     examples: "Tattoo artist, piercer, cosmetologist, nail technician",
