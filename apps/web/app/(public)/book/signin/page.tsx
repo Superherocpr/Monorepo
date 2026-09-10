@@ -9,7 +9,7 @@
  * Used by: booking flow when a non-authenticated user has an existing account.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -37,13 +37,14 @@ export default function BookSignInPage() {
   }, [router]);
 
   // sessionStorage doesn't exist during SSR, so the server always renders
-  // OrderSummary's loading skeleton. Gating on `mounted` (set only after
-  // hydration completes) keeps the client's first render identical to the
-  // server's, avoiding a hydration mismatch once real session details exist.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // OrderSummary's loading skeleton. useSyncExternalStore is the hydration-safe
+  // way to read a client-only value: the server snapshot (false) renders
+  // first, then the real value swaps in, avoiding a hydration mismatch.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   /**
    * Submits sign-in credentials to Supabase.

@@ -7,7 +7,7 @@
  * Used by: booking flow after /api/bookings/confirm returns success.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle, Clock, MapPin, User } from "lucide-react";
@@ -32,13 +32,14 @@ export default function BookConfirmationPage() {
   }, [details, router]);
 
   // sessionStorage doesn't exist during SSR, so the server always renders
-  // with details=null. Gating on `mounted` (set only after hydration
-  // completes) keeps the client's first render identical to the server's,
-  // avoiding a hydration mismatch once the real booking details exist.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // with details=null. useSyncExternalStore is the hydration-safe way to read
+  // a client-only value: the server snapshot (false) renders first, then the
+  // real value swaps in, avoiding a hydration mismatch.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const displayDetails = mounted ? details : null;
 
   return (

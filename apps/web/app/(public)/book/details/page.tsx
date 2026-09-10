@@ -8,7 +8,7 @@
  * Used by: booking flow for all non-authenticated users.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -51,13 +51,14 @@ export default function BookDetailsPage() {
   }, [router]);
 
   // sessionStorage doesn't exist during SSR, so the server always renders
-  // OrderSummary's loading skeleton. Gating on `mounted` (set only after
-  // hydration completes) keeps the client's first render identical to the
-  // server's, avoiding a hydration mismatch once real session details exist.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // OrderSummary's loading skeleton. useSyncExternalStore is the hydration-safe
+  // way to read a client-only value: the server snapshot (false) renders
+  // first, then the real value swaps in, avoiding a hydration mismatch.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   /** Updates a single form field and clears its error. */
   function handleChange(e: React.ChangeEvent<HTMLInputElement>): void {

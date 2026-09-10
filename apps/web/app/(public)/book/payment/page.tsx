@@ -14,7 +14,7 @@
  * Used by: booking flow after /book/details (new customer) or /book/signin (existing).
  */
 
-import { useState, useEffect, useRef, useCallback, type ReactElement } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore, type ReactElement } from "react";
 import { useRouter } from "next/navigation";
 import { PayPalProvider, PayPalOneTimePaymentButton } from "@paypal/react-paypal-js/sdk-v6";
 import type { OnApproveDataOneTimePayments } from "@paypal/react-paypal-js/sdk-v6";
@@ -58,13 +58,14 @@ export default function BookPaymentPage(): ReactElement {
   // sessionStorage doesn't exist during SSR, so the server always renders as if
   // store were null. The client's first hydration pass runs this same component
   // with the real sessionStorage value already available, which would make that
-  // pass's output diverge from the server's and throw a hydration error. Gating
-  // on `mounted` (flipped true only after hydration completes, via the effect
-  // below) keeps the first client render identical to the server's.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // pass's output diverge from the server's and throw a hydration error.
+  // useSyncExternalStore is the hydration-safe way to read a client-only value:
+  // the server snapshot (false) renders first, then the real value swaps in.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const displayStore = mounted ? store : null;
 
   // Tracks the authenticated user id — starts from store for existing customers,
