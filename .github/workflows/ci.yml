@@ -32,6 +32,11 @@ jobs:
     name: check-migrations
     runs-on: ubuntu-latest
     # No Node install needed — uses the system Node that ships with ubuntu-latest.
+    # Overrides the workflow-level `apps/web` default: apps/migrations/ lives at
+    # the repo root, not under apps/web/.
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
 
