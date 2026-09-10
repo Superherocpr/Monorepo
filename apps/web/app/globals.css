@@ -35,6 +35,29 @@
  * animated, which is the tradeoff for full-page navigation resetting reliably.
  */
 
+/*
+ * Step-change animation for the /find-a-class wizard (FindAClassWizard.tsx).
+ * Scoped to @media (prefers-reduced-motion: no-preference) so the keyframes
+ * and the class that uses them simply do not exist for users who asked for
+ * reduced motion — nothing to override, nothing left to animate.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes wizard-step-enter {
+    from {
+      opacity: 0;
+      transform: translateX(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-wizard-step {
+    animation: wizard-step-enter 200ms ease-out;
+  }
+}
+
 body {
   @apply bg-white text-gray-900 antialiased;
 }

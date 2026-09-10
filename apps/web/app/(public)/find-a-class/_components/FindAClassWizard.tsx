@@ -17,7 +17,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { ArrowLeft, CalendarCheck, ChevronRight, MailQuestion, RotateCcw } from "lucide-react";
 import {
   JOB_ROLES,
   resolveJobRecommendation,
@@ -137,6 +137,28 @@ function QuestionHeading({
   );
 }
 
+/**
+ * A row of pills marking questions already answered.
+ * Deliberately has no fixed total — branch depth ranges from one question
+ * (group/workplace exits immediately) to four (personal certification), so a
+ * bar that claimed to know the finish line would be wrong most of the time.
+ * It only ever grows, never predicts.
+ * @param count - Answers given so far (trail.length).
+ */
+function StepDots({ count }: { count: number }): React.ReactElement | null {
+  if (count <= 0) return null;
+  return (
+    <div className="flex items-center gap-1.5 mb-5" aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <span
+          key={i}
+          className="h-1.5 w-6 rounded-full bg-red-500 dark:bg-red-500/80"
+        />
+      ))}
+    </div>
+  );
+}
+
 // ── Wizard ──────────────────────────────────────────────────────────────────
 
 /**
@@ -195,14 +217,14 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
   }
 
   return (
-    <main className="bg-gray-50 dark:bg-gray-950 min-h-[calc(100vh-4rem)] py-12 sm:py-16 px-4">
+    <main className="bg-red-600 dark:bg-red-900 min-h-[calc(100vh-4rem)] py-12 sm:py-16 px-4">
       <div className="max-w-2xl mx-auto">
-        {/* Page header */}
+        {/* Page header — sits directly on the red backdrop, so this text is white rather than the gray used everywhere else. */}
         <div className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 dark:text-white text-balance">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white text-balance">
             Which class do I need?
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
+          <p className="text-white/80 mt-2 leading-relaxed">
             A few questions and we will point you to the right course. No phone
             call required.
           </p>
@@ -211,11 +233,11 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
         {/* Answer trail */}
         {trail.length > 0 && (
           <nav aria-label="Your answers" className="mb-4">
-            <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
+            <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/70">
               {trail.map((answer, i) => (
                 <li key={i} className="flex items-center gap-2">
                   {i > 0 && (
-                    <span aria-hidden="true" className="text-gray-300 dark:text-gray-600">
+                    <span aria-hidden="true" className="text-white/40">
                       /
                     </span>
                   )}
@@ -227,6 +249,8 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
         )}
 
         <div className={`${CARD} p-6 sm:p-8`}>
+        <div key={`${history.length}-${step.name}`} className="animate-wizard-step">
+          <StepDots count={trail.length} />
           {step.name === "start" && (
             <>
               <QuestionHeading
@@ -489,6 +513,7 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
             />
           )}
         </div>
+        </div>
 
         {/* Footer controls */}
         <div className="flex items-center justify-between gap-4 mt-6">
@@ -496,7 +521,7 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
             <button
               type="button"
               onClick={back}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 rounded-sm"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-white/90 hover:text-white transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-red-600 dark:focus-visible:ring-offset-red-900 rounded-sm"
             >
               <ArrowLeft size={16} aria-hidden="true" />
               Back
@@ -507,7 +532,7 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
 
           <Link
             href="/contact"
-            className="text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-150"
+            className="text-sm text-white/80 hover:text-white transition-colors duration-150"
           >
             Still not sure? Send us a message
           </Link>
@@ -600,6 +625,17 @@ function ResultPanel({
       </h2>
 
       <div className="flex flex-wrap gap-2 mt-3">
+        {hasDates ? (
+          <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-semibold px-3 py-1 rounded-full">
+            <CalendarCheck size={13} aria-hidden="true" />
+            Open now
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs font-semibold px-3 py-1 rounded-full">
+            <MailQuestion size={13} aria-hidden="true" />
+            By request
+          </span>
+        )}
         {primary.isAha && (
           <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-semibold px-3 py-1 rounded-full">
             AHA Certified
@@ -623,11 +659,22 @@ function ResultPanel({
         </p>
       )}
 
-      <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
+      <div
+        className={`mt-6 rounded-xl p-5 ${
+          hasDates
+            ? "bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900"
+            : "bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700"
+        }`}
+      >
         {hasDates ? (
-          <Link href={`/book?class=${primary.slug}`} className={PRIMARY_BUTTON}>
-            See dates and book
-          </Link>
+          <>
+            <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
+              Spots are open. Pick a date that works for you.
+            </p>
+            <Link href={`/book?class=${primary.slug}`} className={PRIMARY_BUTTON}>
+              See dates and book
+            </Link>
+          </>
         ) : (
           <>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
