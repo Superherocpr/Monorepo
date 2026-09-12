@@ -71,7 +71,11 @@ async function handlePOST(req: Request): Promise<NextResponse> {
 
     if (error) {
       console.error("[social/refresh] DB upsert failed:", error.message);
-      return NextResponse.json({ error: "Database error" }, { status: 500 });
+      // Caller is always the cron secret or a super_admin session (see
+      // isAuthorized above) — never a public client — so the real message is
+      // safe here and is what lets cron_run_log explain a failure without an
+      // AWS log lookup.
+      return NextResponse.json({ error: `Database error: ${error.message}` }, { status: 500 });
     }
 
     // Remove legacy seeded placeholder rows to avoid broken/non-real post links
@@ -83,7 +87,10 @@ async function handlePOST(req: Request): Promise<NextResponse> {
 
     if (cleanupError) {
       console.error("[social/refresh] Seed-row cleanup failed:", cleanupError.message);
-      return NextResponse.json({ error: "Database error" }, { status: 500 });
+      return NextResponse.json(
+        { error: `Seed-row cleanup failed: ${cleanupError.message}` },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ upserted: posts.length });

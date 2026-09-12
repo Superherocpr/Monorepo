@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "zoho": {
+      "type": "http",
+      "url": "https://mail-organization-938952665.zohomcp.com/mcp/22815eb768ca1749754914f9aa4a2aa7/message"
+    }
+  }
+}
