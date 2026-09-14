@@ -52,16 +52,23 @@ import { createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Admin client where every query resolves empty except `profiles`, which
- * returns the digest recipients.
+ * returns the digest recipients (or, when `recipientsError` is set, fails
+ * instead of returning rows).
  */
-function mockClient(recipients: Array<{ id: string; email: string | null; first_name: string }>) {
+function mockClient(
+  recipients: Array<{ id: string; email: string | null; first_name: string }>,
+  recipientsError: { message: string } | null = null
+) {
   const from = vi.fn((table: string) => {
     const c: Record<string, unknown> = {};
     const self = () => c;
     for (const method of ["select", "eq", "gte", "lte", "lt", "gt", "in", "order", "neq", "is"]) {
       c[method] = vi.fn(self);
     }
-    const result = table === "profiles" ? { data: recipients, error: null } : { data: [], error: null };
+    const result =
+      table === "profiles"
+        ? { data: recipientsError ? null : recipients, error: recipientsError }
+        : { data: [], error: null };
     c.then = (resolve: (v: typeof result) => unknown) => Promise.resolve(result).then(resolve);
     return c;
   });
@@ -149,6 +156,20 @@ describe("POST /api/admin/daily-summary", () => {
     // delivery, so this stays a success — there was nothing to deliver.
     expect(res.status).toBe(200);
     expect(json).toMatchObject({ success: true, sent: 0 });
+    expect(sendEmailsMock).not.toHaveBeenCalled();
+  });
+
+  test("reports a failed run when the recipients query errors, instead of a silent empty send", async () => {
+    mockClient([], { message: "connection timeout" });
+
+    const res = await POST(cronRequest());
+    const json = await res.json();
+
+    // A DB error on the recipients query must not be mistaken for "zero admins
+    // configured" — that reads as a healthy no-op run and the mailer never gets
+    // a chance to send. This must surface as a failure the heartbeat records.
+    expect(res.status).toBe(500);
+    expect(json).toMatchObject({ success: false });
     expect(sendEmailsMock).not.toHaveBeenCalled();
   });
 });

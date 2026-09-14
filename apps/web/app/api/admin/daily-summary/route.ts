@@ -462,6 +462,21 @@ async function handlePOST(request: Request): Promise<Response> {
   const pendingClassApprovalsCount = pendingClassApprovalsResult.count ?? 0;
 
   // ── Recipients ───────────────────────────────────────────────────────────────
+  // A failed query and a genuinely empty table both produce recipientsResult.data
+  // of []. Without this check they'd be indistinguishable, and a DB error here
+  // would silently fall through to the "no recipients" 200 below, reporting a
+  // healthy cron run even though the digest never had a chance to send.
+  if (recipientsResult.error) {
+    console.error(
+      "[POST /api/admin/daily-summary] recipients fetch error",
+      recipientsResult.error
+    );
+    return Response.json(
+      { success: false, error: "Failed to fetch daily-summary recipients." },
+      { status: 500 }
+    );
+  }
+
   const recipients = (recipientsResult?.data ?? []).filter(
     (r): r is { id: string; email: string; first_name: string } => !!r.email
   );
