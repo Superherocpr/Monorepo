@@ -82,6 +82,31 @@ async function extractRecordCount(response: Response): Promise<number | null> {
 }
 
 /**
+ * Extracts an `error` string from a JSON response body, if one is present.
+ * Lets a non-throwing failure (route returns `{ error }` with a non-2xx
+ * status) log the same detail a thrown exception would, instead of just the
+ * HTTP status code.
+ *
+ * Reads a CLONE of the response so the original body stays unconsumed and the
+ * caller still receives it intact.
+ *
+ * @param response - The response the handler produced.
+ * @returns The `error` field's string value, or null if absent/non-JSON.
+ */
+async function extractErrorMessage(response: Response): Promise<string | null> {
+  try {
+    const body: unknown = await response.clone().json();
+    if (typeof body !== "object" || body === null) return null;
+
+    const error = (body as Record<string, unknown>).error;
+    return typeof error === "string" ? error : null;
+  } catch {
+    // Non-JSON or already-consumed body. Not worth failing the request over.
+    return null;
+  }
+}
+
+/**
  * Writes one heartbeat row. Never throws — a logging failure must not turn a
  * successful job into a failed HTTP response.
  * Side effects: one INSERT into cron_run_log.
@@ -148,7 +173,9 @@ export function withCronHeartbeat<T extends Request>(
       // A non-2xx from the handler is a failed run even though nothing threw —
       // an auth rejection or an upstream error still means the work didn't happen.
       const recordsTouched = response.ok ? await extractRecordCount(response) : null;
-      const errorMessage = response.ok ? null : `HTTP ${response.status}`;
+      const errorMessage = response.ok
+        ? null
+        : (await extractErrorMessage(response)) ?? `HTTP ${response.status}`;
 
       await writeHeartbeat(jobName, response.ok, durationMs, recordsTouched, errorMessage);
       return response;

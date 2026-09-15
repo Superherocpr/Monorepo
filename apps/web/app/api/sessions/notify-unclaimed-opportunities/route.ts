@@ -4,8 +4,11 @@
  * Auth: Authorization: Bearer {CRON_SECRET} only — not manually triggerable by any UI
  *
  * Finds cancelled, still-unassigned sessions starting within 48 hours that
- * haven't been escalated yet, sends one digest email to all super_admins, and
- * marks each session escalated so it isn't re-notified on the next run.
+ * haven't been escalated yet and still have at least one active (non-cancelled)
+ * booking — an empty class has no one to teach, so it's excluded from the
+ * digest and left unmarked, so a booking added later picks it back up. Sends
+ * one digest email to all super_admins covering the rest, and marks those
+ * escalated so they aren't re-notified on the next run.
  *
  * This is pure notification — it never changes session status or auto-cancels
  * anything. A super_admin must decide what to do manually.
@@ -89,6 +92,34 @@ async function handlePOST(request: Request): Promise<Response> {
     return NextResponse.json({ data: { notified: 0 } });
   }
 
+  // An empty cancelled class has no one to teach, so it's not worth escalating.
+  // Left unmarked (not stamped escalated) rather than filtered out of the query
+  // above, so a session that later picks up a booking is picked back up on the
+  // next run instead of being permanently suppressed.
+  const { data: activeBookings, error: bookingsError } = await admin
+    .from("bookings")
+    .select("session_id")
+    .in(
+      "session_id",
+      unclaimed.map((s) => s.id)
+    )
+    .eq("cancelled", false);
+
+  if (bookingsError) {
+    // Fail loudly rather than treating the error as "no active bookings" —
+    // that would silently suppress every escalation and the heartbeat would
+    // still record a healthy "notified: 0" run.
+    console.error("[notify-unclaimed-opportunities] Booking-count query failed:", bookingsError);
+    return NextResponse.json({ data: null, error: "Query failed" }, { status: 500 });
+  }
+
+  const sessionIdsWithBookings = new Set((activeBookings ?? []).map((b) => b.session_id));
+  const toEscalate = unclaimed.filter((s) => sessionIdsWithBookings.has(s.id));
+
+  if (toEscalate.length === 0) {
+    return NextResponse.json({ data: { notified: 0 } });
+  }
+
   // Bail before marking sessions escalated — stamping them without sending the
   // digest would suppress the escalation permanently.
   if (!isEmailConfigured()) {
@@ -105,7 +136,7 @@ async function handlePOST(request: Request): Promise<Response> {
   const superAdminEmails = (superAdmins ?? []).map((p) => p.email).filter(Boolean);
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
 
-  const summaries: UnclaimedOpportunitySummary[] = unclaimed.map((s) => ({
+  const summaries: UnclaimedOpportunitySummary[] = toEscalate.map((s) => ({
     sessionId: s.id,
     className: (s.class_types as unknown as { name: string } | null)?.name ?? "Unknown Class",
     sessionDate: s.starts_at,
@@ -127,14 +158,14 @@ async function handlePOST(request: Request): Promise<Response> {
     .update({ unclaimed_escalation_sent_at: new Date().toISOString() })
     .in(
       "id",
-      unclaimed.map((s) => s.id)
+      toEscalate.map((s) => s.id)
     );
 
   if (markError) {
     console.error("[notify-unclaimed-opportunities] Failed to mark sessions escalated:", markError);
   }
 
-  return NextResponse.json({ data: { notified: unclaimed.length } });
+  return NextResponse.json({ data: { notified: toEscalate.length } });
 }
 
 /**

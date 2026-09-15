@@ -143,9 +143,10 @@ describe("POST /api/sessions/notify-unclaimed-opportunities", () => {
     expect(json.data.notified).toBe(0);
   });
 
-  test("sends a digest and marks sessions escalated when unclaimed sessions are found", async () => {
+  test("sends a digest and marks sessions escalated when a booked unclaimed session is found", async () => {
     const mockFrom = mockFromSequence([
       chain({ data: [UNCLAIMED_SESSION], error: null }), // query unclaimed
+      chain({ data: [{ session_id: UNCLAIMED_SESSION.id }], error: null }), // active bookings
       chain({ data: [{ email: "admin@superherocpr.com" }], error: null }), // super_admins
       chain({ data: null, error: null }), // mark escalated
     ]);
@@ -155,8 +156,8 @@ describe("POST /api/sessions/notify-unclaimed-opportunities", () => {
     const json = await res.json();
     expect(json.data.notified).toBe(1);
 
-    // Third call is the escalation-marking update
-    const updateChain = mockFrom.mock.results[2].value as { update: ReturnType<typeof vi.fn> };
+    // Fourth call is the escalation-marking update
+    const updateChain = mockFrom.mock.results[3].value as { update: ReturnType<typeof vi.fn> };
     expect(updateChain.update).toHaveBeenCalledWith(
       expect.objectContaining({ unclaimed_escalation_sent_at: expect.any(String) })
     );
@@ -179,6 +180,40 @@ describe("POST /api/sessions/notify-unclaimed-opportunities", () => {
     await POST(cronRequest());
 
     // A daily "nothing to report" email is trained-to-ignore within a month.
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  test("does not escalate a cancelled session with no active bookings", async () => {
+    const mockFrom = mockFromSequence([
+      chain({ data: [UNCLAIMED_SESSION], error: null }), // query unclaimed
+      chain({ data: [], error: null }), // no active bookings — class is empty
+    ]);
+
+    const res = await POST(cronRequest());
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.notified).toBe(0);
+
+    // An empty class has no one to teach — no digest, and the session must be
+    // left unmarked so a booking added later still triggers the escalation.
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    const updateCalls = mockFrom.mock.calls.filter((c) => c[0] === "class_sessions").length;
+    // Only the initial select query against class_sessions ran; no update call.
+    expect(updateCalls).toBe(1);
+  });
+
+  test("returns 500 and sends no digest when the booking-count query fails", async () => {
+    mockFromSequence([
+      chain({ data: [UNCLAIMED_SESSION], error: null }), // query unclaimed
+      chain({ data: null, error: { message: "DB error" } }), // booking-count query fails
+    ]);
+
+    const res = await POST(cronRequest());
+    expect(res.status).toBe(500);
+
+    // A failed booking-count lookup must not be mistaken for "no active
+    // bookings" — that would silently suppress every escalation while the
+    // heartbeat still logs a healthy run.
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 

@@ -128,11 +128,24 @@ describe("withCronHeartbeat", () => {
     expect(insert.mock.calls[0][0].records_touched).toBeNull();
   });
 
-  test("treats a non-2xx response as a failed run", async () => {
+  test("treats a non-2xx response as a failed run and captures its error field", async () => {
     const { insert } = stubAdmin();
     const handler = vi
       .fn()
       .mockResolvedValue(Response.json({ error: "nope" }, { status: 500 }));
+
+    await withCronHeartbeat("some-job", handler)(cronRequest());
+
+    const row = insert.mock.calls[0][0];
+    expect(row.ok).toBe(false);
+    expect(row.error_message).toBe("nope");
+  });
+
+  test("falls back to the HTTP status when a non-2xx body has no error field", async () => {
+    const { insert } = stubAdmin();
+    const handler = vi
+      .fn()
+      .mockResolvedValue(Response.json({ message: "nothing useful" }, { status: 500 }));
 
     await withCronHeartbeat("some-job", handler)(cronRequest());
 
