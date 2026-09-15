@@ -362,7 +362,7 @@ bookings.
 
 | Feature | U | E | C | A | I | M | Verdict |
 |---|---|---|---|---|---|---|---|
-| Sessions & scheduling | ✅✅ | ○ smoke | ✅ | ✅ | ✅✅ | — | Cron covers unclaimed escalation only |
+| Sessions & scheduling | ✅✅ | ○ smoke | ✅ | ✅ | ✅✅ | — | Cron covers unclaimed escalation only. 2026-09-15: escalation digest now skips cancelled sessions with zero active bookings (was emailing super_admins about empty classes with no one to teach); unmarked rather than filtered so a later booking still triggers escalation |
 | **Class time correctness** | ✅✅ | — | — | ✅ | — | — | ⚠️ Unit-only; call-site gap fired 2026-08-23 — see note below |
 | Class requests | — | — | — | ✅ | — | — | No test of any kind |
 | **Class finder walkthrough** | ✅✅ | **● outcome** | — | ✅ | — | — | ✅ Shipped 2026-09-08. Every branch asserted to its terminal destination; the course name only renders when a mapped slug resolved against the live catalog, so slug drift fails the suite. See note below |
