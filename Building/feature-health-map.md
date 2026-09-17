@@ -711,7 +711,7 @@ notice. The stamp now happens only after a confirmed send.
 | Blog / SEO | — | — | — | ✅ | — | ✅ | No test; quarterly Lighthouse |
 | Analytics | — | ○ smoke | — | ✅ | — | — | — |
 | File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
-| **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | Two tours shipped (create-session, team-booking); TourButton logic unit-tested; no outcome e2e yet, see note below |
+| **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | Three tours shipped (create-session, team-booking, add-student); TourButton logic unit-tested; no outcome e2e yet, see note below |
 
 ### Staff self-service account (added 2026-08-28)
 
@@ -783,15 +783,16 @@ page's model instead, per direct request.)
   URL; a non-matching or absent param does not auto-start; unmounting
   destroys an in-progress tour but not one that never started.
 
-**Not covered.** No outcome e2e test drives either walkthrough end to end
-(open How-To Guides → click Start → confirm the Driver.js overlay highlights
-the right element on `/admin/sessions/new`). `// TODO:` this repo has no
-seeded instructor-role Playwright auth fixture yet (only `tests/auth/customer.setup.ts`
+**Not covered.** No outcome e2e test drives any of the three walkthroughs
+end to end (open How-To Guides → click Start → confirm the Driver.js
+overlay highlights the right element). `// TODO:` this repo has no seeded
+instructor-role Playwright auth fixture yet (only `tests/auth/customer.setup.ts`
 and `tests/auth/admin.setup.ts` exist), so this needs a `tests/auth/instructor.setup.ts`
 fixture before an outcome test modelled on `tests/e2e/rollcall.spec.ts` can be
 written. Until then, the component test above is the only automated signal
-that either tour's copy or `data-tour` targets haven't drifted from
-`CreateSessionClient.tsx`'s real fields.
+that any tour's copy or `data-tour` targets haven't drifted from the real
+fields they target across `CreateSessionClient.tsx` and
+`SessionDetailClient.tsx`.
 
 #### First real tour: "Submit a Class Session for Approval" (added 2026-09-17)
 
@@ -846,6 +847,44 @@ button rather than following through to what happens after. Verified by
 hand up to that exact point (real submit click → real modal → tour
 correctly spotlights the real confirm button) without ever clicking it, so
 no test data was actually submitted during verification.
+
+#### Third tour: "Add a Student to a Class" (added 2026-09-17)
+
+`TOURS` gained a third entry (`id: "add-student"`, `roles: ["instructor",
+"manager", "super_admin"]`), pointing at `/admin/sessions` — a deliberate
+departure from the first two tours. "Add Student" only exists on a specific
+session's detail page (`/admin/sessions/[id]`), and there's no single
+"right" session to deep-link into from a static registry entry, so this
+tour uses a two-hop entry instead of the `?tour=` auto-launch pattern: the
+How-To Guides card sends the user to the sessions list with copy telling
+them to click into any session, where a `TourButton` (gated by the same
+`canAddStudents` check as the "Add Student" button itself) is waiting to be
+clicked manually. New file `addStudentTourSteps.ts` exports
+`getAddStudentSteps(canAddWithoutCharging: boolean)`, a function rather
+than a static array, since three of its seven steps carry genuinely
+different copy for managers/super_admins (who also get a free "Add"
+shortcut per search result) versus instructors (whose only path is the
+charge panel) — simpler and more robust than trying to target the free
+"Add" button via `skipMissingElement`, since it's a per-row element with no
+single stable target. The steps array is memoized with `useMemo` in
+`SessionDetailClient.tsx`, unlike the first two tours' module-level
+constants, specifically so `TourButton`'s auto-launch effect (keyed on the
+steps reference) doesn't re-fire on every render of this frequently-updating
+component.
+
+This is the highest-stakes tour yet: submitting the charge panel captures a
+real PayPal card charge immediately, with no second confirmation step
+anywhere in the flow. The final step highlights the card fields and Charge
+button together (one combined `data-tour="add-student-payment"` wrapper
+around wherever `CardPaymentSection`/`MockCardPaymentSection` renders,
+added only in `SessionDetailClient.tsx` — nothing inside those shared
+payment components was touched) with warning copy and is never clicked
+during the walkthrough itself, by design. Verified live as super_admin
+through all 7 steps, including confirming this specific environment is
+**not** running mock payments (real Visa/Mastercard/Amex/Discover fields,
+no amber "Mock payments active" banner) — closed the modal at the final
+step without ever touching the real Charge button, so no card was actually
+charged during verification.
 
 ---
 

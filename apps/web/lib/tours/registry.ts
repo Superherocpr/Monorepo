@@ -40,6 +40,14 @@ export const TOURS: TourDefinition[] = [
     roles: ["instructor", "manager", "super_admin"],
     href: "/admin/sessions/new?team=1&tour=team-booking",
   },
+  {
+    id: "add-student",
+    title: "Add a Student to a Class",
+    description:
+      'Click into any class session, then use "Need help?" on that page to walk through searching for a student and adding them.',
+    roles: ["instructor", "manager", "super_admin"],
+    href: "/admin/sessions",
+  },
 ];
 
 /**
