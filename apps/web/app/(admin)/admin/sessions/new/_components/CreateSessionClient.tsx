@@ -20,6 +20,7 @@ import AddLocationPanel, { type NewLocationResult } from "@/app/(admin)/_compone
 import { toFloatingISO, addFloatingMinutes } from "@/lib/business-time";
 import TourButton from "@/components/tours/TourButton";
 import { CREATE_SESSION_STEPS } from "./tourSteps";
+import { TEAM_BOOKING_STEPS } from "./teamBookingTourSteps";
 
 /** A class type option for the dropdown. */
 export interface ClassTypeOption {
@@ -701,8 +702,10 @@ export default function CreateSessionClient({
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {isInstructor && !isTeam && (
-            <TourButton id="create-session" steps={CREATE_SESSION_STEPS} />
+          {isTeam ? (
+            <TourButton id="team-booking" steps={TEAM_BOOKING_STEPS} />
+          ) : (
+            isInstructor && <TourButton id="create-session" steps={CREATE_SESSION_STEPS} />
           )}
           <Link
             href="/admin/sessions"
@@ -727,7 +730,10 @@ export default function CreateSessionClient({
       )}
 
       {/* Team/corporate toggle: switches this form between the two modes */}
-      <label className="flex items-start gap-3 bg-white border border-gray-200 rounded-lg px-4 py-3 cursor-pointer">
+      <label
+        className="flex items-start gap-3 bg-white border border-gray-200 rounded-lg px-4 py-3 cursor-pointer"
+        data-tour="team-toggle"
+      >
         <input
           type="checkbox"
           checked={isTeam}
@@ -778,7 +784,7 @@ export default function CreateSessionClient({
           <div className="space-y-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
             <p className="text-sm font-semibold text-gray-900">Company details</p>
 
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5" data-tour="team-company">
               <label htmlFor="cs-company" className="text-sm font-medium text-gray-700">
                 Company Name <span className="text-red-500">*</span>
               </label>
@@ -793,7 +799,7 @@ export default function CreateSessionClient({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5" data-tour="team-contact-name">
                 <label htmlFor="cs-contact-name" className="text-sm font-medium text-gray-700">
                   Contact Name <span className="text-red-500">*</span>
                 </label>
@@ -807,7 +813,7 @@ export default function CreateSessionClient({
                 />
               </div>
 
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5" data-tour="team-contact-phone">
                 <label htmlFor="cs-contact-phone" className="text-sm font-medium text-gray-700">
                   Contact Phone <span className="text-red-500">*</span>
                 </label>
@@ -822,7 +828,7 @@ export default function CreateSessionClient({
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5" data-tour="team-contact-email">
               <label htmlFor="cs-contact-email" className="text-sm font-medium text-gray-700">
                 Contact Email <span className="text-red-500">*</span>
               </label>
@@ -837,7 +843,7 @@ export default function CreateSessionClient({
             </div>
 
             {/* Payment mode: decides who gets billed and what employees see */}
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2" data-tour="team-payment-mode">
               <span className="text-sm font-medium text-gray-700">Who is paying?</span>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {(
@@ -884,7 +890,7 @@ export default function CreateSessionClient({
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5" data-tour="team-price">
               <label htmlFor="cs-team-price" className="text-sm font-medium text-gray-700">
                 {teamForm.payment_mode === "company"
                   ? "Total Price"
@@ -1415,6 +1421,7 @@ export default function CreateSessionClient({
               </button>
               <button
                 type="button"
+                data-tour="team-confirm-submit"
                 onClick={() => {
                   setShowTeamReminder(false);
                   if (pendingPayload) void submitPayload(pendingPayload);

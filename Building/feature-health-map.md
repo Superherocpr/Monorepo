@@ -711,7 +711,7 @@ notice. The stamp now happens only after a confirmed send.
 | Blog / SEO | — | — | — | ✅ | — | ✅ | No test; quarterly Lighthouse |
 | Analytics | — | ○ smoke | — | ✅ | — | — | — |
 | File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
-| **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | First real tour shipped (create-session); TourButton logic unit-tested; no outcome e2e yet, see note below |
+| **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | Two tours shipped (create-session, team-booking); TourButton logic unit-tested; no outcome e2e yet, see note below |
 
 ### Staff self-service account (added 2026-08-28)
 
@@ -779,14 +779,14 @@ role).
   URL; a non-matching or absent param does not auto-start; unmounting
   destroys an in-progress tour but not one that never started.
 
-**Not covered.** No outcome e2e test drives the actual walkthrough end to end
+**Not covered.** No outcome e2e test drives either walkthrough end to end
 (open How-To Guides → click Start → confirm the Driver.js overlay highlights
 the right element on `/admin/sessions/new`). `// TODO:` this repo has no
 seeded instructor-role Playwright auth fixture yet (only `tests/auth/customer.setup.ts`
 and `tests/auth/admin.setup.ts` exist), so this needs a `tests/auth/instructor.setup.ts`
 fixture before an outcome test modelled on `tests/e2e/rollcall.spec.ts` can be
 written. Until then, the component test above is the only automated signal
-that this specific tour's copy or `data-tour` targets haven't drifted from
+that either tour's copy or `data-tour` targets haven't drifted from
 `CreateSessionClient.tsx`'s real fields.
 
 #### First real tour: "Submit a Class Session for Approval" (added 2026-09-17)
@@ -803,6 +803,31 @@ type with eligible add-ons is picked. `TourButton` also gained the
 `?tour=` auto-launch behavior described above, specifically so this entry's
 "Start" link in How-To Guides launches immediately rather than requiring a
 second click on the target page.
+
+#### Second tour: "Create a Team or Corporate Booking" (added 2026-09-17)
+
+`TOURS` gained a second entry (`id: "team-booking"`, `roles: ["instructor",
+"manager", "super_admin"]`), pointing at
+`/admin/sessions/new?team=1&tour=team-booking`. `tourSteps.ts` was refactored
+to export each step as an individually-named constant so this tour could
+reuse the fields that behave identically in team mode (Class Type,
+Instructor, Location, Date, Start Time, Duration, Max Capacity, Discount)
+instead of forking their copy; the shared Instructor step gained
+`skipMissingElement: true` since its target only exists for the instructor
+role, and this tour (unlike the first) is available to all three. Eight new
+`data-tour` attributes cover the company-details block, the payment-mode
+picker, the price field, and the real confirmation modal's "Yes, create it"
+button. 17 steps total.
+
+The tour deliberately ends at that confirmation button, not the post-submit
+success screen: clicking it fires a real `POST /api/team-bookings` that can
+send a real email and raise a real invoice, and reaching the screen that
+follows would need Driver.js's `waitForElement` to bridge that network gap
+for no real benefit, since the first tour also stops at its own Submit
+button rather than following through to what happens after. Verified by
+hand up to that exact point (real submit click → real modal → tour
+correctly spotlights the real confirm button) without ever clicking it, so
+no test data was actually submitted during verification.
 
 ---
 

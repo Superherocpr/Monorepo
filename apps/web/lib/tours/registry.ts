@@ -32,6 +32,14 @@ export const TOURS: TourDefinition[] = [
     roles: ["instructor"],
     href: "/admin/sessions/new?tour=create-session",
   },
+  {
+    id: "team-booking",
+    title: "Create a Team or Corporate Booking",
+    description:
+      "Walks you through setting up a private class for a company, from entering their contact details to sending the signup link.",
+    roles: ["instructor", "manager", "super_admin"],
+    href: "/admin/sessions/new?team=1&tour=team-booking",
+  },
 ];
 
 /** Human-readable label for each role, used to group the "all roles" view. */
