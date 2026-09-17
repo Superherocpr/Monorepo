@@ -66,6 +66,66 @@ body {
   @apply bg-gray-950 text-white;
 }
 
+/*
+ * Driver.js (components/tours/TourButton.tsx) ships its own light-only
+ * popover styling with no dark mode variant, so it must be overridden here
+ * rather than via Tailwind utility classes on the (library-rendered) DOM.
+ * The arrow's visible border side is set to match --driver-popover-bg so it
+ * still reads as attached to the popover card.
+ */
+.dark .driver-popover {
+  --driver-popover-bg: #262626;
+  background-color: var(--driver-popover-bg);
+  color: #f1f1f1;
+}
+
+.dark .driver-popover-title {
+  color: #f1f1f1;
+}
+
+.dark .driver-popover-description {
+  color: #d4d4d4;
+}
+
+.dark .driver-popover-progress-text {
+  color: #a3a3a3;
+}
+
+.dark .driver-popover-footer-btn {
+  background-color: #363636;
+  border-color: #525252;
+  color: #f1f1f1;
+}
+
+.dark .driver-popover-footer-btn:hover,
+.dark .driver-popover-footer-btn:focus {
+  background-color: #404040;
+}
+
+.dark .driver-popover-close-btn {
+  color: #a3a3a3;
+}
+
+.dark .driver-popover-close-btn:hover,
+.dark .driver-popover-close-btn:focus {
+  color: #f1f1f1;
+}
+
+/* Each side shows exactly one visible border edge; the other three stay
+   transparent per driver.css, so only that edge needs recoloring here. */
+.dark .driver-popover-arrow-side-left {
+  border-left-color: var(--driver-popover-bg);
+}
+.dark .driver-popover-arrow-side-right {
+  border-right-color: var(--driver-popover-bg);
+}
+.dark .driver-popover-arrow-side-top {
+  border-top-color: var(--driver-popover-bg);
+}
+.dark .driver-popover-arrow-side-bottom {
+  border-bottom-color: var(--driver-popover-bg);
+}
+
 /* ── Blog post prose styles ──────────────────────────────────────────────────
    Applied to .blog-content wrapper in BlogPostContent. Matches the brand
    typography without pulling in the full @tailwindcss/typography plugin. */

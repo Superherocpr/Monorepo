@@ -543,6 +543,8 @@ export const GROUPS: GroupDef[] = [
           { text: "Payouts tab: shows what each platform fee percentage actually nets after PayPal's fees, and warns if the fee is set below break-even", role: "super" },
           { text: "Payouts tab: warns when Immediate mode would cost more in PayPal payout fees than batching the same payments", role: "super" },
           { text: "Payouts tab: includes the full upcoming-payouts and payout-history panels, the same ones on the Payouts page", role: "super" },
+          "How-To Guides tab: step-by-step walkthroughs that highlight the real page elements for a task, one at a time, until it's done",
+          { text: "How-To Guides tab: managers and super admins see every walkthrough across all roles, grouped by role, instead of just their own", role: "manager" },
         ],
       },
       {

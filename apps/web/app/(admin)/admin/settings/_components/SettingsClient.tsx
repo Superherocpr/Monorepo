@@ -14,6 +14,7 @@ import { CheckCircle, AlertCircle } from "lucide-react";
 import ClassTypePanel from "./ClassTypePanel";
 import ClassTypeImportPanel from "./ClassTypeImportPanel";
 import AddonPanel from "./AddonPanel";
+import WalkthroughsPanel from "@/components/tours/WalkthroughsPanel";
 import type { ClassType, CertTypeOption, PresetGrade, Addon } from "../page";
 
 /** Nav page keys that correspond to toggleable public routes. */
@@ -123,7 +124,8 @@ type SettingsTabId =
   | "social"
   | "locations"
   | "enrollware"
-  | "payouts";
+  | "payouts"
+  | "how-to-guides";
 
 /** Tab nav definition: label + id pairs in display order. */
 interface TabDef {
@@ -237,6 +239,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
     { id: "zoho", label: "Zoho Mail" },
     ...(payoutsSlot ? [{ id: "payouts" as const, label: "Payouts" }] : []),
     ...(enrollwareSlot ? [{ id: "enrollware" as const, label: "Enrollware" }] : []),
+    { id: "how-to-guides", label: "How-To Guides" },
   ];
 
   /** Returns the className applied to a section wrapper based on active tab. */
@@ -1615,6 +1618,11 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
           {enrollwareSlot}
         </section>
       )}
+
+      {/* ── Section 10: How-To Guides ─────────────────────────────────────── */}
+      <section className={tabClass("how-to-guides")}>
+        <WalkthroughsPanel viewerRole="super_admin" showAllRoles />
+      </section>
 
       <ClassTypePanel
         open={classTypePanelOpen}

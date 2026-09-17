@@ -12,8 +12,9 @@
 import React, { useState } from "react";
 import BioSettingsSection from "./BioSettingsSection";
 import AccountSettingsSection from "./AccountSettingsSection";
+import WalkthroughsPanel from "@/components/tours/WalkthroughsPanel";
 
-type TabId = "account" | "enrollware" | "about";
+type TabId = "account" | "enrollware" | "about" | "how-to-guides";
 
 interface TabDef {
   id: TabId;
@@ -50,6 +51,7 @@ const TABS: TabDef[] = [
   { id: "account", label: "Account" },
   { id: "about", label: "About Page" },
   { id: "enrollware", label: "Enrollware" },
+  { id: "how-to-guides", label: "How-To Guides" },
 ];
 
 /**
@@ -179,6 +181,15 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
         className={activeTab === "enrollware" ? "" : "hidden"}
       >
         {enrollwareSlot}
+      </div>
+
+      <div
+        id="tab-panel-how-to-guides"
+        role="tabpanel"
+        aria-labelledby="tab-how-to-guides"
+        className={activeTab === "how-to-guides" ? "" : "hidden"}
+      >
+        <WalkthroughsPanel viewerRole="instructor" />
       </div>
 
       {/* Toast */}

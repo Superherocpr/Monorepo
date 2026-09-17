@@ -18,6 +18,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AddLocationPanel, { type NewLocationResult } from "@/app/(admin)/_components/AddLocationPanel";
 import { toFloatingISO, addFloatingMinutes } from "@/lib/business-time";
+import TourButton from "@/components/tours/TourButton";
+import { CREATE_SESSION_STEPS } from "./tourSteps";
 
 /** A class type option for the dropdown. */
 export interface ClassTypeOption {
@@ -698,12 +700,17 @@ export default function CreateSessionClient({
               : "New sessions are submitted for approval before appearing on the public schedule."}
           </p>
         </div>
-        <Link
-          href="/admin/sessions"
-          className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          ← Back to sessions
-        </Link>
+        <div className="flex items-center gap-4">
+          {isInstructor && !isTeam && (
+            <TourButton id="create-session" steps={CREATE_SESSION_STEPS} />
+          )}
+          <Link
+            href="/admin/sessions"
+            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            ← Back to sessions
+          </Link>
+        </div>
       </div>
 
       {/* Bulk creation prompt: not relevant while building a single team booking */}
@@ -912,7 +919,7 @@ export default function CreateSessionClient({
         )}
 
         {/* Class Type */}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-tour="session-class-type">
           <label htmlFor="cs-class-type" className="text-sm font-medium text-gray-700">
             Class Type <span className="text-red-500">*</span>
           </label>
@@ -955,7 +962,7 @@ export default function CreateSessionClient({
           </div>
         ) : (
           /* Instructors always create sessions for themselves: confirm who that is. */
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5" data-tour="session-instructor">
             <span className="text-sm font-medium text-gray-700">Instructor</span>
             <div className="border border-gray-200 bg-gray-50 rounded-lg px-3 py-2.5 text-sm text-gray-700">
               {instructorName ?? "You"}
@@ -964,7 +971,7 @@ export default function CreateSessionClient({
         )}
 
         {/* Location */}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-tour="session-location">
           <div className="flex items-center justify-between">
             <label htmlFor="cs-location" className="text-sm font-medium text-gray-700">
               Location <span className="text-red-500">*</span>
@@ -995,7 +1002,7 @@ export default function CreateSessionClient({
 
         {/* Date + Start time: side by side */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5" data-tour="session-date">
             <label htmlFor="cs-date" className="text-sm font-medium text-gray-700">
               Date <span className="text-red-500">*</span>
             </label>
@@ -1009,7 +1016,7 @@ export default function CreateSessionClient({
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5" data-tour="session-start-time">
             <label htmlFor="cs-start-time" className="text-sm font-medium text-gray-700">
               Start Time <span className="text-red-500">*</span>
             </label>
@@ -1027,7 +1034,7 @@ export default function CreateSessionClient({
         {/* Duration + Capacity: side by side */}
         <div className="space-y-1.5">
           <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5" data-tour="session-duration">
               <label htmlFor="cs-duration" className="text-sm font-medium text-gray-700">
                 Duration (hours) <span className="text-red-500">*</span>
               </label>
@@ -1048,7 +1055,7 @@ export default function CreateSessionClient({
               )}
             </div>
 
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5" data-tour="session-capacity">
               <label htmlFor="cs-capacity" className="text-sm font-medium text-gray-700">
                 Max Capacity <span className="text-red-500">*</span>
               </label>
@@ -1074,7 +1081,7 @@ export default function CreateSessionClient({
         </div>
 
         {/* Discount (optional) */}
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2" data-tour="session-discount">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-gray-700">
               Discount{" "}
@@ -1273,7 +1280,7 @@ export default function CreateSessionClient({
           const eligibleAddons = addons.filter((a) => eligibleAddonIds.includes(a.id));
           if (eligibleAddons.length === 0) return null;
           return (
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5" data-tour="session-addons">
               <p className="text-sm font-medium text-gray-700">
                 Add-ons <span className="text-gray-400 font-normal">(optional)</span>
               </p>
@@ -1324,6 +1331,7 @@ export default function CreateSessionClient({
           <button
             type="submit"
             disabled={loading}
+            data-tour="session-submit"
             className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition-colors duration-150 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
           >
             {loading

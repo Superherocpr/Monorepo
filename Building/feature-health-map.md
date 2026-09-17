@@ -711,6 +711,7 @@ notice. The stamp now happens only after a confirmed send.
 | Blog / SEO | — | — | — | ✅ | — | ✅ | No test; quarterly Lighthouse |
 | Analytics | — | ○ smoke | — | ✅ | — | — | — |
 | File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
+| **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | First real tour shipped (create-session); TourButton logic unit-tested; no outcome e2e yet, see note below |
 
 ### Staff self-service account (added 2026-08-28)
 
@@ -754,6 +755,54 @@ front-end regression (a field that silently stops submitting) would not be
 caught by anything here — the invariant only proves the two tables agree, not
 that a save did what the user asked. `// TODO:` an outcome e2e test for the
 Account tab, modelled on `tests/e2e/rollcall.spec.ts`, is the honest fill.
+
+---
+
+### Instructor walkthroughs / How-To Guides tab (added 2026-09-17)
+
+`components/tours/TourButton.tsx` wraps Driver.js so any admin page can offer a
+step-by-step walkthrough of a real task. `lib/tours/registry.ts` is the
+discovery manifest, and `components/tours/WalkthroughsPanel.tsx` renders it as
+a "How-To Guides" tab on `/admin/settings` for all three roles (instructor:
+own walkthroughs only; manager and super_admin: every walkthrough, grouped by
+role).
+
+**Signals added:**
+
+- **U** — `tests/unit/lib/tours-registry.test.ts` covers `toursForRole` and
+  `toursGroupedByRole`: role filtering, multi-role sharing, and that a role
+  with no matching walkthroughs is omitted rather than shown as an empty group.
+- **U** — `tests/unit/components/TourButton.test.tsx` covers `TourButton`'s
+  own logic, the part this codebase actually wrote (Driver.js itself is a
+  tested third-party library): clicking starts a tour with the given steps; a
+  matching `?tour=<id>` URL param auto-starts once and strips itself from the
+  URL; a non-matching or absent param does not auto-start; unmounting
+  destroys an in-progress tour but not one that never started.
+
+**Not covered.** No outcome e2e test drives the actual walkthrough end to end
+(open How-To Guides → click Start → confirm the Driver.js overlay highlights
+the right element on `/admin/sessions/new`). `// TODO:` this repo has no
+seeded instructor-role Playwright auth fixture yet (only `tests/auth/customer.setup.ts`
+and `tests/auth/admin.setup.ts` exist), so this needs a `tests/auth/instructor.setup.ts`
+fixture before an outcome test modelled on `tests/e2e/rollcall.spec.ts` can be
+written. Until then, the component test above is the only automated signal
+that this specific tour's copy or `data-tour` targets haven't drifted from
+`CreateSessionClient.tsx`'s real fields.
+
+#### First real tour: "Submit a Class Session for Approval" (added 2026-09-17)
+
+`TOURS` in the registry now has its first entry (`id: "create-session"`,
+`roles: ["instructor"]`), pointing at `/admin/sessions/new?tour=create-session`.
+Ten `data-tour="..."` attributes were added to `CreateSessionClient.tsx`'s
+required-field wrappers, its Discount and Add-ons sections, and its submit
+button (steps defined in the sibling `tourSteps.ts`); Notes and team-booking
+mode are the only things intentionally skipped, to keep the walkthrough
+focused on what's needed to get a session pending approval. The Add-ons step
+uses `skipMissingElement: true` since that section only renders once a class
+type with eligible add-ons is picked. `TourButton` also gained the
+`?tour=` auto-launch behavior described above, specifically so this entry's
+"Start" link in How-To Guides launches immediately rather than requiring a
+second click on the target page.
 
 ---
 

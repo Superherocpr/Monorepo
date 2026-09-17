@@ -17,6 +17,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getSetting } from "@/lib/zoho";
 import SettingsClient from "./_components/SettingsClient";
 import InstructorSettingsClient from "./_components/InstructorSettingsClient";
+import ManagerSettingsClient from "./_components/ManagerSettingsClient";
 import PayoutSettingsPanel from "./_components/PayoutSettingsPanel";
 import BookmarkletSetup from "@/app/(admin)/admin/enrollware-tool/_components/BookmarkletSetup";
 import LocationsClient, {
@@ -187,7 +188,7 @@ export default async function SettingsPage({
             Admin feature reference →
           </a>
         </div>
-        <LocationsClient initialLocations={locations} userRole="manager" />
+        <ManagerSettingsClient initialLocations={locations} />
       </div>
     );
   }
