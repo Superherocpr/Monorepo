@@ -3,17 +3,21 @@
 /**
  * SettingsClient component
  * Full client component owning all state and mutations for the settings page.
- * Sections: Appearance (dark mode), Class Types, Preset Grades, Zoho Mail,
- *           Social Feed, Locations, and Enrollware.
+ * Sections: Appearance (dark mode), Class Types, Preset Grades, Locations,
+ *           Enrollware, and Social Feed.
  * Used by: /admin/settings/page.tsx
+ * Zoho Mail connect/disconnect is intentionally not managed here: the owner
+ * never needs to disconnect it from this page, and connecting still works
+ * via /api/contact/zoho-auth if it's ever needed (linked from nowhere in the
+ * UI on purpose). The Contact page independently checks connection status.
  */
 
 import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, AlertCircle } from "lucide-react";
 import ClassTypePanel from "./ClassTypePanel";
 import ClassTypeImportPanel from "./ClassTypeImportPanel";
 import AddonPanel from "./AddonPanel";
+import WalkthroughsPanel from "@/components/tours/WalkthroughsPanel";
 import type { ClassType, CertTypeOption, PresetGrade, Addon } from "../page";
 
 /** Nav page keys that correspond to toggleable public routes. */
@@ -82,10 +86,6 @@ interface SettingsClientProps {
   /** The full add-on catalog: used by the Add-ons section and the ClassTypePanel eligibility checklist. */
   addons: Addon[];
   presetGrades: PresetGrade[];
-  zohoConnected: boolean;
-  zohoEmail: string | null;
-  /** Value of the ?zoho= query param: "connected" | "error" | null */
-  zohoParam: string | null;
   /** Initial value of the legacy_site_enabled system_settings flag. */
   legacySiteEnabled: boolean;
   /** Whether the current user is a super_admin: gates the Legacy Site section. */
@@ -119,11 +119,11 @@ type SettingsTabId =
   | "general"
   | "class-types"
   | "grades"
-  | "zoho"
-  | "social"
   | "locations"
   | "enrollware"
-  | "payouts";
+  | "payouts"
+  | "how-to-guides"
+  | "social";
 
 /** Tab nav definition: label + id pairs in display order. */
 interface TabDef {
@@ -159,9 +159,6 @@ interface EditingGrade {
  * Root settings client component. Owns all section state.
  * @param classTypes - All class types fetched server-side.
  * @param presetGrades - All preset grades fetched server-side, ordered by value.
- * @param zohoConnected - Whether a Zoho account is currently linked.
- * @param zohoEmail - The Zoho account email if connected.
- * @param zohoParam - The ?zoho= query param from OAuth redirects.
  * @param isSuperAdmin - Whether the current user is a super_admin. Gates the Legacy Site section.
  */
 const SettingsClient: React.FC<SettingsClientProps> = ({
@@ -169,9 +166,6 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   certTypeOptions,
   addons: initialAddons,
   presetGrades: initialPresetGrades,
-  zohoConnected: initialZohoConnected,
-  zohoEmail,
-  zohoParam,
   legacySiteEnabled: initialLegacySiteEnabled,
   isSuperAdmin,
   initialNavVisibility,
@@ -184,19 +178,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   // ── Toast ──────────────────────────────────────────────────────────────────
   // Declared up here because handlers throughout the component call showToast;
   // the react-hooks/immutability rule wants it defined before its first use.
-  //
-  // A Zoho OAuth redirect lands with ?zoho=connected|error, and the resulting
-  // banner is seeded straight into the initial state instead of being pushed in
-  // from an effect on mount: so it is on screen for the first painted frame.
-  const [toast, setToast] = useState<Toast | null>(() => {
-    if (zohoParam === "connected") {
-      return { type: "success", message: "Zoho Mail connected successfully." };
-    }
-    if (zohoParam === "error") {
-      return { type: "error", message: "Zoho connection failed. Please try again." };
-    }
-    return null;
-  });
+  const [toast, setToast] = useState<Toast | null>(null);
 
   /**
    * Shows a toast notification. Success toasts auto-dismiss via the effect below.
@@ -215,13 +197,6 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // Strip the OAuth result param so a reload does not re-show the banner.
-  useEffect(() => {
-    if (zohoParam) {
-      window.history.replaceState({}, "", "/admin/settings");
-    }
-  }, [zohoParam]);
-
   // ── Tabs ───────────────────────────────────────────────────────────────────
   // We render every section all the time (just hide inactive ones with CSS) so
   // that in-progress edits: drafted grades, dirty toggles, etc.: survive a
@@ -233,10 +208,10 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
     { id: "class-types", label: "Class Types" },
     ...(locationsSlot ? [{ id: "locations" as const, label: "Locations" }] : []),
     { id: "grades", label: "Grades" },
-    { id: "social", label: "Social Feed" },
-    { id: "zoho", label: "Zoho Mail" },
     ...(payoutsSlot ? [{ id: "payouts" as const, label: "Payouts" }] : []),
     ...(enrollwareSlot ? [{ id: "enrollware" as const, label: "Enrollware" }] : []),
+    { id: "how-to-guides", label: "How-To Guides" },
+    { id: "social", label: "Social Feed" },
   ];
 
   /** Returns the className applied to a section wrapper based on active tab. */
@@ -404,15 +379,6 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
   const [deletingGradeId, setDeletingGradeId] = useState<string | null>(null);
   const [addingGrade, setAddingGrade] = useState(false);
   const draftValueRef = useRef<HTMLInputElement>(null);
-
-  // ── Zoho ───────────────────────────────────────────────────────────────────
-  // Seeded from the server prop, except that a successful OAuth redirect lands
-  // before that prop reflects the new link: so ?zoho=connected wins on the
-  // first render. Kept in state because disconnecting flips it back locally.
-  const [zohoConnected, setZohoConnected] = useState(
-    initialZohoConnected || zohoParam === "connected"
-  );
-  const [disconnectingZoho, setDisconnectingZoho] = useState(false);
 
   // ── Social feed refresh ───────────────────────────────────────────────────
   const [refreshingFeed, setRefreshingFeed] = useState(false);
@@ -743,32 +709,6 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       showToast("error", "Something went wrong. Please try again.");
     } finally {
       setAddingGrade(false);
-    }
-  }
-
-  // ── Zoho actions ───────────────────────────────────────────────────────────
-
-  /**
-   * Disconnects Zoho Mail by clearing tokens from system_settings.
-   * Calls DELETE /api/settings/zoho/disconnect.
-   */
-  async function handleDisconnectZoho() {
-    setDisconnectingZoho(true);
-    try {
-      const res = await fetch("/api/settings/zoho/disconnect", {
-        method: "DELETE",
-      });
-      const data: { success: boolean; error?: string } = await res.json();
-      if (!res.ok || !data.success) {
-        showToast("error", data.error ?? "Failed to disconnect Zoho.");
-      } else {
-        setZohoConnected(false);
-        showToast("success", "Zoho Mail disconnected.");
-      }
-    } catch {
-      showToast("error", "Something went wrong. Please try again.");
-    } finally {
-      setDisconnectingZoho(false);
     }
   }
 
@@ -1499,66 +1439,33 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         </div>
       </section>
 
-      {/* ── Section 4: Zoho Mail ───────────────────────────────────────────── */}
-      <section aria-labelledby="section-zoho" className={tabClass("zoho")}>
-        <div className="mb-4">
-          <h2
-            id="section-zoho"
-            className="text-lg font-semibold text-gray-900 dark:text-white"
-          >
-            Zoho Mail
-          </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Used for replying to contact form submissions at /admin/contact. All other
-            emails go through Resend.
-          </p>
-        </div>
+      {/* ── Section 4: Locations (optional slot) ──────────────────────────── */}
+      {locationsSlot && (
+        <section className={tabClass("locations")}>
+          {locationsSlot}
+        </section>
+      )}
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
-          {zohoConnected ? (
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                    Connected
-                  </p>
-                  {zohoEmail && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      Account: {zohoEmail}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={handleDisconnectZoho}
-                disabled={disconnectingZoho}
-                className="text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
-              >
-                {disconnectingZoho ? "Disconnecting…" : "Disconnect"}
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-gray-400 shrink-0" />
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Not connected
-                </p>
-              </div>
-              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- OAuth redirect requires full browser navigation; Next Link would intercept it */}
-              <a
-                href="/api/contact/zoho-auth"
-                className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-              >
-                Connect Zoho Mail →
-              </a>
-            </div>
-          )}
-        </div>
+      {/* ── Section 5: Payouts (optional slot: super_admin only) ─────────── */}
+      {payoutsSlot && (
+        <section className={tabClass("payouts")}>
+          {payoutsSlot}
+        </section>
+      )}
+
+      {/* ── Section 6: Enrollware (optional slot) ────────────────────────── */}
+      {enrollwareSlot && (
+        <section className={tabClass("enrollware")}>
+          {enrollwareSlot}
+        </section>
+      )}
+
+      {/* ── Section 7: How-To Guides ───────────────────────────────────────── */}
+      <section className={tabClass("how-to-guides")}>
+        <WalkthroughsPanel viewerRole="super_admin" />
       </section>
 
-      {/* ── Section 6: Social Feed ─────────────────────────────────────────── */}
+      {/* ── Section 8: Social Feed ─────────────────────────────────────────── */}
       <section className={`space-y-4 ${tabClass("social")}`}>
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -1594,27 +1501,6 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
           environment.
         </p>
       </section>
-
-      {/* ── Section 7: Locations (optional slot) ──────────────────────────── */}
-      {locationsSlot && (
-        <section className={tabClass("locations")}>
-          {locationsSlot}
-        </section>
-      )}
-
-      {/* ── Section 8: Payouts (optional slot: super_admin only) ─────────── */}
-      {payoutsSlot && (
-        <section className={tabClass("payouts")}>
-          {payoutsSlot}
-        </section>
-      )}
-
-      {/* ── Section 9: Enrollware (optional slot) ────────────────────────── */}
-      {enrollwareSlot && (
-        <section className={tabClass("enrollware")}>
-          {enrollwareSlot}
-        </section>
-      )}
 
       <ClassTypePanel
         open={classTypePanelOpen}

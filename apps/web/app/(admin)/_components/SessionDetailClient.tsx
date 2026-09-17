@@ -40,6 +40,8 @@ import RaiseTeamInvoiceButton from "@/app/(admin)/_components/RaiseTeamInvoiceBu
 import { PayPalProvider } from "@paypal/react-paypal-js/sdk-v6";
 import { CardPaymentSection } from "@/app/_components/PayPalCardPaymentSection";
 import { MockCardPaymentSection } from "@/app/_components/MockCardPaymentSection";
+import TourButton from "@/components/tours/TourButton";
+import { getAddStudentSteps } from "./addStudentTourSteps";
 
 // ─── Exported types (imported by the server component) ────────────────────────
 
@@ -490,6 +492,14 @@ export default function SessionDetailClient({
    * which endpoint the card form submits to.
    */
   const canAddWithoutCharging = isManager;
+
+  // Memoized so TourButton's auto-launch effect (keyed on the steps
+  // reference) doesn't re-fire on every render of this frequently-updating
+  // component; canAddWithoutCharging never changes mid-session anyway.
+  const addStudentSteps = useMemo(
+    () => getAddStudentSteps(canAddWithoutCharging),
+    [canAddWithoutCharging]
+  );
 
   /**
    * The session's own price (class type price less any instructor discount),
@@ -2004,7 +2014,7 @@ export default function SessionDetailClient({
 
             <div className="grid gap-6 lg:grid-cols-[1.8fr_1fr]">
               <div className="space-y-3">
-                <div className="space-y-3">
+                <div className="space-y-3" data-tour="add-student-search">
                   <div className="flex items-center justify-between gap-3">
                     <label className="block text-xs font-medium text-gray-600">Search Customers</label>
                     <button
@@ -2109,7 +2119,7 @@ export default function SessionDetailClient({
                   </span>
                 </div>
 
-                <div className="overflow-x-auto border border-gray-200 rounded-md">
+                <div className="overflow-x-auto border border-gray-200 rounded-md" data-tour="add-student-results">
                   <table className="min-w-full text-sm">
                     <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
                       <tr>
@@ -2219,7 +2229,7 @@ export default function SessionDetailClient({
                   )}
                 </div>
 
-                <div>
+                <div data-tour="add-student-amount">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
                   <div className="flex rounded-md border border-gray-300 bg-white shadow-sm">
                     <span className="inline-flex items-center px-3 text-gray-500 text-sm">$</span>
@@ -2235,7 +2245,7 @@ export default function SessionDetailClient({
                   </div>
                 </div>
 
-                <div>
+                <div data-tour="add-student-description">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                   <input
                     type="text"
@@ -2246,7 +2256,7 @@ export default function SessionDetailClient({
                   />
                 </div>
 
-                <div>
+                <div data-tour="add-student-notes">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
                   <textarea
                     value={chargeNotes}
@@ -2263,7 +2273,7 @@ export default function SessionDetailClient({
                     : "The student is added to the class only when the charge goes through. If the card is declined, nothing is booked; if the class fills up first, the charge is refunded automatically."}
                 </p>
 
-                <div className="space-y-3">
+                <div className="space-y-3" data-tour="add-student-payment">
                   {mockPaymentsEnabled === true ? (
                     <MockCardPaymentSection
                       onCreateOrder={handleCreateManualChargeOrder}
@@ -3265,8 +3275,10 @@ export default function SessionDetailClient({
                   their own class (charge-to-add only, see canAddWithoutCharging) */}
               {canAddStudents && (
                 <div className="flex items-center gap-4">
+                  <TourButton id="add-student" steps={addStudentSteps} />
                   <button
                     type="button"
+                    data-tour="add-student-button"
                     onClick={() => {
                       setShowAddStudentModal(true);
                       setCustomerSearchQuery("");
