@@ -3,13 +3,14 @@
  * Route: /admin/settings
  * Called by: Admin sidebar nav
  * Auth:
- *   - super_admin: full settings panel (class types, grades, Zoho, locations, etc.)
+ *   - super_admin: full settings panel (class types, grades, locations, etc.)
  *   - manager    : locations panel only
  *   - instructor : Account (own name/phone/email/password), Enrollware, About Page
  * All other roles are redirected to /admin.
  * Fetches class types and preset grades server-side, then passes them to
  * SettingsClient which owns all interactive state and mutations.
- * Checks Zoho connection status from system_settings.
+ * Zoho Mail connect/disconnect is intentionally not exposed here; see the
+ * note in SettingsClient.tsx.
  */
 
 import { redirect } from "next/navigation";
@@ -74,11 +75,7 @@ export interface PresetGrade {
  * Server component: fetches settings data and passes it to SettingsClient.
  * Redirects non-super-admins to /admin.
  */
-export default async function SettingsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string>>;
-}) {
+export default async function SettingsPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -279,8 +276,7 @@ export default async function SettingsPage({
     };
   });
 
-  // Check Zoho connection status using the durable credentials needed to refresh.
-  // Also read the legacy_site_enabled flag and all nav visibility flags.
+  // Read the legacy_site_enabled flag and all nav visibility flags.
   const NAV_PAGES = ["classes", "schedule", "merch", "blog", "about", "contact"] as const;
   type NavPage = (typeof NAV_PAGES)[number];
   const NAV_SETTING_KEY: Record<NavPage, string> = {
@@ -292,11 +288,8 @@ export default async function SettingsPage({
     contact:  "nav_contact_enabled",
   };
 
-  const [zohoAccountId, zohoRefreshToken, zohoEmail, legacySiteFlag, ...navFlags] =
+  const [legacySiteFlag, ...navFlags] =
     await Promise.all([
-      getSetting("zoho_account_id"),
-      getSetting("zoho_refresh_token"),
-      getSetting("zoho_connected_email"),
       getSetting("legacy_site_enabled"),
       ...NAV_PAGES.map((page) => getSetting(NAV_SETTING_KEY[page])),
     ]);
@@ -365,9 +358,6 @@ export default async function SettingsPage({
     console.error("[settings] Payout dashboard data failed to load:", err);
   }
 
-  const params = await searchParams;
-  const zohoParam = params.zoho ?? null;
-
   // Fetch the super admin's own bookmarklet key status so they can manage it
   // from settings just like instructors can.
   const { data: existingKey } = await admin
@@ -385,9 +375,6 @@ export default async function SettingsPage({
       certTypeOptions={(certTypeRows ?? []) as CertTypeOption[]}
       addons={addons}
       presetGrades={(presetGrades ?? []) as PresetGrade[]}
-      zohoConnected={Boolean(zohoAccountId && zohoRefreshToken)}
-      zohoEmail={zohoEmail}
-      zohoParam={zohoParam}
       legacySiteEnabled={legacySiteFlag === "true"}
       initialNavVisibility={initialNavVisibility}
       isSuperAdmin

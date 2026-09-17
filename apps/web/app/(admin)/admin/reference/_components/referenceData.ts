@@ -534,8 +534,6 @@ export const GROUPS: GroupDef[] = [
           { text: "Class Types tab: create, edit, delete, or deactivate class types; set name, description, duration, price, capacity, AHA certified flag (auto-set when a cert type is selected), linked certification type, and eligible add-ons", role: "super" },
           { text: "Class Types tab: renaming a class type changes the link the public class finder uses to recommend it. The finder falls back to the request form rather than breaking, but tell a developer after a rename so the course stays recommendable", role: "super" },
           { text: "Grades tab: configure preset grade values and labels used in the Grading Tool", role: "super" },
-          { text: "Zoho tab: connect or disconnect a Zoho Mail account for replying to contact form submissions", role: "super" },
-          { text: "Social tab: manually trigger a sync of the Facebook social feed cache", role: "super" },
           { text: "Locations tab: create, edit, or delete training locations; set address, notes, and home-base flag", role: "manager" },
           { text: "Locations tab: any number of locations can be a home base at once, e.g. an instructor's own address. Every home-base location appears as a venue choice on the public Request a Class page, with no travel fee", role: "manager" },
           "Enrollware tab: generate or revoke your personal Enrollware bookmarklet API key",
@@ -545,6 +543,7 @@ export const GROUPS: GroupDef[] = [
           { text: "Payouts tab: includes the full upcoming-payouts and payout-history panels, the same ones on the Payouts page", role: "super" },
           "How-To Guides tab: step-by-step walkthroughs that highlight the real page elements for a task, one at a time, until it's done",
           { text: "How-To Guides tab: managers and super admins see every walkthrough across all roles, grouped by role, instead of just their own", role: "manager" },
+          { text: "Social tab: manually trigger a sync of the Facebook social feed cache", role: "super" },
         ],
       },
       {
