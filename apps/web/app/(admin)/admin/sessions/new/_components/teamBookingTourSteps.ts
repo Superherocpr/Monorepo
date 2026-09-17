@@ -1,20 +1,24 @@
 /**
  * Walkthrough steps for the "Create a Team or Corporate Booking" tour.
  * Used by: CreateSessionClient.tsx, via components/tours/TourButton.tsx.
- * Registered in: lib/tours/registry.ts (id: "team-booking").
+ * Registered in: lib/tours/registry.ts (id: "team-booking", all staff).
  * Reuses the shared fields from tourSteps.ts that behave identically in
  * team mode (Class Type, Instructor, Location, Date, Start Time, Duration,
- * Max Capacity, Discount); adds team-specific steps for the company details,
- * payment mode, and price; and ends at the real confirmation modal's "Yes,
- * create it" button rather than the post-submit success screen, since
- * reaching that reliably would require bridging the async gap of a real
- * network request that also sends a real email.
+ * Max Capacity, Discount) — including both INSTRUCTOR_STEP and
+ * INSTRUCTOR_SELECT_STEP, since this tour is open to all three roles and
+ * each targets a different role's version of that field; adds team-specific
+ * steps for the company details, payment mode, and price; and ends at the
+ * real confirmation modal's "Yes, create it" button rather than the
+ * post-submit success screen, since reaching that reliably would require
+ * bridging the async gap of a real network request that also sends a real
+ * email.
  */
 
 import type { DriveStep } from "driver.js";
 import {
   CLASS_TYPE_STEP,
   INSTRUCTOR_STEP,
+  INSTRUCTOR_SELECT_STEP,
   LOCATION_STEP,
   DATE_STEP,
   START_TIME_STEP,
@@ -78,6 +82,7 @@ export const TEAM_BOOKING_STEPS: DriveStep[] = [
   },
   CLASS_TYPE_STEP,
   INSTRUCTOR_STEP,
+  INSTRUCTOR_SELECT_STEP,
   LOCATION_STEP,
   DATE_STEP,
   START_TIME_STEP,

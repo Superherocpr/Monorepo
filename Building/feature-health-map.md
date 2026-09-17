@@ -763,15 +763,19 @@ Account tab, modelled on `tests/e2e/rollcall.spec.ts`, is the honest fill.
 `components/tours/TourButton.tsx` wraps Driver.js so any admin page can offer a
 step-by-step walkthrough of a real task. `lib/tours/registry.ts` is the
 discovery manifest, and `components/tours/WalkthroughsPanel.tsx` renders it as
-a "How-To Guides" tab on `/admin/settings` for all three roles (instructor:
-own walkthroughs only; manager and super_admin: every walkthrough, grouped by
-role).
+a "How-To Guides" tab on `/admin/settings` for all three roles. Filtering
+matches the Admin Feature Reference's access model exactly (`canAccessTour`
+mirrors `canAccess` in `ReferenceContent.tsx`): super_admin sees every
+walkthrough regardless of its tagged roles, everyone else sees only the ones
+tagged for their own role. (Updated 2026-09-17 from an earlier "manager and
+super_admin see everything, grouped by role" design to match the reference
+page's model instead, per direct request.)
 
 **Signals added:**
 
-- **U** — `tests/unit/lib/tours-registry.test.ts` covers `toursForRole` and
-  `toursGroupedByRole`: role filtering, multi-role sharing, and that a role
-  with no matching walkthroughs is omitted rather than shown as an empty group.
+- **U** — `tests/unit/lib/tours-registry.test.ts` covers `canAccessTour` and
+  `toursForRole`: role-tagged filtering, and that super_admin sees every
+  walkthrough regardless of tag while every other role only sees its own.
 - **U** — `tests/unit/components/TourButton.test.tsx` covers `TourButton`'s
   own logic, the part this codebase actually wrote (Driver.js itself is a
   tested third-party library): clicking starts a tour with the given steps; a
@@ -792,17 +796,31 @@ that either tour's copy or `data-tour` targets haven't drifted from
 #### First real tour: "Submit a Class Session for Approval" (added 2026-09-17)
 
 `TOURS` in the registry now has its first entry (`id: "create-session"`,
-`roles: ["instructor"]`), pointing at `/admin/sessions/new?tour=create-session`.
-Ten `data-tour="..."` attributes were added to `CreateSessionClient.tsx`'s
-required-field wrappers, its Discount and Add-ons sections, and its submit
-button (steps defined in the sibling `tourSteps.ts`); Notes and team-booking
-mode are the only things intentionally skipped, to keep the walkthrough
-focused on what's needed to get a session pending approval. The Add-ons step
-uses `skipMissingElement: true` since that section only renders once a class
-type with eligible add-ons is picked. `TourButton` also gained the
-`?tour=` auto-launch behavior described above, specifically so this entry's
-"Start" link in How-To Guides launches immediately rather than requiring a
-second click on the target page.
+`roles: ["instructor", "manager", "super_admin"]` as of a same-day correction
+— originally shipped instructor-only, see below), pointing at
+`/admin/sessions/new?tour=create-session`. `data-tour="..."` attributes were
+added to `CreateSessionClient.tsx`'s required-field wrappers, its Discount
+and Add-ons sections, and its submit button (steps defined in the sibling
+`tourSteps.ts`); Notes and team-booking mode are the only things
+intentionally skipped, to keep the walkthrough focused on what's needed to
+get a session pending approval. The Add-ons step uses `skipMissingElement:
+true` since that section only renders once a class type with eligible
+add-ons is picked. `TourButton` also gained the `?tour=` auto-launch
+behavior described above, specifically so this entry's "Start" link in
+How-To Guides launches immediately rather than requiring a second click on
+the target page.
+
+**Correction (same day):** shipped instructor-only at first even though
+nothing about the underlying task is instructor-specific. Widening it to
+all staff surfaced a real gap: the Instructor field has two different UIs
+(a read-only display for instructors, a required `<select>` for
+managers/super_admins), and the tour only had a step for the first one. Added
+`INSTRUCTOR_SELECT_STEP` (`data-tour="session-instructor-select"`, also
+`skipMissingElement: true`) so exactly one of the two highlights for any
+given viewer. Applied the identical fix to `teamBookingTourSteps.ts`, which
+had the same latent gap since it already claimed to serve all three roles.
+Verified live as super_admin: the tour correctly skips the instructor-only
+step and lands on the real `<select>` with accurate copy.
 
 #### Second tour: "Create a Team or Corporate Booking" (added 2026-09-17)
 

@@ -1462,7 +1462,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
 
       {/* ── Section 7: How-To Guides ───────────────────────────────────────── */}
       <section className={tabClass("how-to-guides")}>
-        <WalkthroughsPanel viewerRole="super_admin" showAllRoles />
+        <WalkthroughsPanel viewerRole="super_admin" />
       </section>
 
       {/* ── Section 8: Social Feed ─────────────────────────────────────────── */}

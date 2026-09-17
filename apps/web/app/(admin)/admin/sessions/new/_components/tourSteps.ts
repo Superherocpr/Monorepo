@@ -1,11 +1,14 @@
 /**
  * Walkthrough steps for the "Submit a Class Session for Approval" tour.
  * Used by: CreateSessionClient.tsx, via components/tours/TourButton.tsx.
- * Registered in: lib/tours/registry.ts (id: "create-session").
- * Targets the `data-tour="..."` attributes added to the instructor-only
- * required fields, plus Discount and Add-ons, in CreateSessionClient.tsx.
+ * Registered in: lib/tours/registry.ts (id: "create-session", all staff).
  * Skips Notes and team-booking mode to keep the walkthrough to the fields
  * that matter for getting a session submitted.
+ *
+ * The Instructor field has two different UIs depending on role (a read-only
+ * display for instructors, a required <select> for managers/super_admins),
+ * so there are two steps for it, each `skipMissingElement: true` so exactly
+ * one actually highlights for a given viewer and the other is a silent no-op.
  *
  * Each step is also exported individually so the team-booking walkthrough
  * (teamBookingTourSteps.ts) can reuse the fields that behave identically in
@@ -26,13 +29,24 @@ export const CLASS_TYPE_STEP: DriveStep = {
 
 export const INSTRUCTOR_STEP: DriveStep = {
   // Only rendered as a read-only div for the instructor role; managers and
-  // super_admins see a <select> with no data-tour attribute instead. Skip
-  // rather than error when this tour is reused by a role where it's absent.
+  // super_admins see a <select> instead (INSTRUCTOR_SELECT_STEP). Skip
+  // rather than error for the roles where this target is absent.
   element: '[data-tour="session-instructor"]',
   skipMissingElement: true,
   popover: {
     title: "You're the Instructor",
     description: "This is filled in automatically with your name. Nothing to do here.",
+  },
+};
+
+export const INSTRUCTOR_SELECT_STEP: DriveStep = {
+  // The manager/super_admin counterpart to INSTRUCTOR_STEP: only rendered
+  // for those roles, so skip rather than error for the instructor role.
+  element: '[data-tour="session-instructor-select"]',
+  skipMissingElement: true,
+  popover: {
+    title: "Choose an Instructor",
+    description: "Select which instructor will teach this class.",
   },
 };
 
@@ -112,6 +126,7 @@ export const SUBMIT_STEP: DriveStep = {
 export const CREATE_SESSION_STEPS: DriveStep[] = [
   CLASS_TYPE_STEP,
   INSTRUCTOR_STEP,
+  INSTRUCTOR_SELECT_STEP,
   LOCATION_STEP,
   DATE_STEP,
   START_TIME_STEP,

@@ -29,7 +29,7 @@ export const TOURS: TourDefinition[] = [
     title: "Submit a Class Session for Approval",
     description:
       "Walks you through creating a new class session, step by step, from picking a class type to sending it in for approval.",
-    roles: ["instructor"],
+    roles: ["instructor", "manager", "super_admin"],
     href: "/admin/sessions/new?tour=create-session",
   },
   {
@@ -42,49 +42,25 @@ export const TOURS: TourDefinition[] = [
   },
 ];
 
-/** Human-readable label for each role, used to group the "all roles" view. */
-export const TOUR_ROLE_LABELS: Record<UserRole, string> = {
-  customer: "Customer",
-  instructor: "Instructor",
-  manager: "Manager",
-  super_admin: "Super Admin",
-  inspector: "Inspector",
-};
-
 /**
- * Display order for role groups in the "all roles" view.
- * Customers are excluded elsewhere: they have no admin-area walkthroughs.
+ * Returns whether a viewer can access a walkthrough tagged for the given
+ * roles. Mirrors the Admin Feature Reference's access model (see `canAccess`
+ * in app/(admin)/admin/reference/_components/ReferenceContent.tsx):
+ * super_admin can access everything; every other role only sees walkthroughs
+ * explicitly tagged for it.
+ * @param tourRoles - Roles the walkthrough is tagged for.
+ * @param viewerRole - The signed-in user's role.
  */
-export const TOUR_ROLE_ORDER: UserRole[] = [
-  "instructor",
-  "manager",
-  "super_admin",
-  "inspector",
-];
+export function canAccessTour(tourRoles: UserRole[], viewerRole: UserRole): boolean {
+  if (viewerRole === "super_admin") return true;
+  return tourRoles.includes(viewerRole);
+}
 
 /**
- * Returns every walkthrough relevant to a single role, in list order.
+ * Returns every walkthrough a role can access, in registry order.
  * @param tours - Walkthroughs to filter, normally the TOURS registry.
  * @param role - The viewer's role.
  */
 export function toursForRole(tours: TourDefinition[], role: UserRole): TourDefinition[] {
-  return tours.filter((tour) => tour.roles.includes(role));
-}
-
-/** One role group and its walkthroughs, for the "all roles" admin view. */
-export interface TourRoleGroup {
-  role: UserRole;
-  tours: TourDefinition[];
-}
-
-/**
- * Groups walkthroughs by role for the "all roles" admin view. Roles with no
- * matching walkthroughs are omitted rather than shown empty.
- * @param tours - Walkthroughs to group, normally the TOURS registry.
- * @param roles - Roles to include, in the desired display order.
- */
-export function toursGroupedByRole(tours: TourDefinition[], roles: UserRole[]): TourRoleGroup[] {
-  return roles
-    .map((role) => ({ role, tours: toursForRole(tours, role) }))
-    .filter((group) => group.tours.length > 0);
+  return tours.filter((tour) => canAccessTour(tour.roles, role));
 }

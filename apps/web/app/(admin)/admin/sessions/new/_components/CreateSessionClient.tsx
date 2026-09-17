@@ -705,7 +705,7 @@ export default function CreateSessionClient({
           {isTeam ? (
             <TourButton id="team-booking" steps={TEAM_BOOKING_STEPS} />
           ) : (
-            isInstructor && <TourButton id="create-session" steps={CREATE_SESSION_STEPS} />
+            <TourButton id="create-session" steps={CREATE_SESSION_STEPS} />
           )}
           <Link
             href="/admin/sessions"
@@ -947,7 +947,7 @@ export default function CreateSessionClient({
 
         {/* Instructor: selector for managers; read-only display for instructors */}
         {!isInstructor ? (
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5" data-tour="session-instructor-select">
             <label htmlFor="cs-instructor" className="text-sm font-medium text-gray-700">
               Instructor <span className="text-red-500">*</span>
             </label>

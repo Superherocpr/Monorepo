@@ -1,12 +1,12 @@
 /**
  * Unit tests for lib/tours/registry.ts
  *
- * Covers: toursForRole, toursGroupedByRole.
- * Both are pure functions that take the walkthrough list as a parameter, so
- * tests use fixture data rather than the (currently empty) live TOURS export.
+ * Covers: canAccessTour, toursForRole. Both are pure functions; toursForRole
+ * takes the walkthrough list as a parameter, so tests use fixture data
+ * rather than the live TOURS export.
  */
 import { describe, test, expect } from "vitest";
-import { toursForRole, toursGroupedByRole, type TourDefinition } from "@/lib/tours/registry";
+import { canAccessTour, toursForRole, type TourDefinition } from "@/lib/tours/registry";
 
 const FIXTURES: TourDefinition[] = [
   {
@@ -20,19 +20,37 @@ const FIXTURES: TourDefinition[] = [
     id: "manage-locations",
     title: "Add a New Location",
     description: "Add a teaching location managers can assign sessions to.",
-    roles: ["manager", "super_admin"],
+    roles: ["manager"],
     href: "/admin/settings",
   },
 ];
 
-describe("toursForRole", () => {
-  test("returns only walkthroughs whose roles include the given role", () => {
-    expect(toursForRole(FIXTURES, "instructor")).toEqual([FIXTURES[0]]);
+describe("canAccessTour", () => {
+  test("super_admin can access a walkthrough regardless of its tagged roles", () => {
+    expect(canAccessTour(["instructor"], "super_admin")).toBe(true);
+    expect(canAccessTour(["manager"], "super_admin")).toBe(true);
+    expect(canAccessTour([], "super_admin")).toBe(true);
   });
 
-  test("returns walkthroughs shared by multiple roles", () => {
+  test("a non-super_admin role can access a walkthrough tagged for it", () => {
+    expect(canAccessTour(["instructor"], "instructor")).toBe(true);
+    expect(canAccessTour(["manager", "instructor"], "manager")).toBe(true);
+  });
+
+  test("a non-super_admin role cannot access a walkthrough not tagged for it", () => {
+    expect(canAccessTour(["manager"], "instructor")).toBe(false);
+    expect(canAccessTour(["instructor"], "manager")).toBe(false);
+  });
+});
+
+describe("toursForRole", () => {
+  test("returns only walkthroughs tagged for the given role", () => {
+    expect(toursForRole(FIXTURES, "instructor")).toEqual([FIXTURES[0]]);
     expect(toursForRole(FIXTURES, "manager")).toEqual([FIXTURES[1]]);
-    expect(toursForRole(FIXTURES, "super_admin")).toEqual([FIXTURES[1]]);
+  });
+
+  test("super_admin sees every walkthrough regardless of its tagged roles, same as the Admin Feature Reference's canAccess model", () => {
+    expect(toursForRole(FIXTURES, "super_admin")).toEqual(FIXTURES);
   });
 
   test("returns an empty array for a role with no matching walkthroughs", () => {
@@ -41,24 +59,6 @@ describe("toursForRole", () => {
 
   test("returns an empty array when given an empty list", () => {
     expect(toursForRole([], "instructor")).toEqual([]);
-  });
-});
-
-describe("toursGroupedByRole", () => {
-  test("groups walkthroughs under each requested role in the given order", () => {
-    const groups = toursGroupedByRole(FIXTURES, ["instructor", "manager", "super_admin"]);
-    expect(groups.map((g) => g.role)).toEqual(["instructor", "manager", "super_admin"]);
-    expect(groups[0].tours).toEqual([FIXTURES[0]]);
-    expect(groups[1].tours).toEqual([FIXTURES[1]]);
-    expect(groups[2].tours).toEqual([FIXTURES[1]]);
-  });
-
-  test("omits roles with no matching walkthroughs instead of returning an empty group", () => {
-    const groups = toursGroupedByRole(FIXTURES, ["instructor", "inspector"]);
-    expect(groups).toEqual([{ role: "instructor", tours: [FIXTURES[0]] }]);
-  });
-
-  test("returns an empty array when no requested role has any walkthroughs", () => {
-    expect(toursGroupedByRole([], ["instructor", "manager"])).toEqual([]);
+    expect(toursForRole([], "super_admin")).toEqual([]);
   });
 });

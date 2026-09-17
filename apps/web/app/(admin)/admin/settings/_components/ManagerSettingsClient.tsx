@@ -85,7 +85,7 @@ const ManagerSettingsClient: React.FC<ManagerSettingsClientProps> = ({
         aria-labelledby="tab-how-to-guides"
         className={activeTab === "how-to-guides" ? "" : "hidden"}
       >
-        <WalkthroughsPanel viewerRole="manager" showAllRoles />
+        <WalkthroughsPanel viewerRole="manager" />
       </div>
     </div>
   );
