@@ -32,11 +32,6 @@ const NAV_ITEMS: NavItem[] = [
     href: "/admin",
     roles: ["instructor", "manager", "super_admin", "inspector"],
   },
-  {
-    label: "Directory",
-    href: "/admin/directory",
-    roles: ["instructor", "manager", "super_admin", "inspector"],
-  },
   // Instructor-only quick-access items (no section label: small flat list)
   { label: "My Class Sessions", href: "/admin/sessions", roles: ["instructor"] },
   { label: "Rollcall", href: "/rollcall", roles: ["instructor"] },
@@ -98,6 +93,11 @@ const NAV_ITEMS: NavItem[] = [
     sectionLabel: "Management",
   },
   { label: "Archived Accounts", href: "/admin/archived", roles: ["super_admin"] },
+  {
+    label: "Directory",
+    href: "/admin/directory",
+    roles: ["instructor", "manager", "super_admin", "inspector"],
+  },
   {
     label: "Settings",
     href: "/admin/settings",
