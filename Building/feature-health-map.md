@@ -712,6 +712,7 @@ notice. The stamp now happens only after a confirmed send.
 | Analytics | — | ○ smoke | — | ✅ | — | — | — |
 | File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
 | **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | Three tours shipped (create-session, team-booking, add-student); TourButton logic unit-tested; no outcome e2e yet, see note below |
+| **Staff Directory** | ✅✅✅✅✅✅✅✅✅✅✅✅✅ | — | — | ✅ | — | — | Added 2026-09-22 (migrations 0070/0071, staging only). Read-only internal contact page: classes-taught list, plus a per-person email override for hiding a real address; see note below |
 
 ### Staff self-service account (added 2026-08-28)
 
@@ -885,6 +886,59 @@ through all 7 steps, including confirming this specific environment is
 no amber "Mock payments active" banner) — closed the modal at the final
 step without ever touching the real Charge button, so no card was actually
 charged during verification.
+
+### Staff Directory (added 2026-09-22)
+
+`/admin/directory` is a new read-only internal page (all staff roles, migration
+0070): a card per active staff member with name, an optional Directory Title,
+click-to-call phone, and click-to-mail email, grouped by role. It reuses the
+existing `profiles` table rather than a new one; `directory_title` is the one
+new column, distinct from `bio_description` (public /about copy — wrong
+audience/tone for an internal list). Editing happens on the existing
+super_admin-only `/admin/staff` page: `BioEditPanel`'s Edit Info button is now
+shown for every role (previously instructor/super_admin only, since it also
+edits the public bio for those two), with the About-page-only fields hidden
+for managers/inspectors.
+
+**Signal:** three pieces of real logic, all in `lib/staff-directory.ts` and all
+unit-tested (13 tests total in `tests/unit/lib/staff-directory.test.ts`):
+grouping/ordering staff by role and sorting by last name (`groupStaffByRole`
+— fixed role order, empty roles omitted rather than rendering an empty
+heading, last-name sorting, input array not mutated); deduping each
+instructor's completed class types into a sorted list (`buildClassesTaughtMap`
+— dedup, per-instructor separation, alphabetical sort, null rows skipped); and
+resolving which email a card shows (`resolveDirectoryEmail` — override wins
+when set, falls back to the real email otherwise).
+
+**Classes-taught addition (same day).** Each staff card now lists the distinct
+class types that person has completed as lead instructor, queried from
+`class_sessions` filtered to `instructor_id = X AND status = 'completed'` —
+deliberately matching the exact filter already used by the Analytics
+"most-active-instructors" chart and the instructor dashboard's pending-grades
+widget (`analyticsData.ts`, `admin/page.tsx`), rather than inventing a new
+definition of "taught". Since `session_status` is a single enum where
+`completed`/`cancelled` are mutually exclusive, that one filter already
+excludes cancelled sessions with no separate check needed. Assistant-taught
+sessions (`assistant_instructor_id`) are **not** counted — no existing code
+aggregates by that column, so scope was kept to the lead-instructor precedent
+rather than making a new product call unprompted.
+
+**Directory email override (same day, migration 0071).** A second new
+column, `directory_email`, lets a super admin show a different email on the
+directory than a staff member's real (and login) address — requested for
+privacy on one account. Deliberately a separate column rather than repurposing
+`email`: `profiles.email` is also the sign-in address (see the Staff
+self-service account note below and invariant #14), so overwriting it to hide
+it from the directory would have broken that person's login. `directory_email`
+is display-only, validated with the same email-shape regex already used by
+three other routes (`/api/staff/[id]/bio`, `/api/profile/payout-email`, etc.)
+client- and server-side, and never read by auth or any email-sending code.
+
+**Honest gap:** no e2e test and no invariant. This is a low-stakes display
+page — it writes nothing (beyond the two admin-edited override fields, which
+are validated but not otherwise gated) — so per the signal table, unit tests
+on its logic are judged sufficient for now. If it grows further editable
+fields beyond the super_admin-only panel it already has, that changes.
 
 ---
 
