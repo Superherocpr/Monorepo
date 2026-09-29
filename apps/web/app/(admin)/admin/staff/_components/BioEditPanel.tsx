@@ -2,9 +2,10 @@
 
 /**
  * BioEditPanel component
- * Slide-in panel for editing an instructor's about-page photo and bio description.
- * Uploads the selected photo to S3 via /api/staff/upload-photo, then saves the
- * resulting URL and description text to /api/staff/[id]/bio.
+ * Slide-in panel for editing a staff member's internal Directory Title
+ * (shown on /admin/directory) and, for instructors, their About page photo
+ * and bio description. Uploads the selected photo to S3 via
+ * /api/staff/upload-photo, then saves everything to /api/staff/[id]/bio.
  * Used by: StaffManagement
  */
 
@@ -48,6 +49,8 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
   onSuccess,
   onError,
 }) => {
+  // Directory title input value: internal-only, shown on the Staff Directory page
+  const [directoryTitle, setDirectoryTitle] = useState("");
   // Description textarea value: initialised from the member's current bio
   const [description, setDescription] = useState("");
   // Credentials textarea value: comma-separated list, initialised from DB
@@ -79,6 +82,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
   if (syncedMemberId !== memberId) {
     setSyncedMemberId(memberId);
     if (member) {
+      setDirectoryTitle(member.directory_title ?? "");
       setDescription(member.bio_description ?? "");
       setCredentials(member.bio_credentials ?? "");
       setPublished(member.bio_published ?? false);
@@ -208,6 +212,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          directory_title: directoryTitle.trim() || null,
           bio_photo: finalPhotoUrl,
           bio_description: description.trim() || null,
           bio_credentials: credentials.trim() || null,
@@ -257,7 +262,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Edit About Page Bio</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Edit Bio &amp; Directory Info</h2>
             <p className="text-sm text-gray-500 mt-0.5">{fullName}</p>
           </div>
           <button
@@ -272,6 +277,31 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
         {/* Form body */}
         <div className="px-6 py-6 space-y-6 flex-1">
 
+          {/* Directory title section */}
+          <div>
+            <label
+              htmlFor="directory-title"
+              className="block text-sm font-semibold text-gray-700 mb-1"
+            >
+              Directory Title
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              Shown under their name on the internal Staff Directory page. Not shown to the public.
+            </p>
+            <input
+              id="directory-title"
+              type="text"
+              value={directoryTitle}
+              onChange={(e) => setDirectoryTitle(e.target.value)}
+              placeholder="e.g. Lead Instructor, Billing & Scheduling"
+              className={inputClass}
+            />
+          </div>
+
+          {/* About page sections: only instructors and super admins appear on
+              the public /about page, so these are hidden for managers/inspectors. */}
+          {(member.role === "instructor" || member.role === "super_admin") && (
+            <>
           {/* Photo section */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -444,6 +474,8 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
               </div>
             </div>
           </div>
+            </>
+          )}
         </div>
 
         {/* Footer: save / cancel */}

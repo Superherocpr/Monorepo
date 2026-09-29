@@ -712,6 +712,7 @@ notice. The stamp now happens only after a confirmed send.
 | Analytics | — | ○ smoke | — | ✅ | — | — | — |
 | File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
 | **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | Three tours shipped (create-session, team-booking, add-student); TourButton logic unit-tested; no outcome e2e yet, see note below |
+| **Staff Directory** | ✅✅✅✅✅✅ | — | — | ✅ | — | — | Added 2026-09-22 (migration 0070, staging only). Read-only internal contact page; see note below |
 
 ### Staff self-service account (added 2026-08-28)
 
@@ -885,6 +886,33 @@ through all 7 steps, including confirming this specific environment is
 no amber "Mock payments active" banner) — closed the modal at the final
 step without ever touching the real Charge button, so no card was actually
 charged during verification.
+
+### Staff Directory (added 2026-09-22)
+
+`/admin/directory` is a new read-only internal page (all staff roles, migration
+0070): a card per active staff member with name, an optional Directory Title,
+click-to-call phone, and click-to-mail email, grouped by role. It reuses the
+existing `profiles` table rather than a new one; `directory_title` is the one
+new column, distinct from `bio_description` (public /about copy — wrong
+audience/tone for an internal list). Editing happens on the existing
+super_admin-only `/admin/staff` page: `BioEditPanel`'s Edit Info button is now
+shown for every role (previously instructor/super_admin only, since it also
+edits the public bio for those two), with the About-page-only fields hidden
+for managers/inspectors.
+
+**Signal:** the only real logic here is grouping/ordering staff by role and
+sorting by last name (`groupStaffByRole` in `lib/staff-directory.ts`), which is
+what a broken filter or a role added to the enum without updating this file
+would silently get wrong — a manager quietly missing from their own section,
+say. 6 unit tests in `tests/unit/lib/staff-directory.test.ts` cover the fixed
+role order, that empty roles are omitted rather than rendering an empty
+heading, last-name sorting, and that the input array isn't mutated.
+
+**Honest gap:** no e2e test and no invariant. This is a low-stakes display
+page — it writes nothing and gates nothing — so per the signal table a unit
+test on its one piece of real logic is judged sufficient for now. If it grows
+editable fields beyond the super_admin-only panel it already has, that
+changes.
 
 ---
 

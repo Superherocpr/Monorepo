@@ -1,8 +1,10 @@
 /**
  * PATCH /api/staff/[id]/bio
- * Called by: BioEditPanel when an admin saves an instructor's about-page bio.
+ * Called by: BioEditPanel when an admin saves an instructor's about-page bio
+ * or their internal Staff Directory title.
  * Auth: super_admin only.
- * Updates the public bio fields on the target profile.
+ * Updates the public bio fields (About page) and/or directory_title (internal
+ * Staff Directory) on the target profile.
  * Fields are optional — omitting a field leaves the existing value unchanged.
  */
 
@@ -23,6 +25,8 @@ interface BioPayload {
   bio_years_experience?: string | null;
   /** Students trained figure for the lead instructor stat block (e.g. "5,000+"). Null hides the stat. */
   bio_students_trained?: string | null;
+  /** Short internal role/blurb shown on the Staff Directory page (/admin/directory). Null clears it. */
+  directory_title?: string | null;
 }
 
 export async function PATCH(
@@ -60,6 +64,7 @@ export async function PATCH(
   }
   if ("bio_years_experience" in body) update.bio_years_experience = body.bio_years_experience ?? null;
   if ("bio_students_trained" in body) update.bio_students_trained = body.bio_students_trained ?? null;
+  if ("directory_title" in body) update.directory_title = body.directory_title ?? null;
 
   if (Object.keys(update).length === 0) {
     return Response.json(

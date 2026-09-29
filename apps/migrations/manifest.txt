@@ -77,4 +77,5 @@
 0067_team_invoice_retry_cron.sql
 0068_team_booking_per_signup.sql
 0069_class_request_venue_mode.sql
+0070_staff_directory_title.sql
 replace-user-uuid.sql

@@ -40,6 +40,8 @@ export interface StaffMember {
   bio_years_experience: string | null;
   /** Students trained figure shown on the lead instructor stat block (e.g. "5,000+"). Null hides the stat. */
   bio_students_trained: string | null;
+  /** Short internal role/blurb shown on the Staff Directory page (/admin/directory). Null hides the line. */
+  directory_title: string | null;
 }
 
 interface StaffManagementProps {
