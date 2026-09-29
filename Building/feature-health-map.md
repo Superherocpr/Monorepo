@@ -934,6 +934,26 @@ is display-only, validated with the same email-shape regex already used by
 three other routes (`/api/staff/[id]/bio`, `/api/profile/payout-email`, etc.)
 client- and server-side, and never read by auth or any email-sending code.
 
+**Production fixes (2026-09-29, migrations 0072/0073).** Three problems reported
+on the live directory. Two cards showed no phone because `profiles.phone` is `''`
+for the lead instructor and the owner (migration 0064 backfilled missing phones
+to empty string to satisfy NOT NULL, and the card hides a blank phone). The
+first recommendation, Staff Management > Edit Contact, was wrong: owner accounts
+are protected there (`isOwner` hides Edit Contact), so neither profile could be
+edited from the site. The real fix is `directory_phone` (0073), an optional
+override editable in the Edit Info panel next to Directory Title and Directory
+Email; `resolveDirectoryPhone()` prefers it, falls back to the real phone, and
+treats blank strings as unset. This also covers the general case of a person
+wanting a different number on the staff list than the one customers see. The
+third problem, a test account in the directory, is handled by a
+`hide_from_directory` flag (0072, default false) toggled in the same panel.
+**Ship-order hazard:** the directory page destructures `data` and only logs
+`error`, so if this code reaches an environment before 0072 and 0073 the query
+fails on the unknown columns and the page silently renders "No staff members to
+show". Migrations and code must go out together (the same trap as 0068).
+`// TODO:` a canary/invariant that flags active non-test staff whose resolved
+directory phone is empty would have caught the missing phones; not built.
+
 **Honest gap:** no e2e test and no invariant. This is a low-stakes display
 page — it writes nothing (beyond the two admin-edited override fields, which
 are validated but not otherwise gated) — so per the signal table, unit tests

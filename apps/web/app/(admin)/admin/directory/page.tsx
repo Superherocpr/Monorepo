@@ -3,8 +3,10 @@
  * Route: /admin/directory
  * Called by: Admin sidebar nav
  * Auth: instructor, manager, super_admin, inspector (any staff role).
- * Read-only internal contact list: name, role, phone, email (or a
- * directory_email override, when set, in place of the real address), and the
+ * Accounts flagged hide_from_directory (test accounts) are omitted.
+ * Read-only internal contact list: name, role, phone and email (each with a
+ * directory_phone / directory_email override that replaces the real value
+ * when set), and the
  * distinct class types each person has completed as lead instructor, for
  * every active staff member, grouped by role. Editing (including each
  * person's directory title/email) happens on /admin/staff, super_admin only.
@@ -17,6 +19,7 @@ import {
   groupStaffByRole,
   buildClassesTaughtMap,
   resolveDirectoryEmail,
+  resolveDirectoryPhone,
   type DirectoryMember,
 } from "@/lib/staff-directory";
 
@@ -35,10 +38,11 @@ export default async function StaffDirectoryPage() {
   const admin = await createAdminClient();
   const { data, error } = await admin
     .from("profiles")
-    .select("id, first_name, last_name, email, phone, role, directory_title, directory_email")
+    .select("id, first_name, last_name, email, phone, role, directory_title, directory_email, directory_phone")
     .neq("role", "customer")
     .eq("deactivated", false)
     .eq("archived", false)
+    .eq("hide_from_directory", false)
     .order("last_name");
 
   if (error) {
@@ -115,12 +119,12 @@ export default async function StaffDirectoryPage() {
                   <p className="text-sm text-gray-500 mt-0.5">{member.directory_title}</p>
                 )}
                 <div className="mt-3 space-y-1 text-sm">
-                  {member.phone && (
+                  {resolveDirectoryPhone(member) && (
                     <a
-                      href={`tel:${member.phone}`}
+                      href={`tel:${resolveDirectoryPhone(member)}`}
                       className="block text-red-600 hover:underline"
                     >
-                      {member.phone}
+                      {resolveDirectoryPhone(member)}
                     </a>
                   )}
                   <a

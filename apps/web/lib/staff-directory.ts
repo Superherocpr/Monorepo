@@ -17,6 +17,8 @@ export interface DirectoryMember {
   directory_title: string | null;
   /** Public-facing contact email override. Null falls back to `email`. Never the real login address to hide. */
   directory_email: string | null;
+  /** Phone override shown in place of `phone`. Null or blank falls back to `phone`. */
+  directory_phone: string | null;
   /** Distinct class type names this person has completed as lead instructor, alphabetized. Empty if none. */
   classesTaught: string[];
 }
@@ -65,6 +67,20 @@ export function groupStaffByRole(members: DirectoryMember[]): DirectoryGroup[] {
  */
 export function resolveDirectoryEmail(member: DirectoryMember): string {
   return member.directory_email ?? member.email;
+}
+
+/**
+ * Resolves the phone shown on a directory card: the override when one is set,
+ * otherwise the real profile phone. Blank strings count as unset, because
+ * migration 0064 backfilled missing profile phones to '' rather than null.
+ * @param member - The staff member whose display phone is needed.
+ * @returns The phone to show, or null when neither value has content.
+ */
+export function resolveDirectoryPhone(member: DirectoryMember): string | null {
+  const override = member.directory_phone?.trim();
+  if (override) return override;
+  const real = member.phone?.trim();
+  return real || null;
 }
 
 /** One completed session row, as needed to build the classes-taught map. */

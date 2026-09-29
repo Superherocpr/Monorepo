@@ -4,7 +4,8 @@
  * or their internal Staff Directory title/email.
  * Auth: super_admin only.
  * Updates the public bio fields (About page) and/or directory_title/
- * directory_email (internal Staff Directory) on the target profile.
+ * directory_email/directory_phone/hide_from_directory (internal Staff
+ * Directory) on the target profile.
  * Fields are optional — omitting a field leaves the existing value unchanged.
  */
 
@@ -14,6 +15,8 @@ import type { UserRole } from "@/types/users";
 
 /** Minimal email shape check — deliverability is proven by the address working, not by a regex. */
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Upper bound on a directory phone; the codebase does no phone format validation, only presence. */
+const MAX_PHONE_LENGTH = 30;
 
 interface BioPayload {
   /** Public S3 URL for the instructor's headshot. Null clears the photo. */
@@ -32,6 +35,10 @@ interface BioPayload {
   directory_title?: string | null;
   /** Public-facing contact email shown on the Staff Directory page in place of the real email. Null clears the override. */
   directory_email?: string | null;
+  /** Phone shown on the Staff Directory page in place of the real phone. Null or blank clears the override. */
+  directory_phone?: string | null;
+  /** When true, omits this account from the Staff Directory page (e.g. a test account). */
+  hide_from_directory?: boolean;
 }
 
 export async function PATCH(
@@ -79,6 +86,25 @@ export async function PATCH(
       );
     }
     update.directory_email = directoryEmail;
+  }
+  if ("directory_phone" in body) {
+    const directoryPhone = body.directory_phone?.trim() || null;
+    if (directoryPhone && directoryPhone.length > MAX_PHONE_LENGTH) {
+      return Response.json(
+        { success: false, error: "Directory phone is too long." },
+        { status: 400 }
+      );
+    }
+    update.directory_phone = directoryPhone;
+  }
+  if ("hide_from_directory" in body) {
+    if (typeof body.hide_from_directory !== "boolean") {
+      return Response.json(
+        { success: false, error: "Hide from directory must be true or false." },
+        { status: 400 }
+      );
+    }
+    update.hide_from_directory = body.hide_from_directory;
   }
 
   if (Object.keys(update).length === 0) {

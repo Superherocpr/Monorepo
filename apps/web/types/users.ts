@@ -44,6 +44,10 @@ export interface Profile {
   directory_title: string | null;
   /** Public-facing contact email shown on the Staff Directory page in place of `email`. Null falls back to `email`. Never used for login. */
   directory_email: string | null;
+  /** Phone shown on the Staff Directory page in place of `phone`. Null or blank falls back to `phone`. */
+  directory_phone: string | null;
+  /** When true, this account is omitted from the Staff Directory page. Does not affect login. */
+  hide_from_directory: boolean;
   daily_access_code: string | null;
   access_code_generated_at: string | null;
   archived: boolean;
