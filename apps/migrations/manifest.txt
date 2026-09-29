@@ -78,4 +78,5 @@
 0068_team_booking_per_signup.sql
 0069_class_request_venue_mode.sql
 0070_staff_directory_title.sql
+0071_staff_directory_email.sql
 replace-user-uuid.sql

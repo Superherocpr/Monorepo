@@ -31,7 +31,7 @@ export default async function StaffPage() {
   // Try a full-column staff query first. If local schema is older, retry with
   // a legacy column set and synthesize defaults used by the UI.
   const fullSelect =
-    "id, first_name, last_name, email, phone, role, deactivated, deactivated_at, created_at, bio_photo, bio_description, bio_credentials, bio_published, bio_years_experience, bio_students_trained, directory_title";
+    "id, first_name, last_name, email, phone, role, deactivated, deactivated_at, created_at, bio_photo, bio_description, bio_credentials, bio_published, bio_years_experience, bio_students_trained, directory_title, directory_email";
   const legacySelect = "id, first_name, last_name, email, role, created_at";
 
   let staffMembers: StaffMember[] = [];
@@ -66,6 +66,7 @@ export default async function StaffPage() {
         bio_years_experience: null,
         bio_students_trained: null,
         directory_title: null,
+        directory_email: null,
       })) as StaffMember[];
     } else {
       console.error("[admin/staff] Failed to fetch staff members.", {

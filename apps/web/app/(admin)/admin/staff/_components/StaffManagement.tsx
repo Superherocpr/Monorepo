@@ -42,6 +42,8 @@ export interface StaffMember {
   bio_students_trained: string | null;
   /** Short internal role/blurb shown on the Staff Directory page (/admin/directory). Null hides the line. */
   directory_title: string | null;
+  /** Public-facing contact email shown on the Staff Directory page in place of `email`. Null falls back to `email`. */
+  directory_email: string | null;
 }
 
 interface StaffManagementProps {

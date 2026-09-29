@@ -15,3 +15,16 @@ ALTER TABLE profiles
 
 COMMENT ON COLUMN profiles.directory_title IS
   'Short internal role/blurb shown on the Staff Directory page (/admin/directory). Null hides the line. Not shown publicly — see bio_description for the public About page bio.';
+
+-- ---------------------------------------------------------------------------
+-- Backfill: Nate's own directory title
+-- ---------------------------------------------------------------------------
+-- Requested directly by the account owner so it ships with the column rather
+-- than being set by hand after promotion. Matched by email (stable identifier
+-- regardless of what the profile's name field holds in a given environment).
+-- Idempotent: safe to run again with no effect, and a no-op if the row
+-- doesn't exist in a given environment.
+
+UPDATE profiles
+SET directory_title = 'Website/App Help, Business Card Orders, and Flyers/Advertisement Orders'
+WHERE email = 'nathanhedgeman@superherocpr.com';

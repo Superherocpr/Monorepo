@@ -34,6 +34,8 @@ const inputClass =
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif"];
 /** Maximum file size in bytes (5 MB). */
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+/** Minimal email shape check, matching /api/staff/[id]/bio's server-side check. */
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Slide-in panel for editing an instructor's photo and bio description.
@@ -51,6 +53,10 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
 }) => {
   // Directory title input value: internal-only, shown on the Staff Directory page
   const [directoryTitle, setDirectoryTitle] = useState("");
+  // Directory email override: shown on the Staff Directory page in place of the real email
+  const [directoryEmail, setDirectoryEmail] = useState("");
+  // Validation error for the directory email field
+  const [directoryEmailError, setDirectoryEmailError] = useState<string | null>(null);
   // Description textarea value: initialised from the member's current bio
   const [description, setDescription] = useState("");
   // Credentials textarea value: comma-separated list, initialised from DB
@@ -83,6 +89,8 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
     setSyncedMemberId(memberId);
     if (member) {
       setDirectoryTitle(member.directory_title ?? "");
+      setDirectoryEmail(member.directory_email ?? "");
+      setDirectoryEmailError(null);
       setDescription(member.bio_description ?? "");
       setCredentials(member.bio_credentials ?? "");
       setPublished(member.bio_published ?? false);
@@ -199,6 +207,14 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
    */
   async function handleSave() {
     if (!member) return;
+
+    const trimmedDirectoryEmail = directoryEmail.trim();
+    if (trimmedDirectoryEmail && !EMAIL_REGEX.test(trimmedDirectoryEmail)) {
+      setDirectoryEmailError("Enter a valid email address.");
+      return;
+    }
+    setDirectoryEmailError(null);
+
     setSaving(true);
 
     try {
@@ -213,6 +229,7 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           directory_title: directoryTitle.trim() || null,
+          directory_email: trimmedDirectoryEmail || null,
           bio_photo: finalPhotoUrl,
           bio_description: description.trim() || null,
           bio_credentials: credentials.trim() || null,
@@ -296,6 +313,36 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
               placeholder="e.g. Lead Instructor, Billing & Scheduling"
               className={inputClass}
             />
+          </div>
+
+          {/* Directory email override section */}
+          <div>
+            <label
+              htmlFor="directory-email"
+              className="block text-sm font-semibold text-gray-700 mb-1"
+            >
+              Directory Email
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              Optional. Shown on the Staff Directory page instead of their real email, e.g. to
+              keep a personal address private. Leave blank to show their real email.
+            </p>
+            <input
+              id="directory-email"
+              type="email"
+              value={directoryEmail}
+              onChange={(e) => {
+                setDirectoryEmail(e.target.value);
+                if (directoryEmailError) setDirectoryEmailError(null);
+              }}
+              placeholder="e.g. superherocpr@gmail.com"
+              className={inputClass}
+            />
+            {directoryEmailError && (
+              <p role="alert" className="text-xs text-red-600 mt-1">
+                {directoryEmailError}
+              </p>
+            )}
           </div>
 
           {/* About page sections: only instructors and super admins appear on

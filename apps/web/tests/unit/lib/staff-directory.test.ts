@@ -1,9 +1,15 @@
 /**
- * Unit tests for groupStaffByRole, the grouping/sort logic behind the
- * Staff Directory page (/admin/directory).
+ * Unit tests for groupStaffByRole, buildClassesTaughtMap, and
+ * resolveDirectoryEmail: the grouping, sort, classes-taught, and
+ * email-override logic behind the Staff Directory page (/admin/directory).
  */
 import { describe, test, expect } from "vitest";
-import { groupStaffByRole, type DirectoryMember } from "@/lib/staff-directory";
+import {
+  groupStaffByRole,
+  buildClassesTaughtMap,
+  resolveDirectoryEmail,
+  type DirectoryMember,
+} from "@/lib/staff-directory";
 
 function member(overrides: Partial<DirectoryMember>): DirectoryMember {
   return {
@@ -14,6 +20,8 @@ function member(overrides: Partial<DirectoryMember>): DirectoryMember {
     phone: "555-0100",
     role: "instructor",
     directory_title: null,
+    directory_email: null,
+    classesTaught: [],
     ...overrides,
   };
 }
@@ -77,5 +85,64 @@ describe("groupStaffByRole", () => {
     groupStaffByRole(input);
 
     expect(input).toEqual(inputCopy);
+  });
+});
+
+describe("buildClassesTaughtMap", () => {
+  test("dedupes repeated class types for the same instructor", () => {
+    const map = buildClassesTaughtMap([
+      { instructor_id: "1", class_type_name: "BLS" },
+      { instructor_id: "1", class_type_name: "BLS" },
+      { instructor_id: "1", class_type_name: "Heartsaver" },
+    ]);
+
+    expect(map["1"]).toEqual(["BLS", "Heartsaver"]);
+  });
+
+  test("keeps each instructor's list separate", () => {
+    const map = buildClassesTaughtMap([
+      { instructor_id: "1", class_type_name: "BLS" },
+      { instructor_id: "2", class_type_name: "ACLS" },
+    ]);
+
+    expect(map["1"]).toEqual(["BLS"]);
+    expect(map["2"]).toEqual(["ACLS"]);
+  });
+
+  test("sorts class names alphabetically", () => {
+    const map = buildClassesTaughtMap([
+      { instructor_id: "1", class_type_name: "Heartsaver" },
+      { instructor_id: "1", class_type_name: "ACLS" },
+      { instructor_id: "1", class_type_name: "BLS" },
+    ]);
+
+    expect(map["1"]).toEqual(["ACLS", "BLS", "Heartsaver"]);
+  });
+
+  test("skips rows with a null instructor_id or class_type_name", () => {
+    const map = buildClassesTaughtMap([
+      { instructor_id: null, class_type_name: "BLS" },
+      { instructor_id: "1", class_type_name: null },
+      { instructor_id: "1", class_type_name: "BLS" },
+    ]);
+
+    expect(Object.keys(map)).toEqual(["1"]);
+    expect(map["1"]).toEqual(["BLS"]);
+  });
+
+  test("returns an empty object for no rows", () => {
+    expect(buildClassesTaughtMap([])).toEqual({});
+  });
+});
+
+describe("resolveDirectoryEmail", () => {
+  test("returns the override email when set", () => {
+    const person = member({ email: "real@example.com", directory_email: "shared@example.com" });
+    expect(resolveDirectoryEmail(person)).toBe("shared@example.com");
+  });
+
+  test("falls back to the real email when no override is set", () => {
+    const person = member({ email: "real@example.com", directory_email: null });
+    expect(resolveDirectoryEmail(person)).toBe("real@example.com");
   });
 });
