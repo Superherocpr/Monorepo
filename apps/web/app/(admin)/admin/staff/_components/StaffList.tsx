@@ -24,7 +24,7 @@ interface StaffListProps {
   onError: (message: string) => void;
   /** Called when the empty-state invite button is clicked. */
   onInvite: () => void;
-  /** Called when the Edit Bio button is clicked for an instructor. */
+  /** Called when the Edit Info button is clicked for a staff member. */
   onEditBio: (member: StaffMember) => void;
 }
 
@@ -76,7 +76,7 @@ function formatDeactivatedDate(dateStr: string): string {
  * @param onSuccess - Callback to show success toast and refresh the list.
  * @param onError - Callback to show an error toast.
  * @param onInvite - Callback to open the invite panel (used in empty state).
- * @param onEditBio - Callback to open the bio edit panel for an instructor.
+ * @param onEditBio - Callback to open the bio/directory-info edit panel for a staff member.
  */
 const StaffList: React.FC<StaffListProps> = ({
   staff,
@@ -451,18 +451,19 @@ const StaffList: React.FC<StaffListProps> = ({
   }
 
   /**
-   * Renders the Edit Bio button for instructors and super admins.
-   * Both roles can appear on the /about page.
+   * Renders the Edit Info button, available to every staff member. Opens
+   * BioEditPanel, which always shows the Directory Title field and, for
+   * instructors and super admins (who can appear on the /about page), the
+   * public bio fields as well.
    * @param member - The staff member row.
    */
   function renderEditBioButton(member: StaffMember) {
-    if (member.role !== "instructor" && member.role !== "super_admin") return null;
     return (
       <button
         onClick={() => onEditBio(member)}
         className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 transition-colors"
       >
-        Edit Bio
+        Edit Info
       </button>
     );
   }
@@ -684,7 +685,7 @@ const StaffList: React.FC<StaffListProps> = ({
                     )}
                   </td>
                   <td className="px-5 py-4">
-                    {/* Edit Bio is available to everyone who can appear on /about.
+                    {/* Edit Info is available to every staff member.
                         Role and deactivate actions are hidden for the owner.
                         Delete is also hidden for the current logged-in user. */}
                     <div className="flex flex-wrap gap-1.5 items-center">
@@ -747,7 +748,7 @@ const StaffList: React.FC<StaffListProps> = ({
                 )}
               </div>
 
-              {/* Action buttons: Edit Bio available to all; role/deactivate/delete hidden for owner */}
+              {/* Action buttons: Edit Info available to all; role/deactivate/delete hidden for owner */}
               <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-1.5 items-center">
                 {renderEditBioButton(member)}
                 {!isOwner && renderEditContactUI(member, fullName)}

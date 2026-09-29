@@ -711,6 +711,8 @@ notice. The stamp now happens only after a confirmed send.
 | Blog / SEO | — | — | — | ✅ | — | ✅ | No test; quarterly Lighthouse |
 | Analytics | — | ○ smoke | — | ✅ | — | — | — |
 | File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
+| **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | Three tours shipped (create-session, team-booking, add-student); TourButton logic unit-tested; no outcome e2e yet, see note below |
+| **Staff Directory** | ✅✅✅✅✅✅✅✅✅✅✅✅✅ | — | — | ✅ | — | — | Added 2026-09-22 (migrations 0070/0071, staging only). Read-only internal contact page: classes-taught list, plus a per-person email override for hiding a real address; see note below |
 
 ### Staff self-service account (added 2026-08-28)
 
@@ -754,6 +756,189 @@ front-end regression (a field that silently stops submitting) would not be
 caught by anything here — the invariant only proves the two tables agree, not
 that a save did what the user asked. `// TODO:` an outcome e2e test for the
 Account tab, modelled on `tests/e2e/rollcall.spec.ts`, is the honest fill.
+
+---
+
+### Instructor walkthroughs / How-To Guides tab (added 2026-09-17)
+
+`components/tours/TourButton.tsx` wraps Driver.js so any admin page can offer a
+step-by-step walkthrough of a real task. `lib/tours/registry.ts` is the
+discovery manifest, and `components/tours/WalkthroughsPanel.tsx` renders it as
+a "How-To Guides" tab on `/admin/settings` for all three roles. Filtering
+matches the Admin Feature Reference's access model exactly (`canAccessTour`
+mirrors `canAccess` in `ReferenceContent.tsx`): super_admin sees every
+walkthrough regardless of its tagged roles, everyone else sees only the ones
+tagged for their own role. (Updated 2026-09-17 from an earlier "manager and
+super_admin see everything, grouped by role" design to match the reference
+page's model instead, per direct request.)
+
+**Signals added:**
+
+- **U** — `tests/unit/lib/tours-registry.test.ts` covers `canAccessTour` and
+  `toursForRole`: role-tagged filtering, and that super_admin sees every
+  walkthrough regardless of tag while every other role only sees its own.
+- **U** — `tests/unit/components/TourButton.test.tsx` covers `TourButton`'s
+  own logic, the part this codebase actually wrote (Driver.js itself is a
+  tested third-party library): clicking starts a tour with the given steps; a
+  matching `?tour=<id>` URL param auto-starts once and strips itself from the
+  URL; a non-matching or absent param does not auto-start; unmounting
+  destroys an in-progress tour but not one that never started.
+
+**Not covered.** No outcome e2e test drives any of the three walkthroughs
+end to end (open How-To Guides → click Start → confirm the Driver.js
+overlay highlights the right element). `// TODO:` this repo has no seeded
+instructor-role Playwright auth fixture yet (only `tests/auth/customer.setup.ts`
+and `tests/auth/admin.setup.ts` exist), so this needs a `tests/auth/instructor.setup.ts`
+fixture before an outcome test modelled on `tests/e2e/rollcall.spec.ts` can be
+written. Until then, the component test above is the only automated signal
+that any tour's copy or `data-tour` targets haven't drifted from the real
+fields they target across `CreateSessionClient.tsx` and
+`SessionDetailClient.tsx`.
+
+#### First real tour: "Submit a Class Session for Approval" (added 2026-09-17)
+
+`TOURS` in the registry now has its first entry (`id: "create-session"`,
+`roles: ["instructor", "manager", "super_admin"]` as of a same-day correction
+— originally shipped instructor-only, see below), pointing at
+`/admin/sessions/new?tour=create-session`. `data-tour="..."` attributes were
+added to `CreateSessionClient.tsx`'s required-field wrappers, its Discount
+and Add-ons sections, and its submit button (steps defined in the sibling
+`tourSteps.ts`); Notes and team-booking mode are the only things
+intentionally skipped, to keep the walkthrough focused on what's needed to
+get a session pending approval. The Add-ons step uses `skipMissingElement:
+true` since that section only renders once a class type with eligible
+add-ons is picked. `TourButton` also gained the `?tour=` auto-launch
+behavior described above, specifically so this entry's "Start" link in
+How-To Guides launches immediately rather than requiring a second click on
+the target page.
+
+**Correction (same day):** shipped instructor-only at first even though
+nothing about the underlying task is instructor-specific. Widening it to
+all staff surfaced a real gap: the Instructor field has two different UIs
+(a read-only display for instructors, a required `<select>` for
+managers/super_admins), and the tour only had a step for the first one. Added
+`INSTRUCTOR_SELECT_STEP` (`data-tour="session-instructor-select"`, also
+`skipMissingElement: true`) so exactly one of the two highlights for any
+given viewer. Applied the identical fix to `teamBookingTourSteps.ts`, which
+had the same latent gap since it already claimed to serve all three roles.
+Verified live as super_admin: the tour correctly skips the instructor-only
+step and lands on the real `<select>` with accurate copy.
+
+#### Second tour: "Create a Team or Corporate Booking" (added 2026-09-17)
+
+`TOURS` gained a second entry (`id: "team-booking"`, `roles: ["instructor",
+"manager", "super_admin"]`), pointing at
+`/admin/sessions/new?team=1&tour=team-booking`. `tourSteps.ts` was refactored
+to export each step as an individually-named constant so this tour could
+reuse the fields that behave identically in team mode (Class Type,
+Instructor, Location, Date, Start Time, Duration, Max Capacity, Discount)
+instead of forking their copy; the shared Instructor step gained
+`skipMissingElement: true` since its target only exists for the instructor
+role, and this tour (unlike the first) is available to all three. Eight new
+`data-tour` attributes cover the company-details block, the payment-mode
+picker, the price field, and the real confirmation modal's "Yes, create it"
+button. 17 steps total.
+
+The tour deliberately ends at that confirmation button, not the post-submit
+success screen: clicking it fires a real `POST /api/team-bookings` that can
+send a real email and raise a real invoice, and reaching the screen that
+follows would need Driver.js's `waitForElement` to bridge that network gap
+for no real benefit, since the first tour also stops at its own Submit
+button rather than following through to what happens after. Verified by
+hand up to that exact point (real submit click → real modal → tour
+correctly spotlights the real confirm button) without ever clicking it, so
+no test data was actually submitted during verification.
+
+#### Third tour: "Add a Student to a Class" (added 2026-09-17)
+
+`TOURS` gained a third entry (`id: "add-student"`, `roles: ["instructor",
+"manager", "super_admin"]`), pointing at `/admin/sessions` — a deliberate
+departure from the first two tours. "Add Student" only exists on a specific
+session's detail page (`/admin/sessions/[id]`), and there's no single
+"right" session to deep-link into from a static registry entry, so this
+tour uses a two-hop entry instead of the `?tour=` auto-launch pattern: the
+How-To Guides card sends the user to the sessions list with copy telling
+them to click into any session, where a `TourButton` (gated by the same
+`canAddStudents` check as the "Add Student" button itself) is waiting to be
+clicked manually. New file `addStudentTourSteps.ts` exports
+`getAddStudentSteps(canAddWithoutCharging: boolean)`, a function rather
+than a static array, since three of its seven steps carry genuinely
+different copy for managers/super_admins (who also get a free "Add"
+shortcut per search result) versus instructors (whose only path is the
+charge panel) — simpler and more robust than trying to target the free
+"Add" button via `skipMissingElement`, since it's a per-row element with no
+single stable target. The steps array is memoized with `useMemo` in
+`SessionDetailClient.tsx`, unlike the first two tours' module-level
+constants, specifically so `TourButton`'s auto-launch effect (keyed on the
+steps reference) doesn't re-fire on every render of this frequently-updating
+component.
+
+This is the highest-stakes tour yet: submitting the charge panel captures a
+real PayPal card charge immediately, with no second confirmation step
+anywhere in the flow. The final step highlights the card fields and Charge
+button together (one combined `data-tour="add-student-payment"` wrapper
+around wherever `CardPaymentSection`/`MockCardPaymentSection` renders,
+added only in `SessionDetailClient.tsx` — nothing inside those shared
+payment components was touched) with warning copy and is never clicked
+during the walkthrough itself, by design. Verified live as super_admin
+through all 7 steps, including confirming this specific environment is
+**not** running mock payments (real Visa/Mastercard/Amex/Discover fields,
+no amber "Mock payments active" banner) — closed the modal at the final
+step without ever touching the real Charge button, so no card was actually
+charged during verification.
+
+### Staff Directory (added 2026-09-22)
+
+`/admin/directory` is a new read-only internal page (all staff roles, migration
+0070): a card per active staff member with name, an optional Directory Title,
+click-to-call phone, and click-to-mail email, grouped by role. It reuses the
+existing `profiles` table rather than a new one; `directory_title` is the one
+new column, distinct from `bio_description` (public /about copy — wrong
+audience/tone for an internal list). Editing happens on the existing
+super_admin-only `/admin/staff` page: `BioEditPanel`'s Edit Info button is now
+shown for every role (previously instructor/super_admin only, since it also
+edits the public bio for those two), with the About-page-only fields hidden
+for managers/inspectors.
+
+**Signal:** three pieces of real logic, all in `lib/staff-directory.ts` and all
+unit-tested (13 tests total in `tests/unit/lib/staff-directory.test.ts`):
+grouping/ordering staff by role and sorting by last name (`groupStaffByRole`
+— fixed role order, empty roles omitted rather than rendering an empty
+heading, last-name sorting, input array not mutated); deduping each
+instructor's completed class types into a sorted list (`buildClassesTaughtMap`
+— dedup, per-instructor separation, alphabetical sort, null rows skipped); and
+resolving which email a card shows (`resolveDirectoryEmail` — override wins
+when set, falls back to the real email otherwise).
+
+**Classes-taught addition (same day).** Each staff card now lists the distinct
+class types that person has completed as lead instructor, queried from
+`class_sessions` filtered to `instructor_id = X AND status = 'completed'` —
+deliberately matching the exact filter already used by the Analytics
+"most-active-instructors" chart and the instructor dashboard's pending-grades
+widget (`analyticsData.ts`, `admin/page.tsx`), rather than inventing a new
+definition of "taught". Since `session_status` is a single enum where
+`completed`/`cancelled` are mutually exclusive, that one filter already
+excludes cancelled sessions with no separate check needed. Assistant-taught
+sessions (`assistant_instructor_id`) are **not** counted — no existing code
+aggregates by that column, so scope was kept to the lead-instructor precedent
+rather than making a new product call unprompted.
+
+**Directory email override (same day, migration 0071).** A second new
+column, `directory_email`, lets a super admin show a different email on the
+directory than a staff member's real (and login) address — requested for
+privacy on one account. Deliberately a separate column rather than repurposing
+`email`: `profiles.email` is also the sign-in address (see the Staff
+self-service account note below and invariant #14), so overwriting it to hide
+it from the directory would have broken that person's login. `directory_email`
+is display-only, validated with the same email-shape regex already used by
+three other routes (`/api/staff/[id]/bio`, `/api/profile/payout-email`, etc.)
+client- and server-side, and never read by auth or any email-sending code.
+
+**Honest gap:** no e2e test and no invariant. This is a low-stakes display
+page — it writes nothing (beyond the two admin-edited override fields, which
+are validated but not otherwise gated) — so per the signal table, unit tests
+on its logic are judged sufficient for now. If it grows further editable
+fields beyond the super_admin-only panel it already has, that changes.
 
 ---
 

@@ -94,6 +94,11 @@ const NAV_ITEMS: NavItem[] = [
   },
   { label: "Archived Accounts", href: "/admin/archived", roles: ["super_admin"] },
   {
+    label: "Directory",
+    href: "/admin/directory",
+    roles: ["instructor", "manager", "super_admin", "inspector"],
+  },
+  {
     label: "Settings",
     href: "/admin/settings",
     roles: ["instructor", "manager", "super_admin"],
