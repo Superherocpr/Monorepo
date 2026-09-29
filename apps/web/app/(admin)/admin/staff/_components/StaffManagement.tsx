@@ -44,6 +44,10 @@ export interface StaffMember {
   directory_title: string | null;
   /** Public-facing contact email shown on the Staff Directory page in place of `email`. Null falls back to `email`. */
   directory_email: string | null;
+  /** Phone shown on the Staff Directory page in place of `phone`. Null or blank falls back to `phone`. */
+  directory_phone: string | null;
+  /** When true, this account is omitted from the Staff Directory page. */
+  hide_from_directory: boolean;
 }
 
 interface StaffManagementProps {

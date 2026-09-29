@@ -8,6 +8,7 @@ import {
   groupStaffByRole,
   buildClassesTaughtMap,
   resolveDirectoryEmail,
+  resolveDirectoryPhone,
   type DirectoryMember,
 } from "@/lib/staff-directory";
 
@@ -21,6 +22,7 @@ function member(overrides: Partial<DirectoryMember>): DirectoryMember {
     role: "instructor",
     directory_title: null,
     directory_email: null,
+    directory_phone: null,
     classesTaught: [],
     ...overrides,
   };
@@ -144,5 +146,32 @@ describe("resolveDirectoryEmail", () => {
   test("falls back to the real email when no override is set", () => {
     const person = member({ email: "real@example.com", directory_email: null });
     expect(resolveDirectoryEmail(person)).toBe("real@example.com");
+  });
+});
+
+describe("resolveDirectoryPhone", () => {
+  test("returns the override when set", () => {
+    const person = member({ phone: "111-111-1111", directory_phone: "222-222-2222" });
+    expect(resolveDirectoryPhone(person)).toBe("222-222-2222");
+  });
+
+  test("falls back to the real phone when no override is set", () => {
+    const person = member({ phone: "111-111-1111", directory_phone: null });
+    expect(resolveDirectoryPhone(person)).toBe("111-111-1111");
+  });
+
+  test("treats a blank override as unset", () => {
+    const person = member({ phone: "111-111-1111", directory_phone: "   " });
+    expect(resolveDirectoryPhone(person)).toBe("111-111-1111");
+  });
+
+  test("returns null when the real phone is the empty-string backfill and there is no override", () => {
+    const person = member({ phone: "", directory_phone: null });
+    expect(resolveDirectoryPhone(person)).toBeNull();
+  });
+
+  test("an override rescues a profile whose real phone is empty", () => {
+    const person = member({ phone: "", directory_phone: "222-222-2222" });
+    expect(resolveDirectoryPhone(person)).toBe("222-222-2222");
   });
 });

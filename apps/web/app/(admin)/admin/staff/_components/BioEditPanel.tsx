@@ -57,6 +57,10 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
   const [directoryEmail, setDirectoryEmail] = useState("");
   // Validation error for the directory email field
   const [directoryEmailError, setDirectoryEmailError] = useState<string | null>(null);
+  // Directory phone override: shown on the Staff Directory page in place of the real phone
+  const [directoryPhone, setDirectoryPhone] = useState("");
+  // Omits this account from the Staff Directory page (e.g. a test account)
+  const [hideFromDirectory, setHideFromDirectory] = useState(false);
   // Description textarea value: initialised from the member's current bio
   const [description, setDescription] = useState("");
   // Credentials textarea value: comma-separated list, initialised from DB
@@ -91,6 +95,8 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
       setDirectoryTitle(member.directory_title ?? "");
       setDirectoryEmail(member.directory_email ?? "");
       setDirectoryEmailError(null);
+      setDirectoryPhone(member.directory_phone ?? "");
+      setHideFromDirectory(member.hide_from_directory ?? false);
       setDescription(member.bio_description ?? "");
       setCredentials(member.bio_credentials ?? "");
       setPublished(member.bio_published ?? false);
@@ -230,6 +236,8 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
         body: JSON.stringify({
           directory_title: directoryTitle.trim() || null,
           directory_email: trimmedDirectoryEmail || null,
+          directory_phone: directoryPhone.trim() || null,
+          hide_from_directory: hideFromDirectory,
           bio_photo: finalPhotoUrl,
           bio_description: description.trim() || null,
           bio_credentials: credentials.trim() || null,
@@ -343,6 +351,49 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
                 {directoryEmailError}
               </p>
             )}
+          </div>
+
+          {/* Directory phone override section */}
+          <div>
+            <label
+              htmlFor="directory-phone"
+              className="block text-sm font-semibold text-gray-700 mb-1"
+            >
+              Directory Phone
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              Optional. Shown on the Staff Directory page instead of their real phone number.
+              Leave blank to show their real number.
+            </p>
+            <input
+              id="directory-phone"
+              type="tel"
+              value={directoryPhone}
+              onChange={(e) => setDirectoryPhone(e.target.value)}
+              maxLength={30}
+              placeholder="e.g. 813-555-0100"
+              className={inputClass}
+            />
+          </div>
+
+          {/* Hide from directory toggle */}
+          <div>
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+              <input
+                type="checkbox"
+                checked={hideFromDirectory}
+                onChange={(e) => setHideFromDirectory(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold text-gray-700">
+                  Hide from Staff Directory
+                </span>
+                <span className="text-xs text-gray-500">
+                  Use for test accounts. They can still sign in and still appear on this page.
+                </span>
+              </span>
+            </label>
           </div>
 
           {/* About page sections: only instructors and super admins appear on
