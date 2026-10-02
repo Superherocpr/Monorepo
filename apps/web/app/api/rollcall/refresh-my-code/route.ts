@@ -1,7 +1,7 @@
 /**
  * POST /api/rollcall/refresh-my-code
- * Called by: InstructorDashboard "Refresh Code" button
- * Auth: Supabase session required — instructor or super_admin role only
+ * Called by: RollcallCodeWidget "Refresh Code" button, checkin QR display "Get new code"
+ * Auth: Supabase session required — instructor, manager, or super_admin role only
  * Generates a new 6-digit daily access code for the authenticated instructor.
  * Used for manual refresh (e.g., instructor displayed the code on a projector
  * and wants a new one, or testing during development).
@@ -18,10 +18,10 @@ import { assignFreshAccessCode } from "@/lib/access-code";
  * @param _request - No body required
  */
 export async function POST(_request: Request) {
-  // ── Verify the caller is an authenticated instructor or super_admin ────────
-  // super_admins are also instructors and may need to refresh their code.
+  // ── Verify the caller is an authenticated instructor, manager, or super_admin ────────
+  // managers and super_admins are also instructors and may need to refresh their code.
   // Honors view-as (deactivated check happens inside requireApiRole).
-  const authResult = await requireApiRole(["instructor", "super_admin"]);
+  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
   if ("error" in authResult) return authResult.error;
   const user = authResult.actor.user;
 

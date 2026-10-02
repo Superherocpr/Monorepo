@@ -4,7 +4,7 @@
  * matches /api/rollcall/verify-code. Auto-refreshes via
  * POST /api/rollcall/refresh-my-code at the midnight rollover, and supports
  * manual refresh as well.
- * Used by: InstructorDashboard, SuperAdminDashboard
+ * Used by: InstructorDashboard, ManagerDashboard, SuperAdminDashboard
  */
 
 "use client";
