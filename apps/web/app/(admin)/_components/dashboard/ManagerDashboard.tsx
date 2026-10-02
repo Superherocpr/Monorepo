@@ -1,12 +1,14 @@
 /**
  * ManagerDashboard: dashboard view for the manager role.
  * Shows: pending approvals, today's all-instructor classes, recent bookings,
- * unanswered contact submissions, and low stock alerts.
+ * unanswered contact submissions, low stock alerts, and the rollcall code
+ * (managers may also teach classes).
  * Used by: app/(admin)/page.tsx and SuperAdminDashboard.tsx
  */
 
 import Link from "next/link";
 import { formatClassTimeRange } from "@/lib/business-time";
+import RollcallCodeWidget from "./RollcallCodeWidget";
 
 /** A class session happening today (all instructors). */
 export interface ManagerTodaySession {
@@ -49,6 +51,10 @@ export interface ManagerDashboardProps {
   recentBookings: RecentBooking[];
   unansweredContactCount: number;
   lowStockVariants: LowStockVariant[];
+  /** Manager's own rollcall code. Omit to hide the widget (SuperAdminDashboard renders its own). */
+  dailyAccessCode?: string | null;
+  /** ISO timestamp the rollcall code was generated. Only used with dailyAccessCode. */
+  dailyAccessCodeGeneratedAt?: string | null;
   /** When true, suppresses the greeting h1: used when ManagerDashboard is embedded in SuperAdminDashboard. */
   hideGreeting?: boolean;
 }
@@ -83,6 +89,8 @@ export default function ManagerDashboard({
   recentBookings,
   unansweredContactCount,
   lowStockVariants,
+  dailyAccessCode,
+  dailyAccessCodeGeneratedAt,
   hideGreeting = false,
 }: ManagerDashboardProps) {
   return (
@@ -91,6 +99,14 @@ export default function ManagerDashboard({
         <h1 className="text-2xl font-bold text-gray-900">
           Good morning, {firstName}
         </h1>
+      )}
+
+      {/* Rollcall code: managers who teach need it too. Hidden when not passed. */}
+      {dailyAccessCode !== undefined && (
+        <RollcallCodeWidget
+          initialCode={dailyAccessCode}
+          initialGeneratedAt={dailyAccessCodeGeneratedAt ?? null}
+        />
       )}
 
       {/* ── Alert row: Pending Approvals + Contact ── */}

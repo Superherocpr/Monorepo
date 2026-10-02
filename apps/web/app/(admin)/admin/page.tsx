@@ -486,7 +486,13 @@ export default async function AdminDashboardPage() {
     };
 
     if (role === "manager") {
-      return <ManagerDashboard {...managerProps} />;
+      return (
+        <ManagerDashboard
+          {...managerProps}
+          dailyAccessCode={accessCode}
+          dailyAccessCodeGeneratedAt={accessCodeGeneratedAt}
+        />
+      );
     }
 
     // ── Super Admin extra data ──────────────────────────────────────────────
