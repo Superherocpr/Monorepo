@@ -17,6 +17,8 @@
  *   - `needs_review` — outcome genuinely unknown (e.g. the network died
  *     mid-request). Must NOT be resent until a human checks PayPal, or the
  *     instructor may be paid twice.
+ *   - `manually_paid` — every instructor in the batch was paid outside PayPal
+ *     and recorded by a super admin (see ManualPayoutMethod).
  */
 export type PayoutBatchStatus =
   | "pending"
@@ -24,7 +26,8 @@ export type PayoutBatchStatus =
   | "completed"
   | "denied"
   | "failed"
-  | "needs_review";
+  | "needs_review"
+  | "manually_paid";
 
 /**
  * Lifecycle status of a single instructor's payout item.
@@ -32,6 +35,34 @@ export type PayoutBatchStatus =
  * no PayPal account attached, then returns them.
  */
 export type PayoutItemStatus = PayoutBatchStatus | "unclaimed";
+
+/**
+ * How an instructor was paid outside PayPal. Values mirror the CHECK constraint
+ * on instructor_payout_items.manual_method (migration 0074).
+ */
+export const MANUAL_PAYOUT_METHODS = [
+  "zelle",
+  "check",
+  "cash",
+  "paypal_personal",
+  "venmo",
+  "bank_transfer",
+  "other",
+] as const;
+
+/** One way of paying an instructor outside PayPal. */
+export type ManualPayoutMethod = (typeof MANUAL_PAYOUT_METHODS)[number];
+
+/** Plain-English label per manual payment method, for dropdowns, badges and emails. */
+export const MANUAL_PAYOUT_METHOD_LABELS: Record<ManualPayoutMethod, string> = {
+  zelle: "Zelle",
+  check: "Check",
+  cash: "Cash",
+  paypal_personal: "PayPal (personal transfer)",
+  venmo: "Venmo",
+  bank_transfer: "Bank transfer",
+  other: "Other",
+};
 
 /** How a denial came to be recorded. */
 export type PayoutDenialSource = "manual" | "paypal_sync" | "webhook";
@@ -44,7 +75,8 @@ export type PayoutAttemptOutcome =
   | "denied"
   | "failed"
   | "needs_review"
-  | "unclaimed";
+  | "unclaimed"
+  | "manually_paid";
 
 /** A payout item as returned by the reservation RPCs. */
 export interface ReservedPayoutItem {
@@ -184,6 +216,26 @@ export interface PayoutHistoryItem {
   deniedAt: string | null;
   denialSource: PayoutDenialSource | null;
   denialReason: string | null;
+  /** Manual settlement record; null unless the item was ever paid outside PayPal. */
+  manualPayment: ManualPaymentRecord | null;
+}
+
+/**
+ * The record of an instructor being paid outside PayPal. Kept on the item even
+ * after an undo (with the `voided*` fields set) so the original claim stays visible.
+ */
+export interface ManualPaymentRecord {
+  method: ManualPayoutMethod;
+  /** Transaction id, check number, or whatever identifies the payment. */
+  reference: string;
+  /** ISO date (YYYY-MM-DD) the money was actually sent. */
+  paidOn: string;
+  note: string | null;
+  recordedByName: string | null;
+  recordedAt: string | null;
+  /** Set when the settlement was undone. */
+  voidedAt: string | null;
+  voidReason: string | null;
 }
 
 /** A past payout batch with its per-instructor lines. */
@@ -260,6 +312,9 @@ export interface InstructorOwnPayoutItem {
   unclaimedExpiresAt: string | null;
   deniedAt: string | null;
   denialReason: string | null;
+  /** How and when the instructor was paid, when the item was settled outside PayPal. */
+  manualMethod: ManualPayoutMethod | null;
+  manualPaidOn: string | null;
   batchSenderBatchId: string;
   paypalPayoutBatchId: string | null;
   batchStatus: PayoutBatchStatus;

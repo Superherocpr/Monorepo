@@ -66,6 +66,7 @@ clone — so this file is the one that travels with the repo.
 | **PayPal invoice webhook** | — | — | — | ~ | — | — | Never fired in prod — but `invoices` is empty, so **untested, not proven broken** |
 | **PayPal payouts webhook** | — | — | — | — | ✅ | — | ✅ **Confirmed live** — received events 2026-08-17. Now covered by `payout_webhook_silent` |
 | Payouts | ✅✅✅✅ | ○ smoke | ✅✅✅ | ✅ | ✅✅✅ | ✅✅ | **Best-covered feature.** The model for everything else |
+| Payout manual settlement | ✅✅✅✅ | — | — | ✅ | ✅✅ | — | Added 2026-10-06 (migration 0074). Settle/void RPCs tested against a real Postgres engine (22 scenarios incl. double-settle, moved-on earnings, in-flight refusal, grants); route tests cover auth, typed confirmation, live-PayPal refusal and email; reconcile guard is mutation-checked. Signals: health invariants `paid_earning_item_not_paid` and `manual_payout_amount_mismatch` (nightly canary). **Gap:** no browser e2e of the dialog, and nothing alerts if an admin *forgets* to record a manual payment (the denied batch keeps appearing in the daily stuck-batch digest, which is the nudge) |
 | Promo codes | ✅ | — | — | ✅ | — | ✅ | Quarterly abuse audit only. No `max_uses` column exists, so there is no redemption cap to check |
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |

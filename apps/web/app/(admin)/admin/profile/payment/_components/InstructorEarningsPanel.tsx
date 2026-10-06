@@ -20,11 +20,13 @@ import {
   X,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/invoice-utils";
-import type {
-  InstructorEarningsData,
-  InstructorOwnEarning,
-  InstructorOwnPayoutItem,
-  PayoutItemStatus,
+import { formatManualPaidOn } from "@/lib/payout-manual";
+import {
+  MANUAL_PAYOUT_METHOD_LABELS,
+  type InstructorEarningsData,
+  type InstructorOwnEarning,
+  type InstructorOwnPayoutItem,
+  type PayoutItemStatus,
 } from "@/types/payouts";
 import { formatClassDate } from "@/lib/business-time";
 
@@ -85,6 +87,7 @@ const PAYOUT_ITEM_STATUS: Record<
   failed: { label: "Failed", classes: "bg-orange-100 text-orange-800" },
   needs_review: { label: "Needs review", classes: "bg-amber-100 text-amber-900" },
   unclaimed: { label: "Unclaimed", classes: "bg-purple-100 text-purple-800" },
+  manually_paid: { label: "Paid directly", classes: "bg-green-100 text-green-800" },
 };
 
 /**
@@ -361,7 +364,8 @@ function PayoutItemsTable({ items }: { items: InstructorOwnPayoutItem[] }): Reac
         <tbody className="divide-y divide-gray-100">
           {items.map((item) => {
             const cfg = PAYOUT_ITEM_STATUS[item.status] ?? PAYOUT_ITEM_STATUS.pending;
-            const note = item.denialReason ?? item.errorMessage ?? null;
+            const note =
+              item.status === "manually_paid" ? null : item.denialReason ?? item.errorMessage ?? null;
             return (
               <tr key={item.id} className="hover:bg-gray-50">
                 <td className="whitespace-nowrap px-4 py-3">
@@ -389,6 +393,12 @@ function PayoutItemsTable({ items }: { items: InstructorOwnPayoutItem[] }): Reac
                   {item.status === "unclaimed" && item.unclaimedExpiresAt ? (
                     <span className="mt-0.5 block text-[11px] text-purple-700">
                       Returns to pool on {fmtDate(item.unclaimedExpiresAt)} if not claimed
+                    </span>
+                  ) : null}
+                  {item.status === "manually_paid" && item.manualMethod && item.manualPaidOn ? (
+                    <span className="mt-0.5 block text-[11px] text-green-700">
+                      {MANUAL_PAYOUT_METHOD_LABELS[item.manualMethod]} on{" "}
+                      {formatManualPaidOn(item.manualPaidOn)}
                     </span>
                   ) : null}
                 </td>

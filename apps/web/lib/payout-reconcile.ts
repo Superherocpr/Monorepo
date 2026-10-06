@@ -7,6 +7,10 @@
  *   - POST /api/webhooks/paypal-payouts (PayPal pushes the outcome to us)
  *   - POST /api/payouts/deny            (an admin asserts a denial manually)
  *
+ * An item an admin has already settled by hand (`manually_paid`, migration 0074)
+ * is never touched by any of these paths: PayPal's view of a payout the business
+ * paid itself must not flip it back to denied or release earnings that are paid.
+ *
  * The central rule: an item whose funds returned to the business account
  * releases its earnings back to `pending` so they can be paid again. An item
  * still in flight — including UNCLAIMED, where PayPal holds the money for 30
@@ -101,6 +105,8 @@ function attemptOutcomeFor(status: PayoutItemStatus): PayoutAttemptOutcome {
       return "unclaimed";
     case "needs_review":
       return "needs_review";
+    case "manually_paid":
+      return "manually_paid";
     default:
       return "submitted";
   }
@@ -173,7 +179,11 @@ async function applyItemStatus(
       updated_at: now,
     })
     .eq("id", itemId)
-    .eq("payout_batch_id", batchId);
+    .eq("payout_batch_id", batchId)
+    // A manual settlement is final as far as PayPal is concerned. The earnings
+    // updates below only touch `payout_pending` rows, which a settled item no
+    // longer has, so guarding the item row is what protects the whole record.
+    .neq("status", "manually_paid");
 
   if (status === "completed") {
     await adminClient
@@ -207,7 +217,8 @@ async function applyItemStatus(
       ...(params.errorMessage ? { note: params.errorMessage } : {}),
     })
     .eq("payout_batch_id", batchId)
-    .eq("payout_item_id", itemId);
+    .eq("payout_item_id", itemId)
+    .neq("outcome", "manually_paid");
 }
 
 /** Result of reconciling one batch against PayPal. */
@@ -259,6 +270,7 @@ async function writeBatchStatus(
   const statuses = ((itemRows ?? []) as { status: PayoutItemStatus }[]).map((r) => r.status);
   const inFlight = statuses.filter(isInFlight).length;
   const completed = statuses.filter((s) => s === "completed").length;
+  const manual = statuses.filter((s) => s === "manually_paid").length;
   const returned = statuses.filter(releasesEarnings).length;
 
   const batchDenied =
@@ -269,12 +281,16 @@ async function writeBatchStatus(
   let localStatus: string;
   let errorMessage: string | null = null;
 
-  if (batchDenied) {
+  if (manual > 0 && inFlight === 0 && returned === 0 && completed === 0) {
+    // Every item was paid by hand. PayPal's header (often DENIED) describes a
+    // payout the business replaced, so it must not drag the batch back to denied.
+    localStatus = "manually_paid";
+  } else if (batchDenied) {
     localStatus = "denied";
     errorMessage = `PayPal denied the entire batch (${paypalBatchStatus}). Funds were returned to the business account.`;
   } else if (inFlight > 0) {
     localStatus = "assumed_complete";
-  } else if (returned > 0 && completed === 0) {
+  } else if (returned > 0 && completed + manual === 0) {
     localStatus = "denied";
     errorMessage = "Every payout item in this batch was returned by PayPal.";
   } else if (returned > 0) {
@@ -293,7 +309,8 @@ async function writeBatchStatus(
       status: localStatus,
       error_message: errorMessage,
       ...(feeTotal !== null ? { paypal_fee_total: feeTotal } : {}),
-      completed_at: localStatus === "completed" ? now : null,
+      completed_at:
+        localStatus === "completed" || localStatus === "manually_paid" ? now : null,
       ...(localStatus === "denied"
         ? {
             denied_at: now,
@@ -354,6 +371,9 @@ export async function reconcilePayoutBatch(
   for (const item of paypalStatus.items) {
     reportedItemIds.add(item.senderItemId);
 
+    // Already paid by hand: PayPal's report on it no longer matters.
+    if (priorStatuses.get(item.senderItemId) === "manually_paid") continue;
+
     // A denied batch header overrides a per-item status that still reads PENDING:
     // nothing in a denied batch was paid.
     const status = batchDenied ? "denied" : mapPayPalItemStatus(item.transactionStatus);
@@ -391,6 +411,7 @@ export async function reconcilePayoutBatch(
 
     for (const row of (unreportedItems ?? []) as { id: string }[]) {
       if (reportedItemIds.has(row.id)) continue;
+      if (priorStatuses.get(row.id) === "manually_paid") continue;
       releasedCount += 1;
       await applyItemStatus(adminClient, {
         itemId: row.id,
@@ -442,7 +463,9 @@ export async function denyPayoutBatchLocally(
   const { data: itemRows } = await adminClient
     .from("instructor_payout_items")
     .select("id")
-    .eq("payout_batch_id", batchId);
+    .eq("payout_batch_id", batchId)
+    // Items already paid by hand are not part of a denial.
+    .neq("status", "manually_paid");
 
   const items = (itemRows ?? []) as { id: string }[];
 

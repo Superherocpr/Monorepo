@@ -111,7 +111,9 @@ export async function POST(request: Request) {
         ? "This batch was never sent to PayPal. Use Release instead."
         : batch.status === "denied"
           ? "This batch is already marked denied."
-          : "This batch already failed and its earnings are back in the payable queue.";
+          : batch.status === "manually_paid"
+            ? "Every payout in this batch was paid manually. Undo the manual payment first if that was a mistake."
+            : "This batch already failed and its earnings are back in the payable queue.";
     return Response.json({ success: false, error: explanation }, { status: 400 });
   }
 
@@ -126,6 +128,25 @@ export async function POST(request: Request) {
       },
       { status: 400 }
     );
+  }
+
+  // A whole-batch denial would sweep up instructors already paid by hand.
+  if (!itemId) {
+    const { count: manualCount } = await adminClient
+      .from("instructor_payout_items")
+      .select("id", { count: "exact", head: true })
+      .eq("payout_batch_id", batch.id)
+      .eq("status", "manually_paid");
+    if ((manualCount ?? 0) > 0) {
+      return Response.json(
+        {
+          success: false,
+          error:
+            "Some instructors in this batch were paid manually. Mark only the individual payouts PayPal returned instead of the whole batch.",
+        },
+        { status: 409 }
+      );
+    }
   }
 
   // Verify the item belongs to this batch before touching it.
@@ -147,6 +168,16 @@ export async function POST(request: Request) {
     if (item.status === "denied") {
       return Response.json(
         { success: false, error: "This payout item is already marked denied." },
+        { status: 400 }
+      );
+    }
+    if (item.status === "manually_paid") {
+      return Response.json(
+        {
+          success: false,
+          error:
+            "This payout was paid manually. Undo the manual payment first if that was a mistake.",
+        },
         { status: 400 }
       );
     }

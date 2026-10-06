@@ -15,6 +15,7 @@ import type {
   InstructorEarningsSummary,
   InstructorOwnEarning,
   InstructorOwnPayoutItem,
+  ManualPayoutMethod,
   PayoutBatchStatus,
   PayoutDenialSource,
   PayoutHistoryBatch,
@@ -612,7 +613,15 @@ export async function getPayoutHistory(
       denied_at,
       denial_source,
       denial_reason,
-      profiles!instructor_id ( first_name, last_name )
+      manual_method,
+      manual_reference,
+      manual_paid_on,
+      manual_note,
+      manual_recorded_at,
+      manual_voided_at,
+      manual_void_reason,
+      profiles!instructor_id ( first_name, last_name ),
+      recorder:profiles!manual_recorded_by ( first_name, last_name )
       `
     )
     .in("payout_batch_id", batchIds)
@@ -632,7 +641,15 @@ export async function getPayoutHistory(
     denied_at: string | null;
     denial_source: string | null;
     denial_reason: string | null;
+    manual_method: ManualPayoutMethod | null;
+    manual_reference: string | null;
+    manual_paid_on: string | null;
+    manual_note: string | null;
+    manual_recorded_at: string | null;
+    manual_voided_at: string | null;
+    manual_void_reason: string | null;
     profiles: { first_name: string | null; last_name: string | null } | null;
+    recorder: { first_name: string | null; last_name: string | null } | null;
   }>;
 
   const itemsByBatch = new Map<string, PayoutHistoryItem[]>();
@@ -650,6 +667,21 @@ export async function getPayoutHistory(
       deniedAt: item.denied_at,
       denialSource: (item.denial_source as PayoutDenialSource | null) ?? null,
       denialReason: item.denial_reason,
+      // The record is kept after an undo (voidedAt set) so the original claim
+      // stays visible; it is only null when the item was never settled by hand.
+      manualPayment:
+        item.manual_method && item.manual_reference && item.manual_paid_on
+          ? {
+              method: item.manual_method,
+              reference: item.manual_reference,
+              paidOn: item.manual_paid_on,
+              note: item.manual_note,
+              recordedByName: item.recorder ? displayName(item.recorder, "Super admin") : null,
+              recordedAt: item.manual_recorded_at,
+              voidedAt: item.manual_voided_at,
+              voidReason: item.manual_void_reason,
+            }
+          : null,
     };
     const list = itemsByBatch.get(item.payout_batch_id);
     if (list) list.push(mapped);
@@ -798,6 +830,7 @@ export async function getInstructorEarningsData(
       `
       id, amount, status, paypal_fee_amount, error_message,
       unclaimed_expires_at, denied_at, denial_reason,
+      manual_method, manual_paid_on,
       instructor_payout_batches!payout_batch_id (
         sender_batch_id, paypal_payout_batch_id, status,
         created_at, submitted_at, completed_at
@@ -818,6 +851,8 @@ export async function getInstructorEarningsData(
     unclaimed_expires_at: string | null;
     denied_at: string | null;
     denial_reason: string | null;
+    manual_method: ManualPayoutMethod | null;
+    manual_paid_on: string | null;
     instructor_payout_batches: {
       sender_batch_id: string;
       paypal_payout_batch_id: string | null;
@@ -839,6 +874,10 @@ export async function getInstructorEarningsData(
     unclaimedExpiresAt: item.unclaimed_expires_at,
     deniedAt: item.denied_at,
     denialReason: item.denial_reason,
+    // Only meaningful while the item is actually settled; an undone record
+    // leaves the columns behind but the status is no longer manually_paid.
+    manualMethod: item.status === "manually_paid" ? item.manual_method : null,
+    manualPaidOn: item.status === "manually_paid" ? item.manual_paid_on : null,
     batchSenderBatchId: item.instructor_payout_batches?.sender_batch_id ?? "",
     paypalPayoutBatchId: item.instructor_payout_batches?.paypal_payout_batch_id ?? null,
     batchStatus: (item.instructor_payout_batches?.status ?? "pending") as PayoutBatchStatus,

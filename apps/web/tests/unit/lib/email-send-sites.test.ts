@@ -107,6 +107,7 @@ const EXPECTED_SEND_SITES: Record<string, string> = {
   "payout-notify:denial": "lib/payout-notify.ts",
   "payout-notify:stuck-digest": "lib/payout-notify.ts",
   "payout-notify:instructor-paid": "lib/payout-notify.ts",
+  "payout-notify:instructor-manual-paid": "lib/payout-notify.ts",
 
   // ── Scheduled / operational ────────────────────────────────────────────────
   "certifications/send-reminders": "app/api/certifications/send-reminders/route.ts",

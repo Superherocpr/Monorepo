@@ -59,6 +59,7 @@ import {
   payoutDeniedAdminEmail,
   payoutStuckDigestAdminEmail,
   instructorPayoutSentEmail,
+  instructorManualPayoutEmail,
   bookingCancelledEmail,
   instructorBookingNotificationEmail,
   dailySummaryEmail,
@@ -619,6 +620,18 @@ const FIXTURES: Record<string, Fixture> = {
         firstName: "Alex",
         amount: 150,
         payoutEmail: "alex@example.com",
+        baseUrl: BASE_URL,
+      }),
+  },
+
+  instructorManualPayoutEmail: {
+    full: () =>
+      instructorManualPayoutEmail({
+        firstName: "Alex",
+        amount: 150,
+        methodLabel: "Zelle",
+        reference: "ZEL-4471",
+        paidOn: "2026-10-05",
         baseUrl: BASE_URL,
       }),
   },

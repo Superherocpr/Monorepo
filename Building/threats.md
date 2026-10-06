@@ -1098,3 +1098,19 @@ This narrows the window rather than closing it — a true fix needs the claim to
 happen before the PayPal call, which requires a schema column to claim against.
 Deferred: at current volume (one company booking in production to date) the
 mitigation is proportionate, and a lost race is now loud rather than silent.
+
+---
+
+## THREAT-069 — Manual payout settlement lets a super_admin mark earnings paid without moving money
+
+**Severity:** 2/10 (low)
+**File:** `apps/web/app/api/payouts/manual-settle/route.ts`, migration `0074_manual_payout_settlement.sql`
+**Date:** 2026-10-06
+**Status:** MITIGATED
+
+**Threat:** "Paid manually" flips instructor earnings to `paid` on a super_admin's say-so, with no PayPal transfer behind it. A malicious or compromised super_admin could mark an instructor's earnings paid so they are never sent, or record payments that were never made.
+
+**Attack vector:** Requires a super_admin session, who can already change fees, payout settings and PayPal batches directly, so this adds little capability. The harm would be an instructor silently going unpaid.
+
+**Mitigation:** The write is a service-role-only RPC (execute revoked from PUBLIC, anon and authenticated). Every record stores who, when, method, reference, date and note, plus a typed batch-id confirmation and an amount that must equal what is owed. The instructor is emailed, so an unrecorded-in-reality payment is reported by the person who would be shorted. Undo requires a reason and keeps the original record. Health invariants 15 and 16 flag a paid earning without a settled item and an amount mismatch. The item must be denied or failed and PayPal is re-checked first, so it cannot be used to mask a payout PayPal is still moving.
+
