@@ -461,6 +461,67 @@ describe("getTeamBookingByShareToken", () => {
 
     expect((await getTeamBookingByShareToken(supabase, TOKEN))?.pricePerSeat).toBe(80);
   });
+
+  /** A per-seat team row whose class carries a session-level discount. */
+  function discountedTeamRow(discount: number | string | null, paymentMode = "per_seat") {
+    const base = teamRow({ payment_mode: paymentMode, price_per_seat: "85.00" });
+    return {
+      ...base,
+      class_sessions: { ...base.class_sessions, discount_percent: discount },
+    };
+  }
+
+  const DISCOUNT_TABLES = {
+    bookings: [],
+    invoices: [],
+    profiles: { first_name: "Ada", last_name: "Lovelace", phone: null, role: "manager" },
+  };
+
+  test("applies the class discount to the employee price, keeping the raw rate separate", async () => {
+    // Mirrors the real 2026-10-14 booking: $85 rate with a $20 (23.529...%) discount.
+    const supabase = mockSupabase({
+      team_bookings: discountedTeamRow("23.52941176470588"),
+      ...DISCOUNT_TABLES,
+    });
+
+    const view = await getTeamBookingByShareToken(supabase, TOKEN);
+
+    expect(view?.discountedPricePerSeat).toBe(65);
+    expect(view?.discountPercent).toBeCloseTo(23.529, 2);
+    // pricePerSeat feeds getSessionPricing as the override, which applies the
+    // discount itself, so it must stay undiscounted or the discount doubles up.
+    expect(view?.pricePerSeat).toBe(85);
+  });
+
+  test("reports no discount when the class has none", async () => {
+    const supabase = mockSupabase({ team_bookings: discountedTeamRow(null), ...DISCOUNT_TABLES });
+
+    const view = await getTeamBookingByShareToken(supabase, TOKEN);
+
+    expect(view?.discountPercent).toBe(0);
+    expect(view?.discountedPricePerSeat).toBe(85);
+  });
+
+  test("never advertises a discount on company-paid classes", async () => {
+    const supabase = mockSupabase({
+      team_bookings: discountedTeamRow(10, "company_per_signup"),
+      ...DISCOUNT_TABLES,
+    });
+
+    const view = await getTeamBookingByShareToken(supabase, TOKEN);
+
+    expect(view?.discountPercent).toBe(0);
+    expect(view?.discountedPricePerSeat).toBe(0);
+  });
+
+  test("selects discount_percent from the session", async () => {
+    // The mock cannot prove the real column is read, so pin the query shape.
+    const supabase = mockSupabase({ team_bookings: discountedTeamRow(10), ...DISCOUNT_TABLES });
+
+    await getTeamBookingByShareToken(supabase, TOKEN);
+
+    expect((selectsByTable.get("team_bookings") ?? [])[0]).toContain("discount_percent");
+  });
 });
 
 // ---------------------------------------------------------------------------

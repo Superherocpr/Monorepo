@@ -130,7 +130,7 @@ export const GROUPS: GroupDef[] = [
             role: "instructor",
           },
           "Send Invoice: opens the invoice creation form pre-filled with this session",
-          "Team / corporate classes show a Team Booking badge and a highlighted panel near the top with the company and contact details, the agreed price, and the signup link, plus a Copy signup link button",
+          "Team / corporate classes show a Team Booking badge and a highlighted panel near the top with the company and contact details, the agreed price (for per-seat bookings this is what each employee pays after the class discount), and the signup link, plus a Copy signup link button",
           "That panel also says whether the contact has been emailed the link yet, and the date it went out",
           { text: "If a flat company-paid team class was never invoiced, that panel says so in red and gives you a Raise invoice button; it re-checks first, so pressing it twice never bills the company twice", role: "manager" },
           { text: "A per-signup team class shows Not invoiced yet with a Raise invoice button. That is normal before the class: it bills automatically the day after, or you can raise it early for whoever has signed up so far", role: "manager" },

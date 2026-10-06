@@ -42,6 +42,7 @@ import { CardPaymentSection } from "@/app/_components/PayPalCardPaymentSection";
 import { MockCardPaymentSection } from "@/app/_components/MockCardPaymentSection";
 import TourButton from "@/components/tours/TourButton";
 import { getAddStudentSteps } from "./addStudentTourSteps";
+import { applyDiscountPercent, normalizeDiscountPercent } from "@/lib/session-pricing";
 
 // ─── Exported types (imported by the server component) ────────────────────────
 
@@ -512,6 +513,20 @@ export default function SessionDetailClient({
     const discount = session.discount_percent ?? 0;
     return Number((Number(base) * (1 - discount / 100)).toFixed(2));
   }, [session.class_types?.price, session.discount_percent]);
+
+  /**
+   * What each employee pays on a per-seat team link: the negotiated rate less
+   * the class discount, formatted for the team card. Uses the shared formula so
+   * it matches the public link and checkout.
+   */
+  const perSeatLabel = useMemo(() => {
+    const rate = Number(session.team_booking?.price_per_seat ?? 0);
+    const discount = normalizeDiscountPercent(session.discount_percent);
+    const final = `$${applyDiscountPercent(rate, discount).toFixed(2)}`;
+    return discount > 0
+      ? `${final} (${parseFloat(discount.toFixed(2))}% off $${rate.toFixed(2)})`
+      : final;
+  }, [session.team_booking?.price_per_seat, session.discount_percent]);
 
   // ── UI state ──────────────────────────────────────────────────────────────
 
@@ -2577,7 +2592,7 @@ export default function SessionDetailClient({
                   ? `$${Number(session.team_booking.total_price ?? 0).toFixed(2)} total, billed to the company`
                   : session.team_booking.payment_mode === "company_per_signup"
                     ? `$${Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} per signup, billed to the company`
-                    : `$${Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} per seat, paid by each employee`}
+                    : `${perSeatLabel} per seat, paid by each employee`}
               </p>
             </div>
 
