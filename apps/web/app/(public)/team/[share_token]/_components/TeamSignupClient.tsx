@@ -84,7 +84,7 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
   const [clientTokenError, setClientTokenError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const amountDue = appliedPromo ? appliedPromo.finalPrice : view.pricePerSeat;
+  const amountDue = appliedPromo ? appliedPromo.finalPrice : view.discountedPricePerSeat;
   // Both company modes are free to the employee: in per-signup mode the company
   // is billed later for exactly the signups made here.
   const isCompanyPaid = view.paymentMode === "company" || view.paymentMode === "company_per_signup";
@@ -385,6 +385,16 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
                 <span className="text-green-700">
                   Nothing — {view.companyName} has paid for this class
                 </span>
+              ) : view.discountPercent > 0 ? (
+                <>
+                  <span className="line-through text-gray-400 font-normal mr-1.5">
+                    ${view.pricePerSeat.toFixed(2)}
+                  </span>
+                  ${view.discountedPricePerSeat.toFixed(2)}
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                    {parseFloat(view.discountPercent.toFixed(2))}% OFF
+                  </span>
+                </>
               ) : (
                 `$${view.pricePerSeat.toFixed(2)}`
               )}
