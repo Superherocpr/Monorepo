@@ -7,11 +7,14 @@
  * Used by: app/(public)/contact/page.tsx
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Phone, Mail, MapPin, MessageSquare } from "lucide-react";
 import CaptchaCheckbox from "@/components/CaptchaCheckbox";
 import TurnstileWidget from "@/components/TurnstileWidget";
-import { CONTACT_INQUIRY_TYPES } from "@/lib/contact-constants";
+import {
+  CONTACT_INQUIRY_TYPES,
+  inquiryTypeFromParam,
+} from "@/lib/contact-constants";
 
 // When this key is present the real Cloudflare Turnstile widget is shown and
 // the token is verified server-side. When unset, the self-contained checkbox
@@ -48,6 +51,19 @@ export default function ContactSection() {
   //   No key                     → captchaChecked is a simple boolean.
   const [captchaChecked, setCaptchaChecked] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+
+  // Preselect the inquiry type when linked with ?inquiry=<type> (e.g. the home
+  // page "Become an Instructor" button). Read on mount rather than via
+  // useSearchParams so the form stays server-rendered without a Suspense bailout.
+  // Only fills an empty selection so it never overwrites a user's choice.
+  useEffect(() => {
+    const preselected = inquiryTypeFromParam(
+      new URLSearchParams(window.location.search).get("inquiry")
+    );
+    if (preselected) {
+      setForm((prev) => (prev.inquiryType ? prev : { ...prev, inquiryType: preselected }));
+    }
+  }, []);
 
   function handleChange(
     e: React.ChangeEvent<

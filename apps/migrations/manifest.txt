@@ -81,4 +81,5 @@
 0071_staff_directory_email.sql
 0072_staff_directory_hidden.sql
 0073_staff_directory_phone.sql
+0074_contact_inquiry_hiring_to_instructor.sql
 replace-user-uuid.sql
