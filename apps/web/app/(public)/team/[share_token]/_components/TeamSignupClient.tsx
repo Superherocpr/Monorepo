@@ -383,7 +383,7 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
             <dd className="text-gray-900 font-medium">
               {isCompanyPaid ? (
                 <span className="text-green-700">
-                  Nothing — {view.companyName} has paid for this class
+                  Nothing to pay. {view.companyName} is covering this class.
                 </span>
               ) : view.discountPercent > 0 ? (
                 <>
@@ -507,7 +507,7 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
             <h2 className="text-base font-semibold text-gray-900">Reserve your spot</h2>
             <p className="mt-1 text-sm text-gray-600">
               {isCompanyPaid
-                ? "Your employer has already paid. We just need your details so your certification card is issued correctly."
+                ? `${view.companyName} is covering the cost of this class, so you won't pay anything here. We just need your details so your certification card is issued correctly.`
                 : "Sign up with your own details so your certification card is issued correctly."}
             </p>
             <button

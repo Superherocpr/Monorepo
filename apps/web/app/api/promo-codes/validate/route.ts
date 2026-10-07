@@ -90,7 +90,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
     if (team.paymentMode !== "per_seat") {
       return NextResponse.json<PromoValidateError>(
-        { valid: false, error: "This class is already paid for by your employer." },
+        { valid: false, error: "Your company is covering this class, so no promo code is needed." },
         { status: 409 }
       );
     }
