@@ -15,7 +15,7 @@
  * live-search behavior, so the two lists read as one system.
  *
  * Used by: SettingsClient.tsx (super_admin), InstructorSettingsClient.tsx
- *          (instructor), ManagerSettingsClient.tsx (manager).
+ *          (instructor and manager).
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";

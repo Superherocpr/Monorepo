@@ -1,7 +1,7 @@
 /**
  * PATCH /api/sessions/[id]/grade
  * Called by: GradingClient — auto-save on grade selection
- * Auth: Instructor (own session only), Super Admin
+ * Auth: Instructor or manager (own session only), Super Admin (any session)
  * Updates the grade on a single roster_record that belongs to this session.
  * Uses the admin client to bypass RLS — the client-side Supabase update was
  * silently failing because roster_records has no UPDATE RLS policy.
@@ -10,9 +10,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { NextResponse } from "next/server";
-
-/** Roles that may submit grades. */
-const ALLOWED_ROLES = ["instructor", "super_admin"] as const;
+import { TEACHING_ROLES, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 /**
  * Saves a grade for a single roster_record that belongs to the given session.
@@ -27,7 +25,7 @@ export async function PATCH(
   const { id: sessionId } = await params;
 
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const authResult = await requireApiRole([...ALLOWED_ROLES]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 
@@ -63,7 +61,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
-  if (actor.effectiveRole === "instructor" && session.instructor_id !== actor.user.id) {
+  if (!canUseInstructorToolsOn(actor.effectiveRole, actor.user.id, session.instructor_id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -9,13 +9,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { UserRole } from "@/types/users";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 interface NavItem {
   label: string;
+  /** Link target. May carry a query string (e.g. "?mine=1"); active-state matching honors it. */
   href: string;
-  roles: UserRole[];
+  roles: readonly UserRole[];
   /** Optional section heading rendered above this item as a visual grouping label. */
   sectionLabel?: string;
   /** Optional sub-group label rendered above this item, nested within a section. */
@@ -32,9 +34,17 @@ const NAV_ITEMS: NavItem[] = [
     href: "/admin",
     roles: ["instructor", "manager", "super_admin", "inspector"],
   },
-  // Instructor-only quick-access items (no section label: small flat list)
+  // Teaching quick-access items (no section label: small flat list). Every
+  // teaching role gets these. An instructor's sessions list is already scoped
+  // to their own classes; managers and super admins see every class there, so
+  // their link carries ?mine=1 to filter it down to the classes they teach.
   { label: "My Class Sessions", href: "/admin/sessions", roles: ["instructor"] },
-  { label: "Rollcall", href: "/rollcall", roles: ["instructor"] },
+  {
+    label: "My Class Sessions",
+    href: "/admin/sessions?mine=1",
+    roles: ["manager", "super_admin"],
+  },
+  { label: "Rollcall", href: "/rollcall", roles: TEACHING_ROLES },
 
   // ── Operations ─────────────────────────────────────────────────────────────
   {
@@ -109,7 +119,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: "Payout Settings",
     href: "/admin/profile/payment",
-    roles: ["instructor", "super_admin"],
+    roles: TEACHING_ROLES,
     sectionLabel: "Payroll",
   },
 ];
@@ -118,9 +128,31 @@ interface AdminSidebarProps {
   role: UserRole;
 }
 
+/**
+ * Whether the current URL matches a nav href, query string included.
+ * @param href - The nav item's href, optionally with a query string.
+ * @param pathname - Current pathname (no query).
+ * @param searchParams - Current query parameters.
+ * @returns True when the path matches (exact for /admin, prefix otherwise) and
+ *          every query parameter in the href has the same value in the URL.
+ */
+function hrefMatches(
+  href: string,
+  pathname: string,
+  searchParams: URLSearchParams
+): boolean {
+  const [path, query] = href.split("?");
+  const pathMatches = path === "/admin" ? pathname === "/admin" : pathname.startsWith(path);
+  if (!pathMatches || !query) return pathMatches;
+  return Array.from(new URLSearchParams(query)).every(
+    ([key, value]) => searchParams.get(key) === value
+  );
+}
+
 /** Role-aware navigation sidebar for the admin area. */
 export default function AdminSidebar({ role }: AdminSidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
@@ -129,11 +161,18 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
     <nav aria-label="Admin navigation">
       <ul className="space-y-0.5">
         {visibleItems.map((item, index) => {
-          // Exact match for dashboard, prefix match for all others
+          // Exact match for dashboard, prefix match for all others. A plain
+          // href yields to a more specific sibling with a matching query, so
+          // "My Class Sessions" (?mine=1) and "Class Sessions" never both light up.
           const isActive =
-            item.href === "/admin"
-              ? pathname === "/admin"
-              : pathname.startsWith(item.href);
+            hrefMatches(item.href, pathname, searchParams) &&
+            (item.href.includes("?") ||
+              !visibleItems.some(
+                (other) =>
+                  other !== item &&
+                  other.href.startsWith(`${item.href}?`) &&
+                  hrefMatches(other.href, pathname, searchParams)
+              ));
 
           // Add breathing room when stepping back out of a nested sub-group.
           const prevItem = visibleItems[index - 1];

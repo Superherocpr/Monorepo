@@ -11,16 +11,13 @@
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
-import type { UserRole } from "@/types/users";
 import BulkCreateSessionClient from "./_components/BulkCreateSessionClient";
 import type {
   ClassTypeOption,
   LocationOption,
   InstructorOption,
 } from "../new/_components/CreateSessionClient";
-
-/** Staff roles allowed to create sessions. */
-const ALLOWED_ROLES: UserRole[] = ["instructor", "manager", "super_admin"];
+import { TEACHING_ROLES, isTeachingRole } from "@/lib/auth/view-as-constants";
 
 /**
  * Server component: authenticates the user, fetches form option data,
@@ -30,7 +27,7 @@ export default async function BulkSessionPage(): Promise<React.ReactElement> {
   // Auth guard: honors view-as: a downgraded super admin gets the instructor
   // variant of the form (own name locked in, no instructor selector).
   const actor = await getAdminActor();
-  if (!actor || !ALLOWED_ROLES.includes(actor.effectiveRole)) {
+  if (!actor || !isTeachingRole(actor.effectiveRole)) {
     redirect("/admin");
   }
 
@@ -81,7 +78,7 @@ export default async function BulkSessionPage(): Promise<React.ReactElement> {
     const { data: rawInstructors } = await admin
       .from("profiles")
       .select("id, first_name, last_name")
-      .in("role", ["instructor", "manager", "super_admin"])
+      .in("role", TEACHING_ROLES)
       .eq("deactivated", false)
       .order("first_name");
 

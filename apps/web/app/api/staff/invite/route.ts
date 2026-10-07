@@ -13,6 +13,8 @@ import { requireApiRole } from "@/lib/auth/effective-role";
 import { OWNER_EMAILS } from "@/lib/constants";
 import { sendEmail } from "@/lib/send-email";
 import { staffInviteEmail } from "@/lib/emails";
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
+import type { UserRole } from "@/types/users";
 
 /**
  * Creates a new staff account, sends a password setup email.
@@ -145,7 +147,8 @@ export async function POST(request: Request) {
     personalMessage: personalMessage ?? null,
     roleLabel,
     actionLink: setupLink,
-    isInstructor: role === "instructor",
+    // role was checked against allowedRoles above, so the cast is safe.
+    isTeaching: isTeachingRole(role as UserRole),
   });
 
   // Account was created either way — a mail failure returns partial success so

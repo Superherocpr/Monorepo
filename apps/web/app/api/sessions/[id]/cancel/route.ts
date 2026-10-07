@@ -32,6 +32,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { sessionCancelledAdminEmail, openOpportunityInstructorEmail } from "@/lib/emails";
 import { msUntilClass } from "@/lib/business-time";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Route handler params from the dynamic [id] segment. */
 interface Params {
@@ -45,7 +46,7 @@ const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
  * eligible instructors that it's now an open opportunity.
  */
 export async function POST(request: Request, { params }: Params): Promise<Response> {
-  const auth = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const auth = await requireApiRole(TEACHING_ROLES);
   if ("error" in auth) return auth.error;
 
   const { id: sessionId } = await params;
@@ -155,7 +156,7 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
       admin
         .from("profiles")
         .select("email")
-        .in("role", ["instructor", "manager", "super_admin"])
+        .in("role", TEACHING_ROLES)
         .eq("deactivated", false),
       // Only send the instructor opportunity email when students have already booked;
       // an empty class has no one to teach, so notifying instructors is unnecessary noise.

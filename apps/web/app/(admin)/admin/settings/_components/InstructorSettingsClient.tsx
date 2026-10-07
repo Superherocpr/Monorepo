@@ -2,19 +2,21 @@
 
 /**
  * InstructorSettingsClient component
- * Tab container for the instructor-facing settings page.
+ * Tab container for the settings page of every teaching role below super admin.
  * Tabs: "Account" (own name/phone/email/password), "About Page" (bio editor),
- * and "Enrollware" (bookmarklet setup).
+ * "Enrollware" (bookmarklet setup), and "How-To Guides". Managers teach too, so
+ * they get all of these plus a leading "Locations" tab (via locationsSlot).
  * Owns tab state and the shared toast so callbacks can be passed to the sections.
- * Used by: /admin/settings/page.tsx (instructor role branch)
+ * Used by: /admin/settings/page.tsx (instructor and manager role branches)
  */
 
 import React, { useState } from "react";
 import BioSettingsSection from "./BioSettingsSection";
 import AccountSettingsSection from "./AccountSettingsSection";
 import WalkthroughsPanel from "@/components/tours/WalkthroughsPanel";
+import type { UserRole } from "@/types/users";
 
-type TabId = "account" | "enrollware" | "about" | "how-to-guides";
+type TabId = "locations" | "account" | "enrollware" | "about" | "how-to-guides";
 
 interface TabDef {
   id: TabId;
@@ -45,9 +47,15 @@ interface InstructorSettingsClientProps {
   initialEmail: string;
   /** True when this is an owner account, whose email is pinned by configuration. */
   isOwner: boolean;
+  /** The viewer's role: picks which How-To Guides are listed. */
+  viewerRole: UserRole;
+  /** Rendered LocationsClient for managers. When set, a "Locations" tab is shown first and opens by default. */
+  locationsSlot?: React.ReactNode;
 }
 
-const TABS: TabDef[] = [
+const LOCATIONS_TAB: TabDef = { id: "locations", label: "Locations" };
+
+const TEACHING_TABS: TabDef[] = [
   { id: "account", label: "Account" },
   { id: "about", label: "About Page" },
   { id: "enrollware", label: "Enrollware" },
@@ -67,6 +75,8 @@ const TABS: TabDef[] = [
  * @param initialPhone - Saved phone number from the DB.
  * @param initialEmail - Saved email / login address from the DB.
  * @param isOwner - Whether this is an owner account (email locked).
+ * @param viewerRole - The viewer's role, for the How-To Guides list.
+ * @param locationsSlot - Optional LocationsClient content (managers only).
  */
 const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
   enrollwareSlot,
@@ -78,8 +88,11 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
   initialPhone,
   initialEmail,
   isOwner,
+  viewerRole,
+  locationsSlot,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabId>("account");
+  const tabs = locationsSlot ? [LOCATIONS_TAB, ...TEACHING_TABS] : TEACHING_TABS;
+  const [activeTab, setActiveTab] = useState<TabId>(tabs[0].id);
   const [toast, setToast] = useState<Toast | null>(null);
 
   /**
@@ -95,13 +108,16 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
   }
 
   return (
-    <div className="max-w-3xl space-y-10">
+    // The locations table needs the wider manager layout; the teaching tabs are form-width.
+    <div className={`${locationsSlot ? "max-w-5xl" : "max-w-3xl"} space-y-10`}>
       {/* Page header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Manage your account details, Enrollware integration, and public About page bio.
+            {locationsSlot
+              ? "Manage class locations, your account details, Enrollware integration, and public About page bio."
+              : "Manage your account details, Enrollware integration, and public About page bio."}
           </p>
         </div>
         <a
@@ -118,7 +134,7 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
         aria-label="Settings sections"
         className="flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-gray-700 -mt-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const active = activeTab === tab.id;
           return (
             <button
@@ -142,6 +158,17 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
 
       {/* Tab panels: all rendered, inactive hidden via CSS so unsaved edits
           survive switching tabs. */}
+      {locationsSlot && (
+        <div
+          id="tab-panel-locations"
+          role="tabpanel"
+          aria-labelledby="tab-locations"
+          className={activeTab === "locations" ? "" : "hidden"}
+        >
+          {locationsSlot}
+        </div>
+      )}
+
       <div
         id="tab-panel-account"
         role="tabpanel"
@@ -189,7 +216,7 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
         aria-labelledby="tab-how-to-guides"
         className={activeTab === "how-to-guides" ? "" : "hidden"}
       >
-        <WalkthroughsPanel viewerRole="instructor" />
+        <WalkthroughsPanel viewerRole={viewerRole} />
       </div>
 
       {/* Toast */}

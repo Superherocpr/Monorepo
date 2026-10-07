@@ -101,7 +101,7 @@ export default async function Page() {
     personalMessage: "Welcome to the team — excited to have you!",
     roleLabel: "Instructor",
     actionLink: "https://superherocpr.com/set-password?token=dev-example",
-    isInstructor: true,
+    isTeaching: true,
   });
   previews.push({ id: "staff-invite", name: "Staff Invite", subject: invite.subject, src: b64(invite.html) });
 

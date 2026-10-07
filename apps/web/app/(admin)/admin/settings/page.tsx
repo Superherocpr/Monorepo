@@ -4,8 +4,8 @@
  * Called by: Admin sidebar nav
  * Auth:
  *   - super_admin: full settings panel (class types, grades, locations, etc.)
- *   - manager    : locations panel only
- *   - instructor : Account (own name/phone/email/password), Enrollware, About Page
+ *   - instructor : Account (own name/phone/email/password), About Page, Enrollware, How-To Guides
+ *   - manager    : Locations, plus every instructor tab (managers teach too)
  * All other roles are redirected to /admin.
  * Fetches class types and preset grades server-side, then passes them to
  * SettingsClient which owns all interactive state and mutations.
@@ -18,7 +18,6 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getSetting } from "@/lib/zoho";
 import SettingsClient from "./_components/SettingsClient";
 import InstructorSettingsClient from "./_components/InstructorSettingsClient";
-import ManagerSettingsClient from "./_components/ManagerSettingsClient";
 import PayoutSettingsPanel from "./_components/PayoutSettingsPanel";
 import BookmarkletSetup from "@/app/(admin)/admin/enrollware-tool/_components/BookmarkletSetup";
 import LocationsClient, {
@@ -29,6 +28,7 @@ import { OWNER_EMAILS } from "@/lib/constants";
 import type { PayoutTrigger, PayoutSchedule } from "@/app/api/settings/payouts/route";
 import { getPayoutHistory, getUpcomingPayoutsData } from "@/lib/payout-dashboard";
 import type { PayoutHistoryBatch, UpcomingPayoutsData } from "@/types/payouts";
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
 
 export const metadata = { title: "Settings" };
 
@@ -72,6 +72,44 @@ export interface PresetGrade {
 }
 
 /**
+ * Loads every location with its session usage, in the shape LocationsClient expects.
+ * Home base first, then alphabetical. Read-only.
+ * @param admin - Service-role Supabase client.
+ * @returns Locations with session count and most recent class date.
+ */
+async function fetchLocationsWithUsage(
+  admin: Awaited<ReturnType<typeof createAdminClient>>
+): Promise<LocationWithCount[]> {
+  const { data: raw } = await admin
+    .from("locations")
+    .select(
+      `id, name, address, city, state, zip, notes, is_home_base, created_at,
+       class_sessions ( starts_at )`
+    )
+    .order("is_home_base", { ascending: false })
+    .order("name", { ascending: true });
+
+  return (raw ?? []).map((loc) => {
+    const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
+    const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
+    const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
+    return {
+      id: loc.id,
+      name: loc.name,
+      address: loc.address,
+      city: loc.city,
+      state: loc.state,
+      zip: loc.zip,
+      notes: loc.notes ?? null,
+      is_home_base: loc.is_home_base,
+      created_at: loc.created_at,
+      sessionCount: sessions.length,
+      last_used_at: lastUsedAt,
+    };
+  });
+}
+
+/**
  * Server component: fetches settings data and passes it to SettingsClient.
  * Redirects non-super-admins to /admin.
  */
@@ -93,16 +131,21 @@ export default async function SettingsPage() {
 
   const role = profile?.role as UserRole | undefined;
 
-  if (!role || !["instructor", "manager", "super_admin"].includes(role)) {
+  if (!role || !isTeachingRole(role)) {
     redirect("/admin");
   }
 
-  // ── Instructor view: Account + Enrollware + About Page bio tabs ──────────
-  if (role === "instructor") {
-    const admin = await createAdminClient();
+  // Service-role client used for all data queries below.
+  const admin = await createAdminClient();
 
-    // Fetch bookmarklet key and current profile (bio + account fields) in parallel
-    const [{ data: existingKey }, { data: bioProfile }] = await Promise.all([
+  // ── Instructor + manager view: Account, About Page, Enrollware, How-To ───
+  // Managers teach too, so they get every instructor tab, plus Locations first.
+  if (role === "instructor" || role === "manager") {
+    const isManager = role === "manager";
+
+    // Fetch bookmarklet key, current profile (bio + account fields), and, for
+    // managers, locations, all in parallel.
+    const [{ data: existingKey }, { data: bioProfile }, locations] = await Promise.all([
       // maybeSingle avoids a PGRST116 error log for users without a key yet
       admin
         .from("api_keys")
@@ -117,16 +160,23 @@ export default async function SettingsPage() {
         )
         .eq("id", user.id)
         .single(),
+      isManager ? fetchLocationsWithUsage(admin) : Promise.resolve(null),
     ]);
 
     const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://superherocpr.com";
 
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10">
+      <div className={`mx-auto ${isManager ? "max-w-5xl" : "max-w-3xl"} px-4 py-10`}>
         <InstructorSettingsClient
           enrollwareSlot={
             <BookmarkletSetup key="enrollware-slot" hasExistingKey={existingKey !== null} siteUrl={siteUrl} />
           }
+          locationsSlot={
+            locations ? (
+              <LocationsClient initialLocations={locations} userRole="manager" />
+            ) : undefined
+          }
+          viewerRole={role}
           initialPhoto={bioProfile?.bio_photo ?? null}
           initialDescription={bioProfile?.bio_description ?? ""}
           initialCredentials={bioProfile?.bio_credentials ?? ""}
@@ -140,63 +190,13 @@ export default async function SettingsPage() {
     );
   }
 
-  // Service-role client used for all data queries in manager and super_admin branches.
-  // Defined here (after the instructor early-return) so it's in scope for both branches.
-  const admin = await createAdminClient();
-
-  // ── Manager view: locations panel only ───────────────────────────────────
-  if (role === "manager") {
-    const { data: raw } = await admin
-      .from("locations")
-      .select(
-        `id, name, address, city, state, zip, notes, is_home_base, created_at,
-         class_sessions ( starts_at )`
-      )
-      .order("is_home_base", { ascending: false })
-      .order("name", { ascending: true });
-
-    const locations: LocationWithCount[] = (raw ?? []).map((loc) => {
-      const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
-      const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
-      const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
-      return {
-        id: loc.id,
-        name: loc.name,
-        address: loc.address,
-        city: loc.city,
-        state: loc.state,
-        zip: loc.zip,
-        notes: loc.notes ?? null,
-        is_home_base: loc.is_home_base,
-        created_at: loc.created_at,
-        sessionCount: sessions.length,
-        last_used_at: lastUsedAt,
-      };
-    });
-
-    return (
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
-          <a
-            href="/admin/reference"
-            className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-          >
-            Admin feature reference →
-          </a>
-        </div>
-        <ManagerSettingsClient initialLocations={locations} />
-      </div>
-    );
-  }
-
   // ── Super admin view: full settings panel ────────────────────────────────
 
   // Fetch class types, preset grades, bookmarklet status, and locations in parallel.
   // class_types is fetched without the addon_class_types join here: kept in its own
   // defensive fetch below, so the Class Types list can't be broken by migration 0035
   // not being applied yet (same reasoning as the payout settings fallback below).
-  const [{ data: classTypeRows }, { data: certTypeRows }, { data: presetGrades }, { data: locationRaw }] =
+  const [{ data: classTypeRows }, { data: certTypeRows }, { data: presetGrades }, locations] =
     await Promise.all([
       admin
         .from("class_types")
@@ -213,14 +213,7 @@ export default async function SettingsPage() {
         .from("preset_grades")
         .select("id, value, label")
         .order("value"),
-      admin
-        .from("locations")
-        .select(
-          `id, name, address, city, state, zip, notes, is_home_base, created_at,
-         class_sessions ( starts_at )`
-        )
-        .order("is_home_base", { ascending: false })
-        .order("name", { ascending: true }),
+      fetchLocationsWithUsage(admin),
     ]);
 
   // Add-on catalog + per-class-type eligibility (migration 0035). Fetched separately and
@@ -255,26 +248,6 @@ export default async function SettingsPage() {
     is_aha: ct.is_aha ?? false,
     addon_ids: addonIdsByClassType.get(ct.id) ?? [],
   }));
-
-  // Map raw locations rows into the shape LocationsClient expects
-  const locations: LocationWithCount[] = (locationRaw ?? []).map((loc) => {
-    const sessions = Array.isArray(loc.class_sessions) ? loc.class_sessions : [];
-    const dates = sessions.map((s: { starts_at: string }) => new Date(s.starts_at).getTime());
-    const lastUsedAt = dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null;
-    return {
-      id: loc.id,
-      name: loc.name,
-      address: loc.address,
-      city: loc.city,
-      state: loc.state,
-      zip: loc.zip,
-      notes: loc.notes ?? null,
-      is_home_base: loc.is_home_base,
-      created_at: loc.created_at,
-      sessionCount: sessions.length,
-      last_used_at: lastUsedAt,
-    };
-  });
 
   // Read the legacy_site_enabled flag and all nav visibility flags.
   const NAV_PAGES = ["classes", "schedule", "merch", "blog", "about", "contact"] as const;

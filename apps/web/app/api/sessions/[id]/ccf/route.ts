@@ -1,7 +1,7 @@
 /**
  * PATCH /api/sessions/[id]/ccf
  * Called by: GradingClient — auto-save on CCF compression score entry
- * Auth: Instructor (own session only), Super Admin
+ * Auth: Instructor or manager (own session only), Super Admin (any session)
  * Updates the ccf_compression field on a single roster_record belonging to this session.
  * Uses the admin client to bypass RLS (roster_records has no UPDATE RLS policy).
  */
@@ -9,8 +9,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { NextResponse } from "next/server";
-
-const ALLOWED_ROLES = ["instructor", "super_admin"] as const;
+import { TEACHING_ROLES, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 /**
  * Saves a CCF compression score for a single roster_record in the given session.
@@ -25,7 +24,7 @@ export async function PATCH(
   const { id: sessionId } = await params;
 
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const authResult = await requireApiRole([...ALLOWED_ROLES]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 
@@ -67,7 +66,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
-  if (actor.effectiveRole === "instructor" && session.instructor_id !== actor.user.id) {
+  if (!canUseInstructorToolsOn(actor.effectiveRole, actor.user.id, session.instructor_id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

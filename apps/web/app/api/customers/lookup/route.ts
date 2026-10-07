@@ -23,6 +23,7 @@ import {
   summarizeCustomerActivity,
   type CustomerActivityRow,
 } from "@/lib/customer-directory";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Minimum characters before a search runs — shorter terms match half the table. */
 const MIN_QUERY_LENGTH = 3;
@@ -40,7 +41,7 @@ function sanitizeTerm(term: string): string {
  * @param request - GET request with a `q` query parameter.
  */
 export async function GET(request: Request): Promise<Response> {
-  const auth = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const auth = await requireApiRole(TEACHING_ROLES);
   if ("error" in auth) return auth.error;
 
   const { searchParams } = new URL(request.url);
