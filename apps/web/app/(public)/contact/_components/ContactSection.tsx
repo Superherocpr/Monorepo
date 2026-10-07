@@ -7,7 +7,7 @@
  * Used by: app/(public)/contact/page.tsx
  */
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Phone, Mail, MapPin, MessageSquare } from "lucide-react";
 import CaptchaCheckbox from "@/components/CaptchaCheckbox";
 import TurnstileWidget from "@/components/TurnstileWidget";
@@ -38,6 +38,14 @@ const EMPTY_FORM: FormData = {
 };
 
 /**
+ * useSyncExternalStore subscribe function for a value that never changes after
+ * page load (the URL query string): nothing to subscribe to, so no-op cleanup.
+ */
+function subscribeNever(): () => void {
+  return () => {};
+}
+
+/**
  * Renders the contact info column (phone, email, service area) and the
  * contact form with submit / success / error states.
  */
@@ -53,17 +61,21 @@ export default function ContactSection() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   // Preselect the inquiry type when linked with ?inquiry=<type> (e.g. the home
-  // page "Become an Instructor" button). Read on mount rather than via
-  // useSearchParams so the form stays server-rendered without a Suspense bailout.
-  // Only fills an empty selection so it never overwrites a user's choice.
-  useEffect(() => {
-    const preselected = inquiryTypeFromParam(
-      new URLSearchParams(window.location.search).get("inquiry")
-    );
-    if (preselected) {
-      setForm((prev) => (prev.inquiryType ? prev : { ...prev, inquiryType: preselected }));
-    }
-  }, []);
+  // page "Become an Instructor" button). Read via useSyncExternalStore rather
+  // than useSearchParams so the form stays server-rendered without a Suspense
+  // bailout, and rather than an effect + setState so there is no cascading
+  // render. The server snapshot is null, so hydration matches the server HTML
+  // and React then re-renders with the real value on the client.
+  const preselectedInquiry = useSyncExternalStore(
+    subscribeNever,
+    () => inquiryTypeFromParam(new URLSearchParams(window.location.search).get("inquiry")),
+    () => null
+  );
+  // The user's own choice always wins; the URL value only fills an empty selection.
+  const values: FormData = {
+    ...form,
+    inquiryType: form.inquiryType || (preselectedInquiry ?? ""),
+  };
 
   function handleChange(
     e: React.ChangeEvent<
@@ -82,7 +94,7 @@ export default function ContactSection() {
       !form.name.trim() ||
       !form.email.trim() ||
       !form.phone.trim() ||
-      !form.inquiryType ||
+      !values.inquiryType ||
       !form.message.trim()
     ) {
       setSubmitError("Please fill in all required fields before sending.");
@@ -104,7 +116,7 @@ export default function ContactSection() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // Send the real Turnstile token when available; server verifies it.
-        body: JSON.stringify({ ...form, captchaToken: captchaToken ?? "human-checked" }),
+        body: JSON.stringify({ ...values, captchaToken: captchaToken ?? "human-checked" }),
       });
 
       if (!response.ok) {
@@ -230,7 +242,7 @@ export default function ContactSection() {
                   id="contact-inquiry"
                   name="inquiryType"
                   required
-                  value={form.inquiryType}
+                  value={values.inquiryType}
                   onChange={handleChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
                 >
