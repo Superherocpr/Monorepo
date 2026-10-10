@@ -25,11 +25,11 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
 };
 
 export const ROLE_CLASSES: Record<RoleKey, string> = {
-  super: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-  manager: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  all: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  instructor: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  instructorOnly: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
+  super: "bg-red-100 text-red-800",
+  manager: "bg-amber-100 text-amber-800",
+  all: "bg-green-100 text-green-800",
+  instructor: "bg-blue-100 text-blue-800",
+  instructorOnly: "bg-sky-100 text-sky-800",
 };
 
 export interface SectionDef {
@@ -577,6 +577,8 @@ export const GROUPS: GroupDef[] = [
           "Account tab: your name, phone, and email are what students see on the booking page and in confirmation emails, and update everywhere as soon as you save",
           "Account tab: change your password, or use the reset link to have a new-password email sent to you",
           "Account tab: changing your email or password requires entering your current password first",
+          "General tab, Appearance: choose a Light, Dark, or System theme for the admin area. It is saved on this device only and never changes the public website",
+          "The sun/moon button in the top bar switches between light and dark without opening Settings. The check-in screen shown to students always stays light",
           { text: "General tab: toggle public nav pages on/off: Classes, Schedule, Merch, Blog, About, Contact", role: "super" },
           { text: "Class Types tab: create, edit, delete, or deactivate class types; set name, description, duration, price, capacity, AHA certified flag (auto-set when a cert type is selected), linked certification type, and eligible add-ons", role: "super" },
           { text: "Class Types tab: renaming a class type changes the link the public class finder uses to recommend it. The finder falls back to the request form rather than breaking, but tell a developer after a rename so the course stays recommendable", role: "super" },

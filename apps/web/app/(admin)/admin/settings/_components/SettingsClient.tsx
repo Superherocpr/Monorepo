@@ -3,7 +3,7 @@
 /**
  * SettingsClient component
  * Full client component owning all state and mutations for the settings page.
- * Sections: Appearance (dark mode), Class Types, Preset Grades, Locations,
+ * Sections: Appearance (admin theme), Class Types, Preset Grades, Locations,
  *           Enrollware, and Social Feed.
  * Used by: /admin/settings/page.tsx
  * Zoho Mail connect/disconnect is intentionally not managed here: the owner
@@ -12,12 +12,14 @@
  * UI on purpose). The Contact page independently checks connection status.
  */
 
-import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ClassTypePanel from "./ClassTypePanel";
 import ClassTypeImportPanel from "./ClassTypeImportPanel";
 import AddonPanel from "./AddonPanel";
 import WalkthroughsPanel from "@/components/tours/WalkthroughsPanel";
+import { ADMIN_THEME_PREFERENCES } from "@/lib/admin-theme";
+import { useAdminTheme } from "@/lib/admin-theme-store";
 import type { ClassType, CertTypeOption, PresetGrade, Addon } from "../page";
 
 /** Nav page keys that correspond to toggleable public routes. */
@@ -34,50 +36,6 @@ const NAV_PAGE_LABELS: Record<NavPage, string> = {
 };
 
 const NAV_PAGES: NavPage[] = ["classes", "schedule", "merch", "blog", "about", "contact"];
-
-// ── Theme store ──────────────────────────────────────────────────────────────
-// The theme preference lives in localStorage, which is external mutable state,
-// so it is read through useSyncExternalStore rather than copied into React state
-// from an effect. Writes go through setStoredTheme so subscribers in this tab
-// are notified too: the browser's own `storage` event only fires for changes
-// made in other tabs.
-
-/** Callbacks React registered to hear about theme changes. */
-const themeSubscribers = new Set<() => void>();
-
-/**
- * Subscribes to theme changes from this tab and others.
- * @param onChange - Called whenever the stored theme may have changed.
- * @returns An unsubscribe function.
- */
-function subscribeToTheme(onChange: () => void): () => void {
-  themeSubscribers.add(onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    themeSubscribers.delete(onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
-
-/** Reads whether dark mode is currently stored. */
-function getThemeIsDark(): boolean {
-  return localStorage.getItem("theme") === "dark";
-}
-
-/** SSR has no localStorage; light is the default until the client corrects it. */
-function getThemeIsDarkOnServer(): boolean {
-  return false;
-}
-
-/**
- * Persists the theme preference and notifies every subscriber.
- * Side effects: writes localStorage.
- * @param isDark - Whether dark mode should be stored as active.
- */
-function setStoredTheme(isDark: boolean): void {
-  localStorage.setItem("theme", isDark ? "dark" : "light");
-  themeSubscribers.forEach((notify) => notify());
-}
 
 interface SettingsClientProps {
   classTypes: ClassType[];
@@ -140,7 +98,7 @@ interface Toast {
 const inputClass =
   "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 " +
   "placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 " +
-  "focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-white";
+  "focus:border-transparent";
 
 /** A new inline preset-grade row being drafted by the user. */
 interface DraftGrade {
@@ -219,28 +177,8 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
     return activeTab === id ? "" : "hidden";
   }
 
-  // ── Dark mode ──────────────────────────────────────────────────────────────
-  const isDark = useSyncExternalStore(
-    subscribeToTheme,
-    getThemeIsDark,
-    getThemeIsDarkOnServer
-  );
-
-  // Push the preference out to the document. This is an external-system sync,
-  // which is what effects are for: the value itself is read from the store
-  // above rather than mirrored into state here.
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDark);
-  }, [isDark]);
-
-  /**
-   * Toggles dark mode on/off. Persists to localStorage; the document class
-   * follows via the effect above.
-   * TODO: apply dark: variants to admin layout and components.
-   */
-  function toggleDarkMode() {
-    setStoredTheme(!isDark);
-  }
+  // ── Appearance ─────────────────────────────────────────────────────────────
+  const { preference: themePreference, setPreference: setThemePreference } = useAdminTheme();
 
   // ── Legacy site flag ───────────────────────────────────────────────────────
   // Persisted server-side in system_settings.legacy_site_enabled.
@@ -718,8 +656,8 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
     <div className="max-w-3xl space-y-10">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <p className="text-sm text-gray-500 mt-1">
           Manage class offerings, grade presets, and system connections.
         </p>
       </div>
@@ -729,7 +667,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       <div
         role="tablist"
         aria-label="Settings sections"
-        className="flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-gray-700 -mt-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex gap-1 overflow-x-auto border-b border-gray-200 -mt-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {tabs.map((tab) => {
           const active = activeTab === tab.id;
@@ -744,7 +682,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
               className={`shrink-0 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                 active
                   ? "border-red-600 text-red-600"
-                  : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+                  : "border-transparent text-gray-500 hover:text-gray-800"
               }`}
             >
               {tab.label}
@@ -757,17 +695,17 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       {isSuperAdmin && <section aria-labelledby="section-legacy-site" className={tabClass("general")}>
         <h2
           id="section-legacy-site"
-          className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
+          className="text-lg font-semibold text-gray-900 mb-4"
         >
           Legacy Site
         </h2>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
+        <div className="bg-white border border-gray-200 rounded-lg p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+              <p className="text-sm font-semibold text-gray-900">
                 Show Legacy Home Page
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-500 mt-0.5">
                 When enabled, the home page (/) shows the classic SuperheroCPR site.
                 When disabled, the modern site is shown.
               </p>
@@ -797,36 +735,38 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       <section aria-labelledby="section-appearance" className={tabClass("general")}>
         <h2
           id="section-appearance"
-          className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
+          className="text-lg font-semibold text-gray-900 mb-4"
         >
           Appearance
         </h2>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                Dark Mode
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Applies to this device only. Your preference is saved locally.
-              </p>
-            </div>
-            {/* Toggle switch: role="switch" with aria-checked for accessibility */}
-            <button
-              role="switch"
-              aria-checked={isDark}
-              onClick={toggleDarkMode}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${
-                isDark ? "bg-red-600" : "bg-gray-200"
-              }`}
-            >
-              <span className="sr-only">Toggle dark mode</span>
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  isDark ? "translate-x-6" : "translate-x-1"
+        <div className="bg-white border border-gray-200 rounded-lg p-5">
+          <p className="text-sm font-semibold text-gray-900">Theme</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Applies to the admin area on this device only. Your preference is saved locally.
+            The public website is never affected.
+          </p>
+          {/* Segmented radio group: native radios keep keyboard and screen reader support. */}
+          <div role="radiogroup" aria-label="Admin theme" className="mt-3 inline-flex rounded-lg border border-gray-300 p-0.5">
+            {ADMIN_THEME_PREFERENCES.map((option) => (
+              <label
+                key={option}
+                className={`cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-red-500 ${
+                  themePreference === option
+                    ? "bg-red-600 text-white"
+                    : "text-gray-600 hover:bg-gray-100"
                 }`}
-              />
-            </button>
+              >
+                <input
+                  type="radio"
+                  name="admin-theme"
+                  value={option}
+                  checked={themePreference === option}
+                  onChange={() => setThemePreference(option)}
+                  className="sr-only"
+                />
+                {option}
+              </label>
+            ))}
           </div>
         </div>
       </section>
@@ -836,23 +776,23 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         <section aria-labelledby="section-reference" className={tabClass("general")}>
           <h2
             id="section-reference"
-            className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
+            className="text-lg font-semibold text-gray-900 mb-4"
           >
             Resources
           </h2>
           <a
             href="/admin/reference"
-            className="flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:border-red-300 dark:hover:border-red-700 transition-colors group"
+            className="flex items-center justify-between bg-white border border-gray-200 rounded-lg p-5 hover:border-red-300 transition-colors group"
           >
             <div>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+              <p className="text-sm font-semibold text-gray-900">
                 Admin Feature Reference
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-500 mt-0.5">
                 A complete guide to every page in the admin panel: what it does and who can access it.
               </p>
             </div>
-            <span className="text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors ml-4 text-lg leading-none">
+            <span className="text-gray-400 group-hover:text-red-600 transition-colors ml-4 text-lg leading-none">
               →
             </span>
           </a>
@@ -864,18 +804,18 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         <section aria-labelledby="section-nav-visibility" className={tabClass("general")}>
           <h2
             id="section-nav-visibility"
-            className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
+            className="text-lg font-semibold text-gray-900 mb-4"
           >
             Navigation Pages
           </h2>
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-700">
+          <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
             {NAV_PAGES.map((page) => (
               <div key={page} className="flex items-center justify-between px-5 py-4">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  <p className="text-sm font-semibold text-gray-900">
                     {NAV_PAGE_LABELS[page]}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <p className="text-xs text-gray-500 mt-0.5">
                     {navVisibility[page]
                       ? "Visible in nav and accessible by URL."
                       : "Hidden from nav and redirects to home if accessed directly."}
@@ -888,7 +828,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                   onClick={() => handleToggleNavPage(page)}
                   disabled={savingNavPage === page}
                   className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 ${
-                    navVisibility[page] ? "bg-red-600" : "bg-gray-200 dark:bg-gray-600"
+                    navVisibility[page] ? "bg-red-600" : "bg-gray-200"
                   }`}
                 >
                   <span className="sr-only">Toggle {NAV_PAGE_LABELS[page]}</span>
@@ -901,7 +841,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
               </div>
             ))}
           </div>
-          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+          <p className="mt-2 text-xs text-gray-400">
             Toggling a page off hides it from the nav bar and makes it inaccessible to site visitors, even via direct URL. Home is always on.
           </p>
         </section>
@@ -913,11 +853,11 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
           <div>
             <h2
               id="section-class-types"
-              className="text-lg font-semibold text-gray-900 dark:text-white"
+              className="text-lg font-semibold text-gray-900"
             >
               Class Types
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <p className="text-xs text-gray-500 mt-0.5">
               Manage the CPR course offerings available for booking and invoicing.
             </p>
           </div>
@@ -949,7 +889,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
             {classTypes.map((ct) => (
               <div
                 key={ct.id}
-                className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
               >
                 {deletingClassTypeId === ct.id ? (
                   // ── Inline delete confirmation ─────────────────────────
@@ -988,7 +928,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                 ) : (
                   <div>
                     <div className="mb-1 flex items-start justify-between gap-2">
-                      <span className="font-semibold text-gray-900 dark:text-white">
+                      <span className="font-semibold text-gray-900">
                         {ct.name}
                       </span>
                       <div className="flex shrink-0 items-center gap-1.5">
@@ -1009,7 +949,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                       </div>
                     </div>
                     {ct.description && (
-                      <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
+                      <p className="mt-1 line-clamp-2 text-sm text-gray-600">
                         {ct.description}
                       </p>
                     )}
@@ -1076,13 +1016,13 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
         )}
 
         {/* ── Add-ons ─────────────────────────────────────────────────────── */}
-        <div className="mt-8 border-t border-gray-200 pt-6 dark:border-gray-700">
+        <div className="mt-8 border-t border-gray-200 pt-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+              <h3 className="text-base font-semibold text-gray-900">
                 Add-ons
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-500 mt-0.5">
                 Purchasable extras. Assign each one to eligible class types above.
               </p>
             </div>
@@ -1106,7 +1046,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
               {addons.map((a) => (
                 <div
                   key={a.id}
-                  className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                  className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
                 >
                   {deletingAddonId === a.id ? (
                     // ── Inline delete confirmation ─────────────────────────
@@ -1145,7 +1085,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                   ) : (
                     <div>
                       <div className="mb-1 flex items-start justify-between gap-2">
-                        <span className="font-semibold text-gray-900 dark:text-white">
+                        <span className="font-semibold text-gray-900">
                           {a.name}
                         </span>
                         {a.active ? (
@@ -1159,7 +1099,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                         )}
                       </div>
                       {a.description && (
-                        <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
+                        <p className="mt-1 line-clamp-2 text-sm text-gray-600">
                           {a.description}
                         </p>
                       )}
@@ -1223,11 +1163,11 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
           <div>
             <h2
               id="section-grades"
-              className="text-lg font-semibold text-gray-900 dark:text-white"
+              className="text-lg font-semibold text-gray-900"
             >
               Preset Grades
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <p className="text-xs text-gray-500 mt-0.5">
               These grade values appear as quick-select buttons in the instructor
               grading tool.
             </p>
@@ -1245,9 +1185,9 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
           )}
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-100 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-900">
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-100">
+            <thead className="bg-gray-50">
               <tr>
                 <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide w-24">
                   Value
@@ -1260,13 +1200,13 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+            <tbody className="divide-y divide-gray-100">
               {grades.map((grade) => {
                 const isEditing = editingGrade?.id === grade.id;
                 const isSaving = savingGradeId === grade.id;
                 const isDeleting = deletingGradeId === grade.id;
                 return (
-                  <tr key={grade.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <tr key={grade.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3">
                       {isEditing ? (
                         <input
@@ -1288,7 +1228,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                         />
                       ) : (
                         <span
-                          className="text-sm text-gray-900 dark:text-white cursor-pointer hover:underline"
+                          className="text-sm text-gray-900 cursor-pointer hover:underline"
                           onClick={() =>
                             setEditingGrade({
                               id: grade.id,
@@ -1321,7 +1261,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
                         />
                       ) : (
                         <span
-                          className="text-sm text-gray-900 dark:text-white cursor-pointer hover:underline"
+                          className="text-sm text-gray-900 cursor-pointer hover:underline"
                           onClick={() =>
                             setEditingGrade({
                               id: grade.id,
@@ -1367,7 +1307,7 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
 
               {/* Draft new-grade row */}
               {draftGrade !== null && (
-                <tr className="bg-gray-50 dark:bg-gray-700/30">
+                <tr className="bg-gray-50">
                   <td className="px-5 py-3">
                     <input
                       ref={draftValueRef}
@@ -1468,10 +1408,10 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
       {/* ── Section 8: Social Feed ─────────────────────────────────────────── */}
       <section className={`space-y-4 ${tabClass("social")}`}>
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-lg font-semibold text-gray-900">
             Social Feed
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             The Facebook photo strip on the home page is powered by a cache that
             refreshes automatically every day. Use this button to pull the latest
             posts immediately.
@@ -1487,13 +1427,13 @@ const SettingsClient: React.FC<SettingsClientProps> = ({
             {refreshingFeed ? "Refreshing…" : "Refresh Feed Now"}
           </button>
           {lastRefreshCount !== null && (
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="text-sm text-gray-500">
               {lastRefreshCount} post{lastRefreshCount !== 1 ? "s" : ""} cached
             </span>
           )}
         </div>
 
-        <p className="text-xs text-gray-400 dark:text-gray-500">
+        <p className="text-xs text-gray-400">
           The feed also refreshes automatically at 3:00 AM UTC daily via a
           scheduled job. Requires{" "}
           <code className="font-mono">FACEBOOK_PAGE_ACCESS_TOKEN</code> and{" "}

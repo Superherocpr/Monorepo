@@ -158,14 +158,14 @@ export default function ReferenceContent({
       <div className="max-w-6xl">
 
         {/* ── Page header ─────────────────────────────────────────────────── */}
-        <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
-          <p className="text-xs font-semibold uppercase tracking-widest text-red-600 dark:text-red-400 mb-2">
+        <div className="mb-6 pb-6 border-b border-gray-200">
+          <p className="text-xs font-semibold uppercase tracking-widest text-red-600 mb-2">
             SuperheroCPR
           </p>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-gray-900">
             Admin Feature Reference
           </h1>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-xl">
+          <p className="mt-2 text-sm text-gray-500 max-w-xl">
             {userRole === "super_admin"
               ? "A page-by-page guide to every section of the admin dashboard: what it does and who can access it."
               : "A guide to every admin page available to your role."}
@@ -191,7 +191,7 @@ export default function ReferenceContent({
                       "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all cursor-pointer",
                       ROLE_CLASSES[key],
                       isActive
-                        ? "ring-2 ring-offset-1 ring-gray-900 dark:ring-white dark:ring-offset-gray-900"
+                        ? "ring-2 ring-offset-1 ring-gray-900"
                         : roleFilter
                         ? "opacity-50 hover:opacity-100"
                         : "hover:opacity-80",
@@ -205,12 +205,12 @@ export default function ReferenceContent({
                 <button
                   type="button"
                   onClick={() => setRoleFilter(null)}
-                  className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline underline-offset-2"
+                  className="text-xs font-medium text-gray-500 hover:text-gray-700 underline underline-offset-2"
                 >
                   Reset
                 </button>
               )}
-              <span className="text-xs text-gray-400 dark:text-gray-500 self-center">
+              <span className="text-xs text-gray-400 self-center">
                 (access level required)
               </span>
             </div>
@@ -238,17 +238,16 @@ export default function ReferenceContent({
                 "w-full border rounded-lg pl-9 pr-9 py-2.5 text-sm bg-white " +
                 "text-gray-900 placeholder:text-gray-400 " +
                 "focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent " +
-                "dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-500 " +
                 (query
-                  ? "border-red-300 dark:border-red-700"
-                  : "border-gray-300 dark:border-gray-600")
+                  ? "border-red-300"
+                  : "border-gray-300")
               }
             />
             {rawQuery && (
               <button
                 onClick={clearSearch}
                 aria-label="Clear search"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -257,7 +256,7 @@ export default function ReferenceContent({
 
           {/* Result count: reflects the search query and/or the active role-filter pill */}
           {(query || roleFilter) && (
-            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-2 text-xs text-gray-500">
               {matchCount === 0 ? (
                 <>
                   No results
@@ -281,12 +280,12 @@ export default function ReferenceContent({
           <main className="space-y-10 min-w-0">
             {filteredGroups.length === 0 ? (
               <div className="py-16 text-center">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                <p className="text-sm font-medium text-gray-500">
                   No sections match
                   {query && <> &ldquo;{rawQuery.trim()}&rdquo;</>}
                   {roleFilter && <> in {ROLE_LABELS[roleFilter]}</>}
                 </p>
-                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                <p className="mt-1 text-xs text-gray-400">
                   Try a different keyword, a URL fragment, or a different access level.
                 </p>
                 <button
@@ -294,7 +293,7 @@ export default function ReferenceContent({
                     clearSearch();
                     setRoleFilter(null);
                   }}
-                  className="mt-4 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline underline-offset-2"
+                  className="mt-4 text-xs font-medium text-red-600 hover:text-red-700 underline underline-offset-2"
                 >
                   Clear filters
                 </button>
@@ -304,10 +303,10 @@ export default function ReferenceContent({
                 <div key={group.id} id={group.id}>
                   {/* Group divider */}
                   <div className="flex items-center gap-3 mb-4">
-                    <span className="text-[0.65rem] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                    <span className="text-[0.65rem] font-bold uppercase tracking-widest text-gray-400 whitespace-nowrap">
                       {group.label}
                     </span>
-                    <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                    <div className="flex-1 h-px bg-gray-200" />
                   </div>
 
                   {/* Section cards */}
@@ -317,14 +316,14 @@ export default function ReferenceContent({
                         key={section.id}
                         id={section.id}
                         href={resolveUrl(section.url)}
-                        className="block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-red-300 dark:hover:border-red-700 transition-colors group cursor-pointer"
+                        className="block bg-white border border-gray-200 rounded-lg overflow-hidden hover:border-red-300 transition-colors group cursor-pointer"
                       >
                         {/* Card header */}
-                        <div className="flex flex-wrap items-center gap-2 px-5 py-3 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700 group-hover:bg-red-50/40 dark:group-hover:bg-red-900/10 transition-colors">
-                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                        <div className="flex flex-wrap items-center gap-2 px-5 py-3 bg-gray-50 border-b border-gray-200 group-hover:bg-red-50/40 transition-colors">
+                          <span className="text-sm font-semibold text-gray-900">
                             {section.name}
                           </span>
-                          <code className="text-[0.67rem] font-mono bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded">
+                          <code className="text-[0.67rem] font-mono bg-gray-100 text-gray-500 px-2 py-0.5 rounded">
                             {section.url}
                           </code>
                           {/* Only show role badge if multiple access levels are visible */}
@@ -335,7 +334,7 @@ export default function ReferenceContent({
                               {ROLE_LABELS[section.role]}
                             </span>
                           )}
-                          <span className={`text-red-500 dark:text-red-400 text-sm font-medium leading-none opacity-0 group-hover:opacity-100 transition-opacity ${visibleRoleKeys.length <= 1 ? "ml-auto" : ""}`}>
+                          <span className={`text-red-500 text-sm font-medium leading-none opacity-0 group-hover:opacity-100 transition-opacity ${visibleRoleKeys.length <= 1 ? "ml-auto" : ""}`}>
                             →
                           </span>
                         </div>
@@ -345,10 +344,10 @@ export default function ReferenceContent({
                           {getVisibleBullets(section.bullets, userRole).map((bullet, i) => (
                             <li
                               key={i}
-                              className="flex gap-2.5 text-sm text-gray-600 dark:text-gray-400"
+                              className="flex gap-2.5 text-sm text-gray-600"
                             >
                               <span
-                                className="mt-[0.6em] h-1 w-1 shrink-0 rounded-full bg-gray-300 dark:bg-gray-600"
+                                className="mt-[0.6em] h-1 w-1 shrink-0 rounded-full bg-gray-300"
                                 aria-hidden="true"
                               />
                               {bullet}
@@ -366,13 +365,13 @@ export default function ReferenceContent({
           {/* ── Sticky TOC: desktop only ──────────────────────────────────── */}
           <aside className="hidden lg:block">
             <nav className="sticky top-8" aria-label="Page sections">
-              <p className="text-[0.62rem] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
+              <p className="text-[0.62rem] font-bold uppercase tracking-widest text-gray-400 mb-3">
                 {query
                   ? `${matchCount} result${matchCount !== 1 ? "s" : ""}`
                   : "On this page"}
               </p>
               {filteredGroups.length === 0 ? (
-                <p className="text-xs text-gray-400 dark:text-gray-500">
+                <p className="text-xs text-gray-400">
                   No matches
                 </p>
               ) : (
@@ -381,7 +380,7 @@ export default function ReferenceContent({
                     <li key={group.id}>
                       <a
                         href={`#${group.id}`}
-                        className="block py-1 text-xs font-semibold text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                        className="block py-1 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors"
                       >
                         {group.label}
                       </a>
@@ -390,7 +389,7 @@ export default function ReferenceContent({
                           <li key={section.id}>
                             <a
                               href={`#${section.id}`}
-                              className="block py-0.5 text-xs text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
+                              className="block py-0.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
                             >
                               {section.name}
                             </a>

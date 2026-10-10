@@ -164,19 +164,19 @@ const BioSettingsSection: React.FC<BioSettingsSectionProps> = ({
     <div className="space-y-8">
       {/* Section header */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">About Page Bio</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <h2 className="text-lg font-semibold text-gray-900">About Page Bio</h2>
+        <p className="text-sm text-gray-500 mt-1">
           This content appears on the public About page when your bio is published. Admins
           control whether your bio is visible.
         </p>
       </div>
 
       {/* ── Headshot ──────────────────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Headshot Photo</h3>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-900">Headshot Photo</h3>
 
         {/* Photo preview */}
-        <div className="relative w-32 h-32 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700">
+        <div className="relative w-32 h-32 rounded-xl overflow-hidden bg-gray-100">
           {displayPhoto ? (
             <Image
               src={displayPhoto}
@@ -209,7 +209,7 @@ const BioSettingsSection: React.FC<BioSettingsSectionProps> = ({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"
           >
             <Upload className="h-4 w-4" aria-hidden="true" />
             {displayPhoto ? "Replace Photo" : "Upload Photo"}
@@ -235,7 +235,7 @@ const BioSettingsSection: React.FC<BioSettingsSectionProps> = ({
         </div>
 
         {pendingFile && (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-gray-500">
             New photo selected: {pendingFile.name}. Will upload when you save.
           </p>
         )}
@@ -245,15 +245,15 @@ const BioSettingsSection: React.FC<BioSettingsSectionProps> = ({
       </div>
 
       {/* ── Bio Description ───────────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 space-y-3">
+      <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-3">
         <div>
           <label
             htmlFor="bio-description"
-            className="block text-sm font-semibold text-gray-900 dark:text-white"
+            className="block text-sm font-semibold text-gray-900"
           >
             Bio Description
           </label>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          <p className="text-xs text-gray-500 mt-0.5">
             A short paragraph that appears below your name on the About page.
           </p>
         </div>
@@ -268,15 +268,15 @@ const BioSettingsSection: React.FC<BioSettingsSectionProps> = ({
       </div>
 
       {/* ── Credentials ───────────────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 space-y-3">
+      <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-3">
         <div>
           <label
             htmlFor="bio-credentials"
-            className="block text-sm font-semibold text-gray-900 dark:text-white"
+            className="block text-sm font-semibold text-gray-900"
           >
             Credentials
           </label>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          <p className="text-xs text-gray-500 mt-0.5">
             Separate each credential with a comma. These appear as checkmark items
             under your name on the About page.
           </p>

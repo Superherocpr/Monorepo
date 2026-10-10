@@ -79,7 +79,7 @@ export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages
   }
 
   return (
-    <header className="bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-800 sticky top-0 z-30">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Relative container so the nav can be absolutely centered on the page.
             Logo sits left in flow, auth sits right via ml-auto, and the nav is pinned
@@ -115,7 +115,7 @@ export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages
                     key={href}
                     href={href}
                     onClick={href === "#legacy-top" ? handleLegacyWelcomeClick : undefined}
-                    className="text-sm transition-colors duration-150 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                    className="text-sm transition-colors duration-150 text-gray-600 hover:text-gray-900"
                   >
                     {label}
                   </a>
@@ -129,7 +129,7 @@ export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages
                     "text-sm transition-colors duration-150",
                     isActive(href)
                       ? "text-red-600 font-semibold"
-                      : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white",
+                      : "text-gray-600 hover:text-gray-900",
                   ].join(" ")}
                 >
                   {label}
@@ -150,7 +150,7 @@ export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages
                       "text-sm transition-colors duration-150",
                       pathname.startsWith("/dashboard")
                         ? "text-red-600 font-semibold"
-                        : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white",
+                        : "text-gray-600 hover:text-gray-900",
                     ].join(" ")}
                   >
                     Dashboard
@@ -183,7 +183,7 @@ export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages
 
           {/* Mobile hamburger toggle — pushed to the far right */}
           <button
-            className="md:hidden ml-auto flex justify-end p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+            className="md:hidden ml-auto flex justify-end p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
@@ -200,7 +200,7 @@ export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 pb-4">
+        <div className="md:hidden border-t border-gray-200 bg-white pb-4">
           <nav className="flex flex-col px-4 pt-3 gap-1" aria-label="Mobile navigation">
             {navLinks.map(({ label, href }) => {
               // Same legacy-vs-normal split as the desktop nav above.
@@ -216,7 +216,7 @@ export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages
                         setMobileOpen(false);
                       }
                     }}
-                    className="py-2 px-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+                    className="py-2 px-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
                   >
                     {label}
                   </a>
@@ -230,8 +230,8 @@ export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages
                   className={[
                     "py-2 px-3 rounded-lg text-sm transition-colors duration-150",
                     isActive(href)
-                      ? "text-red-600 font-semibold bg-red-50 dark:bg-red-950"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800",
+                      ? "text-red-600 font-semibold bg-red-50"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50",
                   ].join(" ")}
                 >
                   {label}
@@ -241,12 +241,12 @@ export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages
 
             {/* Mobile auth actions — hidden in legacy mode to match the simplified menu. */}
             {!legacyMode && (
-              <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-1">
+              <div className="mt-2 pt-2 border-t border-gray-100 flex flex-col gap-1">
                 {isAuthenticated ? (
                   <Link
                     href="/dashboard"
                     onClick={() => setMobileOpen(false)}
-                    className="py-2 px-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+                    className="py-2 px-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
                   >
                     Dashboard
                   </Link>
@@ -254,7 +254,7 @@ export function PublicHeader({ isAuthenticated, legacyMode = false, enabledPages
                   <Link
                     href="/signin"
                     onClick={() => setMobileOpen(false)}
-                    className="py-2 px-3 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                    className="py-2 px-3 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors"
                   >
                     Sign In
                   </Link>

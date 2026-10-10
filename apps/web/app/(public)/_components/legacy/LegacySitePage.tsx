@@ -127,8 +127,8 @@ type SubmitStatus =
 
 /** Tailwind input classes — matches the modern app's input styling. */
 const inputClass =
-  "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-sm " +
-  "text-gray-900 dark:text-white bg-white dark:bg-gray-800 placeholder:text-gray-400 " +
+  "w-full border border-gray-300 rounded-lg px-4 py-3 text-sm " +
+  "text-gray-900 bg-white placeholder:text-gray-400 " +
   "focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent";
 
 /**
@@ -213,7 +213,7 @@ export default function LegacySitePage() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-950">
+    <div className="bg-white">
       {/* Hide the shared footer's Quick Links column on the legacy home page only.
           Scoped via id selector so it has zero effect on any other route. */}
       <style>{`#footer-quick-links { display: none !important; }`}</style>
@@ -259,13 +259,13 @@ export default function LegacySitePage() {
 
       {/* ── 2. Features grid ──────────────────────────────────────────────── */}
       {/* id="why-choose-us" — header "Why Choose Us" link scrolls here in legacy mode */}
-      <section id="why-choose-us" className="py-20 sm:py-24 bg-gray-50 dark:bg-gray-900 scroll-mt-20">
+      <section id="why-choose-us" className="py-20 sm:py-24 bg-gray-50 scroll-mt-20">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               CPR License And Renewal Classes
             </h2>
-            <p className="text-base text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            <p className="text-base text-gray-600 max-w-2xl mx-auto">
               Real-world instruction from someone who&apos;s been on the front line,
               so you walk away ready to act when it matters.
             </p>
@@ -276,15 +276,15 @@ export default function LegacySitePage() {
               return (
                 <div
                   key={card.title}
-                  className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:shadow-md transition-shadow"
+                  className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow"
                 >
-                  <div className="w-12 h-12 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center mb-4">
-                    <Icon className="w-6 h-6 text-red-600 dark:text-red-400" />
+                  <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center mb-4">
+                    <Icon className="w-6 h-6 text-red-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
                     {card.title}
                   </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  <p className="text-sm text-gray-600 leading-relaxed">
                     {card.body}
                   </p>
                 </div>
@@ -295,20 +295,20 @@ export default function LegacySitePage() {
       </section>
 
       {/* ── 3. Testimonials ───────────────────────────────────────────────── */}
-      <section className="py-20 sm:py-24 bg-white dark:bg-gray-950">
+      <section className="py-20 sm:py-24 bg-white">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               Testimonials
             </h2>
-            <p className="text-base text-gray-600 dark:text-gray-300">
+            <p className="text-base text-gray-600">
               See what others are saying about Superhero CPR.
             </p>
           </div>
-          <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-8 sm:p-10">
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-8 sm:p-10">
             <div className="flex flex-col sm:flex-row gap-6 items-start">
               <div className="shrink-0">
-                <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 relative">
+                <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 relative">
                   <Image
                     src="/images/legacy/testimonial-photo.jpg"
                     alt="Super Hero CPR customer review"
@@ -318,7 +318,7 @@ export default function LegacySitePage() {
                 </div>
               </div>
               <div className="flex-1">
-                <blockquote className="text-base sm:text-lg text-gray-800 dark:text-gray-200 italic leading-relaxed mb-4">
+                <blockquote className="text-base sm:text-lg text-gray-800 italic leading-relaxed mb-4">
                   &ldquo;I have been CPR certified for 40 consecutive years.
                   That&apos;s a LOT of CPR classes. The absolute best class I ever
                   attended was yours, last week at Casa Mora. Your teaching
@@ -328,20 +328,20 @@ export default function LegacySitePage() {
                   others to do so. Thanks so much for your commitment in
                   delivering an excellent CPR class.&rdquo;
                 </blockquote>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                <p className="text-sm font-semibold text-gray-900">
                   Holly Duncan, RN, BSN
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-gray-500">
                   Casa Mora Rehabilitation &amp; Extended Care
                 </p>
               </div>
             </div>
-            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 text-center">
+            <div className="mt-8 pt-6 border-t border-gray-200 text-center">
               <a
                 href={FACEBOOK_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-red-600 hover:text-red-700"
               >
                 <FacebookIcon className="w-4 h-4" />
                 Add a testimonial on Facebook
@@ -352,7 +352,7 @@ export default function LegacySitePage() {
       </section>
 
       {/* ── 4. Protect Your Loved Ones ────────────────────────────────────── */}
-      <section className="py-20 sm:py-24 bg-gray-900 dark:bg-black text-white">
+      <section className="py-20 sm:py-24 bg-gray-900 text-white">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-6">
             Protect Your Loved Ones.
@@ -374,30 +374,30 @@ export default function LegacySitePage() {
 
       {/* ── 5. Contact / Booking form ─────────────────────────────────────── */}
       {/* id="contact" — Book Now / Schedule a Class hero CTAs scroll here via #contact */}
-      <section id="contact" className="py-20 sm:py-24 bg-white dark:bg-gray-950 scroll-mt-20">
+      <section id="contact" className="py-20 sm:py-24 bg-white scroll-mt-20">
         <div className="max-w-3xl mx-auto px-6">
           <div className="text-center mb-10">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               Book Your Date Before Classes Fill!
             </h2>
-            <p className="text-base text-gray-600 dark:text-gray-300 mb-6">
+            <p className="text-base text-gray-600 mb-6">
               Give us a call, send us an email, or fill out the form below.
               Your CPR certification class is only one click away.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm">
               <a
                 href={`tel:${BUSINESS_PHONE_TEL}`}
-                className="inline-flex items-center gap-2 font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                className="inline-flex items-center gap-2 font-semibold text-red-600 hover:text-red-700"
               >
                 <Phone className="w-4 h-4" />
                 {BUSINESS_PHONE_DISPLAY}
               </a>
-              <span className="text-gray-300 dark:text-gray-700 hidden sm:inline">
+              <span className="text-gray-300 hidden sm:inline">
                 ·
               </span>
               <a
                 href={`mailto:${BUSINESS_EMAIL}`}
-                className="inline-flex items-center gap-2 font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                className="inline-flex items-center gap-2 font-semibold text-red-600 hover:text-red-700"
               >
                 <Mail className="w-4 h-4" />
                 {BUSINESS_EMAIL}
@@ -407,13 +407,13 @@ export default function LegacySitePage() {
 
           <form
             onSubmit={handleSubmit}
-            className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-6 sm:p-8 space-y-4"
+            className="bg-gray-50 border border-gray-200 rounded-2xl p-6 sm:p-8 space-y-4"
             noValidate
           >
             <div>
               <label
                 htmlFor="legacy-name"
-                className="block text-sm font-semibold text-gray-900 dark:text-white mb-1.5"
+                className="block text-sm font-semibold text-gray-900 mb-1.5"
               >
                 Name <span className="text-red-600">*</span>
               </label>
@@ -432,7 +432,7 @@ export default function LegacySitePage() {
             <div>
               <label
                 htmlFor="legacy-email"
-                className="block text-sm font-semibold text-gray-900 dark:text-white mb-1.5"
+                className="block text-sm font-semibold text-gray-900 mb-1.5"
               >
                 Email <span className="text-red-600">*</span>
               </label>
@@ -451,7 +451,7 @@ export default function LegacySitePage() {
             <div>
               <label
                 htmlFor="legacy-phone"
-                className="block text-sm font-semibold text-gray-900 dark:text-white mb-1.5"
+                className="block text-sm font-semibold text-gray-900 mb-1.5"
               >
                 Phone Number <span className="text-red-600">*</span>
               </label>
@@ -491,13 +491,13 @@ export default function LegacySitePage() {
 
             {/* Inline status feedback — success or error */}
             {status.kind === "success" && (
-              <div className="flex items-start gap-2 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+              <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
                 <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
                 <span>{status.message}</span>
               </div>
             )}
             {status.kind === "error" && (
-              <div className="flex items-start gap-2 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+              <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
                 <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                 <span>{status.message}</span>
               </div>

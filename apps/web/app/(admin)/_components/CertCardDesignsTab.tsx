@@ -82,7 +82,7 @@ export default function CertCardDesignsTab() {
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
               Active: CPR Awareness
             </p>
-            <div style={{ zoom: 0.65 }}>
+            <div className="admin-light-island" style={{ zoom: 0.65 }}>
               <SuperheroCPRCertCard
                 cert={mockSHCPRCert("CPR Awareness")}
                 studentName="Jane Doe"
@@ -95,7 +95,7 @@ export default function CertCardDesignsTab() {
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
               Expired: CPR Awareness
             </p>
-            <div style={{ zoom: 0.65 }}>
+            <div className="admin-light-island" style={{ zoom: 0.65 }}>
               <SuperheroCPRCertCard
                 cert={mockSHCPRCert("CPR Awareness")}
                 studentName="Jane Doe"
@@ -109,7 +109,7 @@ export default function CertCardDesignsTab() {
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
               Long class name
             </p>
-            <div style={{ zoom: 0.65 }}>
+            <div className="admin-light-island" style={{ zoom: 0.65 }}>
               <SuperheroCPRCertCard
                 cert={mockSHCPRCert("Pediatric First Aid & CPR")}
                 studentName="Jane Doe"
@@ -135,7 +135,7 @@ export default function CertCardDesignsTab() {
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
                 {name}
               </p>
-              <div style={{ zoom: 0.65 }}>
+              <div className="admin-light-island" style={{ zoom: 0.65 }}>
                 <AHACertCard cert={mockAHACert(name)} studentName="Jane Doe" />
               </div>
             </div>

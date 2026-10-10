@@ -9,7 +9,9 @@
  */
 
 import { useRouter } from "next/navigation";
+import { Moon, Sun } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useAdminTheme } from "@/lib/admin-theme-store";
 import type { UserRole } from "@/types/users";
 import { ROLE_LABELS, ROLE_COLORS } from "./role-badges";
 import ViewAsSwitcher from "./ViewAsSwitcher";
@@ -34,6 +36,7 @@ export default function AdminTopBar({
   isViewingAs,
 }: AdminTopBarProps) {
   const router = useRouter();
+  const { resolved: theme, setPreference } = useAdminTheme();
 
   /**
    * Signs the user out via the Supabase client and redirects to sign-in.
@@ -75,6 +78,17 @@ export default function AdminTopBar({
             isViewingAs={isViewingAs}
           />
         )}
+
+        {/* Quick theme switch; the full Light / Dark / System choice lives in Settings. */}
+        <button
+          type="button"
+          onClick={() => setPreference(theme === "dark" ? "light" : "dark")}
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors duration-100"
+        >
+          {theme === "dark" ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+        </button>
 
         <button
           type="button"

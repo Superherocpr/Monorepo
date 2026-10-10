@@ -2,15 +2,17 @@
  * Layout for all /admin/* routes.
  * Handles auth guard: redirects unauthenticated users, non-staff, archived, and
  * deactivated accounts to /. Provides the shared sidebar + top bar chrome.
- * Injects a dark mode flash-prevention script that reads localStorage before
- * first paint so dark mode users don't see a flash of light mode.
+ * Renders everything inside AdminThemeScope, the only element that carries the
+ * opt-in dark theme (admin-theme.css), so dark mode can never reach the public site.
  * Used by: every page under app/(admin)/
  */
 
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
+import "./admin-theme.css";
 import AdminSidebar from "./_components/AdminSidebar";
+import AdminThemeScope from "./_components/AdminThemeScope";
 import AdminTopBar from "./_components/AdminTopBar";
 import ViewAsBanner from "./_components/ViewAsBanner";
 import { isTeachingRole } from "@/lib/auth/view-as-constants";
@@ -58,7 +60,7 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+    <AdminThemeScope>
       <AdminSidebar role={role} />
       <div className="flex flex-col flex-1 min-w-0">
         <AdminTopBar
@@ -86,6 +88,6 @@ export default async function AdminLayout({
         )}
         <main className="flex-1 p-6">{children}</main>
       </div>
-    </div>
+    </AdminThemeScope>
   );
 }
