@@ -36,11 +36,11 @@ export default function CaptchaCheckbox({ checked, onChange }: CaptchaCheckboxPr
       className={[
         "flex items-center justify-between gap-4",
         "border rounded-md px-4 py-3 select-none",
-        "bg-gray-50 dark:bg-gray-800",
+        "bg-gray-50",
         "transition-colors",
         checked
-          ? "border-green-500 dark:border-green-600"
-          : "border-gray-300 dark:border-gray-600",
+          ? "border-green-500"
+          : "border-gray-300",
       ].join(" ")}
     >
       {/* Clickable checkbox + label */}
@@ -62,7 +62,7 @@ export default function CaptchaCheckbox({ checked, onChange }: CaptchaCheckboxPr
             "transition-colors",
             checked
               ? "bg-green-500 border-green-500"
-              : "bg-white dark:bg-gray-900 border-gray-400 dark:border-gray-500",
+              : "bg-white border-gray-400",
           ].join(" ")}
         >
           {checked && (
@@ -83,13 +83,13 @@ export default function CaptchaCheckbox({ checked, onChange }: CaptchaCheckboxPr
           )}
         </span>
 
-        <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+        <span className="text-sm text-gray-700 font-medium">
           I&apos;m not a robot
         </span>
       </label>
 
       {/* Right-side badge */}
-      <div className="flex flex-col items-center gap-0.5 text-gray-400 dark:text-gray-500">
+      <div className="flex flex-col items-center gap-0.5 text-gray-400">
         <Shield size={22} aria-hidden="true" />
         <span className="text-[10px] leading-none tracking-wide uppercase font-medium">
           captcha

@@ -68,10 +68,10 @@ function TourCard({ tour, showBadge }: { tour: TourDefinition; showBadge: boolea
   return (
     <Link
       href={tour.href}
-      className="block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-red-300 dark:hover:border-red-700 transition-colors group cursor-pointer"
+      className="block bg-white border border-gray-200 rounded-lg overflow-hidden hover:border-red-300 transition-colors group cursor-pointer"
     >
-      <div className="flex flex-wrap items-center gap-2 px-5 py-3 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700 group-hover:bg-red-50/40 dark:group-hover:bg-red-900/10 transition-colors">
-        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+      <div className="flex flex-wrap items-center gap-2 px-5 py-3 bg-gray-50 border-b border-gray-200 group-hover:bg-red-50/40 transition-colors">
+        <span className="text-sm font-semibold text-gray-900">
           {tour.title}
         </span>
         {showBadge && (
@@ -82,13 +82,13 @@ function TourCard({ tour, showBadge }: { tour: TourDefinition; showBadge: boolea
           </span>
         )}
         <span
-          className={`text-red-500 dark:text-red-400 text-sm font-medium leading-none opacity-0 group-hover:opacity-100 transition-opacity ${showBadge ? "" : "ml-auto"}`}
+          className={`text-red-500 text-sm font-medium leading-none opacity-0 group-hover:opacity-100 transition-opacity ${showBadge ? "" : "ml-auto"}`}
         >
           →
         </span>
       </div>
       <div className="px-5 py-3.5">
-        <p className="text-sm text-gray-600 dark:text-gray-400">{tour.description}</p>
+        <p className="text-sm text-gray-600">{tour.description}</p>
       </div>
     </Link>
   );
@@ -144,10 +144,10 @@ export default function WalkthroughsPanel({ viewerRole }: WalkthroughsPanelProps
       <div className="flex items-start gap-3">
         <CircleHelp className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-lg font-semibold text-gray-900">
             How-To Guides
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             Step-by-step walkthroughs that guide you through common tasks,
             right on the page where you do them.
           </p>
@@ -173,7 +173,7 @@ export default function WalkthroughsPanel({ viewerRole }: WalkthroughsPanelProps
                   "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all cursor-pointer",
                   ROLE_CLASSES[key],
                   isActive
-                    ? "ring-2 ring-offset-1 ring-gray-900 dark:ring-white dark:ring-offset-gray-900"
+                    ? "ring-2 ring-offset-1 ring-gray-900"
                     : roleFilter
                     ? "opacity-50 hover:opacity-100"
                     : "hover:opacity-80",
@@ -187,12 +187,12 @@ export default function WalkthroughsPanel({ viewerRole }: WalkthroughsPanelProps
             <button
               type="button"
               onClick={() => setRoleFilter(null)}
-              className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline underline-offset-2"
+              className="text-xs font-medium text-gray-500 hover:text-gray-700 underline underline-offset-2"
             >
               Reset
             </button>
           )}
-          <span className="text-xs text-gray-400 dark:text-gray-500 self-center">
+          <span className="text-xs text-gray-400 self-center">
             (access level required)
           </span>
         </div>
@@ -219,17 +219,16 @@ export default function WalkthroughsPanel({ viewerRole }: WalkthroughsPanelProps
               "w-full border rounded-lg pl-9 pr-9 py-2.5 text-sm bg-white " +
               "text-gray-900 placeholder:text-gray-400 " +
               "focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent " +
-              "dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-500 " +
               (query
-                ? "border-red-300 dark:border-red-700"
-                : "border-gray-300 dark:border-gray-600")
+                ? "border-red-300"
+                : "border-gray-300")
             }
           />
           {rawQuery && (
             <button
               onClick={clearSearch}
               aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
@@ -238,7 +237,7 @@ export default function WalkthroughsPanel({ viewerRole }: WalkthroughsPanelProps
 
         {/* Result count: reflects the search query and/or the active role-filter pill */}
         {(query || roleFilter) && (
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-xs text-gray-500">
             {filteredTours.length === 0 ? (
               <>
                 No results
@@ -257,8 +256,8 @@ export default function WalkthroughsPanel({ viewerRole }: WalkthroughsPanelProps
 
       {/* List */}
       {filteredTours.length === 0 ? (
-        <div className="py-10 text-center border border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        <div className="py-10 text-center border border-dashed border-gray-300 rounded-lg">
+          <p className="text-sm font-medium text-gray-500">
             {accessibleTours.length === 0 ? (
               "No walkthroughs are available yet. Check back soon."
             ) : (
@@ -275,7 +274,7 @@ export default function WalkthroughsPanel({ viewerRole }: WalkthroughsPanelProps
                 clearSearch();
                 setRoleFilter(null);
               }}
-              className="mt-2 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline underline-offset-2"
+              className="mt-2 text-xs font-medium text-red-600 hover:text-red-700 underline underline-offset-2"
             >
               Clear filters
             </button>
