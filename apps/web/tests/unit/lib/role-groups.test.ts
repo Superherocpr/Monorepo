@@ -113,13 +113,16 @@ describe("instructor gates always include managers", () => {
   }
 
   // Deliberate exceptions:
-  // - The instructor-only sidebar entry: an instructor's sessions list is already
-  //   scoped to their own classes, while managers get their own "My Class
-  //   Sessions" entry pointing at /admin/sessions?mine=1.
+  // - The instructor-only sidebar entries (lib/admin-nav.ts): an instructor's
+  //   sessions list is already scoped to their own classes, while managers get
+  //   their own "My Class Sessions" entry pointing at /admin/sessions?mine=1;
+  //   and instructors keep a separate "Payroll" Payout Settings entry at the
+  //   bottom while managers get theirs under "My Teaching".
   // - The reference page's "instructorOnly" key, which marks restrictions that
   //   bind plain instructors only and so must stay hidden from managers.
   const ALLOWED = [
-    'app/(admin)/_components/AdminSidebar.tsx: { label: "My Class Sessions", href: "/admin/sessions", roles: ["instructor"] },',
+    'lib/admin-nav.ts: { label: "My Class Sessions", href: "/admin/sessions", roles: ["instructor"] },',
+    'lib/admin-nav.ts: roles: ["instructor"],',
     'app/(admin)/admin/reference/_components/ReferenceContent.tsx: if (sectionRole === "instructorOnly") return userRole === "instructor" || userRole === "super_admin";',
   ];
 

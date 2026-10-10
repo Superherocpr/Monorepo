@@ -746,6 +746,13 @@ code on read and verify-code rejects any code not generated today, so it was
 left alone rather than adding a migration that would collide with the unapplied
 0074 on PayrollFeature. Widen it in the next migration that touches that function.
 
+**Sidebar grouping (2026-10-10).** Section headers used to hang off one item each
+(Blog carried "Engagement", Analytics carried "Management"), so managers, who cannot
+see those items, lost the headers and saw Contact, Directory and Settings listed under
+"Financial". Headers are now derived per role in `lib/admin-nav.ts`, and
+`tests/unit/lib/admin-nav.test.ts` pins the exact menu for every role plus the
+hidden-first-item case that caused the bug.
+
 ### Staff self-service account (added 2026-08-28)
 
 The Account tab on `/admin/settings` lets staff change their own name, phone,

@@ -2,6 +2,7 @@
 
 /**
  * AdminSidebar: role-filtered navigation sidebar for the admin area.
+ * The item list and section grouping live in lib/admin-nav.ts.
  * Desktop: fixed left sidebar 240px wide.
  * Mobile: hidden by default, toggled via hamburger button in AdminTopBar.
  * Used by: app/(admin)/layout.tsx
@@ -11,118 +12,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { UserRole } from "@/types/users";
-import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
-
-interface NavItem {
-  label: string;
-  /** Link target. May carry a query string (e.g. "?mine=1"); active-state matching honors it. */
-  href: string;
-  roles: readonly UserRole[];
-  /** Optional section heading rendered above this item as a visual grouping label. */
-  sectionLabel?: string;
-  /** Optional sub-group label rendered above this item, nested within a section. */
-  subLabel?: string;
-  /** When true, indents this item to show it belongs to the preceding subLabel group. */
-  nested?: boolean;
-}
-
-/** Full nav config: items are filtered to the current user's role at render time. */
-const NAV_ITEMS: NavItem[] = [
-  // ── Top-level ──────────────────────────────────────────────────────────────
-  {
-    label: "Dashboard",
-    href: "/admin",
-    roles: ["instructor", "manager", "super_admin", "inspector"],
-  },
-  // Teaching quick-access items (no section label: small flat list). Every
-  // teaching role gets these. An instructor's sessions list is already scoped
-  // to their own classes; managers and super admins see every class there, so
-  // their link carries ?mine=1 to filter it down to the classes they teach.
-  { label: "My Class Sessions", href: "/admin/sessions", roles: ["instructor"] },
-  {
-    label: "My Class Sessions",
-    href: "/admin/sessions?mine=1",
-    roles: ["manager", "super_admin"],
-  },
-  { label: "Rollcall", href: "/rollcall", roles: TEACHING_ROLES },
-
-  // ── Operations ─────────────────────────────────────────────────────────────
-  {
-    label: "Class Sessions",
-    href: "/admin/sessions",
-    roles: ["manager", "super_admin"],
-    sectionLabel: "Operations",
-  },
-  { label: "Customers", href: "/admin/customers", roles: ["manager", "super_admin"] },
-  {
-    label: "Customer Requests",
-    href: "/admin/class-requests",
-    roles: ["manager", "super_admin"],
-    subLabel: "Requests",
-    nested: true,
-  },
-  {
-    label: "Instructor Requests",
-    href: "/admin/sessions/approvals",
-    roles: ["manager", "super_admin"],
-    nested: true,
-  },
-
-  // ── Financial ──────────────────────────────────────────────────────────────
-  {
-    label: "Invoices",
-    href: "/admin/invoices",
-    roles: ["manager", "super_admin"],
-    sectionLabel: "Financial",
-  },
-  { label: "Payments", href: "/admin/payments", roles: ["manager", "super_admin"] },
-  { label: "Payouts", href: "/admin/payouts", roles: ["super_admin"] },
-  { label: "Promo Codes", href: "/admin/promo-codes", roles: ["super_admin"] },
-
-  // ── Engagement ─────────────────────────────────────────────────────────────
-  {
-    label: "Blog",
-    href: "/admin/blog",
-    roles: ["super_admin"],
-    sectionLabel: "Engagement",
-  },
-  {
-    label: "Certifications",
-    href: "/admin/certifications",
-    roles: ["super_admin"],
-  },
-  { label: "Contact", href: "/admin/contact", roles: ["manager", "super_admin"] },
-  { label: "Merch", href: "/admin/merch", roles: ["super_admin"] },
-  { label: "Orders", href: "/admin/orders", roles: ["super_admin"] },
-
-  // ── Management ─────────────────────────────────────────────────────────────
-  {
-    label: "Analytics",
-    href: "/admin/analytics",
-    roles: ["super_admin"],
-    sectionLabel: "Management",
-  },
-  { label: "Archived Accounts", href: "/admin/archived", roles: ["super_admin"] },
-  {
-    label: "Directory",
-    href: "/admin/directory",
-    roles: ["instructor", "manager", "super_admin", "inspector"],
-  },
-  {
-    label: "Settings",
-    href: "/admin/settings",
-    roles: ["instructor", "manager", "super_admin"],
-  },
-  { label: "Staff", href: "/admin/staff", roles: ["super_admin"] },
-
-  // ── Payroll ────────────────────────────────────────────────────────────────
-  {
-    label: "Payout Settings",
-    href: "/admin/profile/payment",
-    roles: TEACHING_ROLES,
-    sectionLabel: "Payroll",
-  },
-];
+import { getVisibleNavItems } from "@/lib/admin-nav";
 
 interface AdminSidebarProps {
   role: UserRole;
@@ -155,7 +45,7 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
   const searchParams = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
+  const visibleItems = getVisibleNavItems(role);
 
   const navLinks = (
     <nav aria-label="Admin navigation">
@@ -180,11 +70,11 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
 
           return (
             <li key={`${item.label}-${item.href}`}>
-              {/* Section label: rendered above the first item in a new group */}
-              {item.sectionLabel && (
+              {/* Section header: rendered above the first visible item of each section */}
+              {item.sectionHeader && (
                 <div className="mt-5 mb-1 border-t border-gray-200">
                   <p className="px-4 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-gray-100">
-                    {item.sectionLabel}
+                    {item.sectionHeader}
                   </p>
                 </div>
               )}
