@@ -70,7 +70,7 @@ clone — so this file is the one that travels with the repo.
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
 | **Team bookings** (0055, 0067, 0068) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — surfaced on the session and invoices pages, retry cron + email alert, root-cause PayPal bug fixed. 2026-09-06: third payment mode (bill the company per signup), the signup link auto-emails the contact, and the class can be edited (date/time/location/certification) at any time with attendees notified instead of a re-approval gate — see below |
-| **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
+| **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout | 2026-10-07: managers can now use this same route from the modal ("Charge and add to class", their default; "Charge only" keeps the old independent capture). The route's existing manager tests cover it; invariant #13 still watches instructor-created bookings only, since a manager's free Add is legitimately unpaid
 
 ### Staging mock payments — a narrower fix for a bigger discovery
 
@@ -373,7 +373,7 @@ bookings.
 | Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on + price-vs-UpdatePanel guard + auto-submit on Mark-as-submitted, all 2026-08-24; unit coverage for all four |
 | **Student documents / photos** | — | — | ✅ | ✅ | — | — | Bookmarklet injects merged PDFs into Enrollware via AjaxUpload1; cron purges DB rows at 30 days; S3 lifecycle rule handles file expiry |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
-| Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
+| Grading / CCF | ✅ | — | — | ✅ | — | — | 2026-10-06: grade route has unit tests for the ownership rule (own class allowed, other's class 403 with no write); CCF route and grade values untested |
 
 ### Class finder walkthrough (added 2026-09-08)
 
@@ -714,6 +714,44 @@ notice. The stamp now happens only after a confirmed send.
 | File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
 | **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | Three tours shipped (create-session, team-booking, add-student); TourButton logic unit-tested; no outcome e2e yet, see note below |
 | **Staff Directory** | ✅✅✅✅✅✅✅✅✅✅✅✅✅ | — | — | ✅ | — | — | Added 2026-09-22 (migrations 0070/0071, staging only). Read-only internal contact page: classes-taught list, plus a per-person email override for hiding a real address; see note below |
+| **Manager / instructor parity** | ✅✅ | — | — | ✅ | — | — | Added 2026-10-06. Managers get every instructor capability. A source scan fails the suite if any role gate admits instructors but not managers; route tests drive grading and rollcall code verification as a manager. No outcome e2e: there is still no staff-role Playwright fixture. See note below |
+
+### Manager / instructor parity (added 2026-10-06)
+
+Managers teach classes, so they must have everything an instructor has plus
+their own manager permissions. Before this change every instructor feature was
+gated on a hand-written `["instructor", "super_admin"]` list, and managers were
+silently left out of each one: grading, CCF, student verification, customer
+info, additional hours, session invoices, Payout Settings, the payout banner,
+the Rollcall sidebar link, and the instructor dashboard and settings tabs. Worst
+of all, `POST /api/rollcall/verify-code` filtered out manager codes, so students
+in a manager-taught class were told their code was wrong. Payouts themselves
+were never role-filtered: production's manager already had earnings accruing.
+
+Instructor gates now use `TEACHING_ROLES` / `isTeachingRole()` /
+`canUseInstructorToolsOn()` from `lib/auth/view-as-constants.ts`. Instructor-only
+tools that managers never had (grading, CCF, invoices...) are scoped to the
+manager's **own** classes, exactly like an instructor; only super admins act on
+anyone's class.
+
+| Signal | What it does |
+|---|---|
+| `tests/unit/lib/role-groups.test.ts` | Scans `app/`, `lib/`, `components/` and fails on any line naming `"instructor"` and `"super_admin"` without `"manager"`, or any role list admitting instructors but not managers. Run against the pre-change code it flags all 19 original gaps. Plus the ownership matrix for `canUseInstructorToolsOn` |
+| `tests/unit/api/manager-teaching-parity.test.ts` | Drives `PATCH /api/sessions/[id]/grade` as a manager (own class: grade written; other's class: 403, nothing written) and `POST /api/rollcall/verify-code` with a manager's code (accepted) |
+
+**Not covered:** the nightly `regenerate_instructor_access_codes()` DB function
+(migration 0006) still rotates only instructor and super admin codes. It is
+redundant for function, since the dashboard and check-in page regenerate a stale
+code on read and verify-code rejects any code not generated today, so it was
+left alone rather than adding a migration that would collide with the unapplied
+0074 on PayrollFeature. Widen it in the next migration that touches that function.
+
+**Sidebar grouping (2026-10-10).** Section headers used to hang off one item each
+(Blog carried "Engagement", Analytics carried "Management"), so managers, who cannot
+see those items, lost the headers and saw Contact, Directory and Settings listed under
+"Financial". Headers are now derived per role in `lib/admin-nav.ts`, and
+`tests/unit/lib/admin-nav.test.ts` pins the exact menu for every role plus the
+hidden-first-item case that caused the bug.
 
 ### Staff self-service account (added 2026-08-28)
 

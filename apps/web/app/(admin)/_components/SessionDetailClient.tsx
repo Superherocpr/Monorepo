@@ -43,6 +43,7 @@ import { MockCardPaymentSection } from "@/app/_components/MockCardPaymentSection
 import TourButton from "@/components/tours/TourButton";
 import { getAddStudentSteps } from "./addStudentTourSteps";
 import { applyDiscountPercent, normalizeDiscountPercent } from "@/lib/session-pricing";
+import { canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 // ─── Exported types (imported by the server component) ────────────────────────
 
@@ -469,11 +470,17 @@ export default function SessionDetailClient({
   const isSuperAdmin = userRole === "super_admin";
   const isOwnSession = session.instructor_id === userId;
 
+  // Instructor tools (invoices section, grading, verification, CCF, customer
+  // info) follow the same rule as their API routes: any teaching role on their
+  // own class, super admin on any. A manager teaching a class gets the full
+  // instructor toolset for it; management access to someone else's class does not.
+  const canUseInstructorTools = canUseInstructorToolsOn(userRole, userId, session.instructor_id);
+
   // Whether the current user can see the invoices section
-  const canSeeInvoices = isSuperAdmin || (isInstructor && isOwnSession);
+  const canSeeInvoices = canUseInstructorTools;
 
   // Whether the current user can use grading and enrollware tools
-  const canUseTools = isSuperAdmin || (isInstructor && isOwnSession);
+  const canUseTools = canUseInstructorTools;
 
   // Who may open the "Add Student to Class" modal at all.
   const canAddStudents = isManager || (isInstructor && isOwnSession);
@@ -651,6 +658,14 @@ export default function SessionDetailClient({
   const [isProcessingCharge, setIsProcessingCharge] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [chargeSuccessMessage, setChargeSuccessMessage] = useState<string | null>(null);
+  /**
+   * What a manager's card charge does. "book" charges and adds the student in
+   * one request (charge-and-book), so the payment is always linked to the
+   * booking and a failed booking is refunded. "charge_only" is the older
+   * independent register charge. Instructors always book; they have no choice.
+   */
+  const [managerChargeMode, setManagerChargeMode] = useState<"book" | "charge_only">("book");
+  const chargeAddsStudent = !canAddWithoutCharging || managerChargeMode === "book";
 
   // Inline "student has no account yet" form inside the add-student modal:
   // the walk-in at the door is usually not in the system.
@@ -1292,10 +1307,10 @@ export default function SessionDetailClient({
         return;
       }
 
-      // Managers capture the charge on its own: adding the student is a
-      // separate button. Instructors post to charge-and-book, which creates
-      // the booking in the same request and refunds if that step fails, so
-      // they can never end up with a student added but not paid.
+      // charge-and-book creates the booking in the same request and refunds if
+      // that step fails, so the student can never end up added but not paid.
+      // Instructors always use it; managers use it unless they picked
+      // "Charge only", which captures the charge on its own.
       const payload = {
         paypalOrderId: orderId,
         customerId: selectedCustomer.id,
@@ -1307,14 +1322,14 @@ export default function SessionDetailClient({
       };
 
       const response = await fetch(
-        canAddWithoutCharging
-          ? "/api/paypal/capture-manual-charge"
-          : `/api/sessions/${session.id}/charge-and-book`,
+        chargeAddsStudent
+          ? `/api/sessions/${session.id}/charge-and-book`
+          : "/api/paypal/capture-manual-charge",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
-            canAddWithoutCharging ? { ...payload, sessionId: session.id } : payload
+            chargeAddsStudent ? payload : { ...payload, sessionId: session.id }
           ),
         }
       );
@@ -1332,7 +1347,7 @@ export default function SessionDetailClient({
 
       const mockSuffix = result.mock ? " (mock; no real charge was made)" : "";
 
-      if (canAddWithoutCharging) {
+      if (!chargeAddsStudent) {
         setChargeSuccessMessage(`Charge recorded successfully.${mockSuffix}`);
       } else {
         setChargeSuccessMessage(
@@ -1343,7 +1358,7 @@ export default function SessionDetailClient({
       }
       setIsProcessingCharge(false);
     },
-    [chargeAmount, chargeDescription, chargeNotes, selectedCustomer, canAddWithoutCharging, session.id, router]
+    [chargeAmount, chargeDescription, chargeNotes, selectedCustomer, chargeAddsStudent, session.id, router]
   );
 
   const handleChargeError = useCallback((message: string): void => {
@@ -2223,11 +2238,45 @@ export default function SessionDetailClient({
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold text-gray-900">Manual charge register</h3>
                   <p className="text-sm text-gray-500">
-                    {canAddWithoutCharging
-                      ? "Enter the amount, billing details, and charge the card independently from adding the student."
-                      : "Enter the amount you're charging, then take the card. The student joins the class once it goes through."}
+                    {chargeAddsStudent
+                      ? "Enter the amount you're charging, then take the card. The student joins the class once it goes through."
+                      : "Enter the amount, billing details, and charge the card independently from adding the student."}
                   </p>
                 </div>
+
+                {/* Managers choose what the charge does; instructors always book. */}
+                {canAddWithoutCharging && (
+                  <fieldset data-tour="add-student-mode">
+                    <legend className="block text-sm font-medium text-gray-700 mb-1">
+                      What should the charge do?
+                    </legend>
+                    <div className="grid grid-cols-2 gap-1 rounded-md border border-gray-300 bg-white p-1">
+                      {([
+                        { value: "book", label: "Charge and add to class" },
+                        { value: "charge_only", label: "Charge only" },
+                      ] as const).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          aria-pressed={managerChargeMode === option.value}
+                          onClick={() => {
+                            setManagerChargeMode(option.value);
+                            setPaymentError(null);
+                            setChargeSuccessMessage(null);
+                          }}
+                          disabled={isProcessingCharge}
+                          className={`rounded px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                            managerChargeMode === option.value
+                              ? "bg-red-600 text-white"
+                              : "text-gray-700 hover:bg-gray-100"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                )}
 
                 <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
                   <p className="font-medium text-gray-900">Selected customer</p>
@@ -2283,9 +2332,9 @@ export default function SessionDetailClient({
                 </div>
 
                 <p className="text-xs text-gray-500">
-                  {canAddWithoutCharging
-                    ? "Booking and payment are independent here. You can charge a card without adding the student, or add the student even if the charge declines."
-                    : "The student is added to the class only when the charge goes through. If the card is declined, nothing is booked; if the class fills up first, the charge is refunded automatically."}
+                  {chargeAddsStudent
+                    ? "The student is added to the class only when the charge goes through. If the card is declined, nothing is booked; if the class fills up first, the charge is refunded automatically."
+                    : "The charge is recorded on its own and does not add the student. Use Add in the list if they should also join the class."}
                 </p>
 
                 <div className="space-y-3" data-tour="add-student-payment">
@@ -2863,7 +2912,7 @@ export default function SessionDetailClient({
           <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">
             <p className="font-medium">This session was not approved.</p>
             <p className="mt-1">Reason: {session.rejection_reason}</p>
-            {isInstructor && isOwnSession && (
+            {isOwnSession && (
               <button
                 type="button"
                 onClick={handleEditClick}
@@ -3301,13 +3350,12 @@ export default function SessionDetailClient({
                       setCustomerSearchError(null);
                       setAddStudentError(null);
                       setSelectedCustomer(null);
-                      // Prefill the class price for the charge-to-add flow:
-                      // still editable, since walk-in rates vary. Managers keep
-                      // the blank field their register has always had.
+                      // Prefill the class price for the charge-to-add flow (the
+                      // default for every role): still editable, since walk-in
+                      // rates vary.
+                      setManagerChargeMode("book");
                       setChargeAmount(
-                        !canAddWithoutCharging && sessionListPrice !== null
-                          ? sessionListPrice.toFixed(2)
-                          : ""
+                        sessionListPrice !== null ? sessionListPrice.toFixed(2) : ""
                       );
                       setChargeDescription("");
                       setChargeNotes("");

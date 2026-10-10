@@ -39,6 +39,7 @@ import { floatingNow } from "@/lib/business-time";
 import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
 import { isMockPaymentsEnabled, mockCaptureOutcome } from "@/lib/mock-payments";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Acceptable rounding tolerance when comparing captured and submitted amounts. */
 const AMOUNT_TOLERANCE = 0.01;
@@ -71,7 +72,7 @@ interface Params {
  * @param params - Route params containing the class_sessions UUID.
  */
 export async function POST(request: Request, { params }: Params): Promise<Response> {
-  const auth = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const auth = await requireApiRole(TEACHING_ROLES);
   if ("error" in auth) return auth.error;
   const actor = auth.actor;
 

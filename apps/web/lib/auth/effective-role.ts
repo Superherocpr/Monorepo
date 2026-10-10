@@ -135,7 +135,7 @@ export async function getAdminActor(): Promise<AdminActor | null> {
  *          NextResponse (401 unauthenticated, 403 insufficient role).
  */
 export async function requireApiRole(
-  allowed: UserRole[]
+  allowed: readonly UserRole[]
 ): Promise<{ actor: AdminActor } | { error: NextResponse }> {
   const actor = await getAdminActor();
   if (!actor) {

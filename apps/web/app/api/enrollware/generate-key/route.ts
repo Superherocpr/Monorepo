@@ -19,11 +19,12 @@
 import { createHash, randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 export async function POST() {
   // Authenticate via Supabase session (companion page caller is always logged in).
   // Honors view-as; archived/deactivated checks happen inside requireApiRole.
-  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const user = authResult.actor.user;
 

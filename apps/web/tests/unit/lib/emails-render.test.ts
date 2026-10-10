@@ -194,15 +194,15 @@ const FIXTURES: Record<string, Fixture> = {
         personalMessage: "Excited to have you aboard.",
         roleLabel: "Instructor",
         actionLink: `${BASE_URL}/setup-password?token_hash=abc&type=recovery`,
-        isInstructor: true,
+        isTeaching: true,
       }),
     sparse: () =>
       staffInviteEmail({
         firstName: "Alex",
         personalMessage: null,
-        roleLabel: "Manager",
+        roleLabel: "Inspector",
         actionLink: `${BASE_URL}/setup-password?token_hash=abc&type=recovery`,
-        isInstructor: false,
+        isTeaching: false,
       }),
   },
 

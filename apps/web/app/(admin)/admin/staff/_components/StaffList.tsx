@@ -13,6 +13,7 @@ import React, { useState } from "react";
 import { Users } from "lucide-react";
 import type { StaffMember } from "./StaffManagement";
 import type { UserRole } from "@/types/users";
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
 
 interface StaffListProps {
   staff: StaffMember[];
@@ -127,10 +128,11 @@ const StaffList: React.FC<StaffListProps> = ({
         onError(data.error ?? "Failed to update role.");
       } else {
         setChangingRoleFor(null);
-        const note =
-          targetRole === "instructor"
-            ? " Remind them to connect a payment account at Admin → Settings → Payment."
-            : "";
+        // Every teaching role is paid for the classes it teaches, so a move into
+        // any of them (including manager) needs a payout email on file.
+        const note = isTeachingRole(targetRole)
+          ? " Remind them to add their PayPal payout email under Payout Settings."
+          : "";
         onSuccess(`Role updated to ${ROLE_LABELS[targetRole]}.${note}`);
       }
     } catch {

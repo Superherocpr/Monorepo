@@ -4,7 +4,13 @@
  * Update this file whenever admin pages or features change: see rule §5 in CLAUDE.md.
  */
 
-export type RoleKey = "super" | "manager" | "all" | "instructor";
+/**
+ * Who a section or bullet applies to.
+ * - "instructor": every teaching role (instructor, manager, super admin). Managers teach too.
+ * - "instructorOnly": a restriction that applies only to the plain instructor role,
+ *   e.g. "once approved, only a manager can edit them". Hidden from managers.
+ */
+export type RoleKey = "super" | "manager" | "all" | "instructor" | "instructorOnly";
 
 /** A single bullet point: either plain text (visible to anyone who can see the section)
  *  or a role-gated object (only shown to users who meet that role requirement). */
@@ -15,6 +21,7 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   manager: "Manager+",
   all: "All Staff",
   instructor: "Instructor+",
+  instructorOnly: "Instructor",
 };
 
 export const ROLE_CLASSES: Record<RoleKey, string> = {
@@ -22,6 +29,7 @@ export const ROLE_CLASSES: Record<RoleKey, string> = {
   manager: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   all: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   instructor: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  instructorOnly: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
 };
 
 export interface SectionDef {
@@ -40,6 +48,23 @@ export interface GroupDef {
 
 export const GROUPS: GroupDef[] = [
   {
+    id: "home",
+    label: "Dashboard",
+    sections: [
+      {
+        id: "dashboard",
+        name: "Dashboard",
+        url: "/admin",
+        role: "all",
+        bullets: [
+          { text: "Your daily rollcall code, open classes you can claim, today's classes, active promo codes, your classes with ungraded students, and your unpaid invoices", role: "instructorOnly" },
+          { text: "Managers teach too: a My Teaching section at the top shows the same widgets an instructor sees, for the classes you teach yourself", role: "manager" },
+          { text: "Pending approvals, unanswered contact messages, today's classes across all instructors, recent bookings, and low stock alerts", role: "manager" },
+        ],
+      },
+    ],
+  },
+  {
     id: "sessions",
     label: "Sessions",
     sections: [
@@ -52,6 +77,7 @@ export const GROUPS: GroupDef[] = [
           "View all scheduled class sessions, grouped and sorted by month",
           "Filter by date range, class type, and approval status",
           { text: "Filter by instructor", role: "manager" },
+          { text: "My Class Sessions in the sidebar opens this list filtered to the classes you teach yourself", role: "manager" },
           "Session cards show status badges, spots remaining, instructor, and location at a glance",
           "Jump directly to New Session, Bulk Create, or Instructor Requests from this page",
         ],
@@ -73,7 +99,7 @@ export const GROUPS: GroupDef[] = [
           "The signup link is emailed to the company contact automatically, so there is nothing to forward by hand. You still get your own copy of the link, and a Copy signup link button on the class page for resending",
           "Team classes are hidden from the public schedule and are only reachable through their link; add-ons are not offered on them",
           { text: "Team bookings you create go live immediately, and the contact is emailed their link on the spot", role: "manager" },
-          { text: "Team bookings you create still go to the approvals queue first. The contact is not emailed until a manager approves it, then the link goes out to them automatically", role: "instructor" },
+          { text: "Team bookings you create still go to the approvals queue first. The contact is not emailed until a manager approves it, then the link goes out to them automatically", role: "instructorOnly" },
         ],
       },
       {
@@ -127,7 +153,7 @@ export const GROUPS: GroupDef[] = [
           },
           {
             text: "Upload, view, and delete per-student photos/documents for your own sessions via the Photos button on each student row",
-            role: "instructor",
+            role: "instructorOnly",
           },
           "Send Invoice: opens the invoice creation form pre-filled with this session",
           "Team / corporate classes show a Team Booking badge and a highlighted panel near the top with the company and contact details, the agreed price (for per-seat bookings this is what each employee pays after the class discount), and the signup link, plus a Copy signup link button",
@@ -136,18 +162,23 @@ export const GROUPS: GroupDef[] = [
           { text: "A per-signup team class shows Not invoiced yet with a Raise invoice button. That is normal before the class: it bills automatically the day after, or you can raise it early for whoever has signed up so far", role: "manager" },
           "Team / corporate classes can be edited at any time, including after approval: unlike an ordinary class, saving a change never pulls it off the schedule or requires re-approval, so the signup link stays open throughout",
           "If you change a team class's certification, date, time, or location, everyone already signed up is automatically emailed the corrected details",
-          { text: "Ordinary classes you created can only be edited before they're approved; once approved, only a manager can edit them", role: "instructor" },
+          { text: "Ordinary classes you created can only be edited before they're approved; once approved, only a manager can edit them", role: "instructorOnly" },
           "Log a payment for a student manually",
           "Add Student: search customers by name, email, or phone, or create an account on the spot for a walk-in who isn't in the system yet",
           {
-            text: "Add Student: add someone to the class without taking payment, and charge a card as a separate action; the two are independent",
+            text: "Add Student: add someone to the class without taking payment with the Add button in the search results",
+            role: "manager",
+          },
+          {
+            text: "Add Student: when charging a card, choose Charge and add to class (the default) to take the payment and add the student in one step, refunded automatically if they can't be added, or Charge only to record the payment without adding them",
             role: "manager",
           },
           {
             text: "Add Student: take a card payment for your own class, typing in the amount you're charging; the student is added only when the charge goes through, and is never added if it declines",
-            role: "instructor",
+            role: "instructorOnly",
           },
           "View all invoices linked to this session and their current status",
+          { text: "On classes you teach yourself, managers get the full instructor toolset: grading, student verification, CCF scores, customer info, and invoices. On other instructors' classes those stay with that instructor and super admins", role: "manager" },
           "View roster upload history and any pending customer-submitted roster files",
         ],
       },
@@ -183,6 +214,7 @@ export const GROUPS: GroupDef[] = [
         url: "/admin/sessions/[id]/grades",
         role: "instructor",
         bullets: [
+          { text: "Instructors and managers grade their own classes; super admins can grade any class", role: "manager" },
           "Assign a grade to each student on the session roster using one-click preset grade buttons",
           "Preset grade options are configurable in Settings: only options valid for this class type appear",
           "Optionally record a CCF compression score per student",
@@ -282,7 +314,8 @@ export const GROUPS: GroupDef[] = [
           "Set invoice type (individual or group), recipient name, company, email, and student count",
           "Optionally override the price per student",
           "Session picker shows remaining spots: capacity accounts for existing bookings and unpaid invoice students",
-          "Instructors who haven't set a PayPal payout email are redirected to profile settings before proceeding",
+          "Instructors and managers who haven't set a PayPal payout email are redirected to Payout Settings before proceeding",
+          { text: "Managers invoice only the classes they teach themselves, the same as instructors", role: "manager" },
           "Can be pre-filled from the Session Detail page via the Send Invoice button",
         ],
       },
@@ -293,9 +326,9 @@ export const GROUPS: GroupDef[] = [
         role: "all",
         bullets: [
           "View invoice header: number, status badge, class/session, location, recipient, student count, and total amount",
-          { text: "Mark as paid", role: "super" },
-          { text: "Resend the invoice email to the recipient", role: "super" },
-          { text: "Cancel the invoice", role: "super" },
+          { text: "Mark your own invoices as paid, resend them to the recipient, or cancel them", role: "instructor" },
+          { text: "Mark any invoice as paid, resend it, or cancel it", role: "super" },
+          { text: "Managers can view other instructors' invoices but not act on them", role: "manager" },
           "Full activity log timeline: every action on the invoice with actor name and timestamp",
         ],
       },
@@ -550,6 +583,7 @@ export const GROUPS: GroupDef[] = [
           { text: "Grades tab: configure preset grade values and labels used in the Grading Tool", role: "super" },
           { text: "Locations tab: create, edit, or delete training locations; set address, notes, and home-base flag", role: "manager" },
           { text: "Locations tab: any number of locations can be a home base at once, e.g. an instructor's own address. Every home-base location appears as a venue choice on the public Request a Class page, with no travel fee", role: "manager" },
+          { text: "About Page tab (instructors and managers): upload your headshot and edit the bio and credentials shown on the public About page", role: "instructor" },
           "Enrollware tab: generate or revoke your personal Enrollware bookmarklet API key",
           { text: "Payouts tab: set the platform fee percentage, payout trigger mode, and payout schedule", role: "super" },
           { text: "Payouts tab: shows what each platform fee percentage actually nets after PayPal's fees, and warns if the fee is set below break-even", role: "super" },
@@ -567,7 +601,8 @@ export const GROUPS: GroupDef[] = [
         role: "instructor",
         bullets: [
           "Save a PayPal payout email: the address where instructor earnings are sent when a payout batch runs",
-          "Required before an instructor can create invoices: the invoice creation flow redirects here if no email is set",
+          "Required before you can create invoices: the invoice creation flow redirects here if no email is set",
+          { text: "Managers who teach are paid for their classes exactly like instructors, so set your payout email here too", role: "manager" },
           "Can be updated at any time; the next payout batch will use the current address on file",
           "My Earnings panel: shows a summary of lifetime earnings: total earned, amount paid out, amount pending, and amount currently in flight at PayPal",
           "Earnings breakdown table: lists every individual earning with the source (class or invoice), date, your share, and status; filter by year and month",

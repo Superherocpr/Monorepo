@@ -15,6 +15,7 @@
 
 import { createHash } from "crypto";
 import { createAdminClient } from "@/lib/supabase/server";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Successful auth result. */
 export interface EnrollwareAuthOk {
@@ -103,7 +104,7 @@ export async function validateEnrollwareKey(
   }
 
   // Only staff roles may use Enrollware endpoints
-  const allowedRoles = ["instructor", "manager", "super_admin"];
+  const allowedRoles = TEACHING_ROLES;
   if (!allowedRoles.includes(profile.role)) {
     return {
       ok: false,

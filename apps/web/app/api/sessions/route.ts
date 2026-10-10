@@ -18,9 +18,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { createClassSession } from "@/lib/session-create";
 import { NextResponse } from "next/server";
-
-/** Staff roles that are permitted to create sessions. */
-const ALLOWED_ROLES = ["instructor", "manager", "super_admin"] as const;
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /**
  * Handles POST requests to create a new class session.
@@ -30,7 +28,7 @@ const ALLOWED_ROLES = ["instructor", "manager", "super_admin"] as const;
  */
 export async function POST(request: Request): Promise<Response> {
   // ── Auth (honors view-as: a downgraded super admin creates as instructor) ──
-  const authResult = await requireApiRole([...ALLOWED_ROLES]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 
