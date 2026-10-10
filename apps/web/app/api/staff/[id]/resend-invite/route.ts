@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { sendEmail } from "@/lib/send-email";
 import { staffInviteEmail } from "@/lib/emails";
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
 
 /** Maps stored role values to human-readable labels for the email. */
 const ROLE_LABELS: Record<string, string> = {
@@ -88,7 +89,7 @@ export async function POST(
     personalMessage: null,
     roleLabel,
     actionLink: setupLink,
-    isInstructor: profile.role === "instructor",
+    isTeaching: isTeachingRole(profile.role),
   });
 
   // Sending the mail IS this route's entire purpose, so unlike most call sites a

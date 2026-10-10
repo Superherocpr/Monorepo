@@ -17,13 +17,14 @@ import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { createAdminClient } from "@/lib/supabase/server";
 import { isMockPaymentsEnabled, createMockOrderId } from "@/lib/mock-payments";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
 export async function POST(request: Request) {
-  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 

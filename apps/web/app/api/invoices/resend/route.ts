@@ -1,7 +1,7 @@
 /**
  * POST /api/invoices/resend
  * Called by: InvoiceDetailClient (Resend Invoice form)
- * Auth: Instructor (own invoice only) or super admin
+ * Auth: Instructor or manager (own invoice only), or super admin (any)
  *
  * Resends the invoice email to the provided address.
  * If the email differs from the current recipient_email, updates the invoice record.
@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { sendEmail } from "@/lib/send-email";
 import { invoiceResendEmail } from "@/lib/emails";
+import { TEACHING_ROLES, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
   }
 
   // Auth check
-  const authResult = await requireApiRole(["instructor", "super_admin"]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
   }
 
   // Instructors may only resend their own invoices
-  if (actor.effectiveRole === "instructor" && invoice.instructor_id !== actor.user.id) {
+  if (!canUseInstructorToolsOn(actor.effectiveRole, actor.user.id, invoice.instructor_id)) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 

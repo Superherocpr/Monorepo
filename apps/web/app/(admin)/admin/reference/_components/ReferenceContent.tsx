@@ -16,6 +16,8 @@ import {
   type RoleKey,
   type Bullet,
 } from "./referenceData";
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
+import type { UserRole } from "@/types/users";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -40,7 +42,10 @@ function resolveUrl(url: string): string {
  */
 function canAccess(sectionRole: RoleKey, userRole: string): boolean {
   if (sectionRole === "all") return true;
-  if (sectionRole === "instructor") return userRole === "instructor" || userRole === "super_admin";
+  // Instructor sections apply to every teaching role: managers teach too.
+  if (sectionRole === "instructor") return isTeachingRole(userRole as UserRole);
+  // Restrictions that bind only the plain instructor role (super admins see everything).
+  if (sectionRole === "instructorOnly") return userRole === "instructor" || userRole === "super_admin";
   if (sectionRole === "manager") return userRole === "manager" || userRole === "super_admin";
   if (sectionRole === "super") return userRole === "super_admin";
   return false;

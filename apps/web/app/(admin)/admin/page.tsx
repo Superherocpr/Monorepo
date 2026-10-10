@@ -15,10 +15,10 @@ import { isSameBusinessDay } from "@/lib/business-time";
 import InstructorDashboard from "../_components/dashboard/InstructorDashboard";
 import type {
   TodaySession,
-  PendingGradeSession,
   PendingInvoice,
   OpenOpportunity,
   ActivePromoCode,
+  InstructorTeachingData,
 } from "../_components/dashboard/InstructorDashboard";
 import ManagerDashboard from "../_components/dashboard/ManagerDashboard";
 import SuperAdminDashboard from "../_components/dashboard/SuperAdminDashboard";
@@ -114,6 +114,110 @@ function buildActivePromoCodes(rows: unknown[]): ActivePromoCode[] {
   });
 }
 
+/**
+ * Loads one teaching-role user's own dashboard data: today's approved classes,
+ * completed classes with ungraded students, unpaid invoices, open opportunities
+ * anyone may claim, and active promo codes. Read-only.
+ * Shared by the instructor dashboard and the manager dashboard's "My Teaching"
+ * section, so a manager who teaches sees exactly what an instructor sees.
+ * @param admin - Service-role Supabase client.
+ * @param userId - The teaching user's profile id.
+ * @param dailyAccessCode - The user's current rollcall code (already refreshed if stale).
+ * @param dailyAccessCodeGeneratedAt - When that code was generated.
+ * @returns Props for InstructorTeachingWidgets.
+ */
+async function fetchInstructorTeachingData(
+  admin: Awaited<ReturnType<typeof createAdminClient>>,
+  userId: string,
+  dailyAccessCode: string | null,
+  dailyAccessCodeGeneratedAt: string | null
+): Promise<InstructorTeachingData> {
+  const today = getTodayUTCRange();
+
+  const [
+    { data: rawTodaySessions },
+    { data: completedSessionsWithRoster },
+    { data: pendingInvoices },
+    { data: rawOpenOpportunities },
+    { data: rawActivePromoCodes },
+  ] = await Promise.all([
+    admin
+      .from("class_sessions")
+      .select(
+        "id, starts_at, ends_at, status, class_types ( name ), locations ( name )"
+      )
+      .eq("instructor_id", userId)
+      .eq("approval_status", "approved")
+      .gte("starts_at", today.start)
+      .lte("starts_at", today.end)
+      .order("starts_at"),
+
+    // Fetch completed sessions with their roster grades to compute ungraded counts
+    admin
+      .from("class_sessions")
+      .select(
+        "id, starts_at, class_types ( name ), roster_records ( id, grade )"
+      )
+      .eq("instructor_id", userId)
+      .eq("status", "completed"),
+
+    admin
+      .from("invoices")
+      .select(
+        "id, recipient_name, total_amount, created_at, class_sessions ( starts_at, class_types ( name ) )"
+      )
+      .eq("instructor_id", userId)
+      .eq("status", "sent")
+      .order("created_at", { ascending: false }),
+
+    // Cancelled sessions with no instructor yet: open for any instructor to claim
+    admin
+      .from("class_sessions")
+      .select("id, starts_at, class_types ( name ), locations ( name, city )")
+      .eq("status", "cancelled")
+      .is("instructor_id", null)
+      .order("starts_at"),
+
+    // Active promo codes with scope details: instructors use this as a quick reference
+    admin
+      .from("promo_codes")
+      .select(`
+        code, discount_type, discount_value, expires_at, scope,
+        promo_code_class_types ( class_types ( name ) ),
+        promo_code_sessions ( class_sessions ( starts_at, class_types ( name ), locations ( name ) ) )
+      `)
+      .eq("active", true)
+      .or("expires_at.is.null,expires_at.gt.now()")
+      .order("expires_at", { ascending: true, nullsFirst: false }),
+  ]);
+
+  // Filter completed sessions down to those with at least one ungraded roster record
+  const pendingGrades = (completedSessionsWithRoster ?? [])
+    .filter((session) =>
+      (
+        session.roster_records as Array<{ id: string; grade: number | null }>
+      ).some((r) => r.grade === null)
+    )
+    .map((session) => ({
+      id: session.id,
+      starts_at: session.starts_at,
+      class_types: session.class_types as unknown as { name: string } | null,
+      ungradedCount: (
+        session.roster_records as Array<{ id: string; grade: number | null }>
+      ).filter((r) => r.grade === null).length,
+    }));
+
+  return {
+    todaySessions: (rawTodaySessions ?? []) as unknown as TodaySession[],
+    pendingGrades,
+    pendingInvoices: (pendingInvoices ?? []) as unknown as PendingInvoice[],
+    openOpportunities: (rawOpenOpportunities ?? []) as unknown as OpenOpportunity[],
+    dailyAccessCode,
+    dailyAccessCodeGeneratedAt,
+    activePromoCodes: buildActivePromoCodes(rawActivePromoCodes ?? []),
+  };
+}
+
 /** Server-rendered role-aware admin dashboard. */
 export default async function AdminDashboardPage() {
   // Layout handles the primary auth guard, but we re-check here as a safeguard
@@ -161,99 +265,13 @@ export default async function AdminDashboardPage() {
 
   // ── Instructor Dashboard ────────────────────────────────────────────────────
   if (role === "instructor") {
-    const today = getTodayUTCRange();
-
-    const [
-      { data: rawTodaySessions },
-      { data: completedSessionsWithRoster },
-      { data: pendingInvoices },
-      { data: rawOpenOpportunities },
-      { data: rawActivePromoCodes },
-    ] = await Promise.all([
-      admin
-        .from("class_sessions")
-        .select(
-          "id, starts_at, ends_at, status, class_types ( name ), locations ( name )"
-        )
-        .eq("instructor_id", user.id)
-        .eq("approval_status", "approved")
-        .gte("starts_at", today.start)
-        .lte("starts_at", today.end)
-        .order("starts_at"),
-
-      // Fetch completed sessions with their roster grades to compute ungraded counts
-      admin
-        .from("class_sessions")
-        .select(
-          "id, starts_at, class_types ( name ), roster_records ( id, grade )"
-        )
-        .eq("instructor_id", user.id)
-        .eq("status", "completed"),
-
-      admin
-        .from("invoices")
-        .select(
-          "id, recipient_name, total_amount, created_at, class_sessions ( starts_at, class_types ( name ) )"
-        )
-        .eq("instructor_id", user.id)
-        .eq("status", "sent")
-        .order("created_at", { ascending: false }),
-
-      // Cancelled sessions with no instructor yet: open for any instructor to claim
-      admin
-        .from("class_sessions")
-        .select("id, starts_at, class_types ( name ), locations ( name, city )")
-        .eq("status", "cancelled")
-        .is("instructor_id", null)
-        .order("starts_at"),
-
-      // Active promo codes with scope details: instructors use this as a quick reference
-      admin
-        .from("promo_codes")
-        .select(`
-          code, discount_type, discount_value, expires_at, scope,
-          promo_code_class_types ( class_types ( name ) ),
-          promo_code_sessions ( class_sessions ( starts_at, class_types ( name ), locations ( name ) ) )
-        `)
-        .eq("active", true)
-        .or("expires_at.is.null,expires_at.gt.now()")
-        .order("expires_at", { ascending: true, nullsFirst: false }),
-    ]);
-
-    // Filter completed sessions down to those with at least one ungraded roster record
-    const pendingGrades = (completedSessionsWithRoster ?? [])
-      .filter((session) =>
-        (
-          session.roster_records as Array<{ id: string; grade: number | null }>
-        ).some((r) => r.grade === null)
-      )
-      .map((session) => ({
-        id: session.id,
-        starts_at: session.starts_at,
-        class_types: session.class_types as unknown as { name: string } | null,
-        ungradedCount: (
-          session.roster_records as Array<{ id: string; grade: number | null }>
-        ).filter((r) => r.grade === null).length,
-      }));
-
-    return (
-      <InstructorDashboard
-        firstName={profile.first_name}
-        todaySessions={
-          (rawTodaySessions ?? []) as unknown as TodaySession[]
-        }
-        pendingGrades={pendingGrades}
-        pendingInvoices={
-          (pendingInvoices ?? []) as unknown as PendingInvoice[]
-        }
-        openOpportunities={
-          (rawOpenOpportunities ?? []) as unknown as OpenOpportunity[]
-        }
-        dailyAccessCode={accessCode}
-        dailyAccessCodeGeneratedAt={accessCodeGeneratedAt}
-        activePromoCodes={buildActivePromoCodes(rawActivePromoCodes ?? [])}
-      />
+    const teaching = await fetchInstructorTeachingData(
+      admin,
+      user.id,
+      accessCode,
+      accessCodeGeneratedAt
     );
+    return <InstructorDashboard firstName={profile.first_name} {...teaching} />;
   }
 
   // ── Manager + Super Admin shared data ──────────────────────────────────────
@@ -367,6 +385,13 @@ export default async function AdminDashboardPage() {
               .eq("status", "sent")
               .order("created_at", { ascending: false }),
           ])
+        : null;
+
+    // Managers teach too: load their own instructor data alongside the shared
+    // batch below. null for super admins, whose dashboard has its own widgets.
+    const managerTeachingPromise =
+      role === "manager"
+        ? fetchInstructorTeachingData(admin, user.id, accessCode, accessCodeGeneratedAt)
         : null;
 
     const [
@@ -487,11 +512,7 @@ export default async function AdminDashboardPage() {
 
     if (role === "manager") {
       return (
-        <ManagerDashboard
-          {...managerProps}
-          dailyAccessCode={accessCode}
-          dailyAccessCodeGeneratedAt={accessCodeGeneratedAt}
-        />
+        <ManagerDashboard {...managerProps} teaching={(await managerTeachingPromise)!} />
       );
     }
 

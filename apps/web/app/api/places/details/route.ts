@@ -9,6 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Parsed address fields returned to the client after a place is selected. */
 export interface ParsedAddress {
@@ -27,7 +28,7 @@ export interface ParsedAddress {
  * Allows instructor, manager, and super_admin (honors view-as).
  */
 async function requireStaffAuth(): Promise<NextResponse | null> {
-  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   return "error" in authResult ? authResult.error : null;
 }
 

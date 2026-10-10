@@ -1,7 +1,7 @@
 /**
  * PATCH /api/sessions/[id]/additional-hours
  * Called by: SessionDetailClient — additional hours selector buttons
- * Auth: Instructor (own session only), Super Admin
+ * Auth: Instructor or manager (own session only), Super Admin (any session)
  * Saves the number of extra hours to add on top of the class type's default
  * duration for this specific session. Used for Enrollware reporting.
  */
@@ -9,8 +9,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { NextResponse } from "next/server";
-
-const ALLOWED_ROLES = ["instructor", "super_admin"] as const;
+import { TEACHING_ROLES, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 /**
  * Updates additional_hours on the given class session.
@@ -24,7 +23,7 @@ export async function PATCH(
   const { id: sessionId } = await params;
 
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const authResult = await requireApiRole([...ALLOWED_ROLES]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 
@@ -59,7 +58,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
-  if (actor.effectiveRole === "instructor" && session.instructor_id !== actor.user.id) {
+  if (!canUseInstructorToolsOn(actor.effectiveRole, actor.user.id, session.instructor_id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

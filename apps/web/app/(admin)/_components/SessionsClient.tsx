@@ -12,14 +12,17 @@ import Link from "next/link";
 import type { SessionWithMeta, InstructorOption } from "../admin/sessions/page";
 import type { SessionApprovalStatus, SessionStatus } from "@/types/schedule";
 import type { UserRole } from "@/types/users";
+import { canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 import { formatClassTimeRange, floatingNow, classDate } from "@/lib/business-time";
 
 interface SessionsClientProps {
   sessions: SessionWithMeta[];
   instructors: InstructorOption[];
   userRole: UserRole;
-  /** The logged-in user's profile id: used to gate Grade button for instructors. */
+  /** The logged-in user's profile id: used to gate the Grade button to the viewer's own classes. */
   userId: string;
+  /** Instructor id the filter starts on. The sidebar's "My Class Sessions" link seeds it with the viewer's own id. */
+  initialInstructorFilter?: string;
 }
 
 /** Approval status badge config. */
@@ -89,6 +92,7 @@ export default function SessionsClient({
   instructors,
   userRole,
   userId,
+  initialInstructorFilter = "",
 }: SessionsClientProps) {
   // Business-day date, so "past" matches the wall clock where classes happen
   // rather than the viewer's or the server's UTC date.
@@ -137,7 +141,7 @@ export default function SessionsClient({
   const [filterClassType, setFilterClassType] = useState("");
   const [filterApproval, setFilterApproval] =
     useState<SessionApprovalStatus | "">("");
-  const [filterInstructor, setFilterInstructor] = useState("");
+  const [filterInstructor, setFilterInstructor] = useState(initialInstructorFilter);
 
   // Derive unique class type options from the sessions data
   const classTypeOptions = useMemo(() => {
@@ -341,9 +345,11 @@ export default function SessionsClient({
                   const statusBadge = STATUS_BADGES[effectiveStatus];
                   const isRejected = session.approval_status === "rejected";
                   const isOwnSession = session.instructor?.id === userId;
-                  const canGrade =
-                    userRole === "super_admin" ||
-                    (userRole === "instructor" && isOwnSession);
+                  const canGrade = canUseInstructorToolsOn(
+                    userRole,
+                    userId,
+                    session.instructor?.id
+                  );
                   // Show "Start Class" when the session is approved + still scheduled
                   // and the logged-in user owns it or is a manager/super admin.
                   const canStart =
@@ -445,7 +451,7 @@ export default function SessionsClient({
                             </span>{" "}
                             {session.rejection_reason}
                           </p>
-                          {userRole === "instructor" && (
+                          {isOwnSession && (
                             <Link
                               href={`/admin/sessions/${session.id}`}
                               className="mt-1 inline-block text-sm text-red-600 hover:underline"

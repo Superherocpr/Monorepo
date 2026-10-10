@@ -13,6 +13,7 @@ import { getAdminActor } from "@/lib/auth/effective-role";
 import AdminSidebar from "./_components/AdminSidebar";
 import AdminTopBar from "./_components/AdminTopBar";
 import ViewAsBanner from "./_components/ViewAsBanner";
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
 
 /**
  * Wraps all /admin/* pages with auth guard, sidebar, and top bar.
@@ -40,10 +41,10 @@ export default async function AdminLayout({
   const admin = await createAdminClient();
   const role = effectiveRole;
 
-  // Check if instructor has a payout email. Fetched separately so a DB error
+  // Check if a teaching-role user (instructor, manager, super admin) has a payout email. Fetched separately so a DB error
   // (e.g. column not yet added via migration 0020) cannot break the auth guard above.
   let showPaymentBanner = false;
-  if (role === "instructor" || role === "super_admin") {
+  if (isTeachingRole(role)) {
     const { data: payoutRow, error: payoutError } = await admin
       .from("profiles")
       .select("paypal_payout_email")

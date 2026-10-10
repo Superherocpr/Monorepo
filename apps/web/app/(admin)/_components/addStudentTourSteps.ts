@@ -10,9 +10,9 @@
  *
  * Demonstrates one golden path (search -> Select -> charge panel), which
  * works for every role, rather than also walking through the manager-only
- * free "Add" shortcut. Copy on three steps varies by role via
- * `canAddWithoutCharging` (true for manager/super_admin) since the
- * underlying behavior genuinely differs, not just the wording.
+ * free "Add" shortcut. Managers and super admins (`canAddWithoutCharging`)
+ * get one extra step for their "Charge and add to class" / "Charge only"
+ * choice, and role-specific copy on the steps whose behavior differs.
  *
  * Ends at the card/Charge step as a highlight-only warning: submitting
  * charges a real card immediately with no second confirmation, so this
@@ -48,7 +48,7 @@ export function getAddStudentSteps(canAddWithoutCharging: boolean): DriveStep[] 
       popover: {
         title: "Pick the Student",
         description: canAddWithoutCharging
-          ? "Find them in the list. Click Add to add them for free with no charge, or Select to charge a card first."
+          ? "Find them in the list. Click Add to add them for free with no charge, or Select to charge their card."
           : "Find them in the list and click Select. They're only added once the charge below goes through.",
       },
     },
@@ -57,10 +57,22 @@ export function getAddStudentSteps(canAddWithoutCharging: boolean): DriveStep[] 
       popover: {
         title: "Confirm the Amount",
         description: canAddWithoutCharging
-          ? "Enter how much to charge. Leave this panel alone if you used the free Add button instead."
+          ? "This is pre-filled from the class price. Adjust it if needed, or leave this panel alone if you used the free Add button instead."
           : "This is pre-filled from the class price. Adjust it if needed before charging.",
       },
     },
+    ...(canAddWithoutCharging
+      ? [
+          {
+            element: '[data-tour="add-student-mode"]',
+            popover: {
+              title: "Choose What the Charge Does",
+              description:
+                "Charge and add to class takes the payment and adds the student in one step, and refunds automatically if they can't be added. Charge only records the payment without adding them.",
+            },
+          },
+        ]
+      : []),
     {
       element: '[data-tour="add-student-description"]',
       popover: {
@@ -80,7 +92,7 @@ export function getAddStudentSteps(canAddWithoutCharging: boolean): DriveStep[] 
       popover: {
         title: "Enter Card & Charge",
         description: canAddWithoutCharging
-          ? "Enter the card, then click Charge. This charges immediately with no second confirmation and does not add the student automatically."
+          ? "Enter the card, then click Charge. This charges immediately with no second confirmation. With Charge and add to class, the student is added only if it succeeds; with Charge only, they are not added. Double check the amount first."
           : "Enter the card, then click Charge. This charges immediately with no second confirmation, and only adds the student if it succeeds. Double check the amount first.",
       },
     },

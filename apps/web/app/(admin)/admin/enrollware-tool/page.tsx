@@ -10,11 +10,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
 import { localDayWindow } from "@/lib/enrollware-api-auth";
 import BookmarkletSetup from "./_components/BookmarkletSetup";
-import type { UserRole } from "@/types/users";
-
-/** Roles permitted to use the Enrollware tool. Inspectors are excluded: they
- *  review sessions but do not submit them to Enrollware. */
-const ALLOWED_ROLES: UserRole[] = ["instructor", "manager", "super_admin"];
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
 
 /** A today's-classes row for the at-a-glance section. */
 interface TodaySession {
@@ -92,7 +88,7 @@ export default async function EnrollwareToolPage() {
   // Auth guard: honors view-as, so a downgraded super admin gets the
   // effective role's access.
   const actor = await getAdminActor();
-  if (!actor || !ALLOWED_ROLES.includes(actor.effectiveRole)) {
+  if (!actor || !isTeachingRole(actor.effectiveRole)) {
     redirect("/admin");
   }
   const profile = actor.profile;
