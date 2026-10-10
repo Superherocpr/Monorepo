@@ -714,7 +714,35 @@ notice. The stamp now happens only after a confirmed send.
 | File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
 | **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | Three tours shipped (create-session, team-booking, add-student); TourButton logic unit-tested; no outcome e2e yet, see note below |
 | **Staff Directory** | ✅✅✅✅✅✅✅✅✅✅✅✅✅ | — | — | ✅ | — | — | Added 2026-09-22 (migrations 0070/0071, staging only). Read-only internal contact page: classes-taught list, plus a per-person email override for hiding a real address; see note below |
+| **Admin dark theme** | ✅✅✅ | ● leak guard | — | ✅ | — | — | Added 2026-10-10. Opt-in, admin-only. Source-scan unit tests fail if a dark class reaches `<html>`/`<body>`, if the root layout regains a theme script, if a CSS rule escapes the `.admin-theme` wrapper, or if a colored text class has no dark rule. The e2e leak guard asserts customer pages render light with every storage key set and with OS dark on. See note below |
 | **Manager / instructor parity** | ✅✅ | — | — | ✅ | — | — | Added 2026-10-06. Managers get every instructor capability. A source scan fails the suite if any role gate admits instructors but not managers; route tests drive grading and rollcall code verification as a manager. No outcome e2e: there is still no staff-role Playwright fixture. See note below |
+
+### Admin dark theme (added 2026-10-10)
+
+Dark mode used to be one global switch: a script in the root layout put a `dark`
+class on `<html>`, so a staff member turning it on also darkened the public site on
+that device, including the customer `/rollcall` page (dark canvas, light-designed
+content). It is now confined to the `.admin-theme` wrapper that
+`app/(admin)/layout.tsx` renders, driven by `app/(admin)/admin-theme.css`, which
+re-declares Tailwind's palette variables inside that wrapper. The preference key is
+`admin-theme` (`light` | `dark` | `system`), deliberately not the old `theme` key, so
+nobody is switched on by a stale value.
+
+**Signal:** the failure mode is silent leakage onto customer pages, so the guards
+target that. `tests/unit/lib/admin-theme-css.test.ts` is a static scan (no dark
+classes on the document, no theme script in the root layout, the theme attribute is
+only set by `AdminThemeScope`, every CSS rule is wrapper-scoped, the light island
+restores every overridden variable, every `text-<hue>-500..900` class in the admin
+has a dark rule). `tests/e2e/admin-theme.spec.ts` is the outcome check: it plants the
+old and new storage keys and asserts `/`, `/rollcall`, `/find-a-class` and `/signin`
+still compute a white body, no theme wrapper, `color-scheme: normal`, also with the
+OS set to dark. `tests/unit/lib/admin-theme.test.ts` executes the inline
+flash-prevention script against the parse/resolve helpers.
+
+**Gap:** nothing asserts how the admin looks in dark. Contrast and layout were checked
+by eye on a preview page, not per real admin page, and there is no staff-role
+Playwright session to automate it. Parts that stay light on purpose: the check-in
+projector screen, the cert card previews, and the PayPal card fields.
 
 ### Manager / instructor parity (added 2026-10-06)
 

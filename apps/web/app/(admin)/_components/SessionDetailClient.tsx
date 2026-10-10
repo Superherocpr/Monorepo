@@ -2337,7 +2337,8 @@ export default function SessionDetailClient({
                     : "The charge is recorded on its own and does not add the student. Use Add in the list if they should also join the class."}
                 </p>
 
-                <div className="space-y-3" data-tour="add-student-payment">
+                {/* Light island: the PayPal card-field iframes are styled by PayPal and stay light in admin dark mode. */}
+                <div className="admin-light-island admin-light-card bg-white space-y-3" data-tour="add-student-payment">
                   {mockPaymentsEnabled === true ? (
                     <MockCardPaymentSection
                       onCreateOrder={handleCreateManualChargeOrder}

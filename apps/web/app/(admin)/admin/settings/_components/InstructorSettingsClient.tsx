@@ -113,8 +113,8 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
       {/* Page header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+          <p className="text-sm text-gray-500 mt-1">
             {locationsSlot
               ? "Manage class locations, your account details, Enrollware integration, and public About page bio."
               : "Manage your account details, Enrollware integration, and public About page bio."}
@@ -122,7 +122,7 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
         </div>
         <a
           href="/admin/reference"
-          className="shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors mt-1"
+          className="shrink-0 text-xs font-medium text-gray-500 hover:text-red-600 transition-colors mt-1"
         >
           Admin feature reference →
         </a>
@@ -132,7 +132,7 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
       <div
         role="tablist"
         aria-label="Settings sections"
-        className="flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-gray-700 -mt-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex gap-1 overflow-x-auto border-b border-gray-200 -mt-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {tabs.map((tab) => {
           const active = activeTab === tab.id;
@@ -147,7 +147,7 @@ const InstructorSettingsClient: React.FC<InstructorSettingsClientProps> = ({
               className={`shrink-0 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                 active
                   ? "border-red-600 text-red-600"
-                  : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+                  : "border-transparent text-gray-500 hover:text-gray-800"
               }`}
             >
               {tab.label}

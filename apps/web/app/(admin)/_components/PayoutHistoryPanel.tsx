@@ -61,45 +61,45 @@ const BATCH_STATUS_BADGES: Record<
 > = {
   pending: {
     label: "Not sent",
-    classes: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
+    classes: "bg-gray-100 text-gray-700",
     icon: <Clock className="h-3 w-3" aria-hidden="true" />,
   },
   assumed_complete: {
     label: "Assumed complete",
-    classes: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
+    classes: "bg-blue-100 text-blue-800",
     icon: <HelpCircle className="h-3 w-3" aria-hidden="true" />,
   },
   completed: {
     label: "Confirmed paid",
-    classes: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+    classes: "bg-green-100 text-green-800",
     icon: <CheckCircle2 className="h-3 w-3" aria-hidden="true" />,
   },
   denied: {
     label: "Denied by PayPal",
-    classes: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+    classes: "bg-red-100 text-red-800",
     icon: <Ban className="h-3 w-3" aria-hidden="true" />,
   },
   failed: {
     label: "Failed to send",
-    classes: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
+    classes: "bg-orange-100 text-orange-800",
     icon: <X className="h-3 w-3" aria-hidden="true" />,
   },
   needs_review: {
     label: "Needs review",
-    classes: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-300",
+    classes: "bg-amber-100 text-amber-900",
     icon: <AlertTriangle className="h-3 w-3" aria-hidden="true" />,
   },
 };
 
 /** Badge appearance per payout item status. */
 const ITEM_STATUS_BADGES: Record<PayoutItemStatus, { label: string; classes: string }> = {
-  pending: { label: "Not sent", classes: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200" },
-  assumed_complete: { label: "Assumed sent", classes: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
-  completed: { label: "Paid", classes: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" },
-  denied: { label: "Returned", classes: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
-  failed: { label: "Failed", classes: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300" },
-  needs_review: { label: "Needs review", classes: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-300" },
-  unclaimed: { label: "Unclaimed", classes: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300" },
+  pending: { label: "Not sent", classes: "bg-gray-100 text-gray-700" },
+  assumed_complete: { label: "Assumed sent", classes: "bg-blue-100 text-blue-800" },
+  completed: { label: "Paid", classes: "bg-green-100 text-green-800" },
+  denied: { label: "Returned", classes: "bg-red-100 text-red-800" },
+  failed: { label: "Failed", classes: "bg-orange-100 text-orange-800" },
+  needs_review: { label: "Needs review", classes: "bg-amber-100 text-amber-900" },
+  unclaimed: { label: "Unclaimed", classes: "bg-purple-100 text-purple-800" },
 };
 
 /** Response shape shared by the payout action routes. */
@@ -168,19 +168,19 @@ function DenyDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-h-full w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+      <div className="max-h-full w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
           <Ban className="h-5 w-5 text-red-600" aria-hidden="true" />
           Mark as denied by PayPal
         </h3>
 
-        <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
+        <p className="mt-3 text-sm text-gray-600">
           This records that PayPal returned the money for {scopeLabel}. The earnings go back
           into the payable queue so they can be sent again.
         </p>
 
-        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900/50 dark:bg-red-950/30">
-          <p className="flex items-start gap-2 text-xs text-red-800 dark:text-red-300">
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3">
+          <p className="flex items-start gap-2 text-xs text-red-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
               Only do this after confirming in PayPal that the funds came back. If the payout
@@ -194,7 +194,7 @@ function DenyDialog({
         <div className="mt-4">
           <label
             htmlFor="denial-reason"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            className="block text-sm font-medium text-gray-700"
           >
             Why did PayPal deny it?
           </label>
@@ -202,7 +202,7 @@ function DenyDialog({
             id="denial-reason"
             value={preset}
             onChange={(event) => setPreset(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-red-500"
           >
             {DENIAL_REASONS.map((option) => (
               <option key={option} value={option}>
@@ -215,7 +215,7 @@ function DenyDialog({
         <div className="mt-3">
           <label
             htmlFor="denial-detail"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            className="block text-sm font-medium text-gray-700"
           >
             Details <span className="font-normal text-gray-400">(optional)</span>
           </label>
@@ -225,18 +225,18 @@ function DenyDialog({
             onChange={(event) => setDetail(event.target.value)}
             rows={2}
             placeholder="What PayPal's notification or dashboard said"
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
 
         <div className="mt-3">
           <label
             htmlFor="denial-confirm"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            className="block text-sm font-medium text-gray-700"
           >
             Type the batch id to confirm
           </label>
-          <p className="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">
+          <p className="mt-1 font-mono text-xs text-gray-500">
             {target.senderBatchId}
           </p>
           <input
@@ -246,7 +246,7 @@ function DenyDialog({
             onChange={(event) => setTyped(event.target.value)}
             autoComplete="off"
             spellCheck={false}
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
 
@@ -255,7 +255,7 @@ function DenyDialog({
             type="button"
             onClick={onCancel}
             disabled={submitting}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
           >
             Cancel
           </button>
@@ -286,21 +286,21 @@ function ItemRow({
   const badge = ITEM_STATUS_BADGES[item.status] ?? ITEM_STATUS_BADGES.pending;
 
   return (
-    <tr className="bg-gray-50/70 dark:bg-gray-900/40">
+    <tr className="bg-gray-50/70">
       <td className="py-2.5 pl-10 pr-4">
-        <span className="block text-sm text-gray-700 dark:text-gray-300">
+        <span className="block text-sm text-gray-700">
           {item.instructorName}
         </span>
-        <span className="block text-xs text-gray-500 dark:text-gray-400">
+        <span className="block text-xs text-gray-500">
           {item.recipientEmail}
         </span>
         {item.status === "unclaimed" && item.unclaimedExpiresAt ? (
-          <span className="mt-0.5 block text-xs text-purple-700 dark:text-purple-300">
+          <span className="mt-0.5 block text-xs text-purple-700">
             Not claimed yet; PayPal returns it on {formatDateTime(item.unclaimedExpiresAt)}
           </span>
         ) : null}
         {item.errorMessage ? (
-          <span className="mt-0.5 block text-xs text-red-700 dark:text-red-400">
+          <span className="mt-0.5 block text-xs text-red-700">
             {item.errorMessage}
           </span>
         ) : null}
@@ -312,10 +312,10 @@ function ItemRow({
           {badge.label}
         </span>
       </td>
-      <td className="px-4 py-2.5 text-right text-xs text-gray-600 dark:text-gray-400">
+      <td className="px-4 py-2.5 text-right text-xs text-gray-600">
         {item.paypalFeeAmount === null ? "-" : formatCurrency(item.paypalFeeAmount)}
       </td>
-      <td className="px-4 py-2.5 text-right text-xs font-medium text-gray-700 dark:text-gray-300">
+      <td className="px-4 py-2.5 text-right text-xs font-medium text-gray-700">
         {formatCurrency(item.amount)}
       </td>
       <td className="px-4 py-2.5 text-right">
@@ -323,7 +323,7 @@ function ItemRow({
           <button
             type="button"
             onClick={onDeny}
-            className="rounded-md border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-white dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            className="rounded-md border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-white"
           >
             Mark denied
           </button>
@@ -507,13 +507,13 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
   }).length;
 
   return (
-    <section className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+    <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-5 py-4">
         <div>
-          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+          <h3 className="text-base font-semibold text-gray-900">
             Payout history
           </h3>
-          <p className="mt-1 max-w-2xl text-xs text-gray-500 dark:text-gray-400">
+          <p className="mt-1 max-w-2xl text-xs text-gray-500">
             &ldquo;Assumed complete&rdquo; means PayPal accepted the batch but has not confirmed
             delivery. PayPal can still deny a payout at that stage and return the money, so if
             that happens, mark the batch or the affected instructor denied and resend it.
@@ -523,7 +523,7 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
           type="button"
           onClick={handleSync}
           disabled={syncing}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
         >
           <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} aria-hidden="true" />
           {syncing ? "Checking PayPal…" : "Sync status"}
@@ -535,8 +535,8 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
           role="status"
           className={`flex items-start gap-2 border-b px-5 py-3 text-sm ${
             message.type === "success"
-              ? "border-green-200 bg-green-50 text-green-800 dark:border-green-900/50 dark:bg-green-950/30 dark:text-green-300"
-              : "border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : "border-red-200 bg-red-50 text-red-800"
           }`}
         >
           {message.type === "success" ? (
@@ -549,7 +549,7 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
       ) : null}
 
       {staleCount > 0 ? (
-        <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+        <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">
           <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
             {staleCount} batch{staleCount === 1 ? "" : "es"} {staleCount === 1 ? "has" : "have"}{" "}
@@ -560,13 +560,13 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
       ) : null}
 
       {batches.length === 0 ? (
-        <p className="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="px-5 py-10 text-center text-sm text-gray-500">
           No payout batches yet.
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
-            <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-900/50 dark:text-gray-400">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-4 py-2.5">Batch</th>
                 <th className="px-4 py-2.5">Status</th>
@@ -575,7 +575,7 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
                 <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+            <tbody className="divide-y divide-gray-100">
               {batches.map((batch) => {
                 const badge = BATCH_STATUS_BADGES[batch.status] ?? BATCH_STATUS_BADGES.pending;
                 const expanded = expandedIds.has(batch.id);
@@ -594,7 +594,7 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
 
                 return (
                   <Fragment key={batch.id}>
-                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <tr className="hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <button
                           type="button"
@@ -614,17 +614,17 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
                             />
                           )}
                           <span>
-                            <span className="block text-sm text-gray-900 dark:text-white">
+                            <span className="block text-sm text-gray-900">
                               {formatDateTime(batch.createdAt)}
                             </span>
-                            <span className="block font-mono text-[11px] text-gray-500 dark:text-gray-400">
+                            <span className="block font-mono text-[11px] text-gray-500">
                               {batch.paypalPayoutBatchId ?? batch.senderBatchId}
                             </span>
-                            <span className="block text-xs text-gray-500 dark:text-gray-400">
+                            <span className="block text-xs text-gray-500">
                               {batch.itemCount} instructor{batch.itemCount === 1 ? "" : "s"}
                             </span>
                             {batch.retryOfSenderBatchId ? (
-                              <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 dark:text-blue-300">
+                              <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-blue-700">
                                 <CornerUpLeft className="h-3 w-3" aria-hidden="true" />
                                 Resend
                                 {batch.retryDepth > 1 ? ` #${batch.retryDepth}` : ""} of{" "}
@@ -643,12 +643,12 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
                           {badge.label}
                         </span>
                         {assumedHours !== null ? (
-                          <span className="mt-1 block text-[11px] text-gray-500 dark:text-gray-400">
+                          <span className="mt-1 block text-[11px] text-gray-500">
                             unconfirmed for {formatElapsed(assumedHours)}
                           </span>
                         ) : null}
                         {batch.deniedAt ? (
-                          <span className="mt-1 block text-[11px] text-gray-500 dark:text-gray-400">
+                          <span className="mt-1 block text-[11px] text-gray-500">
                             {batch.denialSource === "manual"
                               ? `Marked by ${batch.deniedByName ?? "super admin"}`
                               : batch.denialSource === "webhook"
@@ -657,19 +657,19 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
                           </span>
                         ) : null}
                         {batch.errorMessage ? (
-                          <span className="mt-1 block max-w-xs text-[11px] text-red-700 dark:text-red-400">
+                          <span className="mt-1 block max-w-xs text-[11px] text-red-700">
                             {batch.errorMessage}
                           </span>
                         ) : null}
                       </td>
 
-                      <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">
+                      <td className="px-4 py-3 text-right text-sm text-gray-600">
                         {batch.paypalFeeTotal === null
                           ? "-"
                           : formatCurrency(batch.paypalFeeTotal)}
                       </td>
 
-                      <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
                         {formatCurrency(batch.totalAmount)}
                       </td>
 
@@ -685,7 +685,7 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
                                   amount: batch.totalAmount,
                                 })
                               }
-                              className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                              className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50"
                             >
                               <Ban className="h-3 w-3" aria-hidden="true" />
                               Mark denied
@@ -709,7 +709,7 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
                               type="button"
                               onClick={() => handleRelease(batch)}
                               disabled={busyAction === `release-${batch.id}`}
-                              className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                              className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50"
                             >
                               <Undo2 className="h-3 w-3" aria-hidden="true" />
                               {busyAction === `release-${batch.id}` ? "Releasing…" : "Release"}
@@ -721,10 +721,10 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
 
                     {expanded ? (
                       batch.items.length === 0 ? (
-                        <tr className="bg-gray-50/70 dark:bg-gray-900/40">
+                        <tr className="bg-gray-50/70">
                           <td
                             colSpan={5}
-                            className="py-3 pl-10 pr-4 text-xs text-gray-500 dark:text-gray-400"
+                            className="py-3 pl-10 pr-4 text-xs text-gray-500"
                           >
                             No payout items recorded for this batch.
                           </td>

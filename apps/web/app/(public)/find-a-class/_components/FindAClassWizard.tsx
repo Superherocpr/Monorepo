@@ -66,7 +66,7 @@ type Step =
 // ── Shared pieces ───────────────────────────────────────────────────────────
 
 const CARD =
-  "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm";
+  "bg-white border border-gray-200 rounded-xl shadow-sm";
 
 const PRIMARY_BUTTON =
   "inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2";
@@ -90,14 +90,14 @@ function OptionButton({
     <button
       type="button"
       onClick={onClick}
-      className="group w-full text-left border border-gray-200 dark:border-gray-700 rounded-xl px-5 py-4 bg-white dark:bg-gray-900 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50/40 dark:hover:bg-red-950/20 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 flex items-start gap-4"
+      className="group w-full text-left border border-gray-200 rounded-xl px-5 py-4 bg-white hover:border-red-300 hover:bg-red-50/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 flex items-start gap-4"
     >
       <span className="flex-1">
-        <span className="block font-semibold text-gray-900 dark:text-white">
+        <span className="block font-semibold text-gray-900">
           {label}
         </span>
         {hint && (
-          <span className="block text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+          <span className="block text-sm text-gray-500 mt-1 leading-relaxed">
             {hint}
           </span>
         )}
@@ -105,7 +105,7 @@ function OptionButton({
       <ChevronRight
         size={20}
         aria-hidden="true"
-        className="shrink-0 mt-0.5 text-gray-300 dark:text-gray-600 group-hover:text-red-500 transition-colors duration-150"
+        className="shrink-0 mt-0.5 text-gray-300 group-hover:text-red-500 transition-colors duration-150"
       />
     </button>
   );
@@ -125,11 +125,11 @@ function QuestionHeading({
 }): React.ReactElement {
   return (
     <div className="mb-6">
-      <h2 className="text-2xl font-semibold text-gray-900 dark:text-white text-balance">
+      <h2 className="text-2xl font-semibold text-gray-900 text-balance">
         {title}
       </h2>
       {subtitle && (
-        <p className="text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
+        <p className="text-gray-600 mt-2 leading-relaxed">
           {subtitle}
         </p>
       )}
@@ -152,7 +152,7 @@ function StepDots({ count }: { count: number }): React.ReactElement | null {
       {Array.from({ length: count }).map((_, i) => (
         <span
           key={i}
-          className="h-1.5 w-6 rounded-full bg-red-500 dark:bg-red-500/80"
+          className="h-1.5 w-6 rounded-full bg-red-500"
         />
       ))}
     </div>
@@ -217,7 +217,7 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
   }
 
   return (
-    <main className="bg-red-600 dark:bg-red-900 min-h-[calc(100vh-4rem)] py-12 sm:py-16 px-4">
+    <main className="bg-red-600 min-h-[calc(100vh-4rem)] py-12 sm:py-16 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Page header — sits directly on the red backdrop, so this text is white rather than the gray used everywhere else. */}
         <div className="mb-8">
@@ -265,20 +265,20 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
                 />
                 <Link
                   href="/request-class"
-                  className="group w-full text-left border border-gray-200 dark:border-gray-700 rounded-xl px-5 py-4 bg-white dark:bg-gray-900 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50/40 dark:hover:bg-red-950/20 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 flex items-start gap-4"
+                  className="group w-full text-left border border-gray-200 rounded-xl px-5 py-4 bg-white hover:border-red-300 hover:bg-red-50/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 flex items-start gap-4"
                 >
                   <span className="flex-1">
-                    <span className="block font-semibold text-gray-900 dark:text-white">
+                    <span className="block font-semibold text-gray-900">
                       A group or workplace
                     </span>
-                    <span className="block text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                    <span className="block text-sm text-gray-500 mt-1 leading-relaxed">
                       We come to you and teach your team on site
                     </span>
                   </span>
                   <ChevronRight
                     size={20}
                     aria-hidden="true"
-                    className="shrink-0 mt-0.5 text-gray-300 dark:text-gray-600 group-hover:text-red-500 transition-colors duration-150"
+                    className="shrink-0 mt-0.5 text-gray-300 group-hover:text-red-500 transition-colors duration-150"
                   />
                 </Link>
                 {/*
@@ -290,20 +290,20 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
                  */}
                 <Link
                   href="/book"
-                  className="group w-full text-left border border-gray-200 dark:border-gray-700 rounded-xl px-5 py-4 bg-white dark:bg-gray-900 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50/40 dark:hover:bg-red-950/20 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 flex items-start gap-4"
+                  className="group w-full text-left border border-gray-200 rounded-xl px-5 py-4 bg-white hover:border-red-300 hover:bg-red-50/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 flex items-start gap-4"
                 >
                   <span className="flex-1">
-                    <span className="block font-semibold text-red-600 dark:text-red-400">
+                    <span className="block font-semibold text-red-600">
                       I already know what I need
                     </span>
-                    <span className="block text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                    <span className="block text-sm text-gray-500 mt-1 leading-relaxed">
                       Show me the schedule
                     </span>
                   </span>
                   <ChevronRight
                     size={20}
                     aria-hidden="true"
-                    className="shrink-0 mt-0.5 text-gray-300 dark:text-gray-600 group-hover:text-red-500 transition-colors duration-150"
+                    className="shrink-0 mt-0.5 text-gray-300 group-hover:text-red-500 transition-colors duration-150"
                   />
                 </Link>
               </div>
@@ -521,7 +521,7 @@ export default function FindAClassWizard({ classes }: Props): React.ReactElement
             <button
               type="button"
               onClick={back}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-white/90 hover:text-white transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-red-600 dark:focus-visible:ring-offset-red-900 rounded-sm"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-white/90 hover:text-white transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-red-600 rounded-sm"
             >
               <ArrowLeft size={16} aria-hidden="true" />
               Back
@@ -596,13 +596,13 @@ function ResultPanel({
   if (!primary) {
     return (
       <>
-        <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 mb-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-red-600 mb-2">
           What we recommend
         </p>
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white text-balance mb-3">
+        <h2 className="text-2xl font-semibold text-gray-900 text-balance mb-3">
           Let us set this up with you
         </h2>
-        <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
+        <p className="text-gray-600 leading-relaxed mb-6">
           {recommendation.rationale}
         </p>
         <Link href="/request-class" className={PRIMARY_BUTTON}>
@@ -617,44 +617,44 @@ function ResultPanel({
 
   return (
     <>
-      <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 mb-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-red-600 mb-2">
         What we recommend
       </p>
-      <h2 className="text-2xl font-semibold text-gray-900 dark:text-white text-balance">
+      <h2 className="text-2xl font-semibold text-gray-900 text-balance">
         {primary.name}
       </h2>
 
       <div className="flex flex-wrap gap-2 mt-3">
         {hasDates ? (
-          <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-semibold px-3 py-1 rounded-full">
+          <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full">
             <CalendarCheck size={13} aria-hidden="true" />
             Open now
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs font-semibold px-3 py-1 rounded-full">
+          <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 text-xs font-semibold px-3 py-1 rounded-full">
             <MailQuestion size={13} aria-hidden="true" />
             By request
           </span>
         )}
         {primary.isAha && (
-          <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-semibold px-3 py-1 rounded-full">
+          <span className="bg-red-100 text-red-700 text-xs font-semibold px-3 py-1 rounded-full">
             AHA Certified
           </span>
         )}
-        <span className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium px-3 py-1 rounded-full">
+        <span className="bg-gray-100 text-gray-700 text-xs font-medium px-3 py-1 rounded-full">
           {formatDuration(primary.durationMinutes)}
         </span>
-        <span className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium px-3 py-1 rounded-full">
+        <span className="bg-gray-100 text-gray-700 text-xs font-medium px-3 py-1 rounded-full">
           {formatPrice(primary.price)} per person
         </span>
       </div>
 
-      <p className="text-gray-600 dark:text-gray-400 leading-relaxed mt-4">
+      <p className="text-gray-600 leading-relaxed mt-4">
         {recommendation.rationale}
       </p>
 
       {primary.description && (
-        <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mt-3">
+        <p className="text-sm text-gray-500 leading-relaxed mt-3">
           {primary.description}
         </p>
       )}
@@ -662,13 +662,13 @@ function ResultPanel({
       <div
         className={`mt-6 rounded-xl p-5 ${
           hasDates
-            ? "bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900"
-            : "bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700"
+            ? "bg-green-50 border border-green-200"
+            : "bg-gray-50 border border-gray-200"
         }`}
       >
         {hasDates ? (
           <>
-            <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
+            <p className="text-gray-600 leading-relaxed mb-4">
               Spots are open. Pick a date that works for you.
             </p>
             <Link href={`/book?class=${primary.slug}`} className={PRIMARY_BUTTON}>
@@ -677,7 +677,7 @@ function ResultPanel({
           </>
         ) : (
           <>
-            <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
+            <p className="text-gray-600 leading-relaxed mb-4">
               No classes are currently scheduled. Request this class and we will
               contact you within 24 hours.
             </p>
@@ -692,25 +692,25 @@ function ResultPanel({
       </div>
 
       {alternates.length > 0 && (
-        <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+        <div className="mt-6 pt-6 border-t border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">
             Also worth considering
           </h3>
           <div className="flex flex-col gap-3">
             {alternates.map(({ alt, option }) => (
               <div
                 key={option.id}
-                className="border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3"
+                className="border border-gray-200 rounded-lg px-4 py-3"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-medium text-gray-900 dark:text-white text-sm">
+                  <span className="font-medium text-gray-900 text-sm">
                     {option.name}
                   </span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="text-sm text-gray-500">
                     {formatPrice(option.price)}
                   </span>
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mt-1">
+                <p className="text-sm text-gray-500 leading-relaxed mt-1">
                   {alt.reason}
                 </p>
                 <div className="mt-2">
@@ -720,7 +720,7 @@ function ResultPanel({
                         ? `/book?class=${option.slug}`
                         : `/request-class?class=${option.slug}`
                     }
-                    className="text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors duration-150"
+                    className="text-sm font-medium text-red-600 hover:text-red-700 transition-colors duration-150"
                   >
                     {option.upcomingCount > 0
                       ? "See dates"
@@ -748,11 +748,11 @@ function RestartRow({
   onRestart: () => void;
 }): React.ReactElement {
   return (
-    <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
+    <div className="mt-6 pt-6 border-t border-gray-100">
       <button
         type="button"
         onClick={onRestart}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 rounded-sm"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-red-600 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 rounded-sm"
       >
         <RotateCcw size={15} aria-hidden="true" />
         Start over
