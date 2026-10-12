@@ -16,7 +16,7 @@
  *   3. The batch's sender_batch_id must be typed back as confirmation.
  *   4. The amount must equal what is owed, and a method, reference and date are
  *      required, so there is always a trail of who paid what, how, and when.
- *   5. The write is one atomic RPC (record_manual_payout_item, migration 0074).
+ *   5. The write is one atomic RPC (record_manual_payout_item, migration 0075).
  *
  * The instructor is emailed once the record is saved (best effort).
  */

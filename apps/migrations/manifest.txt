@@ -81,5 +81,5 @@
 0071_staff_directory_email.sql
 0072_staff_directory_hidden.sql
 0073_staff_directory_phone.sql
-0074_manual_payout_settlement.sql
+0075_manual_payout_settlement.sql
 replace-user-uuid.sql

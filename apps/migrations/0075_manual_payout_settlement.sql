@@ -1,4 +1,4 @@
--- Migration 0074: Manual payout settlement
+-- Migration 0075: Manual payout settlement
 --
 -- Background: PayPal has been denying payout batches with no stated reason, and
 -- support cannot explain why. Instructors are being paid by hand instead (Zelle,

@@ -7,7 +7,7 @@
  *   - POST /api/webhooks/paypal-payouts (PayPal pushes the outcome to us)
  *   - POST /api/payouts/deny            (an admin asserts a denial manually)
  *
- * An item an admin has already settled by hand (`manually_paid`, migration 0074)
+ * An item an admin has already settled by hand (`manually_paid`, migration 0075)
  * is never touched by any of these paths: PayPal's view of a payout the business
  * paid itself must not flip it back to denied or release earnings that are paid.
  *

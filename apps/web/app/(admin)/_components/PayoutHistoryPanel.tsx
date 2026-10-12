@@ -105,6 +105,17 @@ const BATCH_STATUS_BADGES: Record<
   },
 };
 
+/**
+ * Badge for a finished batch where some instructors were paid and others were
+ * returned by PayPal. The stored batch status is `completed` in that case, which
+ * on its own would read "Confirmed paid" beside a note that money came back.
+ */
+const PARTLY_PAID_BADGE = {
+  label: "Partly paid",
+  classes: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-300",
+  icon: <CheckCircle2 className="h-3 w-3" aria-hidden="true" />,
+};
+
 /** Badge appearance per payout item status. */
 const ITEM_STATUS_BADGES: Record<PayoutItemStatus, { label: string; classes: string }> = {
   pending: { label: "Not sent", classes: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200" },
@@ -957,7 +968,13 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
               {batches.map((batch) => {
-                const badge = BATCH_STATUS_BADGES[batch.status] ?? BATCH_STATUS_BADGES.pending;
+                // A completed batch that still has returned instructors is only partly paid.
+                const partlyPaid =
+                  batch.status === "completed" &&
+                  batch.items.some((item) => item.status === "denied" || item.status === "failed");
+                const badge = partlyPaid
+                  ? PARTLY_PAID_BADGE
+                  : (BATCH_STATUS_BADGES[batch.status] ?? BATCH_STATUS_BADGES.pending);
                 const expanded = expandedIds.has(batch.id);
                 const assumedHours =
                   batch.status === "assumed_complete" ? hoursSince(batch.submittedAt) : null;

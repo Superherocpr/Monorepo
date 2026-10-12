@@ -1,6 +1,6 @@
 /**
  * Tests that PayPal reconciliation never overwrites a payout an admin settled by
- * hand (migration 0074).
+ * hand (migration 0075).
  *
  * PayPal has been denying batches, and an admin then pays instructors directly.
  * The hourly sync, the payouts webhook and the deny route all funnel through

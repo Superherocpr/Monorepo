@@ -1104,7 +1104,7 @@ mitigation is proportionate, and a lost race is now loud rather than silent.
 ## THREAT-069 — Manual payout settlement lets a super_admin mark earnings paid without moving money
 
 **Severity:** 2/10 (low)
-**File:** `apps/web/app/api/payouts/manual-settle/route.ts`, migration `0074_manual_payout_settlement.sql`
+**File:** `apps/web/app/api/payouts/manual-settle/route.ts`, migration `0075_manual_payout_settlement.sql`
 **Date:** 2026-10-06
 **Status:** MITIGATED
 

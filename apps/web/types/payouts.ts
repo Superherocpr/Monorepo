@@ -38,7 +38,7 @@ export type PayoutItemStatus = PayoutBatchStatus | "unclaimed";
 
 /**
  * How an instructor was paid outside PayPal. Values mirror the CHECK constraint
- * on instructor_payout_items.manual_method (migration 0074).
+ * on instructor_payout_items.manual_method (migration 0075).
  */
 export const MANUAL_PAYOUT_METHODS = [
   "zelle",

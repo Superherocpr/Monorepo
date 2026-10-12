@@ -9,7 +9,7 @@
  * again or sent through PayPal. A reason is required and is stored with who undid
  * it. The instructor is not emailed about an undo; tell them directly.
  *
- * The write is one atomic RPC (void_manual_payout_item, migration 0074).
+ * The write is one atomic RPC (void_manual_payout_item, migration 0075).
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
