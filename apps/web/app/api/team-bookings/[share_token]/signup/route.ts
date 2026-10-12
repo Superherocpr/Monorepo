@@ -154,7 +154,7 @@ export async function POST(
         : team.closedReason === "cancelled"
           ? "This class has been cancelled."
           : team.closedReason === "past"
-            ? "This class has already started."
+            ? "This class has already ended."
             : "This class isn't open for signups yet. Please check back shortly.";
     return NextResponse.json({ error: message }, { status: 409 });
   }

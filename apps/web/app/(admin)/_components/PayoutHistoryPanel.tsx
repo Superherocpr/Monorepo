@@ -10,6 +10,10 @@
  * record that denial and resend, while making it hard to do so by accident:
  * marking a delivered payout denied is what allows a double payment.
  *
+ * When PayPal denies a payout and the instructor is paid by hand instead, a
+ * super_admin records that here ("Paid manually"), which marks the earnings paid
+ * so they are never sent again. A mistaken record can be undone.
+ *
  * Used by: app/(admin)/admin/payouts/page.tsx and
  *          app/(admin)/admin/settings/_components/PayoutSettingsPanel.tsx
  */
@@ -19,6 +23,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Ban,
+  Banknote,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -31,11 +36,15 @@ import {
   X,
 } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/invoice-utils";
-import type {
-  PayoutBatchStatus,
-  PayoutHistoryBatch,
-  PayoutHistoryItem,
-  PayoutItemStatus,
+import { formatManualPaidOn } from "@/lib/payout-manual";
+import {
+  MANUAL_PAYOUT_METHODS,
+  MANUAL_PAYOUT_METHOD_LABELS,
+  type ManualPayoutMethod,
+  type PayoutBatchStatus,
+  type PayoutHistoryBatch,
+  type PayoutHistoryItem,
+  type PayoutItemStatus,
 } from "@/types/payouts";
 
 interface PayoutHistoryPanelProps {
@@ -89,6 +98,22 @@ const BATCH_STATUS_BADGES: Record<
     classes: "bg-amber-100 text-amber-900",
     icon: <AlertTriangle className="h-3 w-3" aria-hidden="true" />,
   },
+  manually_paid: {
+    label: "Paid manually",
+    classes: "bg-green-100 text-green-800",
+    icon: <Banknote className="h-3 w-3" aria-hidden="true" />,
+  },
+};
+
+/**
+ * Badge for a finished batch where some instructors were paid and others were
+ * returned by PayPal. The stored batch status is `completed` in that case, which
+ * on its own would read "Confirmed paid" beside a note that money came back.
+ */
+const PARTLY_PAID_BADGE = {
+  label: "Partly paid",
+  classes: "bg-amber-100 text-amber-900",
+  icon: <CheckCircle2 className="h-3 w-3" aria-hidden="true" />,
 };
 
 /** Badge appearance per payout item status. */
@@ -100,6 +125,7 @@ const ITEM_STATUS_BADGES: Record<PayoutItemStatus, { label: string; classes: str
   failed: { label: "Failed", classes: "bg-orange-100 text-orange-800" },
   needs_review: { label: "Needs review", classes: "bg-amber-100 text-amber-900" },
   unclaimed: { label: "Unclaimed", classes: "bg-purple-100 text-purple-800" },
+  manually_paid: { label: "Paid manually", classes: "bg-green-100 text-green-800" },
 };
 
 /** Response shape shared by the payout action routes. */
@@ -273,15 +299,301 @@ function DenyDialog({
   );
 }
 
+/** Today's date in the viewer's own timezone as YYYY-MM-DD, for the date input default. */
+function todayLocalIso(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/** What the manual payment and undo dialogs need to know about their target item. */
+interface ManualTarget {
+  batchId: string;
+  senderBatchId: string;
+  itemId: string;
+  instructorName: string;
+  amount: number;
+}
+
+/** Fields collected by the manual payment dialog. */
+interface ManualPaymentFields {
+  method: ManualPayoutMethod;
+  reference: string;
+  paidOn: string;
+  amount: string;
+  note: string;
+  confirmSenderBatchId: string;
+}
+
+/**
+ * Dialog for recording that an instructor was paid outside PayPal.
+ * Requires the amount and the batch id to be typed back, because recording money
+ * as paid that was not actually sent leaves the instructor unpaid with no alert.
+ */
+function ManualPaymentDialog({
+  target,
+  onCancel,
+  onConfirm,
+  submitting,
+}: {
+  target: ManualTarget;
+  onCancel: () => void;
+  onConfirm: (fields: ManualPaymentFields) => void;
+  submitting: boolean;
+}) {
+  const [method, setMethod] = useState<ManualPayoutMethod>("zelle");
+  const [reference, setReference] = useState("");
+  const [paidOn, setPaidOn] = useState(todayLocalIso());
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [typed, setTyped] = useState("");
+
+  const amountMatches = Number(amount) === target.amount && amount.trim() !== "";
+  const confirmationMatches = typed.trim() === target.senderBatchId;
+  const ready =
+    amountMatches && confirmationMatches && reference.trim().length > 0 && paidOn.length > 0;
+
+  const inputClasses =
+    "mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-green-600";
+  const labelClasses = "block text-sm font-medium text-gray-700";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="max-h-full w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+          <Banknote className="h-5 w-5 text-green-600" aria-hidden="true" />
+          Record a manual payment
+        </h3>
+
+        <p className="mt-3 text-sm text-gray-600">
+          Use this when you paid {target.instructorName} yourself because PayPal denied the
+          payout. Their earnings are marked paid and will not be sent again. You owe them{" "}
+          <strong>{formatCurrency(target.amount)}</strong> for this payout.
+        </p>
+
+        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
+          <p className="flex items-start gap-2 text-xs text-amber-900">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              Only record this after the money has actually been sent. The instructor is
+              emailed that they were paid. PayPal is checked once more before this is saved,
+              and it is refused if PayPal says the payout went through or is still moving.
+            </span>
+          </p>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label htmlFor="manual-method" className={labelClasses}>
+              How did you pay them?
+            </label>
+            <select
+              id="manual-method"
+              value={method}
+              onChange={(event) => setMethod(event.target.value as ManualPayoutMethod)}
+              className={inputClasses}
+            >
+              {MANUAL_PAYOUT_METHODS.map((option) => (
+                <option key={option} value={option}>
+                  {MANUAL_PAYOUT_METHOD_LABELS[option]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="manual-paid-on" className={labelClasses}>
+              Date sent
+            </label>
+            <input
+              id="manual-paid-on"
+              type="date"
+              value={paidOn}
+              max={todayLocalIso()}
+              onChange={(event) => setPaidOn(event.target.value)}
+              className={inputClasses}
+            />
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <label htmlFor="manual-reference" className={labelClasses}>
+            Reference
+          </label>
+          <input
+            id="manual-reference"
+            type="text"
+            value={reference}
+            maxLength={200}
+            onChange={(event) => setReference(event.target.value)}
+            placeholder="Confirmation number, check number, or a short description"
+            className={inputClasses}
+          />
+        </div>
+
+        <div className="mt-3">
+          <label htmlFor="manual-amount" className={labelClasses}>
+            Amount you paid
+          </label>
+          <input
+            id="manual-amount"
+            type="text"
+            inputMode="decimal"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            placeholder={`Type ${target.amount.toFixed(2)} to confirm`}
+            autoComplete="off"
+            className={inputClasses}
+          />
+          {amount.trim() !== "" && !amountMatches ? (
+            <p className="mt-1 text-xs text-red-700">
+              This must equal the amount owed ({formatCurrency(target.amount)}).
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-3">
+          <label htmlFor="manual-note" className={labelClasses}>
+            Note <span className="font-normal text-gray-400">(optional)</span>
+          </label>
+          <textarea
+            id="manual-note"
+            value={note}
+            rows={2}
+            maxLength={1000}
+            onChange={(event) => setNote(event.target.value)}
+            className={inputClasses}
+          />
+        </div>
+
+        <div className="mt-3">
+          <label htmlFor="manual-confirm" className={labelClasses}>
+            Type the batch id to confirm
+          </label>
+          <p className="mt-1 font-mono text-xs text-gray-500">
+            {target.senderBatchId}
+          </p>
+          <input
+            id="manual-confirm"
+            type="text"
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            className={`${inputClasses} font-mono`}
+          />
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={submitting}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              onConfirm({
+                method,
+                reference: reference.trim(),
+                paidOn,
+                amount: amount.trim(),
+                note: note.trim(),
+                confirmSenderBatchId: typed.trim(),
+              })
+            }
+            disabled={submitting || !ready}
+            className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-800 disabled:opacity-50"
+          >
+            {submitting ? "Recording…" : "Record payment"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Dialog for undoing a manual payment record that was made by mistake. */
+function UndoManualDialog({
+  target,
+  onCancel,
+  onConfirm,
+  submitting,
+}: {
+  target: ManualTarget;
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+  submitting: boolean;
+}) {
+  const [reason, setReason] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+          <Undo2 className="h-5 w-5 text-gray-600" aria-hidden="true" />
+          Undo manual payment
+        </h3>
+        <p className="mt-3 text-sm text-gray-600">
+          This puts {target.instructorName}&apos;s {formatCurrency(target.amount)} back in the
+          payable queue, so it will go out again with the next payout unless you record it
+          again. The instructor is not emailed about an undo, so tell them directly if needed.
+        </p>
+        <label
+          htmlFor="undo-reason"
+          className="mt-4 block text-sm font-medium text-gray-700"
+        >
+          Why are you undoing it?
+        </label>
+        <textarea
+          id="undo-reason"
+          value={reason}
+          rows={2}
+          maxLength={1000}
+          onChange={(event) => setReason(event.target.value)}
+          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-500"
+        />
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={submitting}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(reason.trim())}
+            disabled={submitting || reason.trim().length === 0}
+            className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-900 disabled:opacity-50"
+          >
+            {submitting ? "Undoing…" : "Undo payment"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** One payout item line inside an expanded batch. */
 function ItemRow({
   item,
   canDeny,
   onDeny,
+  canSettle,
+  onSettle,
+  onUndoManual,
 }: {
   item: PayoutHistoryItem;
   canDeny: boolean;
   onDeny: () => void;
+  canSettle: boolean;
+  onSettle: () => void;
+  onUndoManual: () => void;
 }) {
   const badge = ITEM_STATUS_BADGES[item.status] ?? ITEM_STATUS_BADGES.pending;
 
@@ -304,6 +616,23 @@ function ItemRow({
             {item.errorMessage}
           </span>
         ) : null}
+        {item.status === "manually_paid" && item.manualPayment ? (
+          <span className="mt-0.5 block text-xs text-green-800">
+            Paid by {MANUAL_PAYOUT_METHOD_LABELS[item.manualPayment.method]} on{" "}
+            {formatManualPaidOn(item.manualPayment.paidOn)}, ref {item.manualPayment.reference}
+            {item.manualPayment.recordedByName
+              ? `, recorded by ${item.manualPayment.recordedByName}`
+              : ""}
+            {item.manualPayment.note ? `. ${item.manualPayment.note}` : ""}
+          </span>
+        ) : null}
+        {item.status !== "manually_paid" && item.manualPayment?.voidedAt ? (
+          <span className="mt-0.5 block text-xs text-gray-500">
+            An earlier manual payment ({MANUAL_PAYOUT_METHOD_LABELS[item.manualPayment.method]},
+            ref {item.manualPayment.reference}) was undone
+            {item.manualPayment.voidReason ? `: ${item.manualPayment.voidReason}` : ""}
+          </span>
+        ) : null}
       </td>
       <td className="px-4 py-2.5">
         <span
@@ -319,15 +648,37 @@ function ItemRow({
         {formatCurrency(item.amount)}
       </td>
       <td className="px-4 py-2.5 text-right">
-        {canDeny ? (
-          <button
-            type="button"
-            onClick={onDeny}
-            className="rounded-md border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-white"
-          >
-            Mark denied
-          </button>
-        ) : null}
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {canDeny ? (
+            <button
+              type="button"
+              onClick={onDeny}
+              className="rounded-md border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-white"
+            >
+              Mark denied
+            </button>
+          ) : null}
+          {canSettle ? (
+            <button
+              type="button"
+              onClick={onSettle}
+              className="inline-flex items-center gap-1 rounded-md bg-green-700 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-green-800"
+            >
+              <Banknote className="h-3 w-3" aria-hidden="true" />
+              Paid manually
+            </button>
+          ) : null}
+          {item.status === "manually_paid" ? (
+            <button
+              type="button"
+              onClick={onUndoManual}
+              className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-white"
+            >
+              <Undo2 className="h-3 w-3" aria-hidden="true" />
+              Undo
+            </button>
+          ) : null}
+        </div>
       </td>
     </tr>
   );
@@ -351,6 +702,9 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
     instructorName?: string;
     amount: number;
   } | null>(null);
+  const [manualTarget, setManualTarget] = useState<ManualTarget | null>(null);
+  const [undoTarget, setUndoTarget] = useState<ManualTarget | null>(null);
+  const [submittingManual, setSubmittingManual] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(
     null
   );
@@ -468,6 +822,41 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
     if (ok) setDenyTarget(null);
   }
 
+  /** Records the manual payment collected by the dialog. */
+  async function handleConfirmManualPayment(fields: ManualPaymentFields) {
+    if (!manualTarget) return;
+    setSubmittingManual(true);
+    const ok = await postAction(
+      "/api/payouts/manual-settle",
+      {
+        batchId: manualTarget.batchId,
+        itemId: manualTarget.itemId,
+        method: fields.method,
+        reference: fields.reference,
+        paidOn: fields.paidOn,
+        amount: fields.amount,
+        note: fields.note,
+        confirmSenderBatchId: fields.confirmSenderBatchId,
+      },
+      "Failed to record the manual payment."
+    );
+    setSubmittingManual(false);
+    if (ok) setManualTarget(null);
+  }
+
+  /** Undoes a manual payment record. */
+  async function handleConfirmUndo(reason: string) {
+    if (!undoTarget) return;
+    setSubmittingManual(true);
+    const ok = await postAction(
+      "/api/payouts/manual-void",
+      { itemId: undoTarget.itemId, reason },
+      "Failed to undo the manual payment."
+    );
+    setSubmittingManual(false);
+    if (ok) setUndoTarget(null);
+  }
+
   /** Resends a denied or failed batch as a new linked batch. */
   async function handleResend(batch: PayoutHistoryBatch) {
     const confirmed = window.confirm(
@@ -516,7 +905,9 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
           <p className="mt-1 max-w-2xl text-xs text-gray-500">
             &ldquo;Assumed complete&rdquo; means PayPal accepted the batch but has not confirmed
             delivery. PayPal can still deny a payout at that stage and return the money, so if
-            that happens, mark the batch or the affected instructor denied and resend it.
+            that happens, mark the batch or the affected instructor denied and resend it. If you
+            paid an instructor yourself instead, expand the batch and use &ldquo;Paid
+            manually&rdquo; on their line so they are not paid twice.
           </p>
         </div>
         <button
@@ -577,7 +968,13 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
             </thead>
             <tbody className="divide-y divide-gray-100">
               {batches.map((batch) => {
-                const badge = BATCH_STATUS_BADGES[batch.status] ?? BATCH_STATUS_BADGES.pending;
+                // A completed batch that still has returned instructors is only partly paid.
+                const partlyPaid =
+                  batch.status === "completed" &&
+                  batch.items.some((item) => item.status === "denied" || item.status === "failed");
+                const badge = partlyPaid
+                  ? PARTLY_PAID_BADGE
+                  : (BATCH_STATUS_BADGES[batch.status] ?? BATCH_STATUS_BADGES.pending);
                 const expanded = expandedIds.has(batch.id);
                 const assumedHours =
                   batch.status === "assumed_complete" ? hoursSince(batch.submittedAt) : null;
@@ -737,7 +1134,27 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
                             canDeny={
                               canDeny &&
                               item.status !== "denied" &&
-                              item.status !== "failed"
+                              item.status !== "failed" &&
+                              item.status !== "manually_paid"
+                            }
+                            canSettle={item.status === "denied" || item.status === "failed"}
+                            onSettle={() =>
+                              setManualTarget({
+                                batchId: batch.id,
+                                senderBatchId: batch.senderBatchId,
+                                itemId: item.id,
+                                instructorName: item.instructorName,
+                                amount: item.amount,
+                              })
+                            }
+                            onUndoManual={() =>
+                              setUndoTarget({
+                                batchId: batch.id,
+                                senderBatchId: batch.senderBatchId,
+                                itemId: item.id,
+                                instructorName: item.instructorName,
+                                amount: item.amount,
+                              })
                             }
                             onDeny={() =>
                               setDenyTarget({
@@ -759,6 +1176,24 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
           </table>
         </div>
       )}
+
+      {manualTarget ? (
+        <ManualPaymentDialog
+          target={manualTarget}
+          onCancel={() => setManualTarget(null)}
+          onConfirm={handleConfirmManualPayment}
+          submitting={submittingManual}
+        />
+      ) : null}
+
+      {undoTarget ? (
+        <UndoManualDialog
+          target={undoTarget}
+          onCancel={() => setUndoTarget(null)}
+          onConfirm={handleConfirmUndo}
+          submitting={submittingManual}
+        />
+      ) : null}
 
       {denyTarget ? (
         <DenyDialog

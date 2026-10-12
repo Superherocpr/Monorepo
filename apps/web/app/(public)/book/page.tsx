@@ -77,7 +77,9 @@ export default async function BookPage({ searchParams }: BookPageProps) {
     // Team/corporate classes are private to the company that booked them —
     // they must never be listed here or the public could take their seats.
     .eq("is_private", false)
-    .gte("starts_at", floatingNow())
+    // Filter on the END time so a class already in progress stays bookable
+    // (late arrivals); it drops off the list once it has finished.
+    .gte("ends_at", floatingNow())
     .order("starts_at", { ascending: true });
 
   // Fetch active class types for filter pills

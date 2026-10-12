@@ -29,6 +29,7 @@ import {
   unclaimedOpportunityEscalationEmail,
   payoutDeniedAdminEmail,
   instructorPayoutSentEmail,
+  instructorManualPayoutEmail,
   instructorBookingNotificationEmail,
   teamBookingCreatedEmail,
   teamSignupConfirmationEmail,
@@ -322,6 +323,16 @@ export default async function Page() {
     baseUrl: "http://localhost:3000",
   });
   previews.push({ id: "payout-sent", name: "Instructor Payout Sent", subject: payoutSent.subject, src: b64(payoutSent.html) });
+
+  const payoutManual = instructorManualPayoutEmail({
+    firstName: "Sarah",
+    amount: 320,
+    methodLabel: "Zelle",
+    reference: "ZEL-4471",
+    paidOn: "2026-10-05",
+    baseUrl: "http://localhost:3000",
+  });
+  previews.push({ id: "payout-manual", name: "Instructor Paid Manually", subject: payoutManual.subject, src: b64(payoutManual.html) });
 
   // ── Instructor new-booking notification ──────────────────────────────────
   const instructorNotify = instructorBookingNotificationEmail({

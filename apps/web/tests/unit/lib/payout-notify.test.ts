@@ -24,6 +24,7 @@ import {
   notifyPayoutDenied,
   notifyPayoutIssuesDigest,
   notifyInstructorsPaid,
+  notifyInstructorManualPayout,
 } from "@/lib/payout-notify";
 
 const BATCH_ID = "11111111-1111-1111-1111-111111111111";
@@ -229,6 +230,62 @@ describe("notifyInstructorsPaid", () => {
   test("does nothing when given no item ids", async () => {
     await notifyInstructorsPaid(mockClient({}), []);
 
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("notifyInstructorManualPayout", () => {
+  test("sends the manual-payment email keyed on the item and when it was recorded", async () => {
+    const client = mockClient({
+      instructor_payout_items: {
+        data: {
+          id: "item-1",
+          amount: "125.50",
+          manual_method: "zelle",
+          manual_reference: "ZEL-4471",
+          manual_paid_on: "2026-10-05",
+          manual_recorded_at: "2026-10-05T14:00:00Z",
+          profiles: { first_name: "Alex", email: "alex@example.com" },
+        },
+        error: null,
+      },
+    });
+
+    await notifyInstructorManualPayout(client, "item-1");
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const call = sendEmailMock.mock.calls[0][0];
+    expect(call.context).toBe("payout-notify:instructor-manual-paid");
+    expect(call.to).toBe("alex@example.com");
+    expect(call.subject).toContain("$125.50");
+    expect(call.html).toContain("Zelle");
+    expect(call.html).toContain("ZEL-4471");
+    expect(call.idempotencyKey).toBe("payout-manual-item-1-2026-10-05T14:00:00Z");
+  });
+
+  test("sends nothing when the item has no manual record", async () => {
+    const client = mockClient({
+      instructor_payout_items: {
+        data: {
+          id: "item-1",
+          amount: "10",
+          manual_method: null,
+          manual_reference: null,
+          manual_paid_on: null,
+          manual_recorded_at: null,
+          profiles: { first_name: "Alex", email: "alex@example.com" },
+        },
+        error: null,
+      },
+    });
+    await notifyInstructorManualPayout(client, "item-1");
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  test("never throws when the lookup fails", async () => {
+    const client = { from: () => { throw new Error("db down"); } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(notifyInstructorManualPayout(client as any, "item-1")).resolves.toBeUndefined();
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });

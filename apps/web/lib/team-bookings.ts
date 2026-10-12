@@ -37,7 +37,7 @@ import {
   teamInvoiceMissingAdminEmail,
   type TeamInvoiceAlertBooking,
 } from "@/lib/emails";
-import { floatingNow } from "@/lib/business-time";
+import { hasClassEnded } from "@/lib/business-time";
 import { applyDiscountPercent, normalizeDiscountPercent } from "@/lib/session-pricing";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -553,7 +553,7 @@ export async function sendContactShareLink(
   // it to pending_approval, so re-approving it would otherwise mail the contact
   // a signup link for a class their people already attended.
   const startsAt = session.starts_at as string | null;
-  if (startsAt && new Date(startsAt) <= new Date(floatingNow())) return false;
+  if (startsAt && hasClassEnded(startsAt, session.ends_at as string | null)) return false;
 
   // Claim the send before doing it. A lost race means another approval path is
   // already mailing this contact, so this call must stay silent.
@@ -1337,7 +1337,7 @@ export interface TeamBookingPublicView {
   cancellationPhone: string;
   maxCapacity: number;
   spotsRemaining: number;
-  /** True once the class is full, cancelled, or already started. */
+  /** True once the class is full, cancelled, or already over. */
   closed: boolean;
   /** Why signups are closed, for a clear message. Null when open. */
   closedReason: "full" | "cancelled" | "past" | "unapproved" | null;
@@ -1469,7 +1469,7 @@ export async function getTeamBookingByShareToken(
       ? "cancelled"
       : session.approval_status !== "approved"
         ? "unapproved"
-        : new Date(session.starts_at as string) <= new Date(floatingNow())
+        : hasClassEnded(session.starts_at as string, session.ends_at as string | null)
           ? "past"
           : spotsRemaining <= 0
             ? "full"

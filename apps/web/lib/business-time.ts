@@ -213,6 +213,18 @@ export function msUntilClass(startsAt: string): number {
   return new Date(startsAt).getTime() - new Date(floatingNow()).getTime();
 }
 
+/**
+ * True once a class is over and can no longer take signups. A class that is
+ * merely in progress is still bookable (late arrivals, walk-ins), so this
+ * compares the END time, in the floating space like msUntilClass().
+ * Falls back to the start time for a row with no end time.
+ * @param startsAt - Stored class start timestamp.
+ * @param endsAt - Stored class end timestamp, if any.
+ */
+export function hasClassEnded(startsAt: string, endsAt?: string | null): boolean {
+  return new Date(endsAt || startsAt).getTime() <= new Date(floatingNow()).getTime();
+}
+
 // ── Calendar-day helpers (real instants, not class times) ─────────────────────
 
 /**

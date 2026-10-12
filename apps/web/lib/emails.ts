@@ -2649,6 +2649,80 @@ export function instructorPayoutSentEmail({
   };
 }
 
+/**
+ * Sent to an instructor when an admin records that they were paid outside PayPal
+ * (PayPal denied or failed the payout, so SuperHeroCPR paid them directly).
+ * Triggered by: POST /api/payouts/manual-settle via notifyInstructorManualPayout.
+ * @param firstName - Instructor's first name.
+ * @param amount - Dollar amount paid.
+ * @param methodLabel - Plain-English payment method, e.g. "Zelle".
+ * @param reference - Confirmation number, check number, or short description.
+ * @param paidOn - ISO date (YYYY-MM-DD) the payment was sent.
+ * @param baseUrl - Site origin for the link.
+ */
+export function instructorManualPayoutEmail({
+  firstName,
+  amount,
+  methodLabel,
+  reference,
+  paidOn,
+  baseUrl,
+}: {
+  firstName: string;
+  amount: number;
+  methodLabel: string;
+  reference: string;
+  paidOn: string;
+  baseUrl: string;
+}): EmailContent {
+  const safeFirstName = escapeHtml(firstName.trim());
+  const safeMethod = escapeHtml(methodLabel.trim());
+  const safeReference = escapeHtml(reference.trim());
+  const formatted = amount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
+  const [year, month, day] = paidOn.split("-").map(Number);
+  const formattedDate = new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+  return {
+    subject: `Your SuperHeroCPR payout of ${formatted} has been paid`,
+    html: wrapEmail(`
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">You Have Been Paid</h1>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Hi ${safeFirstName},</p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:6px;margin-bottom:20px;">
+        <tr><td style="padding:20px;text-align:center;">
+          <p style="margin:0 0 4px 0;font-size:13px;color:#6b7280;">Amount paid</p>
+          <p style="margin:0;font-size:28px;font-weight:700;color:#15803d;">${formatted}</p>
+        </td></tr>
+      </table>
+
+      <p style="font-size:14px;color:#374151;margin-bottom:16px;">
+        We paid you directly by <strong>${safeMethod}</strong> on <strong>${formattedDate}</strong>
+        instead of through PayPal. Reference: <strong>${safeReference}</strong>.
+      </p>
+
+      <p style="margin:24px 0;">
+        <a href="${baseUrl}/admin/profile/payment"
+           style="display:inline-block;background:#dc2626;color:white;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:700;">
+          View Your Earnings →
+        </a>
+      </p>
+
+      <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+      <p style="font-size:12px;color:#9ca3af;">
+        If you did not receive this payment, contact SuperHeroCPR right away.
+      </p>
+    `),
+  };
+}
+
 // ── 33. Booking cancelled by admin ────────────────────────────────────────────
 
 

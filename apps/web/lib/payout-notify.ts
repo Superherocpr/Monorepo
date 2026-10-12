@@ -10,8 +10,10 @@
  */
 
 import { sendEmail, isEmailConfigured } from "@/lib/send-email";
+import { MANUAL_PAYOUT_METHOD_LABELS, type ManualPayoutMethod } from "@/types/payouts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  instructorManualPayoutEmail,
   instructorPayoutSentEmail,
   payoutDeniedAdminEmail,
   payoutStuckDigestAdminEmail,
@@ -247,5 +249,72 @@ export async function notifyInstructorsPaid(
     }
   } catch (err) {
     console.error("[payout-notify] Instructor payout emails failed (non-fatal):", err);
+  }
+}
+
+/**
+ * Tells an instructor they were paid outside PayPal.
+ *
+ * Called after a super_admin records a manual payment for a denied payout item.
+ * Keyed on the item AND the moment it was recorded, so an undo followed by a new
+ * settlement emails again, while a double submit cannot email twice.
+ *
+ * Side effects: reads the payout item + profile, sends one email via Resend.
+ * Best-effort: failures are logged and swallowed so they never undo the record.
+ *
+ * @param adminClient - Admin Supabase client.
+ * @param itemId - Payout item id that was just settled manually.
+ */
+export async function notifyInstructorManualPayout(
+  adminClient: AnySupabaseClient,
+  itemId: string
+): Promise<void> {
+  try {
+    if (!isEmailConfigured()) {
+      console.warn("[payout-notify] Resend not configured. Skipping manual payout email.");
+      return;
+    }
+
+    const { data: itemRow } = await adminClient
+      .from("instructor_payout_items")
+      .select(
+        "id, amount, manual_method, manual_reference, manual_paid_on, manual_recorded_at, profiles!instructor_id (first_name, email)"
+      )
+      .eq("id", itemId)
+      .maybeSingle();
+
+    const item = itemRow as unknown as {
+      id: string;
+      amount: number | string;
+      manual_method: ManualPayoutMethod | null;
+      manual_reference: string | null;
+      manual_paid_on: string | null;
+      manual_recorded_at: string | null;
+      profiles: { first_name: string | null; email: string | null } | null;
+    } | null;
+
+    if (!item || !item.manual_method || !item.manual_reference || !item.manual_paid_on) return;
+
+    const to = item.profiles?.email;
+    if (!to) return;
+
+    const email = instructorManualPayoutEmail({
+      firstName: item.profiles?.first_name ?? "there",
+      amount: Number(item.amount) || 0,
+      methodLabel: MANUAL_PAYOUT_METHOD_LABELS[item.manual_method] ?? "another method",
+      reference: item.manual_reference,
+      paidOn: item.manual_paid_on,
+      baseUrl: getBaseUrl(),
+    });
+
+    await sendEmail({
+      context: "payout-notify:instructor-manual-paid",
+      to,
+      subject: email.subject,
+      html: email.html,
+      idempotencyKey: `payout-manual-${item.id}-${item.manual_recorded_at ?? "x"}`,
+    });
+  } catch (err) {
+    console.error("[payout-notify] Manual payout email failed (non-fatal):", err);
   }
 }
