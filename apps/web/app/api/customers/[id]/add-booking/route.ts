@@ -11,7 +11,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
-import { floatingNow } from "@/lib/business-time";
+import { hasClassEnded } from "@/lib/business-time";
 
 /**
  * Adds a manual booking for the specified customer.
@@ -54,7 +54,7 @@ export async function POST(
   const { data: session } = await supabase
     .from("class_sessions")
     .select(
-      `id, max_capacity, approval_status, status, starts_at, instructor_id,
+      `id, max_capacity, approval_status, status, starts_at, ends_at, instructor_id,
       class_types ( name ),
       locations ( name, address, city, state, zip ),
       profiles!instructor_id ( first_name, last_name, email, phone ),
@@ -70,9 +70,10 @@ export async function POST(
     );
   }
 
-  if (new Date(session.starts_at) <= new Date(floatingNow())) {
+  // A class in progress can still take a student; only a finished one cannot.
+  if (hasClassEnded(session.starts_at, session.ends_at)) {
     return Response.json(
-      { success: false, error: "Cannot book a session that has already started." },
+      { success: false, error: "Cannot book a session that has already ended." },
       { status: 400 }
     );
   }

@@ -322,7 +322,14 @@ describe("getTeamBookingByShareToken", () => {
   test.each([
     ["cancelled session", { status: "cancelled" }, "cancelled"],
     ["unapproved session", { approval_status: "pending_approval" }, "unapproved"],
-    ["past session", { starts_at: new Date(Date.now() - 864e5).toISOString() }, "past"],
+    [
+      "finished session",
+      {
+        starts_at: new Date(Date.now() - 864e5).toISOString(),
+        ends_at: new Date(Date.now() - 864e5 + 36e5).toISOString(),
+      },
+      "past",
+    ],
   ])("closes signups for a %s", async (_label, sessionOverride, expected) => {
     const base = teamRow();
     const supabase = mockSupabase({
@@ -338,6 +345,27 @@ describe("getTeamBookingByShareToken", () => {
     const view = await getTeamBookingByShareToken(supabase, TOKEN);
     expect(view?.closed).toBe(true);
     expect(view?.closedReason).toBe(expected);
+  });
+
+  test("keeps signups open for a class that has started but not ended", async () => {
+    const base = teamRow();
+    const supabase = mockSupabase({
+      team_bookings: {
+        ...base,
+        class_sessions: {
+          ...(base.class_sessions as object),
+          starts_at: new Date(Date.now() - 36e5).toISOString(),
+          ends_at: new Date(Date.now() + 36e5).toISOString(),
+        },
+      },
+      bookings: [],
+      invoices: [],
+      profiles: { first_name: "Ada", last_name: "Lovelace", phone: null, role: "manager" },
+    });
+
+    const view = await getTeamBookingByShareToken(supabase, TOKEN);
+    expect(view?.closed).toBe(false);
+    expect(view?.closedReason).toBeNull();
   });
 
   // The company calls whoever is teaching their class, not the office. These

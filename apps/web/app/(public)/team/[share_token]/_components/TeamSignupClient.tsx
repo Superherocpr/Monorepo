@@ -470,7 +470,7 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
                 : view.closedReason === "cancelled"
                   ? "This class has been cancelled."
                   : view.closedReason === "past"
-                    ? "This class has already started."
+                    ? "This class has already ended."
                     : "This class isn't open for signups just yet — please check back shortly."}
             </p>
             <p className="mt-3">
