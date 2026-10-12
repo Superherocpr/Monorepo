@@ -13,7 +13,7 @@ import GradingClient, {
   type PresetGrade,
   type GradingSessionInfo,
 } from "../../../../_components/GradingClient";
-import type { UserRole } from "@/types/users";
+import { isTeachingRole, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -30,8 +30,8 @@ export default async function GradesPage({ params }: PageProps) {
   const user = actor.user;
   const role = actor.effectiveRole;
 
-  // Only instructors and super admins may access the grading tool
-  if (role !== "instructor" && role !== "super_admin") {
+  // Every teaching role (instructor, manager, super admin) may grade
+  if (!isTeachingRole(role)) {
     redirect("/admin/sessions");
   }
 
@@ -50,8 +50,8 @@ export default async function GradesPage({ params }: PageProps) {
 
   if (!rawSession) redirect("/admin/sessions");
 
-  // Instructors may only grade their own sessions
-  if (role === "instructor" && rawSession.instructor_id !== user.id) {
+  // Instructors and managers may only grade their own sessions
+  if (!canUseInstructorToolsOn(role, user.id, rawSession.instructor_id)) {
     redirect("/admin/sessions");
   }
 

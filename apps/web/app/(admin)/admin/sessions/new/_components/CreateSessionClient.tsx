@@ -918,7 +918,7 @@ export default function CreateSessionClient({
                   ? "The company is invoiced this flat amount. Employees sign up free, and can do so before it's paid."
                   : teamForm.payment_mode === "company_per_signup"
                     ? "The company is billed this much for each person who signs up. Employees sign up free. The invoice goes out after the class, or whenever you raise it from the class page."
-                    : "What each employee pays at signup. This replaces the standard class price. Promo codes still apply."}
+                    : "What each employee pays at signup. This replaces the standard class price, and the Discount below is taken off it. Promo codes still apply."}
               </p>
             </div>
           </div>

@@ -27,6 +27,7 @@ import { sendEmail, sendEmails, isEmailConfigured } from "@/lib/send-email";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { sessionClaimedStudentEmail, sessionClaimedAdminEmail } from "@/lib/emails";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Route handler params from the dynamic [id] segment. */
 interface Params {
@@ -34,7 +35,7 @@ interface Params {
 }
 
 export async function POST(request: Request, { params }: Params): Promise<Response> {
-  const auth = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const auth = await requireApiRole(TEACHING_ROLES);
   if ("error" in auth) return auth.error;
 
   const { id: sessionId } = await params;

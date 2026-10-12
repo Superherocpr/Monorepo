@@ -13,6 +13,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { X, Upload } from "lucide-react";
 import type { StaffMember } from "./StaffManagement";
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
 
 interface BioEditPanelProps {
   /** The staff member whose bio is being edited. Null means the panel is closed. */
@@ -396,9 +397,10 @@ const BioEditPanel: React.FC<BioEditPanelProps> = ({
             </label>
           </div>
 
-          {/* About page sections: only instructors and super admins appear on
-              the public /about page, so these are hidden for managers/inspectors. */}
-          {(member.role === "instructor" || member.role === "super_admin") && (
+          {/* About page sections: every teaching role (instructor, manager, super
+              admin) can appear on the public /about page, so these are hidden only
+              for inspectors. Matches InstructorTeamSection's role filter. */}
+          {isTeachingRole(member.role) && (
             <>
           {/* Photo section */}
           <div>

@@ -42,11 +42,14 @@ import { OverviewCard } from "./OverviewCard";
 import { ChartTooltip } from "./ChartTooltip";
 
 // ── Colour palette ────────────────────────────────────────────────────────────
-const RED = "#dc2626";
-const GRAY = "#6b7280";
-const AMBER = "#d97706";
-const GREEN = "#16a34a";
-const BLUE = "#2563eb";
+// Chart colors are CSS variables (defined in app/(admin)/admin-theme.css) so the
+// SVG strokes and fills follow the admin theme. Light values match the old hex.
+const RED = "var(--admin-chart-red)";
+const GRAY = "var(--admin-chart-axis)";
+const AMBER = "var(--admin-chart-amber)";
+const GREEN = "var(--admin-chart-green)";
+const BLUE = "var(--admin-chart-blue)";
+const GRID = "var(--admin-chart-grid)";
 const PIE_COLORS = [RED, GREEN, GRAY];
 
 // ── Preset ranges ─────────────────────────────────────────────────────────────
@@ -467,7 +470,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
           ) : (
             <ResponsiveContainer width="100%" height={280} aria-label="Revenue over time line chart">
               <LineChart data={data.revenueOverTime}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
                 <XAxis dataKey="period" tick={{ fontSize: 11, fill: GRAY }} />
                 <YAxis
                   tick={{ fontSize: 11, fill: GRAY }}
@@ -493,7 +496,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             ) : (
               <ResponsiveContainer width="100%" height={280} aria-label="Revenue by class type bar chart">
                 <BarChart data={data.revenueByClassType} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 11, fill: GRAY }} tickFormatter={(v: number) => `$${v.toLocaleString()}`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: GRAY }} width={100} />
                   <Tooltip content={<ChartTooltip currency />} />
@@ -512,7 +515,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             ) : (
               <ResponsiveContainer width="100%" height={280} aria-label="Invoice revenue by instructor bar chart">
                 <BarChart data={data.revenueByInstructor} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 11, fill: GRAY }} tickFormatter={(v: number) => `$${v.toLocaleString()}`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: GRAY }} width={120} />
                   <Tooltip content={<ChartTooltip currency />} />
@@ -545,7 +548,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
           ) : (
             <ResponsiveContainer width="100%" height={280} aria-label="Completed sessions per month bar chart">
               <BarChart data={data.sessionsPerMonth}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: GRAY }} />
                 <YAxis tick={{ fontSize: 11, fill: GRAY }} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip />} />
@@ -566,7 +569,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             ) : (
               <ResponsiveContainer width="100%" height={280} aria-label="Average capacity utilisation by class type">
                 <BarChart data={data.capacityUtilisation} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
                   <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: GRAY }} tickFormatter={(v: number) => `${v}%`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: GRAY }} width={100} />
                   <Tooltip content={<ChartTooltip />} />
@@ -786,7 +789,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             ) : (
               <ResponsiveContainer width="100%" height={280} aria-label="Invoices sent per instructor bar chart">
                 <BarChart data={data.instructorInvoiceCounts} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 11, fill: GRAY }} allowDecimals={false} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: GRAY }} width={120} />
                   <Tooltip content={<ChartTooltip />} />
@@ -850,7 +853,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
           ) : (
             <ResponsiveContainer width="100%" height={280} aria-label="Merch revenue over time line chart">
               <LineChart data={data.merchRevenueOverTime}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
                 <XAxis dataKey="period" tick={{ fontSize: 11, fill: GRAY }} />
                 <YAxis tick={{ fontSize: 11, fill: GRAY }} tickFormatter={(v: number) => `$${v.toLocaleString()}`} />
                 <Tooltip content={<ChartTooltip currency />} />
@@ -874,7 +877,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
                   data={[...data.merchProducts].sort((a, b) => b.unitsSold - a.unitsSold)}
                   layout="vertical"
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 11, fill: GRAY }} allowDecimals={false} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: GRAY }} width={120} />
                   <Tooltip content={<ChartTooltip />} />
@@ -893,7 +896,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
             ) : (
               <ResponsiveContainer width="100%" height={280} aria-label="Revenue per product bar chart">
                 <BarChart data={data.merchProducts} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 11, fill: GRAY }} tickFormatter={(v: number) => `$${v.toLocaleString()}`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: GRAY }} width={120} />
                   <Tooltip content={<ChartTooltip currency />} />
@@ -1005,7 +1008,7 @@ export function AnalyticsClient({ initialData, initialStart, initialEnd }: Props
           ) : (
             <ResponsiveContainer width="100%" height={280} aria-label="Payout flow over time line chart">
               <LineChart data={data.payoutsOverTime}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
                 <XAxis dataKey="period" tick={{ fontSize: 11, fill: GRAY }} />
                 <YAxis
                   tick={{ fontSize: 11, fill: GRAY }}

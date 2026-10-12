@@ -38,6 +38,7 @@ import {
   type TeamInvoiceAlertBooking,
 } from "@/lib/emails";
 import { floatingNow } from "@/lib/business-time";
+import { applyDiscountPercent, normalizeDiscountPercent } from "@/lib/session-pricing";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabaseClient = SupabaseClient<any, "public", any>;
@@ -1305,8 +1306,20 @@ export interface TeamBookingPublicView {
   teamBookingId: string;
   companyName: string;
   paymentMode: TeamPaymentMode;
-  /** What an employee pays. 0 in company mode — the company already covers it. */
+  /**
+   * The negotiated per-seat rate BEFORE the class's discount, exactly as stored.
+   * This is the value getSessionPricing() takes as `teamPricePerSeat`, so it
+   * must stay undiscounted or the discount would be applied twice. 0 in both
+   * company modes, where the employee pays nothing.
+   */
   pricePerSeat: number;
+  /** The class's percentage discount (0 when none), taken off pricePerSeat. */
+  discountPercent: number;
+  /**
+   * What an employee actually pays before any promo code: pricePerSeat less the
+   * class discount, computed with the same formula checkout uses. Show this.
+   */
+  discountedPricePerSeat: number;
   sessionId: string;
   className: string;
   startsAt: string;
@@ -1354,6 +1367,7 @@ export async function getTeamBookingByShareToken(
       `id, company_name, payment_mode, price_per_seat, session_id, created_by,
        class_sessions (
          id, starts_at, ends_at, max_capacity, status, approval_status, instructor_id,
+         discount_percent,
          class_types ( name ),
          locations ( name, address, city, state, zip )
        )`
@@ -1472,11 +1486,19 @@ export async function getTeamBookingByShareToken(
         : parseFloat(String(rawPerSeat ?? "0"))
       : 0;
 
+  const safePricePerSeat = Number.isFinite(pricePerSeat) ? pricePerSeat : 0;
+  // Only a per-seat booking has an employee price to discount; the company modes
+  // report 0 so the page never advertises a "% off" on a class that is free to them.
+  const discountPercent =
+    team.payment_mode === "per_seat" ? normalizeDiscountPercent(session.discount_percent) : 0;
+
   return {
     teamBookingId: team.id as string,
     companyName: team.company_name as string,
     paymentMode: team.payment_mode as TeamPaymentMode,
-    pricePerSeat: Number.isFinite(pricePerSeat) ? pricePerSeat : 0,
+    pricePerSeat: safePricePerSeat,
+    discountPercent,
+    discountedPricePerSeat: applyDiscountPercent(safePricePerSeat, discountPercent),
     sessionId: session.id as string,
     className: classType?.name ?? "CPR Class",
     startsAt: session.starts_at as string,

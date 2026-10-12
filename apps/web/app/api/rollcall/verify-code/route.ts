@@ -12,6 +12,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { businessDate, isSameBusinessDay, classDate, floatingNow } from "@/lib/business-time";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 interface SessionRow {
   id: string;
@@ -91,8 +92,8 @@ export async function POST(request: Request) {
     .from("profiles")
     .select("id, first_name, last_name, access_code_generated_at")
     .eq("daily_access_code", code)
-    // super_admins are also instructors and may teach classes
-    .in("role", ["instructor", "super_admin"])
+    // managers and super admins teach too, so their codes must verify
+    .in("role", TEACHING_ROLES)
     // Deactivated instructors should not be findable
     .eq("deactivated", false)
     .maybeSingle();

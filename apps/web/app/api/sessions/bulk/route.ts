@@ -15,9 +15,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { NextResponse } from "next/server";
-
-/** Staff roles permitted to create sessions. */
-const ALLOWED_ROLES = ["instructor", "manager", "super_admin"] as const;
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Shape of each individual session entry in the request body. */
 interface SessionEntry {
@@ -36,7 +34,7 @@ interface SessionEntry {
  */
 export async function POST(request: Request): Promise<Response> {
   // ── Auth (honors view-as: a downgraded super admin creates as instructor) ──
-  const authResult = await requireApiRole([...ALLOWED_ROLES]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 
@@ -154,7 +152,7 @@ export async function POST(request: Request): Promise<Response> {
       .from("profiles")
       .select("id")
       .eq("id", resolvedInstructorId)
-      .in("role", ["instructor", "manager", "super_admin"])
+      .in("role", TEACHING_ROLES)
       .eq("deactivated", false)
       .single();
 

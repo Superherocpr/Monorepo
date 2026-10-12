@@ -71,7 +71,7 @@ clone — so this file is the one that travels with the repo.
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
 | Merch & orders | ✅ | ○ cart UI | — | ✅ | — | — | No order ever completes in a test |
 | **Team bookings** (0055, 0067, 0068) | ✅✅ | — | ✅ | ✅ | ✅ | — | ✅ Closed 2026-09-05 — surfaced on the session and invoices pages, retry cron + email alert, root-cause PayPal bug fixed. 2026-09-06: third payment mode (bill the company per signup), the signup link auto-emails the contact, and the class can be edited (date/time/location/certification) at any time with attendees notified instead of a re-approval gate — see below |
-| **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout |
+| **Instructor charge-and-book** (0061) | ✅ | — | — | ✅ | ✅ | — | Shipped 2026-08-22. 35 unit tests (20 real-capture + 5 staging mock-mode, plus 10 for lib/mock-payments.ts's three-condition guard) on `/api/sessions/[id]/charge-and-book`, each asserting what did NOT happen on a failure (no booking on decline, refund when `book_spot` rejects). Backed by the `instructor_booking_missing_payment` invariant — see below. No e2e: same blank `NEXT_PUBLIC_PAYPAL_CLIENT_ID` blocker as the public checkout | 2026-10-07: managers can now use this same route from the modal ("Charge and add to class", their default; "Charge only" keeps the old independent capture). The route's existing manager tests cover it; invariant #13 still watches instructor-created bookings only, since a manager's free Add is legitimately unpaid
 
 ### Staging mock payments — a narrower fix for a bigger discovery
 
@@ -166,6 +166,7 @@ idle feature.
 |---|---|
 | `tests/unit/lib/paypal-invoice-create.test.ts` | 7 tests pinning the PayPal contract: asserts the `Prefer` header is sent, and that **both** response shapes still yield an id, so a merchant account that ignores the header cannot resurrect this |
 | `tests/unit/lib/team-bookings.test.ts` (+6) | `ensureTeamInvoice()` short-circuits — an already-linked booking, a per-seat booking, and a booking with no total must never reach PayPal |
+| `tests/unit/lib/session-pricing.test.ts` + `team-bookings.test.ts` (2026-10-06) | Per-seat team price: the class discount is taken off the negotiated rate, and the public link's displayed price comes from the same `applyDiscountPercent()` that checkout charges. Found because two live per-seat bookings had a class discount that neither the link nor checkout honoured, so employees saw and paid the undiscounted rate. Company-paid modes deliberately ignore the discount. **Gap:** no e2e driving link price against the PayPal order amount |
 | Cron `retry-team-booking-invoices` (0067) | Daily 13:00 UTC. Retries every breaching booking, so the common case self-heals. **⚠️ Written and applied but NOT YET SCHEDULED in either environment** — see below |
 | Email alert | Fires **immediately** at booking time on failure, and daily from the sweep for anything still outstanding. This is the part that was missing |
 | Admin surfaces | The signup link and company details now sit on the class's own page (`/admin/sessions/[id]`), with a Copy button and, for company bookings, a Raise invoice action. `/admin/invoices` lists any uninvoiced company bookings above the table with the same retry, and tags raised team invoices so they are distinguishable from ordinary group ones |
@@ -373,7 +374,7 @@ bookings.
 | Enrollware integration | ✅✅ | ○ smoke | — | ✅ | — | ✅ | Import auto-click + cert-issued-on + price-vs-UpdatePanel guard + auto-submit on Mark-as-submitted, all 2026-08-24; unit coverage for all four |
 | **Student documents / photos** | — | — | ✅ | ✅ | — | — | Bookmarklet injects merged PDFs into Enrollware via AjaxUpload1; cron purges DB rows at 30 days; S3 lifecycle rule handles file expiry |
 | Certifications | ✅ | ○ smoke | ✅ | ✅ | ✅ | — | Cron sends reminders; issuance untested |
-| Grading / CCF | — | — | — | ✅ | — | — | No test of any kind |
+| Grading / CCF | ✅ | — | — | ✅ | — | — | 2026-10-06: grade route has unit tests for the ownership rule (own class allowed, other's class 403 with no write); CCF route and grade values untested |
 
 ### Class finder walkthrough (added 2026-09-08)
 
@@ -714,6 +715,72 @@ notice. The stamp now happens only after a confirmed send.
 | File uploads / S3 | — | — | — | ~ | — | ✅ | Weekly bucket-size check only. Turbopack breaks all S3 routes — a known live footgun |
 | **Instructor walkthroughs (How-To Guides tab)** | ✅✅ | — | — | ✅ | — | — | Three tours shipped (create-session, team-booking, add-student); TourButton logic unit-tested; no outcome e2e yet, see note below |
 | **Staff Directory** | ✅✅✅✅✅✅✅✅✅✅✅✅✅ | — | — | ✅ | — | — | Added 2026-09-22 (migrations 0070/0071, staging only). Read-only internal contact page: classes-taught list, plus a per-person email override for hiding a real address; see note below |
+| **Admin dark theme** | ✅✅✅ | ● leak guard | — | ✅ | — | — | Added 2026-10-10. Opt-in, admin-only. Source-scan unit tests fail if a dark class reaches `<html>`/`<body>`, if the root layout regains a theme script, if a CSS rule escapes the `.admin-theme` wrapper, or if a colored text class has no dark rule. The e2e leak guard asserts customer pages render light with every storage key set and with OS dark on. See note below |
+| **Manager / instructor parity** | ✅✅ | — | — | ✅ | — | — | Added 2026-10-06. Managers get every instructor capability. A source scan fails the suite if any role gate admits instructors but not managers; route tests drive grading and rollcall code verification as a manager. No outcome e2e: there is still no staff-role Playwright fixture. See note below |
+
+### Admin dark theme (added 2026-10-10)
+
+Dark mode used to be one global switch: a script in the root layout put a `dark`
+class on `<html>`, so a staff member turning it on also darkened the public site on
+that device, including the customer `/rollcall` page (dark canvas, light-designed
+content). It is now confined to the `.admin-theme` wrapper that
+`app/(admin)/layout.tsx` renders, driven by `app/(admin)/admin-theme.css`, which
+re-declares Tailwind's palette variables inside that wrapper. The preference key is
+`admin-theme` (`light` | `dark` | `system`), deliberately not the old `theme` key, so
+nobody is switched on by a stale value.
+
+**Signal:** the failure mode is silent leakage onto customer pages, so the guards
+target that. `tests/unit/lib/admin-theme-css.test.ts` is a static scan (no dark
+classes on the document, no theme script in the root layout, the theme attribute is
+only set by `AdminThemeScope`, every CSS rule is wrapper-scoped, the light island
+restores every overridden variable, every `text-<hue>-500..900` class in the admin
+has a dark rule). `tests/e2e/admin-theme.spec.ts` is the outcome check: it plants the
+old and new storage keys and asserts `/`, `/rollcall`, `/find-a-class` and `/signin`
+still compute a white body, no theme wrapper, `color-scheme: normal`, also with the
+OS set to dark. `tests/unit/lib/admin-theme.test.ts` executes the inline
+flash-prevention script against the parse/resolve helpers.
+
+**Gap:** nothing asserts how the admin looks in dark. Contrast and layout were checked
+by eye on a preview page, not per real admin page, and there is no staff-role
+Playwright session to automate it. Parts that stay light on purpose: the check-in
+projector screen, the cert card previews, and the PayPal card fields.
+
+### Manager / instructor parity (added 2026-10-06)
+
+Managers teach classes, so they must have everything an instructor has plus
+their own manager permissions. Before this change every instructor feature was
+gated on a hand-written `["instructor", "super_admin"]` list, and managers were
+silently left out of each one: grading, CCF, student verification, customer
+info, additional hours, session invoices, Payout Settings, the payout banner,
+the Rollcall sidebar link, and the instructor dashboard and settings tabs. Worst
+of all, `POST /api/rollcall/verify-code` filtered out manager codes, so students
+in a manager-taught class were told their code was wrong. Payouts themselves
+were never role-filtered: production's manager already had earnings accruing.
+
+Instructor gates now use `TEACHING_ROLES` / `isTeachingRole()` /
+`canUseInstructorToolsOn()` from `lib/auth/view-as-constants.ts`. Instructor-only
+tools that managers never had (grading, CCF, invoices...) are scoped to the
+manager's **own** classes, exactly like an instructor; only super admins act on
+anyone's class.
+
+| Signal | What it does |
+|---|---|
+| `tests/unit/lib/role-groups.test.ts` | Scans `app/`, `lib/`, `components/` and fails on any line naming `"instructor"` and `"super_admin"` without `"manager"`, or any role list admitting instructors but not managers. Run against the pre-change code it flags all 19 original gaps. Plus the ownership matrix for `canUseInstructorToolsOn` |
+| `tests/unit/api/manager-teaching-parity.test.ts` | Drives `PATCH /api/sessions/[id]/grade` as a manager (own class: grade written; other's class: 403, nothing written) and `POST /api/rollcall/verify-code` with a manager's code (accepted) |
+
+**Not covered:** the nightly `regenerate_instructor_access_codes()` DB function
+(migration 0006) still rotates only instructor and super admin codes. It is
+redundant for function, since the dashboard and check-in page regenerate a stale
+code on read and verify-code rejects any code not generated today, so it was
+left alone rather than adding a migration that would collide with the unapplied
+0074 on PayrollFeature. Widen it in the next migration that touches that function.
+
+**Sidebar grouping (2026-10-10).** Section headers used to hang off one item each
+(Blog carried "Engagement", Analytics carried "Management"), so managers, who cannot
+see those items, lost the headers and saw Contact, Directory and Settings listed under
+"Financial". Headers are now derived per role in `lib/admin-nav.ts`, and
+`tests/unit/lib/admin-nav.test.ts` pins the exact menu for every role plus the
+hidden-first-item case that caused the bug.
 
 ### Staff self-service account (added 2026-08-28)
 

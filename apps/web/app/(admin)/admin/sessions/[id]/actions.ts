@@ -19,6 +19,7 @@ import { sendContactLinksForApprovedSessions, notifyTeamClassUpdated } from "@/l
 import type { UserRole } from "@/types/users";
 import { floatingNow } from "@/lib/business-time";
 import { getS3BucketName, getS3Region } from "@/lib/s3";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /**
  * Auth guard for these server actions. Server actions are network-invocable
@@ -29,7 +30,7 @@ import { getS3BucketName, getS3Region } from "@/lib/s3";
  * @returns The actor on success, or an error string matching the actions' return contract.
  */
 async function requireActionRole(
-  allowed: UserRole[]
+  allowed: readonly UserRole[]
 ): Promise<{ actor: AdminActor } | { error: string }> {
   const actor = await getAdminActor();
   if (!actor) return { error: "You must be signed in." };
@@ -181,7 +182,7 @@ export async function updateSession(
   fields: SessionEditFields,
   wasApproved: boolean
 ): Promise<string | null> {
-  const auth = await requireActionRole(["instructor", "manager", "super_admin"]);
+  const auth = await requireActionRole(TEACHING_ROLES);
   if ("error" in auth) return auth.error;
   const { actor } = auth;
 
@@ -293,7 +294,7 @@ export async function setSessionAssistant(
     return "An assistant may be a platform instructor or a name, not both.";
   }
 
-  const auth = await requireActionRole(["instructor", "manager", "super_admin"]);
+  const auth = await requireActionRole(TEACHING_ROLES);
   if ("error" in auth) return auth.error;
   const { actor } = auth;
 
@@ -563,7 +564,7 @@ export async function setSessionAddons(
   sessionId: string,
   addonIds: string[]
 ): Promise<string | null> {
-  const auth = await requireActionRole(["instructor", "manager", "super_admin"]);
+  const auth = await requireActionRole(TEACHING_ROLES);
   if ("error" in auth) return auth.error;
   const { actor } = auth;
 
@@ -674,7 +675,7 @@ export async function uploadStudentDocument(
   owner: { type: "booking" | "roster"; id: string },
   file: File
 ): Promise<{ error: string | null; document: StudentDocumentRecord | null }> {
-  const auth = await requireActionRole(["instructor", "manager", "super_admin"]);
+  const auth = await requireActionRole(TEACHING_ROLES);
   if ("error" in auth) return { error: auth.error, document: null };
   const { actor } = auth;
 
@@ -784,7 +785,7 @@ export async function deleteStudentDocument(
   documentId: string,
   sessionId: string
 ): Promise<string | null> {
-  const auth = await requireActionRole(["instructor", "manager", "super_admin"]);
+  const auth = await requireActionRole(TEACHING_ROLES);
   if ("error" in auth) return auth.error;
   const { actor } = auth;
 

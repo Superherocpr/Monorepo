@@ -11,6 +11,7 @@ import { CheckCircle2 } from "lucide-react";
 import sanitizeHtml from "sanitize-html";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getInstructorBio } from "@/lib/bios";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 interface PublicInstructorCard {
   /** Database profile ID used as the React key. */
@@ -106,7 +107,7 @@ export default async function InstructorTeamSection() {
   const { data: instructors, error } = await supabase
     .from("profiles")
     .select("id, first_name, last_name, bio_photo, bio_description, bio_credentials")
-    .in("role", ["instructor", "super_admin", "manager"])
+    .in("role", TEACHING_ROLES)
     .eq("is_lead_instructor", false)
     .eq("deactivated", false)
     .eq("bio_published", true)

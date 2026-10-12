@@ -1,7 +1,7 @@
 /**
  * POST /api/invoices/create
  * Called by: CreateInvoiceClient (Step 3 "Send Invoice" button)
- * Auth: Instructor or Super Admin
+ * Auth: Instructor or manager (own session only), or super admin (any session)
  *
  * Validates the request body, re-verifies spot availability at submit time
  * (prevents race conditions), then delegates PayPal invoice creation, the DB
@@ -17,6 +17,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { createAndSendInvoice } from "@/lib/invoice-actions";
+import { TEACHING_ROLES, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 /** Type guard — ensures a value is a non-null plain object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const authResult = await requireApiRole(["instructor", "super_admin"]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 
@@ -144,7 +145,9 @@ export async function POST(request: Request) {
     );
   }
 
-  if (actor.effectiveRole === "instructor" && sessionData.instructor_id !== actor.user.id) {
+  // Managers invoice like instructors: only their own classes. Only a super
+  // admin may raise an invoice on another instructor's session.
+  if (!canUseInstructorToolsOn(actor.effectiveRole, actor.user.id, sessionData.instructor_id)) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -177,11 +180,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const instructorId =
-    actor.effectiveRole === "instructor" ? actor.user.id : sessionData.instructor_id;
+  const isSuperAdmin = actor.effectiveRole === "super_admin";
+  const instructorId = isSuperAdmin ? sessionData.instructor_id : actor.user.id;
 
   let instructorName: string | null = null;
-  if (actor.effectiveRole === "instructor") {
+  if (!isSuperAdmin) {
     instructorName =
       [actor.profile.first_name, actor.profile.last_name].filter(Boolean).join(" ") || null;
   } else {

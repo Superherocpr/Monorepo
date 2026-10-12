@@ -1,7 +1,7 @@
 /**
  * /admin/profile/payment: Instructor payout settings page.
  * Server component: fetches the logged-in instructor's PayPal payout email.
- * Access: instructor and super_admin only.
+ * Access: any teaching role (instructor, manager, super_admin).
  * Used by: AdminSidebar "Payout Settings" link.
  */
 
@@ -10,24 +10,21 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
 import { getInstructorEarningsData } from "@/lib/payout-dashboard";
 import type { Metadata } from "next";
-import type { UserRole } from "@/types/users";
 import PayoutSettingsClient from "./_components/PayoutSettingsClient";
 import InstructorEarningsPanel from "./_components/InstructorEarningsPanel";
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
 
 export const metadata: Metadata = {
   title: "Payout Settings | SuperHeroCPR Admin",
 };
 
-/** Roles that may access this page. */
-const ALLOWED_ROLES: UserRole[] = ["instructor", "super_admin"];
-
 /**
  * Fetches and renders the payout settings page.
- * Redirects to /admin unless the effective role is instructor or super_admin.
+ * Redirects to /admin unless the effective role is a teaching role.
  */
 export default async function PaymentAccountPage() {
   const actor = await getAdminActor();
-  if (!actor || !ALLOWED_ROLES.includes(actor.effectiveRole)) {
+  if (!actor || !isTeachingRole(actor.effectiveRole)) {
     redirect("/admin");
   }
 

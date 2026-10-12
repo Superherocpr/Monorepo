@@ -9,10 +9,9 @@
 import { redirect } from "next/navigation";
 import { getAdminActor } from "@/lib/auth/effective-role";
 import ReferenceContent from "./_components/ReferenceContent";
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
 
 export const metadata = { title: "Admin Reference" };
-
-const ALLOWED_ROLES = ["instructor", "manager", "super_admin"] as const;
 
 /**
  * Server component entry point for /admin/reference.
@@ -24,7 +23,7 @@ export default async function AdminReferencePage(): Promise<React.ReactElement> 
 
   if (
     !actor ||
-    !(ALLOWED_ROLES as readonly string[]).includes(actor.effectiveRole)
+    !isTeachingRole(actor.effectiveRole)
   ) {
     redirect("/admin");
   }

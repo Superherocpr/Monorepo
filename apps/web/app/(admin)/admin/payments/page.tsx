@@ -15,6 +15,7 @@ import { getAdminActor } from "@/lib/auth/effective-role";
 import PaymentsClient, {
   type PaymentsPageData,
 } from "@/app/(admin)/_components/PaymentsClient";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Allowed payment_type values: used for filtering. */
 const VALID_TYPES = new Set([
@@ -178,10 +179,11 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
     .gte("created_at", startOfMonth);
 
   // ── Instructors list for filter dropdown ───────────────────────────────────
+  // Every teaching role, so payments on a manager's own classes are filterable too.
   const { data: instructors } = await admin
     .from("profiles")
     .select("id, first_name, last_name")
-    .eq("role", "instructor")
+    .in("role", TEACHING_ROLES)
     .eq("deactivated", false)
     .order("last_name", { ascending: true });
 

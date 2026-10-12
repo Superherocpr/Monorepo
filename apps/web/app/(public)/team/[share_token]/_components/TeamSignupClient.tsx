@@ -84,7 +84,7 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
   const [clientTokenError, setClientTokenError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const amountDue = appliedPromo ? appliedPromo.finalPrice : view.pricePerSeat;
+  const amountDue = appliedPromo ? appliedPromo.finalPrice : view.discountedPricePerSeat;
   // Both company modes are free to the employee: in per-signup mode the company
   // is billed later for exactly the signups made here.
   const isCompanyPaid = view.paymentMode === "company" || view.paymentMode === "company_per_signup";
@@ -383,8 +383,18 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
             <dd className="text-gray-900 font-medium">
               {isCompanyPaid ? (
                 <span className="text-green-700">
-                  Nothing — {view.companyName} has paid for this class
+                  Nothing to pay. {view.companyName} is covering this class.
                 </span>
+              ) : view.discountPercent > 0 ? (
+                <>
+                  <span className="line-through text-gray-400 font-normal mr-1.5">
+                    ${view.pricePerSeat.toFixed(2)}
+                  </span>
+                  ${view.discountedPricePerSeat.toFixed(2)}
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                    {parseFloat(view.discountPercent.toFixed(2))}% OFF
+                  </span>
+                </>
               ) : (
                 `$${view.pricePerSeat.toFixed(2)}`
               )}
@@ -497,7 +507,7 @@ export default function TeamSignupClient({ shareToken, initialView }: Props): Re
             <h2 className="text-base font-semibold text-gray-900">Reserve your spot</h2>
             <p className="mt-1 text-sm text-gray-600">
               {isCompanyPaid
-                ? "Your employer has already paid. We just need your details so your certification card is issued correctly."
+                ? `${view.companyName} is covering the cost of this class, so you won't pay anything here. We just need your details so your certification card is issued correctly.`
                 : "Sign up with your own details so your certification card is issued correctly."}
             </p>
             <button

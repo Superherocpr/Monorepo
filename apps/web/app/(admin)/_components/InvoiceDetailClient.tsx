@@ -17,6 +17,7 @@ import {
   PLATFORM_LABELS,
 } from "@/lib/invoice-utils";
 import { formatClassDateTimeLong } from "@/lib/business-time";
+import { canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -118,10 +119,9 @@ export default function InvoiceDetailClient({
   userId,
 }: InvoiceDetailClientProps) {
   const isManager = userRole === "manager";
-  const isSuperAdmin = userRole === "super_admin";
-  const isOwner = invoice.profiles?.id === userId;
-  // Instructors can act on their own; super admins can act on all; managers view only
-  const canAct = isSuperAdmin || (userRole === "instructor" && isOwner);
+  // Instructors and managers act on their own invoices; super admins act on all.
+  // A manager viewing another instructor's invoice is read-only.
+  const canAct = canUseInstructorToolsOn(userRole, userId, invoice.profiles?.id);
 
   const [actionMode, setActionMode] = useState<ActionMode>("idle");
   const [resendEmail, setResendEmail] = useState(invoice.recipient_email);
@@ -556,7 +556,7 @@ export default function InvoiceDetailClient({
             {currentStatus === "cancelled" && (
               <div className="space-y-3">
                 <p className="text-sm text-gray-500">This invoice has been cancelled.</p>
-                {(isSuperAdmin || (userRole === "instructor" && isOwner)) && session && (
+                {canAct && session && (
                   <Link
                     href={`/admin/invoices/new?session=${session.id}`}
                     className="block w-full text-center px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
@@ -567,10 +567,10 @@ export default function InvoiceDetailClient({
               </div>
             )}
 
-            {/* Managers: view only notice */}
-            {isManager && currentStatus === "sent" && (
+            {/* Managers on someone else's invoice: view only notice */}
+            {isManager && !canAct && currentStatus === "sent" && (
               <p className="text-xs text-gray-400">
-                Managers can view invoices but cannot take actions. Contact the instructor or super admin.
+                Managers can view other instructors&apos; invoices but cannot take actions on them. Contact the instructor or super admin.
               </p>
             )}
           </div>

@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     }
     if (team.paymentMode !== "per_seat") {
       return NextResponse.json(
-        { error: "This class is paid for by the company — no payment is needed." },
+        { error: "Your company is covering this class, so no payment is needed here." },
         { status: 409 }
       );
     }

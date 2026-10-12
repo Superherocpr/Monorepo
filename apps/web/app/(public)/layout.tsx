@@ -58,7 +58,7 @@ export default async function PublicLayout({
   });
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-950">
+    <div className="flex flex-col min-h-screen bg-white">
       <PublicHeader isAuthenticated={!!user} legacyMode={legacyMode} enabledPages={enabledPages} />
       <main className="flex-1">{children}</main>
       <PublicFooter />

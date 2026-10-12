@@ -1,7 +1,7 @@
 /**
  * POST /api/invoices/mark-paid
  * Called by: InvoiceDetailClient (Mark as Paid confirmation)
- * Auth: Instructor (own invoice only) or super admin
+ * Auth: Instructor or manager (own invoice only), or super admin (any)
  *
  * Validates the caller and ownership, then delegates the actual mark-paid
  * work — the mark_invoice_paid() RPC call, instructor earnings recording,
@@ -14,6 +14,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { markInvoicePaidAndNotify } from "@/lib/invoice-actions";
+import { TEACHING_ROLES, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
   const { invoiceId } = body;
 
   // Auth check
-  const authResult = await requireApiRole(["instructor", "super_admin"]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Invoice not found" }, { status: 404 });
   }
 
-  if (actor.effectiveRole === "instructor" && invoiceOwnership.instructor_id !== actor.user.id) {
+  if (!canUseInstructorToolsOn(actor.effectiveRole, actor.user.id, invoiceOwnership.instructor_id)) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 

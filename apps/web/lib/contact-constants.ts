@@ -11,17 +11,31 @@
  * Note: a DB migration may be needed to backfill any renamed values in existing rows.
  */
 export const CONTACT_INQUIRY_TYPES = [
+  "Instructor",
   "General Question",
   "Group Booking (5+ people)",
   "Corporate / Workplace Training",
   "Certification Renewal",
   "Booking Inquiry",
-  "Hiring",
   "Other",
 ] as const;
 
 /** TypeScript union of all valid inquiry type strings. */
 export type ContactInquiryType = (typeof CONTACT_INQUIRY_TYPES)[number];
+
+/**
+ * Resolves the `?inquiry=` query param on /contact to a canonical inquiry type,
+ * so a link (e.g. the home page "Become an Instructor" button) can preselect it.
+ * Case-insensitive; returns null for a missing or unrecognized value.
+ * @param param - raw value of the `inquiry` query param.
+ */
+export function inquiryTypeFromParam(
+  param: string | null | undefined
+): ContactInquiryType | null {
+  const wanted = param?.trim().toLowerCase();
+  if (!wanted) return null;
+  return CONTACT_INQUIRY_TYPES.find((t) => t.toLowerCase() === wanted) ?? null;
+}
 
 /**
  * The business inbox that customer-originated notifications are delivered to —

@@ -15,6 +15,7 @@ import { useSearchParams } from "next/navigation";
 import { driver, type DriveStep } from "driver.js";
 import "driver.js/dist/driver.css";
 import { CircleHelp } from "lucide-react";
+import { useAdminTheme } from "@/lib/admin-theme-store";
 import { BASE_TOUR_CONFIG } from "./tourConfig";
 
 interface TourButtonProps {
@@ -49,6 +50,7 @@ export default function TourButton({
 }: TourButtonProps) {
   const driverRef = useRef<ReturnType<typeof driver> | null>(null);
   const searchParams = useSearchParams();
+  const { resolved: theme } = useAdminTheme();
 
   // Tear down an in-progress tour if the page unmounts (e.g. instructor
   // navigates away mid-walkthrough) so the overlay never gets orphaned.
@@ -60,9 +62,15 @@ export default function TourButton({
 
   const startTour = useCallback((): void => {
     driverRef.current?.destroy();
-    driverRef.current = driver({ ...BASE_TOUR_CONFIG, steps });
+    // Driver.js renders its popover into <body>, outside the themed admin wrapper,
+    // so the theme is passed as a class on the popover itself (see admin-theme.css).
+    driverRef.current = driver({
+      ...BASE_TOUR_CONFIG,
+      popoverClass: theme === "dark" ? "admin-tour-dark" : undefined,
+      steps,
+    });
     driverRef.current.drive();
-  }, [steps]);
+  }, [steps, theme]);
 
   // Auto-launch when arriving via a How-To Guides "Start" link (?tour=<id>),
   // then strip the param so a refresh doesn't relaunch it. No "already ran"
@@ -88,7 +96,7 @@ export default function TourButton({
       type="button"
       onClick={startTour}
       className={[
-        "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950 transition-colors",
+        "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors",
         className,
       ]
         .filter(Boolean)

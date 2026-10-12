@@ -12,12 +12,9 @@ import sharp from "sharp";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getS3BucketName, getS3Region } from "@/lib/s3";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import type { UserRole } from "@/types/users";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 export const runtime = "nodejs";
-
-/** Roles permitted to upload their own profile photo. */
-const ALLOWED_ROLES: UserRole[] = ["instructor", "manager", "super_admin"];
 
 /** Allowed MIME types for profile photos. */
 const ALLOWED_TYPES = [
@@ -70,7 +67,7 @@ async function compressImage(buffer: Buffer): Promise<Buffer> {
  * @param request - Multipart form request containing the image file.
  */
 export async function POST(request: Request): Promise<Response> {
-  const authResult = await requireApiRole(ALLOWED_ROLES);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
 
   let formData: FormData;

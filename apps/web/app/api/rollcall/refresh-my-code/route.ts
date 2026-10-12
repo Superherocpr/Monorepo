@@ -10,6 +10,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { assignFreshAccessCode } from "@/lib/access-code";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /**
  * Regenerates the calling instructor's daily_access_code and returns the new value.
@@ -21,7 +22,7 @@ export async function POST(_request: Request) {
   // ── Verify the caller is an authenticated instructor, manager, or super_admin ────────
   // managers and super_admins are also instructors and may need to refresh their code.
   // Honors view-as (deactivated check happens inside requireApiRole).
-  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const user = authResult.actor.user;
 

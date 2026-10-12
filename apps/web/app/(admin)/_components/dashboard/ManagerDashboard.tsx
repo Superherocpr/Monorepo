@@ -1,14 +1,15 @@
 /**
  * ManagerDashboard: dashboard view for the manager role.
  * Shows: pending approvals, today's all-instructor classes, recent bookings,
- * unanswered contact submissions, low stock alerts, and the rollcall code
- * (managers may also teach classes).
+ * unanswered contact submissions, low stock alerts, and (managers teach too)
+ * a "My Teaching" section with the full instructor widget set.
  * Used by: app/(admin)/page.tsx and SuperAdminDashboard.tsx
  */
 
 import Link from "next/link";
 import { formatClassTimeRange } from "@/lib/business-time";
-import RollcallCodeWidget from "./RollcallCodeWidget";
+import { InstructorTeachingWidgets } from "./InstructorDashboard";
+import type { InstructorTeachingData } from "./InstructorDashboard";
 
 /** A class session happening today (all instructors). */
 export interface ManagerTodaySession {
@@ -51,10 +52,13 @@ export interface ManagerDashboardProps {
   recentBookings: RecentBooking[];
   unansweredContactCount: number;
   lowStockVariants: LowStockVariant[];
-  /** Manager's own rollcall code. Omit to hide the widget (SuperAdminDashboard renders its own). */
-  dailyAccessCode?: string | null;
-  /** ISO timestamp the rollcall code was generated. Only used with dailyAccessCode. */
-  dailyAccessCodeGeneratedAt?: string | null;
+  /**
+   * The manager's own teaching data. Managers teach too, so they get the full
+   * instructor widget set (rollcall code, own classes, grades, invoices) as a
+   * "My Teaching" section. Omitted when embedded in SuperAdminDashboard, which
+   * renders its own rollcall and oversight widgets.
+   */
+  teaching?: InstructorTeachingData;
   /** When true, suppresses the greeting h1: used when ManagerDashboard is embedded in SuperAdminDashboard. */
   hideGreeting?: boolean;
 }
@@ -89,8 +93,7 @@ export default function ManagerDashboard({
   recentBookings,
   unansweredContactCount,
   lowStockVariants,
-  dailyAccessCode,
-  dailyAccessCodeGeneratedAt,
+  teaching,
   hideGreeting = false,
 }: ManagerDashboardProps) {
   return (
@@ -101,12 +104,20 @@ export default function ManagerDashboard({
         </h1>
       )}
 
-      {/* Rollcall code: managers who teach need it too. Hidden when not passed. */}
-      {dailyAccessCode !== undefined && (
-        <RollcallCodeWidget
-          initialCode={dailyAccessCode}
-          initialGeneratedAt={dailyAccessCodeGeneratedAt ?? null}
-        />
+      {/* ── My Teaching: the same widgets an instructor's dashboard shows ── */}
+      {teaching && (
+        <>
+          <section aria-labelledby="my-teaching-heading" className="space-y-4">
+            <h2
+              id="my-teaching-heading"
+              className="text-lg font-semibold text-gray-900"
+            >
+              My Teaching
+            </h2>
+            <InstructorTeachingWidgets {...teaching} />
+          </section>
+          <h2 className="pt-2 text-lg font-semibold text-gray-900">Operations</h2>
+        </>
       )}
 
       {/* ── Alert row: Pending Approvals + Contact ── */}

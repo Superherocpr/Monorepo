@@ -81,10 +81,10 @@ export default function PayoutsClient({ upcoming, history }: PayoutsClientProps)
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-gray-900">
             Instructor Payouts
           </h1>
-          <p className="mt-1 max-w-2xl text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-1 max-w-2xl text-sm text-gray-600">
             Review what instructors are owed, send payouts through PayPal, and track what
             PayPal actually did with each batch.
           </p>
@@ -105,8 +105,8 @@ export default function PayoutsClient({ upcoming, history }: PayoutsClientProps)
           role="status"
           className={`mb-6 flex items-start gap-2 rounded-md border px-4 py-3 text-sm ${
             message.type === "success"
-              ? "border-green-200 bg-green-50 text-green-800 dark:border-green-900/50 dark:bg-green-950/30 dark:text-green-300"
-              : "border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : "border-red-200 bg-red-50 text-red-800"
           }`}
         >
           {message.type === "success" ? (

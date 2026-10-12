@@ -5,7 +5,10 @@
  * contains the values that the contact form, admin filter, and API route all rely on.
  */
 import { describe, test, expect } from "vitest";
-import { CONTACT_INQUIRY_TYPES } from "@/lib/contact-constants";
+import {
+  CONTACT_INQUIRY_TYPES,
+  inquiryTypeFromParam,
+} from "@/lib/contact-constants";
 
 describe("CONTACT_INQUIRY_TYPES", () => {
   test("is a non-empty array", () => {
@@ -22,6 +25,11 @@ describe("CONTACT_INQUIRY_TYPES", () => {
     expect(CONTACT_INQUIRY_TYPES).toContain("Other");
   });
 
+  test("lists Instructor first and no longer includes the retired Hiring type", () => {
+    expect(CONTACT_INQUIRY_TYPES[0]).toBe("Instructor");
+    expect(CONTACT_INQUIRY_TYPES).not.toContain("Hiring");
+  });
+
   test("all entries are non-empty strings", () => {
     for (const type of CONTACT_INQUIRY_TYPES) {
       expect(typeof type).toBe("string");
@@ -32,5 +40,19 @@ describe("CONTACT_INQUIRY_TYPES", () => {
   test("has no duplicate values", () => {
     const unique = new Set(CONTACT_INQUIRY_TYPES);
     expect(unique.size).toBe(CONTACT_INQUIRY_TYPES.length);
+  });
+});
+
+describe("inquiryTypeFromParam", () => {
+  test("resolves a known type case-insensitively", () => {
+    expect(inquiryTypeFromParam("instructor")).toBe("Instructor");
+    expect(inquiryTypeFromParam(" INSTRUCTOR ")).toBe("Instructor");
+  });
+
+  test("returns null for missing or unrecognized values", () => {
+    expect(inquiryTypeFromParam(null)).toBeNull();
+    expect(inquiryTypeFromParam(undefined)).toBeNull();
+    expect(inquiryTypeFromParam("")).toBeNull();
+    expect(inquiryTypeFromParam("banana")).toBeNull();
   });
 });

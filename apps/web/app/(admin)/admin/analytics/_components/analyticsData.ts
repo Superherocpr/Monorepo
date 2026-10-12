@@ -10,6 +10,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
@@ -319,7 +320,7 @@ export async function fetchAnalyticsData(
     supabase
       .from("profiles")
       .select("id, first_name, last_name, role")
-      .in("role", ["instructor", "manager", "super_admin"]),
+      .in("role", TEACHING_ROLES),
 
     // Instructor earnings created in range: feeds the Payouts analytics section
     supabase

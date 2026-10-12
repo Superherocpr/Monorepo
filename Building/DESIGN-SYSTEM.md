@@ -225,52 +225,58 @@ Inactive: bg-white border border-gray-200 text-gray-600 text-sm px-3 py-1.5 roun
 
 ## 6. Dark Mode
 
-Dark mode is stored in `localStorage` under the key `theme` (`'dark'` | `'light'`).
-It is device-specific. Tailwind's `dark:` variant strategy applies the dark class
-to `document.documentElement`.
+Dark mode is an **opt-in, admin-only** theme for staff. The public site has no dark
+mode and must never gain one by accident: customer pages (rollcall, booking, dashboard)
+are designed light only.
 
-In `tailwind.config.ts`:
-```typescript
-darkMode: 'class',
-```
+The preference is stored in `localStorage` under `admin-theme` (`'light'` | `'dark'` |
+`'system'`, default light). It is device-specific. Helpers live in `lib/admin-theme.ts`
+(pure) and `lib/admin-theme-store.ts` (hook). Staff change it from the sun/moon button in
+the top bar or Settings > General > Appearance.
 
-The admin layout includes a script in `<head>` to prevent flash of unstyled content:
-```html
-<script dangerouslySetInnerHTML={{
-  __html: `
-    (function() {
-      if (localStorage.getItem('theme') === 'dark') {
-        document.documentElement.classList.add('dark');
-      }
-    })();
-  `
-}} />
-```
+### How it is scoped
 
-### Dark Mode — Public Site
+The theme is applied by one element, `.admin-theme[data-admin-theme="dark"]`, rendered by
+`app/(admin)/_components/AdminThemeScope.tsx` inside `app/(admin)/layout.tsx`. It is never
+set on `<html>` or `<body>`, and there are no `dark:` utility classes anywhere. A static
+test (`tests/unit/lib/admin-theme-css.test.ts`) enforces both.
 
-The public site in dark mode stays clean. Backgrounds invert to near-black,
-text inverts to near-white, red and gold remain vibrant.
+`app/(admin)/admin-theme.css` re-declares Tailwind v4's palette variables (the gray ramp
+and the 50-300 tints of each status hue) inside that wrapper, so every existing
+`bg-gray-*`, `text-gray-*`, `border-gray-*` and `bg-green-100`-style class is themed with no
+per-component edits. Attribute-selector rules handle what a variable swap cannot: `bg-white`
+becomes the card surface, `text-<hue>-500..900` becomes one readable tone per hue (those
+shades are also solid button fills, so they are not remapped), and modals get a raised
+surface. Write new admin UI with the same ordinary Tailwind classes; do not add `dark:`.
 
-```
-dark:bg-gray-950     ← page backgrounds
-dark:bg-gray-900     ← card/surface backgrounds
-dark:text-white      ← primary headings
-dark:text-gray-300   ← body text
-dark:border-gray-700 ← borders
-```
-
-### Dark Mode — Admin Panel
-
-The admin sidebar is already dark — dark mode deepens the content area to match.
+### Palette (cool slate)
 
 ```
-dark:bg-gray-900     ← main content area (was gray-50)
-dark:bg-gray-800     ← cards (was white)
-dark:text-white      ← headings
-dark:text-gray-300   ← body/muted text
-dark:border-gray-700 ← borders (was gray-200)
+page            #0f1013    behind cards
+surface (card)  #18191b    bg-white
+raised          #212225    modals, popovers
+field           #131416    inputs, inset wells
+border          #2e3135    border-gray-200  (control border gray-300: #3e4248)
+text            #edeef0 primary (gray-900), #b0b4ba secondary (gray-600), #9a9fa8 muted (gray-500)
+status          tinted fill + light text, e.g. green: #132d21 fill, #3dd68c text
 ```
+
+Depth comes from lighter surfaces and 1px borders, not shadows. Solid brand fills
+(`bg-red-600 text-white`) are unchanged.
+
+### Things that stay light on purpose
+
+Wrap them in `.admin-light-island` (it restores Tailwind's own palette inside): the
+check-in projector screen (QR codes need a light background), the printed cert card
+previews, and the PayPal card fields (third-party iframes).
+
+### Things to remember
+
+- Chart colors are CSS variables (`--admin-chart-*`), not hex, so SVG follows the theme.
+- Driver.js tour popovers render into `<body>`, outside the wrapper; `TourButton` tags
+  them with `.admin-tour-dark`.
+- Flash prevention is an inline script, the first child of the wrapper, that sets the
+  attribute before first paint. Do not move it to `next/script` or an effect.
 
 ---
 

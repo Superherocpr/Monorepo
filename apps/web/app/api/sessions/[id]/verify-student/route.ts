@@ -1,7 +1,7 @@
 /**
  * PATCH /api/sessions/[id]/verify-student
  * Called by: SessionDetailClient — manual verified toggle in the student roster
- * Auth: Instructor (own session only), Super Admin
+ * Auth: Instructor or manager (own session only), Super Admin (any session)
  *
  * Updates the confirmed field on a roster_record.
  * Two modes:
@@ -13,8 +13,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { NextResponse } from "next/server";
-
-const ALLOWED_ROLES = ["instructor", "super_admin"] as const;
+import { TEACHING_ROLES, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 /**
  * Manually sets the confirmed (verified) status on a student's roster_record.
@@ -28,7 +27,7 @@ export async function PATCH(
   const { id: sessionId } = await params;
 
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const authResult = await requireApiRole([...ALLOWED_ROLES]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 
@@ -66,7 +65,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
-  if (actor.effectiveRole === "instructor" && session.instructor_id !== actor.user.id) {
+  if (!canUseInstructorToolsOn(actor.effectiveRole, actor.user.id, session.instructor_id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

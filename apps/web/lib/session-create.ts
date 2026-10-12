@@ -12,6 +12,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabaseClient = SupabaseClient<any, "public", any>;
@@ -120,7 +121,7 @@ export async function createClassSession(
       .from("profiles")
       .select("id, role")
       .eq("id", params.instructorId)
-      .in("role", ["instructor", "manager", "super_admin"])
+      .in("role", TEACHING_ROLES)
       .eq("deactivated", false)
       .single();
 

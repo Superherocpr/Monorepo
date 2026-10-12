@@ -1,11 +1,12 @@
 /**
  * GET /admin/invoices/new
- * Access: Instructor and Super Admin only.
+ * Access: any teaching role. Instructors and managers invoice their own classes;
+ * super admins pick any teaching-role user's classes.
  *
- * Fetches the authenticated instructor's payout setup and their
- * upcoming approved class sessions with spot availability computed.
- * If no payout email exists (instructors only), renders a gate prompt
- * directing them to save one first. Super admins bypass the payout gate.
+ * Fetches the authenticated user's payout setup and their approved class
+ * sessions with spot availability computed. If no payout email exists
+ * (instructors and managers), renders a gate prompt directing them to save one
+ * first. Super admins bypass the payout gate.
  * Accepts a `?session=[id]` query param to pre-select a session.
  */
 
@@ -14,6 +15,7 @@ import { CreditCard } from "lucide-react";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
+import { TEACHING_ROLES, isTeachingRole } from "@/lib/auth/view-as-constants";
 import CreateInvoiceClient, {
   type SessionOption,
   type InstructorOption,
@@ -41,8 +43,8 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
 
   const role = actor.effectiveRole;
 
-  // Only instructors and super admins may create invoices
-  if (role === "inspector" || role === "manager" || role === "customer") {
+  // Every teaching role may create invoices (managers teach too)
+  if (!isTeachingRole(role)) {
     redirect("/admin");
   }
 
@@ -65,7 +67,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
     const { data: allInstructors } = await admin
       .from("profiles")
       .select("id, first_name, last_name")
-      .eq("role", "instructor")
+      .in("role", TEACHING_ROLES)
       .eq("deactivated", false)
       .order("last_name", { ascending: true });
 
@@ -87,8 +89,9 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
 
   let instructorId: string;
 
-  if (role === "instructor") {
-    // Instructors need a payout email before they can create invoices.
+  if (role !== "super_admin") {
+    // Instructors and managers invoice only their own classes, and need a
+    // payout email first.
     if (!profile.paypal_payout_email) {
       return (
         <main className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-8 text-center">
@@ -127,12 +130,12 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
     instructorId = targetSession.instructor_id as string;
   } else {
     // Super admin arrived via ?instructor=[id] from the instructor selection step.
-    // Validate the id against active instructors to prevent a confused wizard state.
+    // Validate the id against active teaching-role users to prevent a confused wizard state.
     const { data: instructorCheck } = await admin
       .from("profiles")
       .select("id")
       .eq("id", preSelectedInstructorId)
-      .eq("role", "instructor")
+      .in("role", TEACHING_ROLES)
       .eq("deactivated", false)
       .single();
 

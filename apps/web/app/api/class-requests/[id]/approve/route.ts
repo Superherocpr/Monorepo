@@ -30,6 +30,7 @@ import {
 } from "@/lib/emails";
 import { PREFERRED_TIME_LABELS } from "@/types/class-requests";
 import type { PreferredTimeOfDay, VenueMode } from "@/types/class-requests";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Route handler params from the dynamic [id] segment. */
 interface Params {
@@ -262,7 +263,7 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
   const { data: instructorProfiles } = await admin
     .from("profiles")
     .select("email")
-    .in("role", ["instructor", "manager", "super_admin"])
+    .in("role", TEACHING_ROLES)
     .eq("deactivated", false);
 
   const instructorEmails = (instructorProfiles ?? [])

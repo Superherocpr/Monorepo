@@ -47,7 +47,7 @@ interface Toast {
 const inputCls =
   "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 " +
   "placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 " +
-  "focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-white";
+  "focus:border-transparent";
 
 /** Radio option card rendered for each trigger mode. */
 interface TriggerOption {
@@ -131,10 +131,10 @@ function MarginReadout({ feePercent }: { feePercent: number }) {
   );
 
   return (
-    <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
-      <p className="text-xs text-gray-500 dark:text-gray-400">
+    <div className="mt-4 border-t border-gray-200 pt-4">
+      <p className="text-xs text-gray-500">
         Instructors receive{" "}
-        <span className="font-semibold text-gray-900 dark:text-white">
+        <span className="font-semibold text-gray-900">
           {instructorShare.toFixed(1)}%
         </span>{" "}
         of each payment. PayPal&rsquo;s fees come out of your share, not theirs:
@@ -142,7 +142,7 @@ function MarginReadout({ feePercent }: { feePercent: number }) {
 
       <div className="mt-3 overflow-x-auto">
         <table className="min-w-full text-xs">
-          <thead className="text-left text-gray-500 dark:text-gray-400">
+          <thead className="text-left text-gray-500">
             <tr>
               <th className="py-1.5 pr-4 font-medium">Class price</th>
               <th className="py-1.5 pr-4 text-right font-medium">Your cut</th>
@@ -151,26 +151,26 @@ function MarginReadout({ feePercent }: { feePercent: number }) {
               <th className="py-1.5 text-right font-medium">You actually keep</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+          <tbody className="divide-y divide-gray-100">
             {examples.map(({ price, margin }) => (
               <tr key={price}>
-                <td className="py-1.5 pr-4 text-gray-700 dark:text-gray-300">
+                <td className="py-1.5 pr-4 text-gray-700">
                   {formatCurrency(price)}
                 </td>
-                <td className="py-1.5 pr-4 text-right text-gray-600 dark:text-gray-400">
+                <td className="py-1.5 pr-4 text-right text-gray-600">
                   {formatCurrency(margin.platformCut)}
                 </td>
-                <td className="py-1.5 pr-4 text-right text-red-700 dark:text-red-400">
+                <td className="py-1.5 pr-4 text-right text-red-700">
                   −{formatCurrency(margin.inboundFee)}
                 </td>
-                <td className="py-1.5 pr-4 text-right text-red-700 dark:text-red-400">
+                <td className="py-1.5 pr-4 text-right text-red-700">
                   −{formatCurrency(margin.outboundFee)}
                 </td>
                 <td
                   className={`py-1.5 text-right font-semibold ${
                     margin.netMargin >= 0
-                      ? "text-green-700 dark:text-green-400"
-                      : "text-red-700 dark:text-red-400"
+                      ? "text-green-700"
+                      : "text-red-700"
                   }`}
                 >
                   {formatCurrency(margin.netMargin)}
@@ -187,7 +187,7 @@ function MarginReadout({ feePercent }: { feePercent: number }) {
       </div>
 
       {losingMoney.length > 0 ? (
-        <p className="mt-3 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+        <p className="mt-3 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
             At {feePercent.toFixed(1)}% you lose money on{" "}
@@ -199,7 +199,7 @@ function MarginReadout({ feePercent }: { feePercent: number }) {
           </span>
         </p>
       ) : (
-        <p className="mt-2 text-[11px] text-gray-400 dark:text-gray-500">
+        <p className="mt-2 text-[11px] text-gray-400">
           Estimated using PayPal&rsquo;s standard US rates (2.9% + $0.30 to collect, 2% capped at
           $1.00 to send). Actual fees are recorded per payment and shown in the tracking panel
           below.
@@ -232,7 +232,7 @@ function BatchingCostNote({ upcoming }: { upcoming: UpcomingPayoutsData }) {
   if (comparison.savings <= 0 || comparison.earningCount === 0) return null;
 
   return (
-    <div className="mt-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+    <div className="mt-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
       <TrendingDown className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <span>
         <strong>Batching is cheaper.</strong> The {comparison.earningCount} payment
@@ -355,19 +355,19 @@ export default function PayoutSettingsPanel({
     <div className="space-y-8">
       {/* ── Platform fee ────────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">
           Platform Fee
         </h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        <p className="text-xs text-gray-500 mb-4">
           The percentage SuperHeroCPR retains from each payment. Instructors receive the
           remainder. This is locked in at the time each earning is recorded; changing
           it here does not retroactively change existing earnings.
         </p>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
+        <div className="bg-white border border-gray-200 rounded-lg p-5">
           <div className="flex items-center gap-3 max-w-xs">
             <label
               htmlFor="platform-fee"
-              className="text-sm font-medium text-gray-700 dark:text-gray-300 shrink-0"
+              className="text-sm font-medium text-gray-700 shrink-0"
             >
               SuperHeroCPR keeps
             </label>
@@ -392,10 +392,10 @@ export default function PayoutSettingsPanel({
 
       {/* ── Payout trigger ──────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">
           When to Pay Instructors
         </h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        <p className="text-xs text-gray-500 mb-4">
           Choose how often pending earnings are sent to instructors via PayPal Payouts.
         </p>
         <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Payout trigger mode">
@@ -410,17 +410,17 @@ export default function PayoutSettingsPanel({
                 onClick={() => setTrigger(opt.value)}
                 className={`text-left rounded-lg border p-4 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                   selected
-                    ? "border-red-500 bg-red-50 dark:bg-red-950/30 dark:border-red-400"
-                    : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 hover:border-gray-300"
+                    ? "border-red-500 bg-red-50"
+                    : "border-gray-200 bg-white hover:border-gray-300"
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   {opt.icon}
-                  <span className={`text-sm font-semibold ${selected ? "text-red-700 dark:text-red-300" : "text-gray-900 dark:text-white"}`}>
+                  <span className={`text-sm font-semibold ${selected ? "text-red-700" : "text-gray-900"}`}>
                     {opt.label}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                <p className="text-xs text-gray-500 leading-relaxed">
                   {opt.description}
                 </p>
               </button>
@@ -433,10 +433,10 @@ export default function PayoutSettingsPanel({
       {/* ── Schedule interval (only shown when trigger = scheduled) ──────── */}
       {trigger === "scheduled" && (
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">
             Payout Schedule
           </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          <p className="text-xs text-gray-500 mb-4">
             Payouts will be sent automatically on this interval. The cron job runs at
             5:00 AM UTC; make sure migration 0021 is applied to your Supabase project
             to activate it.
@@ -453,14 +453,14 @@ export default function PayoutSettingsPanel({
                   onClick={() => setSchedule(opt.value)}
                   className={`text-left rounded-lg border p-4 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                     selected
-                      ? "border-red-500 bg-red-50 dark:bg-red-950/30 dark:border-red-400"
-                      : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 hover:border-gray-300"
+                      ? "border-red-500 bg-red-50"
+                      : "border-gray-200 bg-white hover:border-gray-300"
                   }`}
                 >
-                  <p className={`text-sm font-semibold ${selected ? "text-red-700 dark:text-red-300" : "text-gray-900 dark:text-white"}`}>
+                  <p className={`text-sm font-semibold ${selected ? "text-red-700" : "text-gray-900"}`}>
                     {opt.label}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <p className="text-xs text-gray-500 mt-0.5">
                     {opt.description}
                   </p>
                 </button>
@@ -484,16 +484,16 @@ export default function PayoutSettingsPanel({
 
       {/* ── Manual send ─────────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">
           Send Payouts Now
         </h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        <p className="text-xs text-gray-500 mb-4">
           Immediately disburse all pending eligible earnings to instructors via PayPal
           Payouts, regardless of the trigger mode above. Only instructors with a saved
           payout email will receive funds. You can also send payouts from the{" "}
           <a href="/admin/payouts" className="text-red-600 hover:underline">Payouts page</a>.
         </p>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
+        <div className="bg-white border border-gray-200 rounded-lg p-5">
           <button
             type="button"
             onClick={handleSendNow}
@@ -503,7 +503,7 @@ export default function PayoutSettingsPanel({
             <Send className="h-4 w-4" />
             {sending ? "Sending…" : "Send Payouts Now"}
           </button>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+          <p className="text-xs text-gray-400 mt-3">
             This creates one PayPal Payouts batch grouping all instructors with pending
             earnings. PayPal accepting the batch is not confirmation that it was delivered;
             track the outcome in Payout history below.
@@ -513,10 +513,10 @@ export default function PayoutSettingsPanel({
 
       {/* ── Upcoming payouts ─────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">
           Upcoming Payouts
         </h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        <p className="text-xs text-gray-500 mb-4">
           Who is owed what right now, which classes the money came from, and what
           SuperHeroCPR actually keeps once PayPal has taken its cut on both ends.
         </p>
@@ -525,10 +525,10 @@ export default function PayoutSettingsPanel({
 
       {/* ── Payout history ───────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">
           Payout History
         </h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        <p className="text-xs text-gray-500 mb-4">
           Every payout batch and what PayPal did with it. If PayPal denies a payout after
           accepting it, mark it denied here to put the earnings back in the queue, then resend.
         </p>

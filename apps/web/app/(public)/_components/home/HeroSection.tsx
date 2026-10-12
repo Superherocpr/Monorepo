@@ -137,7 +137,7 @@ export default async function HeroSection() {
             Book a Class
           </Link>
           <Link
-            href="/contact"
+            href="/contact?inquiry=instructor"
             className="border-2 border-white/60 text-white font-semibold py-3.5 rounded-lg hover:bg-white/10 transition-colors duration-150 text-base text-center"
           >
             Become an Instructor

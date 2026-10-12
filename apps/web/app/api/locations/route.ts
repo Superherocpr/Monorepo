@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Valid US state codes for server-side validation. */
 const VALID_STATES = new Set([
@@ -85,7 +86,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   // Instructors can create new locations (e.g. from the session creation form).
-  const result = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const result = await requireApiRole(TEACHING_ROLES);
   if ("error" in result) return result.error;
 
   const adminClient = await createAdminClient();

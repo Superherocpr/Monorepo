@@ -21,9 +21,10 @@
 
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { isMockPaymentsEnabled } from "@/lib/mock-payments";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 export async function GET(): Promise<Response> {
-  const auth = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const auth = await requireApiRole(TEACHING_ROLES);
   if ("error" in auth) return auth.error;
 
   return Response.json({ mock: isMockPaymentsEnabled() });

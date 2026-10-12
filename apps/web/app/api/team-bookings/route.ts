@@ -22,9 +22,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { createTeamBooking, type TeamPaymentMode } from "@/lib/team-bookings";
 import { NextResponse } from "next/server";
-
-/** Staff roles permitted to create team bookings. */
-const ALLOWED_ROLES = ["instructor", "manager", "super_admin"] as const;
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -48,7 +46,7 @@ function requiredString(value: unknown): string | null {
  */
 export async function POST(request: Request): Promise<Response> {
   // ── Auth (honors view-as: a downgraded super admin creates as instructor) ──
-  const authResult = await requireApiRole([...ALLOWED_ROLES]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 

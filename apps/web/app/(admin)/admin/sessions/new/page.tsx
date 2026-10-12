@@ -13,16 +13,13 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
-import type { UserRole } from "@/types/users";
 import CreateSessionClient, {
   type ClassTypeOption,
   type LocationOption,
   type InstructorOption,
   type AddonOption,
 } from "./_components/CreateSessionClient";
-
-/** Staff roles allowed to create sessions. */
-const ALLOWED_ROLES: UserRole[] = ["instructor", "manager", "super_admin"];
+import { TEACHING_ROLES, isTeachingRole } from "@/lib/auth/view-as-constants";
 
 /**
  * Server component: authenticates the user, fetches form option data,
@@ -32,7 +29,7 @@ export default async function NewSessionPage() {
   // Auth guard: honors view-as: a downgraded super admin gets the instructor
   // variant of the form (own name locked in, no instructor selector).
   const actor = await getAdminActor();
-  if (!actor || !ALLOWED_ROLES.includes(actor.effectiveRole)) {
+  if (!actor || !isTeachingRole(actor.effectiveRole)) {
     redirect("/admin");
   }
 
@@ -108,7 +105,7 @@ export default async function NewSessionPage() {
     const { data: rawInstructors } = await admin
       .from("profiles")
       .select("id, first_name, last_name")
-      .in("role", ["instructor", "manager", "super_admin"])
+      .in("role", TEACHING_ROLES)
       .eq("deactivated", false)
       .order("first_name");
 

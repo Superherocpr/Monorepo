@@ -1,7 +1,9 @@
 /**
  * Admin sessions list page: /admin/sessions
  * Shows all class sessions grouped by month.
- * Instructors see only their own sessions. Managers and super admins see all.
+ * Instructors see only their own sessions. Managers and super admins see all;
+ * `?mine=1` (the sidebar's "My Class Sessions" link) pre-filters their view to
+ * the classes they teach themselves.
  * Data is fetched server-side; filtering is handled by SessionsClient.
  * Used by: admin sidebar nav for all staff roles.
  */
@@ -11,7 +13,6 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
 import SessionsClient from "../../_components/SessionsClient";
 import type { SessionApprovalStatus, SessionStatus } from "@/types/schedule";
-import type { UserRole } from "@/types/users";
 
 /** A session row as returned by the Supabase query with joined relations. */
 export interface SessionWithMeta {
@@ -37,8 +38,13 @@ export interface InstructorOption {
   last_name: string;
 }
 
+interface SessionsPageProps {
+  searchParams: Promise<{ mine?: string }>;
+}
+
 /** Fetches data and renders the sessions list via SessionsClient. */
-export default async function SessionsPage() {
+export default async function SessionsPage({ searchParams }: SessionsPageProps) {
+  const { mine } = await searchParams;
   // Auth guard: honors view-as: a downgraded super admin gets instructor
   // scoping ("their own" sessions, i.e. sessions assigned to them).
   const actor = await getAdminActor();
@@ -107,12 +113,20 @@ export default async function SessionsPage() {
     instructors = (rawInstructors ?? []) as InstructorOption[];
   }
 
+  // Instructors are already scoped server-side, so ?mine=1 only matters for
+  // managers and super admins viewing the full list.
+  const mineOnly = mine === "1" && !isInstructor;
+
   return (
     <SessionsClient
+      // Remount on toggle so the seeded filter applies when navigating between
+      // /admin/sessions and /admin/sessions?mine=1 on the same route.
+      key={mineOnly ? "mine" : "all"}
       sessions={sessions}
       instructors={instructors}
       userRole={role}
       userId={user.id}
+      initialInstructorFilter={mineOnly ? user.id : ""}
     />
   );
 }

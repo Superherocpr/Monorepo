@@ -162,9 +162,9 @@ export default function CheckinDisplayClient({
 
   return (
     // Fixed full-viewport layer: covers the admin sidebar/top bar so the
-    // projected page is clean. Always light regardless of admin dark mode:
-    // QR codes need a light background to scan reliably.
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto flex flex-col">
+    // projected page is clean. Always light regardless of admin dark mode
+    // (admin-light-island): QR codes need a light background to scan reliably.
+    <div className="admin-light-island fixed inset-0 z-50 bg-white overflow-y-auto flex flex-col">
       {/* Brand accent stripe */}
       <div className="h-2 w-full shrink-0" style={{ backgroundColor: "#CC1122" }} />
 

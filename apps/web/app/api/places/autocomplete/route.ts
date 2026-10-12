@@ -8,6 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /**
  * A single autocomplete suggestion returned to the client.
@@ -23,7 +24,7 @@ export interface PlaceSuggestion {
  * Allows instructor, manager, and super_admin (honors view-as).
  */
 async function requireStaffAuth(): Promise<NextResponse | null> {
-  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   return "error" in authResult ? authResult.error : null;
 }
 

@@ -561,28 +561,30 @@ export function orderShippedEmail({
  * @param personalMessage - Optional personal message from the inviting admin.
  * @param roleLabel       - Human-readable role string (e.g. "Instructor").
  * @param actionLink      - Supabase-generated password setup link.
- * @param isInstructor    - Whether to show the payment account setup reminder.
+ * @param isTeaching      - Whether the role teaches classes (instructor or manager),
+ *                          which shows the payout setup reminder.
  */
 export function staffInviteEmail({
   firstName,
   personalMessage,
   roleLabel,
   actionLink,
-  isInstructor,
+  isTeaching,
 }: {
   firstName: string;
   personalMessage: string | null;
   roleLabel: string;
   actionLink: string;
-  isInstructor: boolean;
+  isTeaching: boolean;
 }): EmailContent {
   const safePersonalMessage = personalMessage?.trim()
     ? `<p>${escapeHtml(personalMessage.trim())}</p>`
     : "";
 
-  const instructorNote = isInstructor
-    ? `<p><strong>Important:</strong> Once you log in, you'll need to connect a payment account
-       before you can send invoices. Visit Admin → Settings → Payment to get set up.</p>`
+  const payoutNote = isTeaching
+    ? `<p><strong>Important:</strong> Once you log in, add the PayPal email where you'd like
+       your teaching payouts sent. You'll need it before you can send invoices. Open
+       Payout Settings in the admin menu to get set up.</p>`
     : "";
 
   return {
@@ -594,7 +596,7 @@ export function staffInviteEmail({
       <p>Click the link below to set your password and activate your account.</p>
       <p><a href="${escapeHtml(actionLink)}">Set My Password →</a></p>
       <p>This link expires in 24 hours.</p>
-      ${instructorNote}
+      ${payoutNote}
       <p>- The SuperHeroCPR Team</p>
     `),
   };

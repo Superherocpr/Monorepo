@@ -1,7 +1,7 @@
 /**
  * POST /api/invoices/cancel
  * Called by: InvoiceDetailClient (Cancel Invoice confirmation)
- * Auth: Instructor (own invoice only) or super admin
+ * Auth: Instructor or manager (own invoice only), or super admin (any)
  *
  * Cancels an invoice by:
  * 1. Calling the business PayPal API to void the invoice there
@@ -14,6 +14,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { getPayPalAccessToken, getPayPalApiBase } from "@/lib/paypal";
+import { TEACHING_ROLES, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
   const { invoiceId } = body;
 
   // Auth check
-  const authResult = await requireApiRole(["instructor", "super_admin"]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
   }
 
   // Instructors may only cancel their own invoices
-  if (actor.effectiveRole === "instructor" && invoice.instructor_id !== actor.user.id) {
+  if (!canUseInstructorToolsOn(actor.effectiveRole, actor.user.id, invoice.instructor_id)) {
     return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 

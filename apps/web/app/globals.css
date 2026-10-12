@@ -12,19 +12,16 @@
 @theme inline {
   /* Font family — Inter loaded via next/font/google, referenced by CSS var */
   --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
-
-  /*
-   * Dark mode is class-based (toggled via JS on document.documentElement).
-   * See DESIGN-SYSTEM.md §6 for dark mode strategy.
-   */
 }
 
 /*
- * Dark mode class strategy.
- * The admin layout injects a script in <head> to read localStorage['theme']
- * and add/remove the 'dark' class on <html> before first paint.
+ * Dark mode is admin-only and implemented by app/(admin)/admin-theme.css, not by
+ * Tailwind's dark: variant. There must be no dark: classes anywhere (enforced by
+ * tests/unit/lib/admin-theme-css.test.ts). This custom variant exists so a stray
+ * dark: class can never fall back to Tailwind's default prefers-color-scheme
+ * behavior, which would darken the public site for visitors with a dark OS.
  */
-@variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:where([data-never-matches]));
 
 /*
  * scroll-behavior: smooth was here globally for anchor links like /classes#bls,
@@ -60,70 +57,6 @@
 
 body {
   @apply bg-white text-gray-900 antialiased;
-}
-
-.dark body {
-  @apply bg-gray-950 text-white;
-}
-
-/*
- * Driver.js (components/tours/TourButton.tsx) ships its own light-only
- * popover styling with no dark mode variant, so it must be overridden here
- * rather than via Tailwind utility classes on the (library-rendered) DOM.
- * The arrow's visible border side is set to match --driver-popover-bg so it
- * still reads as attached to the popover card.
- */
-.dark .driver-popover {
-  --driver-popover-bg: #262626;
-  background-color: var(--driver-popover-bg);
-  color: #f1f1f1;
-}
-
-.dark .driver-popover-title {
-  color: #f1f1f1;
-}
-
-.dark .driver-popover-description {
-  color: #d4d4d4;
-}
-
-.dark .driver-popover-progress-text {
-  color: #a3a3a3;
-}
-
-.dark .driver-popover-footer-btn {
-  background-color: #363636;
-  border-color: #525252;
-  color: #f1f1f1;
-}
-
-.dark .driver-popover-footer-btn:hover,
-.dark .driver-popover-footer-btn:focus {
-  background-color: #404040;
-}
-
-.dark .driver-popover-close-btn {
-  color: #a3a3a3;
-}
-
-.dark .driver-popover-close-btn:hover,
-.dark .driver-popover-close-btn:focus {
-  color: #f1f1f1;
-}
-
-/* Each side shows exactly one visible border edge; the other three stay
-   transparent per driver.css, so only that edge needs recoloring here. */
-.dark .driver-popover-arrow-side-left {
-  border-left-color: var(--driver-popover-bg);
-}
-.dark .driver-popover-arrow-side-right {
-  border-right-color: var(--driver-popover-bg);
-}
-.dark .driver-popover-arrow-side-top {
-  border-top-color: var(--driver-popover-bg);
-}
-.dark .driver-popover-arrow-side-bottom {
-  border-bottom-color: var(--driver-popover-bg);
 }
 
 /* ── Blog post prose styles ──────────────────────────────────────────────────

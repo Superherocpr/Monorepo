@@ -19,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { sendEmail } from "@/lib/send-email";
 import { customerSetupEmail } from "@/lib/emails";
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Basic email format check — not a substitute for server-side validation but catches obvious garbage. */
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
   const supabase = await createAdminClient();
 
   // ── Auth & role check ──────────────────────────────────────────────────────
-  const authResult = await requireApiRole(["instructor", "manager", "super_admin"]);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
   const user = actor.user;

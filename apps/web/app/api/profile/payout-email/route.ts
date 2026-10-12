@@ -1,16 +1,13 @@
 /**
  * PATCH /api/profile/payout-email
  * Called by: /admin/profile/payment payout settings form
- * Auth: instructor or super_admin only
+ * Auth: any teaching role (instructor, manager, super_admin); own profile only
  * Saves the PayPal email address where instructor payouts should be sent.
  */
 
 import { createClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import type { UserRole } from "@/types/users";
-
-/** Roles permitted to save payout email settings. */
-const ALLOWED_ROLES: UserRole[] = ["instructor", "super_admin"];
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 /** Type guard — ensures a value is a non-null object. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -40,7 +37,7 @@ export async function PATCH(request: Request) {
   }
 
   // Honors view-as; archived/deactivated checks happen inside requireApiRole.
-  const authResult = await requireApiRole(ALLOWED_ROLES);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 

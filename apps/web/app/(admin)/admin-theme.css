@@ -1,0 +1,487 @@
+/*
+ * Admin dark mode (cool slate palette). Imported by app/(admin)/layout.tsx.
+ *
+ * HOW IT WORKS
+ * Dark values exist ONLY inside .admin-theme[data-admin-theme="dark"], the wrapper
+ * rendered by app/(admin)/_components/AdminThemeScope.tsx. Nothing here touches
+ * <html> or <body> except through :has(), which can only match when that wrapper is
+ * in the page. The public site (rollcall, booking, dashboard) never renders the
+ * wrapper, so it cannot be affected. tests/unit/lib/admin-theme-css.test.ts guards this.
+ *
+ * Tailwind v4 emits its palette as CSS variables, so re-declaring the gray ramp and
+ * the pale tints (50-300) of each status hue inside the wrapper re-themes every
+ * existing bg-gray-*, text-gray-*, border-gray-*, bg-green-100 ... class with no
+ * per-file edits. Three things a variable swap cannot express are handled by the
+ * attribute-selector rules below:
+ *   1. bg-white -> card surface (text-white must stay white, so --color-white is untouched).
+ *   2. text-<hue>-500..900 -> one readable light tone per hue. Those shades double as
+ *      solid button fills (bg-red-600 hover:bg-red-700), so the variables stay put and
+ *      only the text-* utilities are overridden.
+ *   3. Raised surfaces (modals, popovers) and native-control quirks.
+ * Unlayered rules beat Tailwind's layered utilities, which is why these win.
+ *
+ * LIGHT ISLANDS
+ * Anything that is a physical or customer-facing document stays light: wrap it in
+ * .admin-light-island (check-in projector screen, printed cert card previews, PayPal
+ * card fields). The island re-declares the variables with Tailwind's own defaults and
+ * is excluded from the attribute rules via :not().
+
+ */
+
+:root {
+  /* Page background behind cards. Light value matches the old bg-gray-50 shell. */
+  --admin-page: var(--color-gray-50);
+}
+
+.admin-theme[data-admin-theme="dark"] {
+  color-scheme: dark;
+  --admin-page: #0f1013;
+  --admin-surface: #18191b;
+  --admin-raised: #212225;
+  --admin-border: #2e3135;
+  --admin-field: #131416;
+  --admin-chart-grid: #2e3135;
+  --admin-chart-axis: #9a9fa8;
+  --admin-chart-red: #f0595e;
+  --admin-chart-green: #3dd68c;
+  --admin-chart-amber: #f5b53a;
+  --admin-chart-blue: #5aa9ff;
+  --color-gray-50: #1f2023;
+  --color-gray-100: #25272b;
+  --color-gray-200: #2e3135;
+  --color-gray-300: #3e4248;
+  --color-gray-400: #80848d;
+  --color-gray-500: #9a9fa8;
+  --color-gray-600: #b0b4ba;
+  --color-gray-700: #c9ccd1;
+  --color-gray-800: #dde0e4;
+  --color-gray-900: #edeef0;
+  --color-gray-950: #f5f6f7;
+  --color-red-50: #2b1519;
+  --color-red-100: #3b1219;
+  --color-red-200: #531a22;
+  --color-red-300: #72232d;
+  --color-green-50: #10241b;
+  --color-green-100: #132d21;
+  --color-green-200: #1a4330;
+  --color-green-300: #20573e;
+  --color-amber-50: #271a08;
+  --color-amber-100: #302008;
+  --color-amber-200: #47300a;
+  --color-amber-300: #5c3d05;
+  --color-blue-50: #0b2036;
+  --color-blue-100: #0d2847;
+  --color-blue-200: #0f3a66;
+  --color-blue-300: #104d87;
+  --color-purple-50: #1f1830;
+  --color-purple-100: #291f43;
+  --color-purple-200: #382a5e;
+  --color-purple-300: #473876;
+  --color-indigo-50: #141c3a;
+  --color-indigo-100: #182449;
+  --color-indigo-200: #22346b;
+  --color-indigo-300: #304384;
+  --color-yellow-50: #251d05;
+  --color-yellow-100: #2d2305;
+  --color-yellow-200: #403206;
+  --color-yellow-300: #574500;
+  --color-orange-50: #29170a;
+  --color-orange-100: #331e0b;
+  --color-orange-200: #4a2a0e;
+  --color-orange-300: #5f3513;
+  --color-teal-50: #0b2523;
+  --color-teal-100: #0d2d2a;
+  --color-teal-200: #0e4540;
+  --color-teal-300: #0d5f56;
+  --color-sky-50: #0c2230;
+  --color-sky-100: #0f2b3d;
+  --color-sky-200: #123e57;
+  --color-sky-300: #155375;
+}
+
+/* Light island: restore Tailwind's own palette (values read from tailwindcss/theme.css). */
+.admin-theme[data-admin-theme="dark"] .admin-light-island {
+  color-scheme: light;
+  color: var(--color-gray-900); /* restored inside the island, so unstyled text is dark on white */
+  --color-gray-50: oklch(98.5% 0.002 247.839);
+  --color-gray-100: oklch(96.7% 0.003 264.542);
+  --color-gray-200: oklch(92.8% 0.006 264.531);
+  --color-gray-300: oklch(87.2% 0.01 258.338);
+  --color-gray-400: oklch(70.7% 0.022 261.325);
+  --color-gray-500: oklch(55.1% 0.027 264.364);
+  --color-gray-600: oklch(44.6% 0.03 256.802);
+  --color-gray-700: oklch(37.3% 0.034 259.733);
+  --color-gray-800: oklch(27.8% 0.033 256.848);
+  --color-gray-900: oklch(21% 0.034 264.665);
+  --color-gray-950: oklch(13% 0.028 261.692);
+  --color-red-50: oklch(97.1% 0.013 17.38);
+  --color-red-100: oklch(93.6% 0.032 17.717);
+  --color-red-200: oklch(88.5% 0.062 18.334);
+  --color-red-300: oklch(80.8% 0.114 19.571);
+  --color-green-50: oklch(98.2% 0.018 155.826);
+  --color-green-100: oklch(96.2% 0.044 156.743);
+  --color-green-200: oklch(92.5% 0.084 155.995);
+  --color-green-300: oklch(87.1% 0.15 154.449);
+  --color-amber-50: oklch(98.7% 0.022 95.277);
+  --color-amber-100: oklch(96.2% 0.059 95.617);
+  --color-amber-200: oklch(92.4% 0.12 95.746);
+  --color-amber-300: oklch(87.9% 0.169 91.605);
+  --color-blue-50: oklch(97% 0.014 254.604);
+  --color-blue-100: oklch(93.2% 0.032 255.585);
+  --color-blue-200: oklch(88.2% 0.059 254.128);
+  --color-blue-300: oklch(80.9% 0.105 251.813);
+  --color-purple-50: oklch(97.7% 0.014 308.299);
+  --color-purple-100: oklch(94.6% 0.033 307.174);
+  --color-purple-200: oklch(90.2% 0.063 306.703);
+  --color-purple-300: oklch(82.7% 0.119 306.383);
+  --color-indigo-50: oklch(96.2% 0.018 272.314);
+  --color-indigo-100: oklch(93% 0.034 272.788);
+  --color-indigo-200: oklch(87% 0.065 274.039);
+  --color-indigo-300: oklch(78.5% 0.115 274.713);
+  --color-yellow-50: oklch(98.7% 0.026 102.212);
+  --color-yellow-100: oklch(97.3% 0.071 103.193);
+  --color-yellow-200: oklch(94.5% 0.129 101.54);
+  --color-yellow-300: oklch(90.5% 0.182 98.111);
+  --color-orange-50: oklch(98% 0.016 73.684);
+  --color-orange-100: oklch(95.4% 0.038 75.164);
+  --color-orange-200: oklch(90.1% 0.076 70.697);
+  --color-orange-300: oklch(83.7% 0.128 66.29);
+  --color-teal-50: oklch(98.4% 0.014 180.72);
+  --color-teal-100: oklch(95.3% 0.051 180.801);
+  --color-teal-200: oklch(91% 0.096 180.426);
+  --color-teal-300: oklch(85.5% 0.138 181.071);
+  --color-sky-50: oklch(97.7% 0.013 236.62);
+  --color-sky-100: oklch(95.1% 0.026 236.824);
+  --color-sky-200: oklch(90.1% 0.058 230.902);
+  --color-sky-300: oklch(82.8% 0.111 230.318);
+}
+
+/* Canvas, scrollbars and overscroll follow the theme. :has() only matches when the wrapper exists. */
+html:has(.admin-theme[data-admin-theme="dark"]) {
+  color-scheme: dark;
+  background-color: #0f1013;
+}
+body:has(.admin-theme[data-admin-theme="dark"]) {
+  background-color: #0f1013;
+}
+
+/* Shell. The wrapper paints the page color; cards sit one step up. */
+.admin-theme {
+  background-color: var(--admin-page);
+  /*
+   * Default text color for everything that sets none of its own. Without this, text
+   * (and form controls, which Tailwind's preflight makes inherit) fell through to the
+   * body color, which is the LIGHT-mode gray-900 and renders near-black on dark. Light
+   * mode value is unchanged (gray-900), so nothing moves there.
+   */
+  color: var(--color-gray-900);
+  /* Chart colors (Recharts reads these through var()). Light values = the original hex. */
+  --admin-chart-grid: #f3f4f6;
+  --admin-chart-axis: #6b7280;
+  --admin-chart-red: #dc2626;
+  --admin-chart-green: #16a34a;
+  --admin-chart-amber: #d97706;
+  --admin-chart-blue: #2563eb;
+}
+
+/* 1. White surfaces become the card surface. */
+.admin-theme[data-admin-theme="dark"] [class~="bg-white"]:not(.admin-light-island, .admin-light-island *) {
+  background-color: var(--admin-surface);
+}
+.admin-theme[data-admin-theme="dark"] [class~="bg-white/90"]:not(.admin-light-island, .admin-light-island *) {
+  background-color: color-mix(in oklab, var(--admin-surface) 90%, transparent);
+}
+.admin-theme[data-admin-theme="dark"] .admin-light-island [class~="bg-white"],
+.admin-theme[data-admin-theme="dark"] .admin-light-island[class~="bg-white"] {
+  background-color: #fff;
+}
+
+/* Raised surfaces: modals and popovers sit one step above cards, lit by a hairline. */
+.admin-theme[data-admin-theme="dark"] :is([class~="shadow-lg"], [class~="shadow-xl"], [class~="shadow-2xl"])[class~="bg-white"]:not(.admin-light-island, .admin-light-island *) {
+  background-color: var(--admin-raised);
+  box-shadow: 0 0 0 1px var(--admin-border), 0 24px 64px rgb(0 0 0 / 0.6);
+}
+
+/* Focus-ring offset gap defaults to white in Tailwind; paint it as the card surface instead. */
+.admin-theme[data-admin-theme="dark"] *:not(.admin-light-island *, .admin-light-island) {
+  --tw-ring-offset-color: var(--admin-surface);
+}
+
+/* Form fields sit slightly below the card so they read as inset wells. */
+.admin-theme[data-admin-theme="dark"] :is(input, select, textarea):not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="button"], [type="submit"])[class~="bg-white"]:not(.admin-light-island, .admin-light-island *) {
+  background-color: var(--admin-field);
+}
+.admin-theme[data-admin-theme="dark"] input:-webkit-autofill {
+  -webkit-text-fill-color: var(--color-gray-900);
+  box-shadow: 0 0 0 1000px var(--admin-field) inset;
+}
+
+/*
+ * Inverted pills and buttons (bg-gray-900 text-white, used for active filter pills and
+ * dark action buttons). The gray remap turns the fill light, so the white text would
+ * vanish; flip the text to the page color. Solid colored fills (bg-red-600 text-white)
+ * are untouched because their variables are not remapped.
+ */
+.admin-theme[data-admin-theme="dark"] :is([class~="bg-gray-700"], [class~="bg-gray-800"], [class~="bg-gray-900"])[class~="text-white"]:not(.admin-light-island, .admin-light-island *) {
+  color: var(--admin-page);
+}
+
+/* 2. Colored text: one readable tone per hue, plus a brighter hover tone. */
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="text-red-500"],
+  [class~="text-red-600"],
+  [class~="text-red-700"],
+  [class~="text-red-800"],
+  [class~="text-red-900"]
+):not(.admin-light-island, .admin-light-island *) {
+  color: #ff9592;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="hover:text-red-400"]:hover,
+  [class~="hover:text-red-500"]:hover,
+  [class~="hover:text-red-600"]:hover,
+  [class~="hover:text-red-700"]:hover,
+  [class~="hover:text-red-800"]:hover,
+  [class~="hover:text-red-900"]:hover
+):not(.admin-light-island, .admin-light-island *) {
+  color: #ffb4b1;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="text-green-500"],
+  [class~="text-green-600"],
+  [class~="text-green-700"],
+  [class~="text-green-800"],
+  [class~="text-green-900"]
+):not(.admin-light-island, .admin-light-island *) {
+  color: #3dd68c;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="hover:text-green-400"]:hover,
+  [class~="hover:text-green-500"]:hover,
+  [class~="hover:text-green-600"]:hover,
+  [class~="hover:text-green-700"]:hover,
+  [class~="hover:text-green-800"]:hover,
+  [class~="hover:text-green-900"]:hover
+):not(.admin-light-island, .admin-light-island *) {
+  color: #7ee8b2;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="text-amber-500"],
+  [class~="text-amber-600"],
+  [class~="text-amber-700"],
+  [class~="text-amber-800"],
+  [class~="text-amber-900"]
+):not(.admin-light-island, .admin-light-island *) {
+  color: #ffca16;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="hover:text-amber-400"]:hover,
+  [class~="hover:text-amber-500"]:hover,
+  [class~="hover:text-amber-600"]:hover,
+  [class~="hover:text-amber-700"]:hover,
+  [class~="hover:text-amber-800"]:hover,
+  [class~="hover:text-amber-900"]:hover
+):not(.admin-light-island, .admin-light-island *) {
+  color: #ffdc61;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="text-blue-500"],
+  [class~="text-blue-600"],
+  [class~="text-blue-700"],
+  [class~="text-blue-800"],
+  [class~="text-blue-900"]
+):not(.admin-light-island, .admin-light-island *) {
+  color: #70b8ff;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="hover:text-blue-400"]:hover,
+  [class~="hover:text-blue-500"]:hover,
+  [class~="hover:text-blue-600"]:hover,
+  [class~="hover:text-blue-700"]:hover,
+  [class~="hover:text-blue-800"]:hover,
+  [class~="hover:text-blue-900"]:hover
+):not(.admin-light-island, .admin-light-island *) {
+  color: #9acdff;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="text-purple-500"],
+  [class~="text-purple-600"],
+  [class~="text-purple-700"],
+  [class~="text-purple-800"],
+  [class~="text-purple-900"]
+):not(.admin-light-island, .admin-light-island *) {
+  color: #baa7ff;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="hover:text-purple-400"]:hover,
+  [class~="hover:text-purple-500"]:hover,
+  [class~="hover:text-purple-600"]:hover,
+  [class~="hover:text-purple-700"]:hover,
+  [class~="hover:text-purple-800"]:hover,
+  [class~="hover:text-purple-900"]:hover
+):not(.admin-light-island, .admin-light-island *) {
+  color: #d0c3ff;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="text-indigo-500"],
+  [class~="text-indigo-600"],
+  [class~="text-indigo-700"],
+  [class~="text-indigo-800"],
+  [class~="text-indigo-900"]
+):not(.admin-light-island, .admin-light-island *) {
+  color: #9eb1ff;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="hover:text-indigo-400"]:hover,
+  [class~="hover:text-indigo-500"]:hover,
+  [class~="hover:text-indigo-600"]:hover,
+  [class~="hover:text-indigo-700"]:hover,
+  [class~="hover:text-indigo-800"]:hover,
+  [class~="hover:text-indigo-900"]:hover
+):not(.admin-light-island, .admin-light-island *) {
+  color: #bccaff;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="text-yellow-500"],
+  [class~="text-yellow-600"],
+  [class~="text-yellow-700"],
+  [class~="text-yellow-800"],
+  [class~="text-yellow-900"]
+):not(.admin-light-island, .admin-light-island *) {
+  color: #f5e147;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="hover:text-yellow-400"]:hover,
+  [class~="hover:text-yellow-500"]:hover,
+  [class~="hover:text-yellow-600"]:hover,
+  [class~="hover:text-yellow-700"]:hover,
+  [class~="hover:text-yellow-800"]:hover,
+  [class~="hover:text-yellow-900"]:hover
+):not(.admin-light-island, .admin-light-island *) {
+  color: #f8ea7a;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="text-orange-500"],
+  [class~="text-orange-600"],
+  [class~="text-orange-700"],
+  [class~="text-orange-800"],
+  [class~="text-orange-900"]
+):not(.admin-light-island, .admin-light-island *) {
+  color: #ffa057;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="hover:text-orange-400"]:hover,
+  [class~="hover:text-orange-500"]:hover,
+  [class~="hover:text-orange-600"]:hover,
+  [class~="hover:text-orange-700"]:hover,
+  [class~="hover:text-orange-800"]:hover,
+  [class~="hover:text-orange-900"]:hover
+):not(.admin-light-island, .admin-light-island *) {
+  color: #ffbb86;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="text-teal-500"],
+  [class~="text-teal-600"],
+  [class~="text-teal-700"],
+  [class~="text-teal-800"],
+  [class~="text-teal-900"]
+):not(.admin-light-island, .admin-light-island *) {
+  color: #0bd8b6;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="hover:text-teal-400"]:hover,
+  [class~="hover:text-teal-500"]:hover,
+  [class~="hover:text-teal-600"]:hover,
+  [class~="hover:text-teal-700"]:hover,
+  [class~="hover:text-teal-800"]:hover,
+  [class~="hover:text-teal-900"]:hover
+):not(.admin-light-island, .admin-light-island *) {
+  color: #5eeacd;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="text-sky-500"],
+  [class~="text-sky-600"],
+  [class~="text-sky-700"],
+  [class~="text-sky-800"],
+  [class~="text-sky-900"]
+):not(.admin-light-island, .admin-light-island *) {
+  color: #7ce2fe;
+}
+.admin-theme[data-admin-theme="dark"] :is(
+  [class~="hover:text-sky-400"]:hover,
+  [class~="hover:text-sky-500"]:hover,
+  [class~="hover:text-sky-600"]:hover,
+  [class~="hover:text-sky-700"]:hover,
+  [class~="hover:text-sky-800"]:hover,
+  [class~="hover:text-sky-900"]:hover
+):not(.admin-light-island, .admin-light-island *) {
+  color: #a6ecff;
+}
+.admin-theme[data-admin-theme="dark"] .group:hover [class~="group-hover:text-red-400"]:not(.admin-light-island, .admin-light-island *),
+.admin-theme[data-admin-theme="dark"] .group:hover [class~="group-hover:text-red-600"]:not(.admin-light-island, .admin-light-island *) {
+  color: #ffb4b1;
+}
+.admin-theme[data-admin-theme="dark"] [class~="file:text-red-700"]:not(.admin-light-island, .admin-light-island *)::file-selector-button {
+  color: #ff9592;
+}
+
+/*
+ * Driver.js tour popovers render into <body> (outside the themed wrapper) and ship
+ * light-only styling, so TourButton tags them with .admin-tour-dark when the admin
+ * theme is dark. Arrow: each side shows exactly one visible border edge (the others
+ * stay transparent per driver.css), so only that edge is recolored to match the card.
+ */
+.driver-popover.admin-tour-dark {
+  --driver-popover-bg: #212225;
+  background-color: var(--driver-popover-bg);
+  color: #edeef0;
+  box-shadow: 0 0 0 1px #2e3135, 0 24px 64px rgb(0 0 0 / 0.6);
+}
+.admin-tour-dark .driver-popover-title {
+  color: #edeef0;
+}
+.admin-tour-dark .driver-popover-description {
+  color: #c9ccd1;
+}
+.admin-tour-dark .driver-popover-progress-text {
+  color: #9a9fa8;
+}
+.admin-tour-dark .driver-popover-footer-btn {
+  background-color: #2e3135;
+  border-color: #3e4248;
+  color: #edeef0;
+  text-shadow: none;
+}
+.admin-tour-dark .driver-popover-footer-btn:hover,
+.admin-tour-dark .driver-popover-footer-btn:focus {
+  background-color: #3e4248;
+}
+.admin-tour-dark .driver-popover-close-btn {
+  color: #9a9fa8;
+}
+.admin-tour-dark .driver-popover-close-btn:hover,
+.admin-tour-dark .driver-popover-close-btn:focus {
+  color: #edeef0;
+}
+.admin-tour-dark .driver-popover-arrow-side-left {
+  border-left-color: var(--driver-popover-bg);
+}
+.admin-tour-dark .driver-popover-arrow-side-right {
+  border-right-color: var(--driver-popover-bg);
+}
+.admin-tour-dark .driver-popover-arrow-side-top {
+  border-top-color: var(--driver-popover-bg);
+}
+.admin-tour-dark .driver-popover-arrow-side-bottom {
+  border-bottom-color: var(--driver-popover-bg);
+}
+
+/*
+ * Light card for embedded third-party widgets (PayPal card fields). Padding and radius
+ * apply only while dark, so light mode keeps its original layout; in dark the white
+ * card needs breathing room against the dark modal around it.
+ */
+.admin-theme[data-admin-theme="dark"] .admin-light-card {
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+}

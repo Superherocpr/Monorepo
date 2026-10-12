@@ -18,6 +18,7 @@ import {
   STATUS_BADGES,
   PLATFORM_LABELS,
 } from "@/lib/invoice-utils";
+import { isTeachingRole } from "@/lib/auth/view-as-constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -114,8 +115,8 @@ export default function InvoicesClient({
   uninvoicedTeamBookings,
 }: InvoicesClientProps) {
   const isManager = userRole === "manager" || userRole === "super_admin";
-  // Instructors and super admins can create invoices; managers cannot
-  const canCreate = userRole === "instructor" || userRole === "super_admin";
+  // Every teaching role can create invoices (managers for their own classes)
+  const canCreate = isTeachingRole(userRole);
 
   // ─── Filter state ───────────────────────────────────────────────────────────
   const [filterStatus, setFilterStatus] = useState<InvoiceStatus | "all">("sent");

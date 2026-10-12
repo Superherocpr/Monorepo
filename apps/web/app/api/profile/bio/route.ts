@@ -8,10 +8,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import type { UserRole } from "@/types/users";
-
-/** Roles permitted to update their own bio. */
-const ALLOWED_ROLES: UserRole[] = ["instructor", "manager", "super_admin"];
+import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
 
 interface BioPayload {
   /** Public S3 URL for the instructor's headshot. Null clears the photo. */
@@ -29,7 +26,7 @@ interface BioPayload {
  * @param request - PATCH request with JSON body containing any subset of bio fields.
  */
 export async function PATCH(request: Request): Promise<Response> {
-  const authResult = await requireApiRole(ALLOWED_ROLES);
+  const authResult = await requireApiRole(TEACHING_ROLES);
   if ("error" in authResult) return authResult.error;
   const { actor } = authResult;
 

@@ -21,14 +21,36 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * Optional pricing overrides.
  *
- * `teamPricePerSeat` replaces the catalog-derived price for a signup made
- * through a team/corporate link, where staff negotiated a per-seat rate on a
- * call. It must always be resolved server-side from the team_bookings row the
+ * `teamPricePerSeat` replaces the catalog price for a signup made through a
+ * team/corporate link, where staff negotiated a per-seat rate on a call. The
+ * session's discount_percent is still applied on top of it. It must always be resolved server-side from the team_bookings row the
  * share token points at — never accepted from the client, which would let a
  * buyer name their own price (THREAT-013).
  */
 export interface SessionPricingOptions {
   teamPricePerSeat?: number | null;
+}
+
+/**
+ * Normalizes a stored discount_percent (numeric column, may arrive as a string
+ * or null) to a non-negative finite number, 0 when absent or unparseable.
+ * @param raw - The raw class_sessions.discount_percent value.
+ */
+export function normalizeDiscountPercent(raw: number | string | null | undefined): number {
+  if (raw == null) return 0;
+  const parsed = typeof raw === "number" ? raw : parseFloat(String(raw));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+/**
+ * Applies a session-level percentage discount, rounded to cents. The one
+ * formula behind both the price a team signup link displays and the price
+ * checkout charges, so the two cannot drift apart.
+ * @param price - Price before the discount.
+ * @param discountPercent - Already-normalized discount, 0 for none.
+ */
+export function applyDiscountPercent(price: number, discountPercent: number): number {
+  return discountPercent > 0 ? parseFloat((price * (1 - discountPercent / 100)).toFixed(2)) : price;
 }
 
 /** Result when the session and its class type were found and price could be resolved. */
@@ -101,28 +123,20 @@ export async function getSessionPricing(
     return { found: false, error: "Session pricing unavailable" };
   }
 
-  const rawDiscountPercent = row.discount_percent;
-  const parsedDiscountPercent =
-    rawDiscountPercent == null
-      ? 0
-      : typeof rawDiscountPercent === "number"
-        ? rawDiscountPercent
-        : parseFloat(String(rawDiscountPercent));
-  const discountPercent =
-    Number.isFinite(parsedDiscountPercent) && parsedDiscountPercent > 0 ? parsedDiscountPercent : 0;
+  const discountPercent = normalizeDiscountPercent(row.discount_percent);
 
-  // A team/corporate rate is the negotiated price for that link's buyers and
-  // fully replaces the catalog price — the instructor's session-level discount
-  // is not stacked on top, since the quoted rate already reflects the deal.
+  // A team/corporate rate replaces the catalog price as the starting point, and
+  // the session's discount_percent is then taken off it like any other class.
+  // Staff set that discount in the same form as the rate, so ignoring it here
+  // meant the link and checkout both showed the undiscounted rate.
   const teamOverride = options.teamPricePerSeat;
   const hasTeamOverride =
     typeof teamOverride === "number" && Number.isFinite(teamOverride) && teamOverride >= 0;
 
-  const basePrice = hasTeamOverride
-    ? parseFloat(teamOverride.toFixed(2))
-    : discountPercent > 0
-      ? parseFloat((rawPrice * (1 - discountPercent / 100)).toFixed(2))
-      : rawPrice;
+  const basePrice = applyDiscountPercent(
+    hasTeamOverride ? parseFloat(teamOverride.toFixed(2)) : rawPrice,
+    discountPercent
+  );
 
   return {
     found: true,
