@@ -719,6 +719,7 @@ notice. The stamp now happens only after a confirmed send.
 | **Staff Directory** | ✅✅✅✅✅✅✅✅✅✅✅✅✅ | — | — | ✅ | — | — | Added 2026-09-22 (migrations 0070/0071, staging only). Read-only internal contact page: classes-taught list, plus a per-person email override for hiding a real address; see note below |
 | **Admin dark theme** | ✅✅✅ | ● leak guard | — | ✅ | — | — | Added 2026-10-10. Opt-in, admin-only. Source-scan unit tests fail if a dark class reaches `<html>`/`<body>`, if the root layout regains a theme script, if a CSS rule escapes the `.admin-theme` wrapper, or if a colored text class has no dark rule. The e2e leak guard asserts customer pages render light with every storage key set and with OS dark on. See note below |
 | **Manager / instructor parity** | ✅✅ | — | — | ✅ | — | — | Added 2026-10-06. Managers get every instructor capability. A source scan fails the suite if any role gate admits instructors but not managers; route tests drive grading and rollcall code verification as a manager. No outcome e2e: there is still no staff-role Playwright fixture. See note below |
+| **Staff What's New (changelog)** | ✅✅✅ | — | — | ✅ | — | — | Added 2026-10-15 (migration 0079, applied to staging and production 2026-10-15). Unit tests pin the logic and, more importantly, the content: the suite fails if package.json reaches a new x.y.0 with no changelog entry, if entries are out of order, malformed, or name a role that does not exist. Route and component tests assert what is written and when. No outcome e2e: there is still no staff-role Playwright fixture. See note below |
 
 ### Admin dark theme (added 2026-10-10)
 
@@ -783,6 +784,37 @@ see those items, lost the headers and saw Contact, Directory and Settings listed
 "Financial". Headers are now derived per role in `lib/admin-nav.ts`, and
 `tests/unit/lib/admin-nav.test.ts` pins the exact menu for every role plus the
 hidden-first-item case that caused the bug.
+
+### Staff What's New (added 2026-10-15)
+
+Staff had no way to learn that something changed. `/admin/whats-new` lists
+plain-English entries from `content/changelog.ts`, grouped by the app version in
+`package.json`, filtered to the viewer's effective role. The sidebar shows an
+unread count. Opening the page calls `POST /api/profile/whats-new-seen`, which
+sets `profiles.whats_new_seen_version` (migration 0079) to the newest version in the
+server's own changelog. The version never comes from the request.
+
+Entries live in the repo, not the database, so an entry ships in the same merge as
+its feature and cannot appear on production before the feature does. The cost is
+that fixing a typo needs a deploy.
+
+**Signal:** the failure mode of a changelog is going stale, so the guard is on the
+content, not the page. `tests/unit/lib/changelog.test.ts` fails the suite if the
+version in `package.json` is a minor or major release (`x.y.0`) with no entry, if any
+entry is dated for a version the app has not reached, or if the list is unsorted,
+malformed, or uses a role that does not exist. Patch releases may have no entry on
+purpose. CLAUDE.md rule 14 is what makes writing the entry part of every task.
+
+**Failure containment:** `loadWhatsNewState` swallows its own DB errors and reports
+"nothing unread", because it runs inside the auth-guarded admin layout. So a deploy
+without migration 0079 (now applied to both environments) could not break the admin area;
+the badge would just stay hidden and the save would return a 500 that the page ignores. A person who has never
+opened the page (null column) sees only entries released after their account was
+created as unread, not the whole history.
+
+**Gaps:** the page has not yet been checked in a browser. Backfilled entries (1.0.0 to 1.7.0) were reconstructed
+from git history and each filed under the first version bump at or after the work
+landed, so a few dates are approximate.
 
 ### Staff self-service account (added 2026-08-28)
 

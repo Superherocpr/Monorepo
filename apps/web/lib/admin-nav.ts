@@ -30,6 +30,8 @@ export interface NavItem {
   subLabel?: string;
   /** When true, indents this item to show it belongs to the preceding subLabel group. */
   nested?: boolean;
+  /** When true, the sidebar shows the viewer's unread What's New count beside the label. */
+  showsUnreadCount?: boolean;
 }
 
 /** A nav item as one role sees it, with the section header to draw above it (if any). */
@@ -50,6 +52,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Dashboard",
     href: "/admin",
     roles: ["instructor", "manager", "super_admin", "inspector"],
+  },
+  {
+    label: "What's New",
+    href: "/admin/whats-new",
+    roles: ["instructor", "manager", "super_admin", "inspector"],
+    showsUnreadCount: true,
   },
 
   // ── My Teaching ────────────────────────────────────────────────────────────
