@@ -26,7 +26,7 @@ function menuFor(role: UserRole): string[] {
 describe("sidebar menu per role", () => {
   test("manager", () => {
     expect(menuFor("manager")).toEqual([
-      "TOP: Dashboard",
+      "TOP: Dashboard, What's New",
       "MY TEACHING: My Class Sessions, Rollcall, Payout Settings",
       "OPERATIONS: Class Sessions, Customers, Contact, Customer Requests, Instructor Requests",
       "FINANCIAL: Invoices, Payments",
@@ -36,7 +36,7 @@ describe("sidebar menu per role", () => {
 
   test("super admin", () => {
     expect(menuFor("super_admin")).toEqual([
-      "TOP: Dashboard",
+      "TOP: Dashboard, What's New",
       "MY TEACHING: My Class Sessions, Rollcall, Payout Settings",
       "OPERATIONS: Class Sessions, Customers, Contact, Customer Requests, Instructor Requests",
       "FINANCIAL: Invoices, Payments, Payouts, Promo Codes",
@@ -48,13 +48,13 @@ describe("sidebar menu per role", () => {
 
   test("instructor keeps the original menu: flat, with Payout Settings under Payroll", () => {
     expect(menuFor("instructor")).toEqual([
-      "TOP: Dashboard, My Class Sessions, Rollcall, Directory, Settings",
+      "TOP: Dashboard, What's New, My Class Sessions, Rollcall, Directory, Settings",
       "PAYROLL: Payout Settings",
     ]);
   });
 
   test("inspector keeps the original flat menu", () => {
-    expect(menuFor("inspector")).toEqual(["TOP: Dashboard, Directory"]);
+    expect(menuFor("inspector")).toEqual(["TOP: Dashboard, What's New, Directory"]);
   });
 });
 

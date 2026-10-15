@@ -50,6 +50,7 @@
 | deactivated_at | timestamptz | | Set when staff account is deactivated. Null if not deactivated. |
 | customer_notes | text | | Internal staff notes. Never visible to the customer. |
 | paypal_payout_email | text | | PayPal email where instructor payouts are sent. Nullable until staff saves it. |
+| whats_new_seen_version | text | | Newest app version (major.minor.patch) whose What's New entries this staff member has seen (0079). Null = never opened; only entries released after created_at count as unread. Advanced by POST /api/profile/whats-new-seen. |
 | created_at | timestamptz | NN | Default: now() |
 | updated_at | timestamptz | NN | Default: now() |
 

@@ -86,4 +86,5 @@
 0076_signups_until_class_ends.sql
 0077_invoice_payment_method_fees.sql
 0078_selective_payout_reservation.sql
+0079_whats_new_seen.sql
 replace-user-uuid.sql

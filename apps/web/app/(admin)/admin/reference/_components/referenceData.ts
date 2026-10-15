@@ -62,6 +62,20 @@ export const GROUPS: GroupDef[] = [
           { text: "Pending approvals, unanswered contact messages, today's classes across all instructors, recent bookings, and low stock alerts", role: "manager" },
         ],
       },
+      {
+        id: "whats-new",
+        name: "What's New",
+        url: "/admin/whats-new",
+        role: "all",
+        bullets: [
+          "A running list of new features and changes, newest first, grouped by the version number shown at the bottom of the sidebar",
+          "A red number beside What's New in the sidebar counts the entries you have not read yet. Opening the page clears it, and the entries that were new to you stay marked Unread until you leave",
+          "You only see entries that apply to your role; a change to Payouts is not listed for instructors",
+          "Your read position is saved to your account, so it follows you to another device",
+          "Entries with a Go to this feature link take you straight to the page that changed",
+          "Developers add an entry for every visible change when they ship it; nothing is written here by hand through the site",
+        ],
+      },
     ],
   },
   {

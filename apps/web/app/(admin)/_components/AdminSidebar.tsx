@@ -16,6 +16,8 @@ import { getVisibleNavItems } from "@/lib/admin-nav";
 
 interface AdminSidebarProps {
   role: UserRole;
+  /** How many What's New entries the viewer has not read yet; 0 hides the badge. */
+  whatsNewUnread: number;
 }
 
 /**
@@ -40,7 +42,7 @@ function hrefMatches(
 }
 
 /** Role-aware navigation sidebar for the admin area. */
-export default function AdminSidebar({ role }: AdminSidebarProps) {
+export default function AdminSidebar({ role, whatsNewUnread }: AdminSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -98,6 +100,14 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
                 ].join(" ")}
               >
                 {item.label}
+                {item.showsUnreadCount && whatsNewUnread > 0 && (
+                  <span
+                    className="ml-auto min-w-5 px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold leading-none text-center"
+                    aria-label={`${whatsNewUnread} unread`}
+                  >
+                    {whatsNewUnread}
+                  </span>
+                )}
               </Link>
             </li>
           );
@@ -118,6 +128,13 @@ export default function AdminSidebar({ role }: AdminSidebarProps) {
         <span className="block w-5 h-0.5 bg-gray-700 mb-1" />
         <span className="block w-5 h-0.5 bg-gray-700 mb-1" />
         <span className="block w-5 h-0.5 bg-gray-700" />
+        {/* Unread What's New marker, so mobile users notice it without opening the drawer */}
+        {whatsNewUnread > 0 && (
+          <span
+            className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-600"
+            aria-label="Unread What's New entries"
+          />
+        )}
       </button>
 
       {/* ── Mobile overlay ── */}
