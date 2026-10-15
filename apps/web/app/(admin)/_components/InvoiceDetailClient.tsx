@@ -8,13 +8,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { InvoiceStatus, InvoiceType } from "@/types/invoices";
+import type { InvoicePaymentMethod, InvoiceStatus, InvoiceType } from "@/types/invoices";
 import type { PaymentPlatform, UserRole } from "@/types/users";
 import {
   formatCurrency,
   formatDate,
   STATUS_BADGES,
   PLATFORM_LABELS,
+  PAYMENT_METHOD_LABELS,
 } from "@/lib/invoice-utils";
 import { formatClassDateTimeLong } from "@/lib/business-time";
 import { canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
@@ -49,6 +50,11 @@ export interface InvoiceDetail {
   created_at: string;
   paid_at: string | null;
   cancelled_at: string | null;
+  /** How the invoice was paid; null until paid and on invoices paid before migration 0077. */
+  payment_method: InvoicePaymentMethod | null;
+  /** PayPal collection fee in dollars; null while unknown. */
+  paypal_fee_amount: number | string | null;
+  net_amount: number | string | null;
   class_sessions: {
     id: string;
     starts_at: string;
@@ -132,6 +138,15 @@ export default function InvoiceDetailClient({
   // Current status for reactive UI after actions
   const [currentStatus, setCurrentStatus] = useState<InvoiceStatus>(invoice.status);
   const [currentPaidAt, setCurrentPaidAt] = useState(invoice.paid_at);
+  // The method chosen in the confirm step. Deliberately unset by default so the
+  // fee is never recorded against a method nobody actually picked.
+  const [paymentMethod, setPaymentMethod] = useState<InvoicePaymentMethod | "">("");
+  const [currentMethod, setCurrentMethod] = useState<InvoicePaymentMethod | null>(
+    invoice.payment_method
+  );
+  const [currentFee, setCurrentFee] = useState<number | null>(
+    invoice.paypal_fee_amount === null ? null : Number(invoice.paypal_fee_amount)
+  );
   const [currentCancelledAt, setCurrentCancelledAt] = useState(invoice.cancelled_at);
 
   const badge = STATUS_BADGES[currentStatus];
@@ -175,15 +190,21 @@ export default function InvoiceDetailClient({
    * Marks the invoice as paid.
    * Side effects: sets invoice status to 'paid' in DB, creates one booking row
    * per student slot (booking_source='invoice'), logs to invoice_activity_log,
-   * and sends a paid notification email to the instructor.
+   * and sends a paid notification email to the instructor. The chosen payment
+   * method decides the fee: only PayPal charges one, every other method is a
+   * known $0.
    */
   function handleMarkPaid() {
+    if (paymentMethod === "") return;
+    const chosen = paymentMethod;
     callAction(
       "/api/invoices/mark-paid",
-      { invoiceId: invoice.id },
+      { invoiceId: invoice.id, paymentMethod: chosen },
       () => {
         setCurrentStatus("paid");
         setCurrentPaidAt(new Date().toISOString());
+        setCurrentMethod(chosen);
+        setCurrentFee(chosen === "paypal" ? null : 0);
         setSuccessMsg("Invoice marked as paid. Booking spots have been reserved.");
       }
     );
@@ -351,6 +372,22 @@ export default function InvoiceDetailClient({
                   <dd>{formatDate(currentPaidAt)}</dd>
                 </div>
               )}
+              {currentStatus === "paid" && currentMethod && (
+                <div className="flex justify-between text-gray-600 pt-1">
+                  <dt>Paid by</dt>
+                  <dd>{PAYMENT_METHOD_LABELS[currentMethod]}</dd>
+                </div>
+              )}
+              {currentStatus === "paid" && currentMethod && (
+                <div className="flex justify-between text-gray-600 pt-1">
+                  <dt>PayPal fee</dt>
+                  <dd>
+                    {currentFee === null
+                      ? "Waiting for PayPal"
+                      : formatCurrency(currentFee)}
+                  </dd>
+                </div>
+              )}
               {currentCancelledAt && (
                 <div className="flex justify-between text-gray-400 pt-1">
                   <dt>Cancelled</dt>
@@ -450,9 +487,31 @@ export default function InvoiceDetailClient({
             {/* Confirm mark paid */}
             {actionMode === "confirm-paid" && (
               <div className="space-y-3">
-                <p className="text-sm text-gray-700">
-                  Confirm this invoice has been paid manually?
-                </p>
+                <div>
+                  <label
+                    htmlFor="payment-method"
+                    className="block text-xs font-medium text-gray-500 mb-1"
+                  >
+                    How was it paid?
+                  </label>
+                  <select
+                    id="payment-method"
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as InvoicePaymentMethod | "")}
+                    className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Choose a payment method</option>
+                    {(Object.keys(PAYMENT_METHOD_LABELS) as InvoicePaymentMethod[]).map((method) => (
+                      <option key={method} value={method}>
+                        {PAYMENT_METHOD_LABELS[method]}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    PayPal payments are charged a collection fee, which is read from PayPal.
+                    Check, cash, and other methods have no fee.
+                  </p>
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -465,7 +524,7 @@ export default function InvoiceDetailClient({
                   <button
                     type="button"
                     onClick={handleMarkPaid}
-                    disabled={loading}
+                    disabled={loading || paymentMethod === ""}
                     className="flex-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50"
                   >
                     {loading ? "Saving…" : "Confirm - Mark Paid"}

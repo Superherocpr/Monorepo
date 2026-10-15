@@ -4,23 +4,25 @@
  * PayoutSettingsPanel: payout configuration section for the admin settings page.
  * Lets super_admins control the platform fee percentage, payout trigger mode
  * (immediate / scheduled / manual), and the schedule interval.
- * Also exposes a "Send Payouts Now" button for on-demand manual disbursements.
+ * Manual disbursement (choosing which instructors and classes to pay) lives in
+ * PayoutSendSection, rendered under Upcoming Payouts.
  * Used by: app/(admin)/admin/settings/page.tsx (rendered as payoutsSlot)
  */
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, AlertCircle, Send, Zap, Clock, HandCoins, TrendingDown } from "lucide-react";
+import { CheckCircle, AlertCircle, Zap, Clock, HandCoins, TrendingDown } from "lucide-react";
 import type { PayoutTrigger, PayoutSchedule } from "@/app/api/settings/payouts/route";
-import UpcomingPayoutsPanel from "@/app/(admin)/_components/UpcomingPayoutsPanel";
+import PayoutSendSection from "@/app/(admin)/_components/PayoutSendSection";
 import PayoutHistoryPanel from "@/app/(admin)/_components/PayoutHistoryPanel";
 import {
   breakEvenFeePercent,
   compareBatchingCost,
+  describePayoutFeeModel,
   estimatePlatformMargin,
 } from "@/lib/payout-fees";
 import { formatCurrency } from "@/lib/invoice-utils";
-import type { PayoutHistoryBatch, UpcomingPayoutsData } from "@/types/payouts";
+import type { PayoutFeeModel, PayoutHistoryBatch, UpcomingPayoutsData } from "@/types/payouts";
 
 /** Class prices used to illustrate margin at both ends of the catalog. */
 const MARGIN_EXAMPLE_PRICES = [50, 100];
@@ -83,7 +85,7 @@ const TRIGGER_OPTIONS: TriggerOption[] = [
     value: "manual",
     label: "Manual only",
     description:
-      'Earnings accumulate until you push "Send Payouts Now". Full control; nothing goes out automatically.',
+      'Earnings accumulate until you choose who to pay under Upcoming Payouts and confirm. Full control; nothing goes out automatically.',
     icon: <HandCoins className="h-5 w-5 text-gray-500" />,
   },
 ];
@@ -94,13 +96,6 @@ const SCHEDULE_OPTIONS: ScheduleOption[] = [
   { value: "monthly", label: "Monthly", description: "1st of each month at 5:00 AM UTC" },
 ];
 
-/** Response shape expected from POST /api/payouts/create. */
-interface PayoutCreateResponse {
-  success: boolean;
-  error?: string;
-  paypalBatchId?: string;
-}
-
 /**
  * Shows what the configured platform fee actually nets after PayPal's fees, and
  * warns when the fee is set below break-even.
@@ -110,14 +105,20 @@ interface PayoutCreateResponse {
  * booking. Break-even is higher for cheaper classes, because PayPal's fixed
  * per-transaction charge is a bigger share of a smaller sale.
  */
-function MarginReadout({ feePercent }: { feePercent: number }) {
+function MarginReadout({
+  feePercent,
+  feeModel,
+}: {
+  feePercent: number;
+  feeModel: PayoutFeeModel;
+}) {
   if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent > 100) return null;
 
   const instructorShare = 100 - feePercent;
   const examples = MARGIN_EXAMPLE_PRICES.map((price) => ({
     price,
-    margin: estimatePlatformMargin(price, feePercent),
-    breakEven: breakEvenFeePercent(price),
+    margin: estimatePlatformMargin(price, feePercent, feeModel),
+    breakEven: breakEvenFeePercent(price, feeModel),
   }));
   const losingMoney = examples.filter((example) => example.margin.netMargin < 0);
   const highestBreakEven = examples.reduce<number | null>(
@@ -200,9 +201,9 @@ function MarginReadout({ feePercent }: { feePercent: number }) {
         </p>
       ) : (
         <p className="mt-2 text-[11px] text-gray-400">
-          Estimated using PayPal&rsquo;s standard US rates (2.9% + $0.30 to collect, 2% capped at
-          $1.00 to send). Actual fees are recorded per payment and shown in the tracking panel
-          below.
+          Collection fees are estimated at PayPal&rsquo;s standard US rate (2.9% + $0.30).
+          Payout fees are estimated at {describePayoutFeeModel(feeModel)}. Actual fees are
+          recorded per payment and shown in the tracking panel below.
         </p>
       )}
     </div>
@@ -228,7 +229,7 @@ function BatchingCostNote({ upcoming }: { upcoming: UpcomingPayoutsData }) {
     )
   );
 
-  const comparison = compareBatchingCost(amountsByInstructor);
+  const comparison = compareBatchingCost(amountsByInstructor, upcoming.payoutFeeModel);
   if (comparison.savings <= 0 || comparison.earningCount === 0) return null;
 
   return (
@@ -241,8 +242,8 @@ function BatchingCostNote({ upcoming }: { upcoming: UpcomingPayoutsData }) {
         {comparison.instructorCount === 1 ? "" : "s"} would cost about{" "}
         {formatCurrency(comparison.immediateCost)} in PayPal payout fees sent individually in
         Immediate mode, versus {formatCurrency(comparison.batchedCost)} combined, a difference
-        of {formatCurrency(comparison.savings)}. PayPal caps its payout fee per recipient, so
-        one combined payout per instructor pays that cap once instead of per booking.
+        of {formatCurrency(comparison.savings)}. PayPal charges its payout fee per recipient, so
+        one combined payout per instructor pays it once instead of once per booking.
       </span>
     </div>
   );
@@ -268,7 +269,6 @@ export default function PayoutSettingsPanel({
 
   // ── Button states ──────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
-  const [sending, setSending] = useState(false);
 
   // ── Toast ──────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<Toast | null>(null);
@@ -320,37 +320,6 @@ export default function PayoutSettingsPanel({
     }
   }
 
-  /**
-   * Immediately sends all pending eligible earnings as a PayPal payout batch.
-   * Calls POST /api/payouts/create. Refreshes the page on success so the
-   * payout dashboard and pending counts reflect the new state.
-   * Side effects: creates payout batch + items in DB, submits to PayPal API.
-   */
-  async function handleSendNow() {
-    setSending(true);
-    setToast(null);
-    try {
-      const res = await fetch("/api/payouts/create", { method: "POST" });
-      const data = (await res.json()) as PayoutCreateResponse;
-      if (!res.ok || !data.success) {
-        showToast(
-          "error",
-          data.error ?? "Failed to send payouts. Check the Payouts page for details."
-        );
-        return;
-      }
-      showToast(
-        "success",
-        `Payout batch sent to PayPal${data.paypalBatchId ? ` (${data.paypalBatchId})` : ""}.`
-      );
-      router.refresh();
-    } catch {
-      showToast("error", "Something went wrong sending payouts.");
-    } finally {
-      setSending(false);
-    }
-  }
-
   return (
     <div className="space-y-8">
       {/* ── Platform fee ────────────────────────────────────────────────── */}
@@ -386,7 +355,7 @@ export default function PayoutSettingsPanel({
               <span className="absolute right-3 text-sm text-gray-500 pointer-events-none">%</span>
             </div>
           </div>
-          <MarginReadout feePercent={parseFloat(feePercent)} />
+          <MarginReadout feePercent={parseFloat(feePercent)} feeModel={upcoming.payoutFeeModel} />
         </div>
       </div>
 
@@ -482,35 +451,6 @@ export default function PayoutSettingsPanel({
         </button>
       </div>
 
-      {/* ── Manual send ─────────────────────────────────────────────────── */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">
-          Send Payouts Now
-        </h2>
-        <p className="text-xs text-gray-500 mb-4">
-          Immediately disburse all pending eligible earnings to instructors via PayPal
-          Payouts, regardless of the trigger mode above. Only instructors with a saved
-          payout email will receive funds. You can also send payouts from the{" "}
-          <a href="/admin/payouts" className="text-red-600 hover:underline">Payouts page</a>.
-        </p>
-        <div className="bg-white border border-gray-200 rounded-lg p-5">
-          <button
-            type="button"
-            onClick={handleSendNow}
-            disabled={sending}
-            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <Send className="h-4 w-4" />
-            {sending ? "Sending…" : "Send Payouts Now"}
-          </button>
-          <p className="text-xs text-gray-400 mt-3">
-            This creates one PayPal Payouts batch grouping all instructors with pending
-            earnings. PayPal accepting the batch is not confirmation that it was delivered;
-            track the outcome in Payout history below.
-          </p>
-        </div>
-      </div>
-
       {/* ── Upcoming payouts ─────────────────────────────────────────────── */}
       <div>
         <h2 className="text-lg font-semibold text-gray-900 mb-1">
@@ -518,9 +458,12 @@ export default function PayoutSettingsPanel({
         </h2>
         <p className="text-xs text-gray-500 mb-4">
           Who is owed what right now, which classes the money came from, and what
-          SuperHeroCPR actually keeps once PayPal has taken its cut on both ends.
+          SuperHeroCPR actually keeps once PayPal has taken its cut on both ends. Tick the
+          instructors or classes you want to pay, or use Pay all, then confirm to send them
+          through PayPal. You can also send from the{" "}
+          <a href="/admin/payouts" className="text-red-600 hover:underline">Payouts page</a>.
         </p>
-        <UpcomingPayoutsPanel data={upcoming} />
+        <PayoutSendSection upcoming={upcoming} />
       </div>
 
       {/* ── Payout history ───────────────────────────────────────────────── */}
