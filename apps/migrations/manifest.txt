@@ -84,4 +84,6 @@
 0074_contact_inquiry_hiring_to_instructor.sql
 0075_manual_payout_settlement.sql
 0076_signups_until_class_ends.sql
+0077_invoice_payment_method_fees.sql
+0078_selective_payout_reservation.sql
 replace-user-uuid.sql

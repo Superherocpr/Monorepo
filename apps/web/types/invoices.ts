@@ -11,6 +11,9 @@ export type InvoiceType = "individual" | "group";
 /** Invoice status values for invoices.status enum. */
 export type InvoiceStatus = "sent" | "paid" | "cancelled";
 
+/** How an invoice was paid. Only `paypal` incurs a PayPal collection fee. */
+export type InvoicePaymentMethod = "paypal" | "check" | "cash" | "bank_transfer" | "other";
+
 /**
  * An invoice record from the `invoices` table.
  * invoice_number (e.g. "INV-00042") is used as the roster upload lookup key.
@@ -35,6 +38,12 @@ export interface Invoice {
   paid_at: string | null;
   cancelled_at: string | null;
   created_at: string;
+  /** How the invoice was paid; null until paid, and on invoices paid before migration 0077. */
+  payment_method: InvoicePaymentMethod | null;
+  /** PayPal collection fee in dollars. 0 for non-PayPal methods; null = not yet known. */
+  paypal_fee_amount: number | null;
+  /** Amount credited to the business account after the fee; null whenever the fee is. */
+  net_amount: number | null;
 }
 
 /**

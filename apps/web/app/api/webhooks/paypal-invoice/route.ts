@@ -109,6 +109,8 @@ export async function POST(request: Request): Promise<Response> {
     invoiceId: invoiceRow.id,
     actorId: invoiceRow.instructor_id,
     source: "webhook",
+    // PayPal only fires this event for a payment made through PayPal.
+    paymentMethod: "paypal",
   });
 
   if (!result.success) {

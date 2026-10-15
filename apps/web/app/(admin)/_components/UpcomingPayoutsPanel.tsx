@@ -8,7 +8,7 @@
  *          app/(admin)/admin/settings/_components/PayoutSettingsPanel.tsx
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   ChevronDown,
@@ -19,7 +19,17 @@ import {
   Wallet,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/invoice-utils";
+import { describePayoutFeeModel } from "@/lib/payout-fees";
+import {
+  allEarningIds,
+  groupEarningIds,
+  selectionState,
+  toggleIds,
+  type PayoutSelection,
+  type SelectionState,
+} from "@/lib/payout-selection";
 import type {
+  PayoutFeeModel,
   PayoutRevenueTotals,
   UpcomingPayoutGroup,
   UpcomingPayoutsData,
@@ -27,6 +37,41 @@ import type {
 
 interface UpcomingPayoutsPanelProps {
   data: UpcomingPayoutsData;
+  /**
+   * When given, the payable-now table shows checkboxes so the admin can choose
+   * which instructors and classes to pay. Omit for a read-only view.
+   */
+  selection?: PayoutSelection;
+}
+
+/**
+ * A checkbox that can show "some selected" (the dash state). Used for instructors
+ * and the select-all header, which cover several classes at once.
+ */
+function TriStateCheckbox({
+  state,
+  onChange,
+  label,
+}: {
+  state: SelectionState;
+  onChange: () => void;
+  label: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = state === "some";
+  }, [state]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={state === "all"}
+      onChange={onChange}
+      aria-label={label}
+      className="h-4 w-4 cursor-pointer rounded border-gray-300 text-red-600 focus:ring-red-500"
+    />
+  );
 }
 
 /** Formats a class session date compactly, or returns null when there is none. */
@@ -76,17 +121,28 @@ function StatTile({
  * Measured PayPal fees and estimated ones are labelled separately: the outbound
  * fee cannot be known until the payout is actually sent.
  */
-function RevenueStrip({ totals }: { totals: PayoutRevenueTotals }) {
+function RevenueStrip({
+  totals,
+  feeModel,
+}: {
+  totals: PayoutRevenueTotals;
+  feeModel: PayoutFeeModel;
+}) {
   const totalFees = totals.inboundPayPalFees + totals.estimatedPayoutFees;
   const partial = totals.feeUntrackedCount > 0;
 
   return (
     <div className="mb-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatTile
-          label="Collected from customers"
+          label="Charged to customers"
           value={formatCurrency(totals.grossCollected)}
-          hint={`${totals.earningCount} payment${totals.earningCount === 1 ? "" : "s"} in this payout`}
+          hint={`${totals.earningCount} payment${totals.earningCount === 1 ? "" : "s"} in this payout, before PayPal fees`}
+        />
+        <StatTile
+          label="Deposited to PayPal"
+          value={formatCurrency(totals.depositedAmount)}
+          hint={`After ${formatCurrency(totals.inboundPayPalFees)} collection fees${partial ? "*" : ""}`}
         />
         <StatTile
           label="To instructors"
@@ -112,12 +168,19 @@ function RevenueStrip({ totals }: { totals: PayoutRevenueTotals }) {
         />
       </div>
 
+      <p className="mt-2 text-[11px] leading-snug text-gray-500">
+        Payout fees are estimated at {describePayoutFeeModel(feeModel)}. SuperHeroCPR pays
+        this fee, so instructors receive the full payout amount. PayPal only charges it when
+        a payout is delivered, not when one is denied.
+      </p>
+
       {partial ? (
         <p className="mt-2 text-[11px] leading-snug text-gray-500">
           * {totals.feeUntrackedCount} of {totals.earningCount} payments have no PayPal fee
-          recorded; invoices and offline payments do not report one, so the collection fee
-          above covers only the {totals.feeTrackedCount} that do. The real net is therefore
-          slightly optimistic.
+          recorded yet, so the collection fee above covers only the {totals.feeTrackedCount}
+          that do. This is usually a PayPal invoice whose fee PayPal has not reported (it can
+          take a few hours); it fills in automatically. Until then, the deposited amount and
+          real net are slightly optimistic.
         </p>
       ) : null}
     </div>
@@ -130,15 +193,27 @@ function InstructorRow({
   expanded,
   onToggle,
   showPayoutEmail,
+  selection,
 }: {
   group: UpcomingPayoutGroup;
   expanded: boolean;
   onToggle: () => void;
   showPayoutEmail: boolean;
+  selection?: PayoutSelection;
 }) {
+  const groupIds = groupEarningIds(group);
   return (
     <>
       <tr className="hover:bg-gray-50">
+        {selection ? (
+          <td className="w-10 px-4 py-3">
+            <TriStateCheckbox
+              state={selectionState(groupIds, selection.selected)}
+              onChange={() => selection.onChange(toggleIds(selection.selected, groupIds))}
+              label={`Pay ${group.instructorName}`}
+            />
+          </td>
+        ) : null}
         <td className="px-4 py-3">
           <button
             type="button"
@@ -185,6 +260,9 @@ function InstructorRow({
         <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
           {formatCurrency(group.instructorAmount)}
         </td>
+        <td className="px-4 py-3 text-right text-sm text-gray-600">
+          ~{formatCurrency(group.estimatedPayoutFee)}
+        </td>
       </tr>
 
       {expanded
@@ -192,6 +270,17 @@ function InstructorRow({
             const sessionDate = formatSessionDate(source.sessionDate);
             return (
               <tr key={source.key} className="bg-gray-50/70">
+                {selection ? (
+                  <td className="w-10 px-4 py-2.5">
+                    <TriStateCheckbox
+                      state={selectionState(source.earningIds, selection.selected)}
+                      onChange={() =>
+                        selection.onChange(toggleIds(selection.selected, source.earningIds))
+                      }
+                      label={`Pay ${source.label} for ${group.instructorName}`}
+                    />
+                  </td>
+                ) : null}
                 <td className="py-2.5 pl-10 pr-4">
                   <span className="flex items-start gap-2">
                     {source.kind === "session" ? (
@@ -232,6 +321,7 @@ function InstructorRow({
                 <td className="px-4 py-2.5 text-right text-xs font-medium text-gray-700">
                   {formatCurrency(source.instructorAmount)}
                 </td>
+                <td className="px-4 py-2.5" />
               </tr>
             );
           })
@@ -249,6 +339,7 @@ function BucketSection({
   icon,
   accentClass,
   emptyMessage,
+  selection,
 }: {
   title: string;
   description: string;
@@ -257,6 +348,8 @@ function BucketSection({
   icon: React.ReactNode;
   accentClass: string;
   emptyMessage: string;
+  /** Present only for the payable bucket; other buckets cannot be paid yet. */
+  selection?: PayoutSelection;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -294,12 +387,29 @@ function BucketSection({
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
               <tr>
+                {selection ? (
+                  <th className="w-10 px-4 py-2.5">
+                    <TriStateCheckbox
+                      state={selectionState(allEarningIds(groups), selection.selected)}
+                      onChange={() =>
+                        selection.onChange(toggleIds(selection.selected, allEarningIds(groups)))
+                      }
+                      label="Select every instructor"
+                    />
+                  </th>
+                ) : null}
                 <th className="px-4 py-2.5">Instructor</th>
                 <th className="px-4 py-2.5">PayPal email</th>
-                <th className="px-4 py-2.5 text-right">Lines</th>
+                <th className="px-4 py-2.5 text-right">Classes</th>
                 <th className="px-4 py-2.5 text-right">Gross</th>
                 <th className="px-4 py-2.5 text-right">Cut</th>
                 <th className="px-4 py-2.5 text-right">Payout</th>
+                <th
+                  className="px-4 py-2.5 text-right"
+                  title="Estimated PayPal fee to send this payout. SuperHeroCPR pays it; the instructor receives the full payout amount."
+                >
+                  Send fee (est.)
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -310,6 +420,7 @@ function BucketSection({
                   expanded={expandedIds.has(group.instructorId)}
                   onToggle={() => toggle(group.instructorId)}
                   showPayoutEmail
+                  selection={selection}
                 />
               ))}
             </tbody>
@@ -325,7 +436,7 @@ function BucketSection({
  * buckets, with a revenue summary showing real margin after PayPal fees.
  * All state is local expansion state; data is fetched server-side.
  */
-export default function UpcomingPayoutsPanel({ data }: UpcomingPayoutsPanelProps) {
+export default function UpcomingPayoutsPanel({ data, selection }: UpcomingPayoutsPanelProps) {
   const hasAnything =
     data.payableNow.length > 0 || data.blocked.length > 0 || data.inFlight.length > 0;
 
@@ -345,16 +456,17 @@ export default function UpcomingPayoutsPanel({ data }: UpcomingPayoutsPanelProps
 
   return (
     <div>
-      {data.payableNow.length > 0 ? <RevenueStrip totals={data.payableTotals} /> : null}
+      {data.payableNow.length > 0 ? <RevenueStrip totals={data.payableTotals} feeModel={data.payoutFeeModel} /> : null}
 
       <BucketSection
         title="Payable now"
-        description="Ready to send. These instructors have a PayPal payout email saved. Expand a row to see which classes the money came from."
+        description="Ready to send. These instructors have a PayPal payout email saved. Tick the instructors or classes to pay, or expand a row to see which classes the money came from."
         total={data.payableTotals.instructorTotal}
         groups={data.payableNow}
         icon={<Wallet className="h-4 w-4" aria-hidden="true" />}
         accentClass="text-green-700"
         emptyMessage="Nothing is ready to pay right now."
+        selection={selection}
       />
 
       {data.blocked.length > 0 ? (

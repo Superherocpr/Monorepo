@@ -46,6 +46,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
       amount_per_student, custom_price, total_amount,
       payment_platform, platform_invoice_id,
       status, notes, created_at, paid_at, cancelled_at,
+      payment_method, paypal_fee_amount, net_amount,
       instructor_id,
       class_sessions (
         id, starts_at, ends_at,

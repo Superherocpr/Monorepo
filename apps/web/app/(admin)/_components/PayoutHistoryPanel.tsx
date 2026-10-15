@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/invoice-utils";
 import { formatManualPaidOn } from "@/lib/payout-manual";
+import { describePayoutFee } from "@/lib/payout-fees";
 import {
   MANUAL_PAYOUT_METHODS,
   MANUAL_PAYOUT_METHOD_LABELS,
@@ -115,6 +116,16 @@ const PARTLY_PAID_BADGE = {
   classes: "bg-amber-100 text-amber-900",
   icon: <CheckCircle2 className="h-3 w-3" aria-hidden="true" />,
 };
+
+/**
+ * A payout fee cell: the amount PayPal charged, or a short reason there is none
+ * (denied, paid by hand, or not reported yet). Used for batches and their items.
+ */
+function PayoutFeeCell({ status, fee }: { status: string; fee: number | null }) {
+  const described = describePayoutFee(status, fee);
+  if (described.kind === "amount") return <>{formatCurrency(described.amount)}</>;
+  return <span className="text-gray-400">{described.text}</span>;
+}
 
 /** Badge appearance per payout item status. */
 const ITEM_STATUS_BADGES: Record<PayoutItemStatus, { label: string; classes: string }> = {
@@ -642,7 +653,7 @@ function ItemRow({
         </span>
       </td>
       <td className="px-4 py-2.5 text-right text-xs text-gray-600">
-        {item.paypalFeeAmount === null ? "-" : formatCurrency(item.paypalFeeAmount)}
+        <PayoutFeeCell status={item.status} fee={item.paypalFeeAmount} />
       </td>
       <td className="px-4 py-2.5 text-right text-xs font-medium text-gray-700">
         {formatCurrency(item.amount)}
@@ -1061,9 +1072,7 @@ export default function PayoutHistoryPanel({ batches }: PayoutHistoryPanelProps)
                       </td>
 
                       <td className="px-4 py-3 text-right text-sm text-gray-600">
-                        {batch.paypalFeeTotal === null
-                          ? "-"
-                          : formatCurrency(batch.paypalFeeTotal)}
+                        <PayoutFeeCell status={batch.status} fee={batch.paypalFeeTotal} />
                       </td>
 
                       <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">

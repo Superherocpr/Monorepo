@@ -9,7 +9,11 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { estimatePayoutFee } from "@/lib/payout-fees";
+import {
+  derivePayoutFeeModel,
+  estimatePayoutFee,
+  type PayoutFeeObservation,
+} from "@/lib/payout-fees";
 import type {
   InstructorEarningsData,
   InstructorEarningsSummary,
@@ -18,6 +22,7 @@ import type {
   ManualPayoutMethod,
   PayoutBatchStatus,
   PayoutDenialSource,
+  PayoutFeeModel,
   PayoutHistoryBatch,
   PayoutHistoryItem,
   PayoutItemStatus,
@@ -77,7 +82,7 @@ function displayName(
 }
 
 /** Raw earning row with its instructor profile joined. */
-interface RawEarningRow {
+export interface RawEarningRow {
   id: string;
   instructor_id: string;
   status: string;
@@ -184,32 +189,96 @@ async function loadInvoiceContexts(
 }
 
 /**
- * Loads measured PayPal processing fees for the payments behind these earnings.
+ * Loads the recorded PayPal collection fee behind each earning.
+ *
+ * A booking earning reads the fee off its payment row (captured from PayPal at
+ * checkout). An invoice earning has no payment row, so it reads the fee stored
+ * on the invoice itself: a PayPal figure for PayPal invoices, a known 0 for
+ * check, cash and bank transfer.
+ *
  * @param adminClient - Admin Supabase client.
- * @param paymentIds - Payment ids referenced by pending earnings.
- * @returns Map of payment id to its recorded fee, null where untracked.
+ * @param rows - Earning rows to find fees for.
+ * @returns Map of earning id to its fee in dollars; null where not tracked.
  */
-async function loadPaymentFees(
+async function loadEarningFees(
   adminClient: AnySupabaseClient,
-  paymentIds: string[]
+  rows: RawEarningRow[]
 ): Promise<Map<string, number | null>> {
+  const paymentIds = rows.map((row) => row.payment_id).filter((id): id is string => Boolean(id));
+  const invoiceIds = rows
+    .filter((row) => !row.payment_id)
+    .map((row) => row.invoice_id)
+    .filter((id): id is string => Boolean(id));
+
+  const [paymentResult, invoiceResult] = await Promise.all([
+    paymentIds.length > 0
+      ? adminClient.from("payments").select("id, paypal_fee_amount").in("id", paymentIds)
+      : Promise.resolve({ data: [], error: null }),
+    invoiceIds.length > 0
+      ? adminClient.from("invoices").select("id, paypal_fee_amount").in("id", invoiceIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  logQueryError("payment fees", paymentResult.error);
+  logQueryError("invoice fees", invoiceResult.error);
+
+  const feeById = (data: unknown): Map<string, number | null> => {
+    const map = new Map<string, number | null>();
+    for (const row of (data ?? []) as Array<{
+      id: string;
+      paypal_fee_amount: number | string | null;
+    }>) {
+      map.set(row.id, nullableMoney(row.paypal_fee_amount));
+    }
+    return map;
+  };
+  const paymentFees = feeById(paymentResult.data);
+  const invoiceFees = feeById(invoiceResult.data);
+
   const fees = new Map<string, number | null>();
-  if (paymentIds.length === 0) return fees;
-
-  const { data, error } = await adminClient
-    .from("payments")
-    .select("id, paypal_fee_amount")
-    .in("id", paymentIds);
-  logQueryError("payment fees", error);
-
-  for (const row of (data ?? []) as Array<{
-    id: string;
-    paypal_fee_amount: number | string | null;
-  }>) {
-    fees.set(row.id, nullableMoney(row.paypal_fee_amount));
+  for (const row of rows) {
+    if (row.payment_id) {
+      fees.set(row.id, paymentFees.get(row.payment_id) ?? null);
+    } else if (row.invoice_id) {
+      fees.set(row.id, invoiceFees.get(row.invoice_id) ?? null);
+    } else {
+      fees.set(row.id, null);
+    }
   }
-
   return fees;
+}
+
+/** How many recent batches the payout fee rate is learned from. */
+const FEE_MODEL_SAMPLE_BATCHES = 20;
+
+/**
+ * Learns how PayPal charges this account to send a payout.
+ *
+ * Reads the fee PayPal reported on the most recent batches, including denied ones:
+ * a denied batch is never charged, but its header still quotes the fee PayPal would
+ * have charged, which is the only record of the rate until a payout succeeds.
+ *
+ * @param adminClient - Admin Supabase client.
+ * @returns A flat per-item model when the observed fees agree, else PayPal's published rate.
+ */
+async function loadPayoutFeeModel(adminClient: AnySupabaseClient): Promise<PayoutFeeModel> {
+  const { data, error } = await adminClient
+    .from("instructor_payout_batches")
+    .select("paypal_fee_total, instructor_payout_items(count)")
+    .not("paypal_fee_total", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(FEE_MODEL_SAMPLE_BATCHES);
+  logQueryError("payout fee model", error);
+
+  const observations: PayoutFeeObservation[] = [];
+  for (const row of (data ?? []) as unknown as Array<{
+    paypal_fee_total: number | string | null;
+    instructor_payout_items: Array<{ count: number }> | null;
+  }>) {
+    const feeTotal = nullableMoney(row.paypal_fee_total);
+    const itemCount = row.instructor_payout_items?.[0]?.count ?? 0;
+    if (feeTotal !== null) observations.push({ feeTotal, itemCount });
+  }
+  return derivePayoutFeeModel(observations);
 }
 
 /** Accumulator used while grouping earnings by instructor and source. */
@@ -223,12 +292,14 @@ interface GroupAccumulator {
  * @param rows - Earning rows to group.
  * @param bookingContexts - Session context per booking id.
  * @param invoiceContexts - Invoice context per invoice id.
+ * @param feeModel - How PayPal charges this account to send a payout.
  * @returns Instructor groups sorted by name, each with sorted source lines.
  */
 function groupEarnings(
   rows: RawEarningRow[],
   bookingContexts: Map<string, BookingContext>,
-  invoiceContexts: Map<string, InvoiceContext>
+  invoiceContexts: Map<string, InvoiceContext>,
+  feeModel: PayoutFeeModel
 ): UpcomingPayoutGroup[] {
   const accumulators = new Map<string, GroupAccumulator>();
 
@@ -264,7 +335,10 @@ function groupEarnings(
 
     // Resolve which line this earning rolls up into.
     let key: string;
-    let source: Omit<UpcomingPayoutSource, "grossAmount" | "platformFeeAmount" | "instructorAmount" | "soldCount">;
+    let source: Omit<
+      UpcomingPayoutSource,
+      "grossAmount" | "platformFeeAmount" | "instructorAmount" | "soldCount" | "earningIds"
+    >;
 
     if (row.booking_id) {
       const context = bookingContexts.get(row.booking_id);
@@ -297,6 +371,7 @@ function groupEarnings(
       existing.platformFeeAmount += platformFee;
       existing.instructorAmount += instructorAmount;
       existing.soldCount += 1;
+      existing.earningIds.push(row.id);
     } else {
       accumulator.sources.set(key, {
         ...source,
@@ -304,6 +379,7 @@ function groupEarnings(
         grossAmount: gross,
         platformFeeAmount: platformFee,
         instructorAmount: instructorAmount,
+        earningIds: [row.id],
       });
     }
   }
@@ -316,7 +392,7 @@ function groupEarnings(
       instructorAmount: roundCurrency(group.instructorAmount),
       // One payout item per instructor, so the fee is estimated on the combined
       // amount — that is what makes batching cheaper than paying per booking.
-      estimatedPayoutFee: estimatePayoutFee(roundCurrency(group.instructorAmount)),
+      estimatedPayoutFee: estimatePayoutFee(roundCurrency(group.instructorAmount), feeModel),
       sources: Array.from(sources.values())
         .map((source) => ({
           ...source,
@@ -341,13 +417,13 @@ function groupEarnings(
  * Sums revenue, measured inbound fees, and estimated outbound fees for a bucket.
  * @param rows - Earning rows in the bucket.
  * @param groups - Grouped instructor payouts for the same rows.
- * @param paymentFees - Measured PayPal fee per payment id.
+ * @param earningFees - Recorded PayPal collection fee per earning id (null = not tracked).
  * @returns Totals with measured and estimated figures kept distinct.
  */
-function sumTotals(
+export function sumTotals(
   rows: RawEarningRow[],
   groups: UpcomingPayoutGroup[],
-  paymentFees: Map<string, number | null>
+  earningFees: Map<string, number | null>
 ): PayoutRevenueTotals {
   let grossCollected = 0;
   let platformCut = 0;
@@ -361,10 +437,12 @@ function sumTotals(
     platformCut += money(row.platform_fee_amount);
     instructorTotal += money(row.instructor_amount);
 
-    const fee = row.payment_id ? paymentFees.get(row.payment_id) ?? null : null;
+    const fee = earningFees.get(row.id) ?? null;
     if (fee === null) {
-      // Invoices and offline payments never report a fee. Counted separately so
-      // the UI can say the net figure is partial rather than implying zero cost.
+      // No fee recorded: a PayPal invoice still waiting for PayPal to report it,
+      // or a payment from before fees were tracked. A check or cash invoice is NOT
+      // here; its fee is a recorded 0. Counted separately so the UI can say the
+      // figures are partial rather than implying zero cost.
       feeUntrackedCount += 1;
     } else {
       inboundPayPalFees += fee;
@@ -382,6 +460,7 @@ function sumTotals(
     platformCut: roundCurrency(platformCut),
     instructorTotal: roundCurrency(instructorTotal),
     inboundPayPalFees: roundCurrency(inboundPayPalFees),
+    depositedAmount: roundCurrency(grossCollected - inboundPayPalFees),
     feeTrackedCount,
     feeUntrackedCount,
     estimatedPayoutFees: roundCurrency(estimatedPayoutFees),
@@ -434,7 +513,7 @@ export async function getUpcomingPayoutsData(
 
   const rows = (earningRows ?? []) as unknown as RawEarningRow[];
 
-  const [bookingContexts, invoiceContexts, paymentFees] = await Promise.all([
+  const [bookingContexts, invoiceContexts, earningFees, feeModel] = await Promise.all([
     loadBookingContexts(
       adminClient,
       rows.map((row) => row.booking_id).filter((id): id is string => Boolean(id))
@@ -443,10 +522,8 @@ export async function getUpcomingPayoutsData(
       adminClient,
       rows.map((row) => row.invoice_id).filter((id): id is string => Boolean(id))
     ),
-    loadPaymentFees(
-      adminClient,
-      rows.map((row) => row.payment_id).filter((id): id is string => Boolean(id))
-    ),
+    loadEarningFees(adminClient, rows),
+    loadPayoutFeeModel(adminClient),
   ]);
 
   const pendingRows = rows.filter((row) => row.status === "pending");
@@ -458,15 +535,16 @@ export async function getUpcomingPayoutsData(
   const payableRows = pendingRows.filter(hasPayoutEmail);
   const blockedRows = pendingRows.filter((row) => !hasPayoutEmail(row));
 
-  const payableNow = groupEarnings(payableRows, bookingContexts, invoiceContexts);
-  const blocked = groupEarnings(blockedRows, bookingContexts, invoiceContexts);
-  const inFlight = groupEarnings(inFlightRows, bookingContexts, invoiceContexts);
+  const payableNow = groupEarnings(payableRows, bookingContexts, invoiceContexts, feeModel);
+  const blocked = groupEarnings(blockedRows, bookingContexts, invoiceContexts, feeModel);
+  const inFlight = groupEarnings(inFlightRows, bookingContexts, invoiceContexts, feeModel);
 
   return {
     payableNow,
     blocked,
     inFlight,
-    payableTotals: sumTotals(payableRows, payableNow, paymentFees),
+    payableTotals: sumTotals(payableRows, payableNow, earningFees),
+    payoutFeeModel: feeModel,
     blockedTotal: roundCurrency(
       blocked.reduce((sum, group) => sum + group.instructorAmount, 0)
     ),

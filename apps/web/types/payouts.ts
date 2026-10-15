@@ -117,6 +117,10 @@ export interface ReservedPayoutResult {
   available?: number;
   batch?: ReservedPayoutBatch;
   items?: ReservedPayoutItem[];
+  /** Earnings the caller asked for; null when it asked for "all eligible". */
+  requested_count?: number | null;
+  /** Earnings actually reserved. May be fewer than requested if some moved on. */
+  reserved_count?: number;
 }
 
 // ── Admin dashboard display shapes ───────────────────────────────────────────
@@ -140,6 +144,8 @@ export interface UpcomingPayoutSource {
   grossAmount: number;
   platformFeeAmount: number;
   instructorAmount: number;
+  /** Every earning behind this line. Selecting the line selects exactly these. */
+  earningIds: string[];
 }
 
 /** An instructor's upcoming payout, broken down by what generated it. */
@@ -158,13 +164,31 @@ export interface UpcomingPayoutGroup {
 }
 
 /**
+ * How PayPal's fee to send one payout item is estimated.
+ *
+ * `published` is PayPal's standard US rate (2%, capped at $1). `flat` is a fixed
+ * fee per payout item learned from what PayPal actually reported on this account's
+ * own batches, which is more accurate than the published rate when an account is
+ * on different pricing.
+ */
+export type PayoutFeeModel =
+  | { kind: "published" }
+  | {
+      kind: "flat";
+      /** Fee PayPal reported per payout item, in dollars. */
+      perItem: number;
+      /** Payout items the rate was learned from. */
+      sampleItems: number;
+    };
+
+/**
  * Revenue and fee totals for a set of earnings.
  *
  * Inbound fees are measured values read from PayPal. Outbound fees are estimates,
  * because the money has not been sent yet — the UI must label them as such.
  */
 export interface PayoutRevenueTotals {
-  /** Total collected from customers. */
+  /** Total charged to customers, before any PayPal fee. */
   grossCollected: number;
   /** Platform cut before any PayPal fees. */
   platformCut: number;
@@ -172,9 +196,11 @@ export interface PayoutRevenueTotals {
   instructorTotal: number;
   /** Measured PayPal fees already paid to collect this money. */
   inboundPayPalFees: number;
-  /** Earnings with a recorded PayPal fee. */
+  /** What actually reached the business account: charged minus recorded collection fees. */
+  depositedAmount: number;
+  /** Earnings with a recorded PayPal fee (a recorded 0 counts: check and cash invoices). */
   feeTrackedCount: number;
-  /** Earnings with no recorded fee (invoices and offline payments). */
+  /** Earnings with no recorded fee yet (PayPal invoices awaiting PayPal, or pre-tracking payments). */
   feeUntrackedCount: number;
   /** Estimated PayPal fees to send the payouts. */
   estimatedPayoutFees: number;
@@ -194,6 +220,8 @@ export interface UpcomingPayoutsData {
   inFlight: UpcomingPayoutGroup[];
   /** Totals across the payable-now bucket. */
   payableTotals: PayoutRevenueTotals;
+  /** How the estimated payout fees on this page were worked out. */
+  payoutFeeModel: PayoutFeeModel;
   /** Instructor amount held back for missing payout setup. */
   blockedTotal: number;
   /** Instructor amount currently in flight at PayPal. */

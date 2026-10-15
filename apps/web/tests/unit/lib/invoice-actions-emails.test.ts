@@ -26,6 +26,11 @@ vi.mock("@/lib/instructor-earnings", () => ({
   recordInvoiceEarning: vi.fn().mockResolvedValue(undefined),
 }));
 
+const recordInvoicePaymentMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/invoice-fees", () => ({
+  recordInvoicePayment: (...args: unknown[]) => recordInvoicePaymentMock(...args),
+}));
+
 vi.mock("@/lib/payout-trigger", () => ({
   maybeTriggerImmediatePayout: vi.fn().mockResolvedValue(undefined),
 }));
@@ -47,6 +52,7 @@ function invoiceRow(over: Record<string, unknown> = {}) {
     recipient_email: "billing@tgh.example.com",
     status: "sent",
     total_amount: "600.00",
+    platform_invoice_id: "INV2-TEST-0001",
     class_session_id: "44444444-4444-4444-4444-444444444444",
     profiles: { email: "alex@example.com", first_name: "Alex", last_name: "Lee" },
     class_sessions: {
@@ -82,12 +88,45 @@ beforeEach(() => {
   sendEmailMock.mockResolvedValue({ sent: true, id: "email-1" });
 });
 
+describe("markInvoicePaidAndNotify payment method", () => {
+  test("records the chosen payment method against the invoice", async () => {
+    await markInvoicePaidAndNotify(mockClient(invoiceRow()), {
+      invoiceId: INVOICE_ID,
+      actorId: ACTOR_ID,
+      source: "manual",
+      paymentMethod: "check",
+    });
+
+    // The method is what decides whether a PayPal fee applies, so it must reach
+    // the fee recorder with the invoice total and PayPal id intact.
+    expect(recordInvoicePaymentMock).toHaveBeenCalledTimes(1);
+    const params = recordInvoicePaymentMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(params).toMatchObject({
+      invoiceId: INVOICE_ID,
+      method: "check",
+      totalAmount: 600,
+      platformInvoiceId: "INV2-TEST-0001",
+    });
+  });
+
+  test("records nothing when the invoice is not payable", async () => {
+    await markInvoicePaidAndNotify(mockClient(invoiceRow({ status: "paid" })), {
+      invoiceId: INVOICE_ID,
+      actorId: ACTOR_ID,
+      source: "webhook",
+      paymentMethod: "paypal",
+    });
+
+    expect(recordInvoicePaymentMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("markInvoicePaidAndNotify", () => {
   test("emails both the instructor and the invoice recipient", async () => {
     const result = await markInvoicePaidAndNotify(mockClient(invoiceRow()), {
       invoiceId: INVOICE_ID,
       actorId: ACTOR_ID,
-      source: "manual",
+      source: "manual", paymentMethod: "check",
     });
 
     expect(result.success).toBe(true);
@@ -112,7 +151,7 @@ describe("markInvoicePaidAndNotify", () => {
     await markInvoicePaidAndNotify(mockClient(invoiceRow()), {
       invoiceId: INVOICE_ID,
       actorId: ACTOR_ID,
-      source: "webhook",
+      source: "webhook", paymentMethod: "paypal",
     });
 
     // Manual and webhook paths must behave identically — that is the whole
@@ -123,7 +162,7 @@ describe("markInvoicePaidAndNotify", () => {
   test("still notifies the recipient when the instructor has no email", async () => {
     await markInvoicePaidAndNotify(
       mockClient(invoiceRow({ profiles: { email: null, first_name: "Alex", last_name: "Lee" } })),
-      { invoiceId: INVOICE_ID, actorId: ACTOR_ID, source: "manual" }
+      { invoiceId: INVOICE_ID, actorId: ACTOR_ID, source: "manual", paymentMethod: "check" }
     );
 
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
@@ -136,7 +175,7 @@ describe("markInvoicePaidAndNotify", () => {
     await markInvoicePaidAndNotify(mockClient(invoiceRow({ recipient_email: null })), {
       invoiceId: INVOICE_ID,
       actorId: ACTOR_ID,
-      source: "manual",
+      source: "manual", paymentMethod: "check",
     });
 
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
@@ -149,7 +188,7 @@ describe("markInvoicePaidAndNotify", () => {
     const result = await markInvoicePaidAndNotify(mockClient(null), {
       invoiceId: INVOICE_ID,
       actorId: ACTOR_ID,
-      source: "manual",
+      source: "manual", paymentMethod: "check",
     });
 
     expect(result.success).toBe(false);
@@ -160,7 +199,7 @@ describe("markInvoicePaidAndNotify", () => {
     const result = await markInvoicePaidAndNotify(mockClient(invoiceRow({ status: "paid" })), {
       invoiceId: INVOICE_ID,
       actorId: ACTOR_ID,
-      source: "manual",
+      source: "manual", paymentMethod: "check",
     });
 
     // Re-marking a paid invoice must not re-announce the payment.

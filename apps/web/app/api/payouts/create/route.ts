@@ -11,6 +11,13 @@
  *   - X-Payout-Source: "scheduled" — checks payout_trigger = "scheduled" and whether
  *     today matches payout_schedule (daily/weekly/monthly) before proceeding
  *
+ * Body (session path only, optional): { earningIds: string[] }
+ *   Omitted      -> every eligible pending earning (what the automatic modes do).
+ *   A list       -> ONLY those earnings, each re-checked for eligibility inside the
+ *                   reservation function. An empty or malformed list is rejected
+ *                   with 400; it must never be read as "everything". Cron callers
+ *                   cannot narrow a batch: their body is ignored.
+ *
  * Atomically reserves pending instructor earnings, then hands the reservation to
  * submitReservedPayout() — shared with POST /api/payouts/retry — which sends the
  * PayPal batch and records the result. A successful send leaves the batch
@@ -23,6 +30,39 @@ import { requireApiRole } from "@/lib/auth/effective-role";
 import { submitReservedPayout } from "@/lib/payout-submit";
 import type { ReservedPayoutResult } from "@/types/payouts";
 import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
+
+/** Most earnings one manual payout may name; far above any real batch. */
+const MAX_SELECTED_EARNINGS = 1000;
+
+/** Matches a canonical UUID, so only well-formed ids ever reach the database. */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Outcome of reading the optional earning selection from a request body. */
+type SelectionParse =
+  | { ok: true; earningIds: string[] | null }
+  | { ok: false; error: string };
+
+/**
+ * Reads the optional `earningIds` selection from a request body.
+ * @param body - Parsed JSON body, or null when absent or unparseable.
+ * @returns null ids when no selection was sent; otherwise a validated, de-duplicated
+ *          list. A key that is present but empty, oversized or malformed is an error.
+ */
+function parseSelection(body: unknown): SelectionParse {
+  if (typeof body !== "object" || body === null || !("earningIds" in body)) {
+    return { ok: true, earningIds: null };
+  }
+  const ids = (body as { earningIds: unknown }).earningIds;
+  if (
+    !Array.isArray(ids) ||
+    ids.length === 0 ||
+    ids.length > MAX_SELECTED_EARNINGS ||
+    !ids.every((id): id is string => typeof id === "string" && UUID_PATTERN.test(id))
+  ) {
+    return { ok: false, error: "Choose at least one valid earning to pay out." };
+  }
+  return { ok: true, earningIds: [...new Set(ids.map((id) => id.toLowerCase()))] };
+}
 
 /**
  * Returns the current super admin's profile id or a Response when unauthorized.
@@ -94,12 +134,15 @@ function isScheduleDue(schedule: string): boolean {
 }
 
 /**
- * Creates and sends one PayPal payout batch for all currently pending earnings.
+ * Creates and sends one PayPal payout batch for the pending earnings an admin
+ * selected, or for all of them when no selection is given.
  * Side effects: database reservation + PayPal Payouts API call + DB status updates.
  * @param request - Incoming HTTP request (used for cron auth and source header).
  */
 async function handlePOST(request: Request) {
   let actorId: string;
+  // Only an admin's session may narrow a batch; automatic triggers pay everyone eligible.
+  let earningIds: string[] | null = null;
 
   // ── Cron / system bearer path ────────────────────────────────────────────
   if (isCronRequest(request)) {
@@ -132,11 +175,20 @@ async function handlePOST(request: Request) {
     const sessionActor = await requireSuperAdmin();
     if (sessionActor instanceof Response) return sessionActor;
     actorId = sessionActor;
+
+    const selection = parseSelection(await request.json().catch(() => null));
+    if (!selection.ok) {
+      return Response.json({ success: false, error: selection.error }, { status: 400 });
+    }
+    earningIds = selection.earningIds;
   }
 
   const adminClient = await createAdminClient();
+  // p_earning_ids is left out entirely for "everyone eligible" so that path keeps
+  // working against the database before migration 0078 adds the parameter.
   const { data, error } = await adminClient.rpc("reserve_instructor_payout_batch", {
     p_actor_id: actorId,
+    ...(earningIds ? { p_earning_ids: earningIds } : {}),
   });
 
   if (error) {
@@ -157,7 +209,9 @@ async function handlePOST(request: Request) {
         success: false,
         error:
           reservation?.reason === "no_eligible_earnings"
-            ? "No pending earnings are ready to pay. Check that instructors have payout emails saved."
+            ? earningIds
+              ? "None of the selected earnings could be paid. They may already have been sent, or the instructor has no payout email saved."
+              : "No pending earnings are ready to pay. Check that instructors have payout emails saved."
             : "No eligible payouts found.",
       },
       { status: 400 }
@@ -179,6 +233,9 @@ async function handlePOST(request: Request) {
     paypalBatchId: result.paypalBatchId,
     totalAmount: result.totalAmount,
     itemCount: result.itemCount,
+    // Lets the UI say so when some selected earnings had already moved on.
+    requestedCount: earningIds ? earningIds.length : null,
+    reservedCount: reservation.reserved_count ?? null,
   });
 }
 

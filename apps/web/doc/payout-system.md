@@ -53,9 +53,27 @@ PayPal capture response and stores the **real** processing fee on the `payments`
 row (`paypal_fee_amount`, `net_amount`). This costs no extra API call and is the
 only exact source for what a payment cost.
 
-A `NULL` fee means **not tracked**, never zero. PayPal-invoice payments and
-manually logged cash/check payments do not report a fee, so their rows stay null
-and the dashboard says so rather than implying the money was free to collect.
+A `NULL` fee means **not tracked**, never zero.
+
+Invoices have no `payments` row, so the same facts live on the invoice itself
+(`payment_method`, `paypal_fee_amount`, `net_amount`, migration 0077). Whoever marks
+an invoice paid chooses how it was paid:
+
+| Method | Fee recorded |
+|---|---|
+| Check, cash, bank transfer, other | A known **$0** (it did not go through PayPal) |
+| PayPal (including the PayPal webhook, which always means PayPal) | Read from PayPal's Transaction Search, as `fee_amount` |
+
+PayPal reports a transaction's fee up to three hours late, so a PayPal invoice is
+saved with an unknown fee at first (`NULL`, shown as "Waiting for PayPal") and the
+hourly `POST /api/payouts/sync` job fills it in (`syncInvoicePayPalFees` in
+`lib/invoice-fees.ts`). If Transaction Search is not enabled on the PayPal app,
+the sync logs the reason and the fee stays unknown rather than being guessed.
+
+Payout fees work the same way in reverse: the real per-recipient fee is read from
+`payout_item_fee` when a payout is reconciled. A finished batch that still has a
+completed item with no fee is re-read by the hourly sync for 30 days, because a
+completed batch is otherwise terminal and a late fee would stay blank.
 
 **Plain English:** SuperHeroCPR collects all the money first, then records an IOU to
 the instructor in the database, along with what PayPal charged to collect it.
@@ -70,12 +88,27 @@ Configured in Admin Settings → Payouts tab (`system_settings.payout_trigger`):
 |---|---|
 | **Immediate** | Right after every booking/invoice payment, `lib/payout-trigger.ts` fires a non-blocking background fetch to `POST /api/payouts/create` |
 | **Scheduled** | A `pg_cron` database job (migration 0021) calls `POST /api/payouts/create` on a daily/weekly/monthly schedule |
-| **Manual** | A super_admin clicks "Send Payouts" on `/admin/payouts` or in Settings → Payouts |
+| **Manual** | A super_admin ticks instructors and/or individual classes on `/admin/payouts` (or in Settings → Payouts), then confirms. **Pay all** selects everything payable. Only the ticked earnings are sent |
 
 All three paths hit the same route. The trigger mode only controls *when* it is called.
 
-**Cost note:** PayPal's payout fee is charged **per recipient item** (US domestic:
-2%, capped at $1). Batching an instructor's earnings into one item pays that cap
+**Choosing what to pay (manual mode).** The Upcoming panel's payable table has a
+checkbox per instructor, per class and per invoice. A class or invoice is the
+smallest thing that can be ticked, and ticking an instructor ticks all of theirs.
+The page sends the ticked *earning ids* to `POST /api/payouts/create`
+(`lib/payout-selection.ts` holds the selection logic). The automatic modes
+(Immediate, Scheduled) cannot name earnings: they always pay everyone eligible, and
+the route ignores any selection from a cron caller.
+
+**Cost note:** PayPal's payout fee is charged **per recipient item**. The published
+US rate is 2% capped at $1, but this account's own batches report a flat $0.25 per
+item whatever the amount, so the dashboard learns the rate from the fees PayPal has
+actually reported (`derivePayoutFeeModel` in `lib/payout-fees.ts`): if every recent
+batch implies the same per-item fee it is treated as flat, otherwise the published
+rate is used. The Upcoming panel shows the estimate per instructor ("Send fee") and
+says where the rate came from. SuperHeroCPR pays this fee; instructors receive the
+full payout. A denied or failed payout is shown as "Not charged" even though PayPal's
+batch header still quotes a would-be fee, and a payout paid by hand shows no fee. Batching an instructor's earnings into one item pays that cap
 once; Immediate mode creates a separate batch per transaction and pays it per
 booking. The Settings → Payouts tab quantifies the difference for whatever is
 currently queued.
@@ -89,7 +122,8 @@ currently queued.
 This is a single PostgreSQL function that does everything atomically using
 `FOR UPDATE SKIP LOCKED` to prevent double-paying:
 
-1. Finds all `instructor_earnings` rows where:
+1. Finds the `instructor_earnings` rows (all of them, or only the ids the admin
+   selected, migration 0078) where:
    - `status = 'pending'`
    - `instructor_amount > 0`
    - The instructor has a `paypal_payout_email` saved and is not archived or deactivated
