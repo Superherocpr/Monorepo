@@ -13,16 +13,19 @@
  * tests/unit/lib/changelog.test.ts enforces ordering, format, and that a new
  * minor or major version in package.json has an entry.
  *
- * Versions before 1.8.0 were reconstructed from git history: each entry is filed
- * under the first version bump at or after the work landed.
+ * Versions up to 1.7.0 were reconstructed from git history: each entry is filed
+ * under the first version bump at or after the work landed. 1.7.0 also holds the
+ * What's New page itself and the team-invoice travel fee fix, because the app
+ * version was rolled back to 1.7.0 on 2026-10-17 (the 1.8.0 and 1.9.0 bumps were
+ * folded into it).
  */
 
 import type { ChangelogEntry } from "@/types/changelog";
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
-  // ── 1.9.0 ──────────────────────────────────────────────────────────────────
+  // ── 1.7.0 ──────────────────────────────────────────────────────────────────
   {
-    version: "1.9.0",
+    version: "1.7.0",
     date: "2026-10-17",
     kind: "fixed",
     title: "Travel and setup fee on company team invoices",
@@ -31,22 +34,18 @@ export const CHANGELOG: readonly ChangelogEntry[] = [
     roles: ["super_admin", "manager", "instructor"],
     href: "/admin/sessions/new",
   },
-
-  // ── 1.8.0 ──────────────────────────────────────────────────────────────────
   {
-    version: "1.8.0",
-    date: "2026-10-15",
+    version: "1.7.0",
+    date: "2026-10-17",
     kind: "new",
     title: "What's New page",
     summary:
       "This page. Whenever a feature is added or something changes in a way that matters to you, it is listed here under the version number shown at the bottom of the sidebar. A number beside What's New in the menu tells you how many entries you have not read yet.",
     href: "/admin/whats-new",
   },
-
-  // ── 1.7.0 ──────────────────────────────────────────────────────────────────
   {
     version: "1.7.0",
-    date: "2026-10-15",
+    date: "2026-10-17",
     kind: "new",
     title: "Pay only the instructors you choose",
     summary:
@@ -56,7 +55,7 @@ export const CHANGELOG: readonly ChangelogEntry[] = [
   },
   {
     version: "1.7.0",
-    date: "2026-10-15",
+    date: "2026-10-17",
     kind: "new",
     title: "Invoices record how they were paid and what it cost",
     summary:
