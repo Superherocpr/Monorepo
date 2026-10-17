@@ -28,7 +28,7 @@ import { randomUUID } from "node:crypto";
 import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClassSession, type CreateClassSessionParams } from "@/lib/session-create";
-import { createAndSendInvoice } from "@/lib/invoice-actions";
+import { createAndSendInvoice, type InvoiceLineItem } from "@/lib/invoice-actions";
 import {
   teamBookingCreatedEmail,
   teamClassUpdatedEmail,
@@ -39,6 +39,7 @@ import {
 } from "@/lib/emails";
 import { hasClassEnded } from "@/lib/business-time";
 import { applyDiscountPercent, normalizeDiscountPercent } from "@/lib/session-pricing";
+import { resolveTeamTravelFee, validateTravelFee } from "@/lib/team-travel-fee";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabaseClient = SupabaseClient<any, "public", any>;
@@ -98,6 +99,12 @@ export interface TeamBookingDetails {
   totalPrice?: number | null;
   /** Set when created via "Convert to team booking" from a class request. */
   classRequestId?: string | null;
+  /**
+   * Travel & setup fee staff entered for a company-paid class. Null/undefined
+   * takes the $65 default; 0 waives it. Ignored when employees pay ('per_seat'),
+   * where the fee is always waived. See lib/team-travel-fee.ts.
+   */
+  travelFee?: number | null;
 }
 
 /** Everything needed to create a team booking, with or without a new session. */
@@ -143,7 +150,16 @@ export type CreateTeamBookingResult =
  * @returns An error message, or null when the shape is valid.
  */
 export function validateTeamPricing(details: TeamBookingDetails): string | null {
+  const travelFeeError = validateTravelFee(details.travelFee);
+  if (travelFeeError) return travelFeeError;
+
   if (details.paymentMode === "per_seat") {
+    // The fee is waived when employees pay their own seat. Rejecting a positive
+    // fee here, rather than silently dropping it, stops staff believing a fee
+    // was applied that never will be.
+    if (details.travelFee != null && details.travelFee > 0) {
+      return "The travel fee is waived when employees pay for their own seat.";
+    }
     if (typeof details.pricePerSeat !== "number" || !Number.isFinite(details.pricePerSeat)) {
       return "A price per seat is required when employees pay individually.";
     }
@@ -211,6 +227,10 @@ export async function createTeamBooking(
   // rejects signups on an unapproved session, so the link waits.
   const autoApprove = actorRole === "manager" || actorRole === "super_admin";
 
+  // Stored on the session so the invoice (raised now or after the class) reads
+  // one source of truth. null when employees pay: the fee is waived.
+  const travelFee = resolveTeamTravelFee(isCompanyBilled(details.paymentMode), details.travelFee);
+
   // ── Resolve the session ──────────────────────────────────────────────────
   let sessionId: string;
 
@@ -231,12 +251,28 @@ export async function createTeamBooking(
     // A team booking may already exist for this session — allow it (a company
     // could book two blocks), but the link is per team_bookings row either way.
     sessionId = existing.id as string;
+
+    // Written before the booking exists so a failure here cannot leave a
+    // company-paid class that will invoice without its fee. Skipped when
+    // employees pay: an existing fee (e.g. from a customer request) is left alone.
+    if (travelFee !== null) {
+      const { error: feeError } = await adminClient
+        .from("class_sessions")
+        .update({ travel_fee: travelFee })
+        .eq("id", sessionId);
+
+      if (feeError) {
+        console.error("[createTeamBooking] travel_fee update failed:", feeError);
+        return { success: false, error: "Failed to set the travel fee on the class.", status: 500 };
+      }
+    }
   } else {
     const created = await createClassSession(adminClient, {
       ...target.session,
       // Corporate classes never appear on the public schedule.
       isPrivate: true,
       autoApprove,
+      travelFee,
     });
 
     if (!created.success) {
@@ -399,18 +435,26 @@ export async function createTeamBooking(
  * @param mode - The booking's payment mode.
  * @param totalPrice - Flat total, for 'company' mode.
  * @param pricePerSeat - Per-head rate, for the other two modes.
+ * @param travelFee - The session's travel & setup fee. Only mentioned when the
+ *                    company is billed and the fee is above zero, so the contact
+ *                    is told about it before the invoice arrives.
  * @returns A phrase such as "$80.00 per person who signs up".
  */
 export function describeTeamPrice(
   mode: TeamPaymentMode | string,
   totalPrice: number | null,
-  pricePerSeat: number | null
+  pricePerSeat: number | null,
+  travelFee: number | null = null
 ): string {
+  const feeSuffix =
+    isCompanyBilled(mode) && travelFee !== null && travelFee > 0
+      ? `, plus a $${travelFee.toFixed(2)} travel and setup fee`
+      : "";
   if (mode === "company") {
-    return `$${(totalPrice ?? 0).toFixed(2)} total, billed to the company`;
+    return `$${(totalPrice ?? 0).toFixed(2)} total, billed to the company${feeSuffix}`;
   }
   if (mode === "company_per_signup") {
-    return `$${(pricePerSeat ?? 0).toFixed(2)} per person who signs up, billed to the company`;
+    return `$${(pricePerSeat ?? 0).toFixed(2)} per person who signs up, billed to the company${feeSuffix}`;
   }
   return `$${(pricePerSeat ?? 0).toFixed(2)} per seat`;
 }
@@ -439,7 +483,7 @@ async function sendShareLinkEmail(
     adminClient.from("profiles").select("first_name, email").eq("id", args.actorId).maybeSingle(),
     adminClient
       .from("class_sessions")
-      .select("starts_at, class_types ( name ), locations ( name )")
+      .select("starts_at, travel_fee, class_types ( name ), locations ( name )")
       .eq("id", args.sessionId)
       .maybeSingle(),
   ]);
@@ -453,7 +497,8 @@ async function sendShareLinkEmail(
   const priceLabel = describeTeamPrice(
     args.details.paymentMode,
     args.details.totalPrice ?? null,
-    args.details.pricePerSeat ?? null
+    args.details.pricePerSeat ?? null,
+    session.travel_fee == null ? null : Number(session.travel_fee)
   );
 
   const { subject, html } = teamBookingCreatedEmail({
@@ -537,7 +582,7 @@ export async function sendContactShareLink(
   const { data: session } = await adminClient
     .from("class_sessions")
     .select(
-      `starts_at, ends_at, approval_status, status, instructor_id,
+      `starts_at, ends_at, approval_status, status, instructor_id, travel_fee,
        class_types ( name ),
        locations ( name, address, city, state, zip )`
     )
@@ -585,7 +630,12 @@ export async function sendContactShareLink(
     shareUrl: `${baseUrl}/team/${booking.share_token}`,
     paymentMode: booking.payment_mode as TeamPaymentMode,
     pricePerSeat: perSeat,
-    priceLabel: describeTeamPrice(booking.payment_mode, total, perSeat),
+    priceLabel: describeTeamPrice(
+      booking.payment_mode,
+      total,
+      perSeat,
+      session.travel_fee == null ? null : Number(session.travel_fee)
+    ),
     supportPhone: await resolveSupportPhone(adminClient, session.instructor_id as string | null),
   });
 
@@ -711,7 +761,7 @@ async function createTeamInvoice(
   const { data: session } = await adminClient
     .from("class_sessions")
     .select(
-      `starts_at, instructor_id,
+      `starts_at, instructor_id, travel_fee,
        class_types ( name ),
        locations ( name, city, state )`
     )
@@ -738,6 +788,13 @@ async function createTeamInvoice(
 
   const total = args.details.totalPrice as number;
 
+  // The travel & setup fee is added on top of the price as its own line, so the
+  // company can see it separately. Only company-billed bookings reach this
+  // function; employee-paid classes never invoice, so the waiver needs no check.
+  const travelFee = Number(session.travel_fee) || 0;
+  const extraLineItems: InvoiceLineItem[] =
+    travelFee > 0 ? [{ name: "Travel & Setup Fee", quantity: 1, unitAmount: travelFee }] : [];
+
   const result = await createAndSendInvoice(adminClient, {
     sessionId: args.sessionId,
     instructorId: session.instructor_id as string,
@@ -749,7 +806,9 @@ async function createTeamInvoice(
     // Zero so this invoice never reserves seats — see the doc comment above.
     studentCount: 0,
     amountPerStudent: total,
-    totalAmount: total,
+    // The fee is part of what the company owes, so it is part of the invoice
+    // total and of the instructor earning computed from it.
+    totalAmount: Math.round((total + travelFee) * 100) / 100,
     // Suppresses the per-student breakdown in the invoice UI, which is
     // meaningless for a flat corporate rate.
     customPrice: true,
@@ -769,6 +828,7 @@ async function createTeamInvoice(
       quantity: 1,
       unitAmount: total,
     },
+    extraLineItems,
   });
 
   if (!result.success) {

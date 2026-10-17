@@ -535,6 +535,15 @@ export default function SessionDetailClient({
       : final;
   }, [session.team_booking?.price_per_seat, session.discount_percent]);
 
+  /**
+   * Tail for the team card's price line when the company is also billed the
+   * travel & setup fee. Empty when waived, so employee-paid cards never mention it.
+   */
+  const teamFeeSuffix =
+    session.travel_fee != null && Number(session.travel_fee) > 0
+      ? `, plus $${Number(session.travel_fee).toFixed(2)} travel and setup fee`
+      : "";
+
   // ── UI state ──────────────────────────────────────────────────────────────
 
   const [showRejectForm, setShowRejectForm] = useState(false);
@@ -2639,9 +2648,9 @@ export default function SessionDetailClient({
               </div>
               <p className="text-xs font-medium text-indigo-900 shrink-0">
                 {session.team_booking.payment_mode === "company"
-                  ? `$${Number(session.team_booking.total_price ?? 0).toFixed(2)} total, billed to the company`
+                  ? `$${Number(session.team_booking.total_price ?? 0).toFixed(2)} total, billed to the company${teamFeeSuffix}`
                   : session.team_booking.payment_mode === "company_per_signup"
-                    ? `$${Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} per signup, billed to the company`
+                    ? `$${Number(session.team_booking.price_per_seat ?? 0).toFixed(2)} per signup, billed to the company${teamFeeSuffix}`
                     : `${perSeatLabel} per seat, paid by each employee`}
               </p>
             </div>

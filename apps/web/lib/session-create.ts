@@ -49,6 +49,11 @@ export interface CreateClassSessionParams {
    * live immediately — book_spot rejects signups on unapproved sessions.
    */
   autoApprove?: boolean;
+  /**
+   * Flat travel & setup fee stored on the session (class_sessions.travel_fee).
+   * Only team bookings pass this; null/undefined leaves the column null.
+   */
+  travelFee?: number | null;
 }
 
 export type CreateClassSessionResult =
@@ -147,6 +152,7 @@ export async function createClassSession(
         : {}),
       ...(params.isPrivate ? { is_private: true } : {}),
       ...(params.autoApprove ? { approval_status: "approved" } : {}),
+      ...(params.travelFee != null ? { travel_fee: params.travelFee } : {}),
       // Defaults set by DB: status = 'scheduled', approval_status = 'pending_approval'
     })
     .select("id")
