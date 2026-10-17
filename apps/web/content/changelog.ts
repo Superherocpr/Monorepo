@@ -20,6 +20,18 @@
 import type { ChangelogEntry } from "@/types/changelog";
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
+  // ── 1.9.0 ──────────────────────────────────────────────────────────────────
+  {
+    version: "1.9.0",
+    date: "2026-10-17",
+    kind: "fixed",
+    title: "Travel and setup fee on company team invoices",
+    summary:
+      "Team classes where the company pays now include the $65 travel and setup fee as its own line on the invoice, added on top of the price. For a per-signup class it is added once, not per person. The fee box on the New Session form is pre-filled with $65 and you can change it or set it to 0. Classes where each employee pays their own seat have no fee.",
+    roles: ["super_admin", "manager", "instructor"],
+    href: "/admin/sessions/new",
+  },
+
   // ── 1.8.0 ──────────────────────────────────────────────────────────────────
   {
     version: "1.8.0",

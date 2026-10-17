@@ -18,6 +18,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AddLocationPanel, { type NewLocationResult } from "@/app/(admin)/_components/AddLocationPanel";
 import { toFloatingISO, addFloatingMinutes } from "@/lib/business-time";
+import { TEAM_TRAVEL_FEE_DEFAULT, validateTravelFee } from "@/lib/team-travel-fee";
 import TourButton from "@/components/tours/TourButton";
 import { CREATE_SESSION_STEPS } from "./tourSteps";
 import { TEAM_BOOKING_STEPS } from "./teamBookingTourSteps";
@@ -118,6 +119,11 @@ interface TeamForm {
    * employee pays in per_seat, what the company owes per signup otherwise).
    */
   price: string;
+  /**
+   * Travel & setup fee added on top of the price when the company pays (either
+   * company mode). Not shown, and not sent, when employees pay their own seat.
+   */
+  travel_fee: string;
 }
 
 const EMPTY_TEAM_FORM: TeamForm = {
@@ -127,6 +133,7 @@ const EMPTY_TEAM_FORM: TeamForm = {
   contact_phone: "",
   payment_mode: "per_seat",
   price: "",
+  travel_fee: String(TEAM_TRAVEL_FEE_DEFAULT),
 };
 
 /** What the API returns after a team booking is created. */
@@ -365,6 +372,7 @@ export default function CreateSessionClient({
 
     // ── Team-mode validation ────────────────────────────────────────────────
     let teamPrice: number | null = null;
+    let teamTravelFee: number | null = null;
     if (isTeam) {
       if (!teamForm.company_name.trim()) {
         setError("Please enter the company name.");
@@ -402,6 +410,20 @@ export default function CreateSessionClient({
         setError("The rate per signup must be greater than zero.");
         return;
       }
+      // The fee only exists when the company pays; employees paying their own
+      // seat never see it. A blank box is an error, not $0, so a waiver is deliberate.
+      if (teamForm.payment_mode !== "per_seat") {
+        teamTravelFee = parseFloat(teamForm.travel_fee);
+        if (teamForm.travel_fee === "" || isNaN(teamTravelFee)) {
+          setError("Please enter the travel fee, or 0 to waive it.");
+          return;
+        }
+        const feeError = validateTravelFee(teamTravelFee);
+        if (feeError) {
+          setError(feeError);
+          return;
+        }
+      }
     }
 
     // Stored as floating wall-clock time: the time entered here is the time
@@ -438,6 +460,7 @@ export default function CreateSessionClient({
       } else {
         payload.price_per_seat = teamPrice;
       }
+      if (teamTravelFee !== null) payload.travel_fee = teamTravelFee;
       if (classRequestId) payload.class_request_id = classRequestId;
     }
 
@@ -921,6 +944,32 @@ export default function CreateSessionClient({
                     : "What each employee pays at signup. This replaces the standard class price, and the Discount below is taken off it. Promo codes still apply."}
               </p>
             </div>
+
+            {teamForm.payment_mode !== "per_seat" && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="cs-team-travel-fee" className="text-sm font-medium text-gray-700">
+                  Travel &amp; Setup Fee <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500 select-none">$</span>
+                  <input
+                    id="cs-team-travel-fee"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={teamForm.travel_fee}
+                    onChange={(e) => setTeamField("travel_fee", e.target.value)}
+                    aria-describedby="cs-team-travel-fee-help"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <p id="cs-team-travel-fee-help" className="text-xs text-gray-400">
+                  Added to the company&apos;s invoice as its own line, on top of the{" "}
+                  {teamForm.payment_mode === "company" ? "total price" : "per-signup charges"}. Enter 0
+                  to waive it. It is never charged when employees pay for their own seat.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

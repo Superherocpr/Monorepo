@@ -15,6 +15,11 @@
  * POST /api/sessions. Manager/super-admin sessions are auto-approved so the
  * share link works immediately; instructor-created ones wait for approval.
  *
+ * When the company pays (company or company_per_signup) the optional `travel_fee`
+ * body field sets the travel & setup fee stored on the session and added to the
+ * invoice; it defaults to $65, 0 waives it, and a positive value is rejected when
+ * employees pay their own seat. See lib/team-travel-fee.ts.
+ *
  * Returns the share token so the caller can display the link to hand over.
  */
 
@@ -98,12 +103,17 @@ export async function POST(request: Request): Promise<Response> {
 
   const pricePerSeat = body.price_per_seat;
   const totalPrice = body.total_price;
+  const travelFee = body.travel_fee;
 
   if (pricePerSeat !== undefined && pricePerSeat !== null && typeof pricePerSeat !== "number") {
     return NextResponse.json({ error: "price_per_seat must be a number." }, { status: 400 });
   }
   if (totalPrice !== undefined && totalPrice !== null && typeof totalPrice !== "number") {
     return NextResponse.json({ error: "total_price must be a number." }, { status: 400 });
+  }
+  // Range and per-seat waiver are enforced by validateTeamPricing in createTeamBooking.
+  if (travelFee !== undefined && travelFee !== null && typeof travelFee !== "number") {
+    return NextResponse.json({ error: "travel_fee must be a number." }, { status: 400 });
   }
 
   const details = {
@@ -115,6 +125,7 @@ export async function POST(request: Request): Promise<Response> {
     pricePerSeat: (pricePerSeat as number | null | undefined) ?? null,
     totalPrice: (totalPrice as number | null | undefined) ?? null,
     classRequestId: typeof body.class_request_id === "string" ? body.class_request_id : null,
+    travelFee: (travelFee as number | null | undefined) ?? null,
   };
 
   // ── Resolve the target: existing session, or a new one to create ──────────

@@ -15,6 +15,8 @@ import {
   generateShareToken,
   getTeamBookingByShareToken,
   ensureTeamInvoice,
+  createTeamBooking,
+  describeTeamPrice,
   notifyTeamClassUpdated,
   MAIN_CANCELLATION_PHONE,
   type TeamBookingDetails,
@@ -1074,5 +1076,298 @@ describe("notifyTeamClassUpdated", () => {
 
     await expect(notifyTeamClassUpdated(supabase as never, args)).resolves.toBeUndefined();
     expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Travel & setup fee
+// ---------------------------------------------------------------------------
+
+/**
+ * Rule agreed 2026-10-17: the $65 travel & setup fee rides on every team class
+ * where the COMPANY pays (flat or per signup), added on top of the price, and is
+ * waived when employees pay their own seat. Before this, a team invoice was only
+ * ever the typed total or signups x rate, so the fee silently never reached the
+ * company (it was not stored on the session either).
+ */
+describe("travel fee: validateTeamPricing", () => {
+  test("accepts a company booking carrying a fee, and one carrying 0 to waive it", () => {
+    const company = { paymentMode: "company" as const, pricePerSeat: null, totalPrice: 900 };
+    expect(validateTeamPricing(details({ ...company, travelFee: 65 }))).toBeNull();
+    expect(validateTeamPricing(details({ ...company, travelFee: 0 }))).toBeNull();
+  });
+
+  test("rejects a positive fee on an employee-paid booking instead of silently dropping it", () => {
+    expect(validateTeamPricing(details({ travelFee: 65 }))).toMatch(/waived when employees pay/i);
+  });
+
+  test("lets an employee-paid booking carry a zero fee", () => {
+    expect(validateTeamPricing(details({ travelFee: 0 }))).toBeNull();
+  });
+
+  test("rejects a negative fee", () => {
+    expect(
+      validateTeamPricing(
+        details({ paymentMode: "company", pricePerSeat: null, totalPrice: 900, travelFee: -5 })
+      )
+    ).toMatch(/cannot be negative/i);
+  });
+});
+
+describe("travel fee: describeTeamPrice", () => {
+  test("tells the company about the fee in both company modes", () => {
+    expect(describeTeamPrice("company", 900, null, 65)).toBe(
+      "$900.00 total, billed to the company, plus a $65.00 travel and setup fee"
+    );
+    expect(describeTeamPrice("company_per_signup", null, 80, 65)).toBe(
+      "$80.00 per person who signs up, billed to the company, plus a $65.00 travel and setup fee"
+    );
+  });
+
+  test("says nothing about a fee that is waived, zero, or absent", () => {
+    expect(describeTeamPrice("company", 900, null, 0)).toBe("$900.00 total, billed to the company");
+    expect(describeTeamPrice("company", 900, null, null)).toBe("$900.00 total, billed to the company");
+  });
+
+  test("never mentions a fee on an employee-paid booking", () => {
+    expect(describeTeamPrice("per_seat", null, 80, 65)).toBe("$80.00 per seat");
+  });
+});
+
+describe("travel fee: the invoice", () => {
+  beforeEach(() => {
+    createAndSendInvoiceMock.mockReset();
+    createAndSendInvoiceMock.mockResolvedValue({
+      success: true,
+      invoiceId: "inv-fee",
+      invoiceNumber: "INV-00009",
+    });
+  });
+
+  /** Session and profile rows the invoice path reads, with a chosen fee. */
+  function feeContext(travelFee: unknown) {
+    return {
+      class_sessions: {
+        starts_at: "2026-11-17T09:00:00",
+        instructor_id: INSTRUCTOR_ID,
+        travel_fee: travelFee,
+        class_types: { name: "BLS Renewals" },
+        locations: { name: "Acme HQ", city: "Tampa", state: "FL" },
+      },
+      profiles: { first_name: "Ada", last_name: "Lovelace" },
+    };
+  }
+
+  test("flat company mode adds the fee on top of the typed total, as its own line", async () => {
+    const supabase = mockSupabase({
+      team_bookings: companyRow({ total_price: "900.00" }),
+      ...feeContext("65"),
+    });
+
+    await ensureTeamInvoice(supabase as never, { teamBookingId: TEAM_ID, actorId: CREATOR_ID });
+
+    const sent = createAndSendInvoiceMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(sent.totalAmount).toBe(965);
+    // The flat price line is untouched; the fee is separate so the company can see it.
+    expect(sent.primaryLineItem).toEqual({
+      name: "Corporate Training — BLS Renewals",
+      quantity: 1,
+      unitAmount: 900,
+    });
+    expect(sent.extraLineItems).toEqual([
+      { name: "Travel & Setup Fee", quantity: 1, unitAmount: 65 },
+    ]);
+  });
+
+  test("per-signup mode adds the fee once on top of signups x rate", async () => {
+    const supabase = mockSupabase(
+      {
+        team_bookings: companyRow({
+          payment_mode: "company_per_signup",
+          total_price: null,
+          price_per_seat: "80.00",
+        }),
+        ...feeContext("65"),
+      },
+      {},
+      [],
+      { bookings: 7 }
+    );
+
+    await ensureTeamInvoice(supabase as never, { teamBookingId: TEAM_ID, actorId: CREATOR_ID });
+
+    const sent = createAndSendInvoiceMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(sent.totalAmount).toBe(625); // 7 x $80 + $65, the fee is not per head
+    expect(sent.primaryLineItem).toMatchObject({ unitAmount: 560 });
+    expect(sent.extraLineItems).toEqual([
+      { name: "Travel & Setup Fee", quantity: 1, unitAmount: 65 },
+    ]);
+  });
+
+  test("adds no fee line when the session has no fee or a deliberate 0", async () => {
+    for (const fee of [null, "0", "0.00"]) {
+      createAndSendInvoiceMock.mockClear();
+      const supabase = mockSupabase({
+        team_bookings: companyRow({ total_price: "900.00" }),
+        ...feeContext(fee),
+      });
+
+      await ensureTeamInvoice(supabase as never, { teamBookingId: TEAM_ID, actorId: CREATOR_ID });
+
+      const sent = createAndSendInvoiceMock.mock.calls[0][1] as Record<string, unknown>;
+      expect(sent.totalAmount).toBe(900);
+      expect(sent.extraLineItems).toEqual([]);
+    }
+  });
+
+  test("per-signup with nobody signed up still bills nothing, fee included", async () => {
+    const supabase = mockSupabase(
+      {
+        team_bookings: companyRow({
+          payment_mode: "company_per_signup",
+          total_price: null,
+          price_per_seat: "80.00",
+        }),
+        ...feeContext("65"),
+      },
+      {},
+      [],
+      { bookings: 0 }
+    );
+
+    const result = await ensureTeamInvoice(supabase as never, {
+      teamBookingId: TEAM_ID,
+      actorId: CREATOR_ID,
+    });
+
+    // A $65-only invoice for a class nobody joined is deliberately not raised.
+    expect(result.status).toBe("nothing_to_bill");
+    expect(createAndSendInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  test("reads travel_fee from the session in its query", async () => {
+    const supabase = mockSupabase({
+      team_bookings: companyRow({ total_price: "900.00" }),
+      ...feeContext("65"),
+    });
+
+    await ensureTeamInvoice(supabase as never, { teamBookingId: TEAM_ID, actorId: CREATOR_ID });
+
+    // The mock returns whatever it is given, so pin the query shape too.
+    expect((selectsByTable.get("class_sessions") ?? [])[0]).toContain("travel_fee");
+  });
+});
+
+/** Replaces session creation so the fee createTeamBooking hands it can be asserted. */
+const createClassSessionMock = vi.fn();
+vi.mock("@/lib/session-create", () => ({
+  createClassSession: (...args: unknown[]) => createClassSessionMock(...args),
+}));
+
+describe("travel fee: createTeamBooking stores it on the session", () => {
+  /** Records every class_sessions UPDATE so the stored fee can be asserted. */
+  function bookingSupabase() {
+    const sessionUpdates: Array<Record<string, unknown>> = [];
+    const from = vi.fn((table: string) => {
+      const chain: Record<string, unknown> = {};
+      const self = () => chain;
+      const row =
+        table === "team_bookings"
+          ? { id: TEAM_ID }
+          : { id: SESSION_ID, status: "scheduled", approval_status: "approved" };
+      chain.select = vi.fn(self);
+      chain.eq = vi.fn(self);
+      chain.insert = vi.fn(self);
+      chain.update = vi.fn((values: Record<string, unknown>) => {
+        if (table === "class_sessions") sessionUpdates.push(values);
+        return chain;
+      });
+      chain.maybeSingle = vi.fn(() => Promise.resolve({ data: row, error: null }));
+      chain.single = vi.fn(() => Promise.resolve({ data: row, error: null }));
+      chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: row, error: null });
+      return chain;
+    });
+    return { client: { from } as never, sessionUpdates };
+  }
+
+  const newSession = {
+    classTypeId: "ct",
+    instructorId: INSTRUCTOR_ID,
+    locationId: "loc",
+    startsAt: "2026-11-17T09:00:00.000Z",
+    endsAt: "2026-11-17T13:00:00.000Z",
+    maxCapacity: 20,
+    discountPercent: null,
+  };
+
+  beforeEach(() => {
+    createClassSessionMock.mockReset();
+    createClassSessionMock.mockResolvedValue({ success: true, sessionId: SESSION_ID });
+  });
+
+  /** Runs createTeamBooking for a per-signup or per-seat booking on a new session. */
+  async function createNew(overrides: Partial<TeamBookingDetails>) {
+    const { client } = bookingSupabase();
+    const result = await createTeamBooking(client, {
+      actorId: CREATOR_ID,
+      actorRole: "super_admin",
+      details: details({ paymentMode: "company_per_signup", pricePerSeat: 80, ...overrides }),
+      target: { kind: "new", session: newSession },
+    });
+    expect(result.success).toBe(true);
+    return createClassSessionMock.mock.calls[0][1] as Record<string, unknown>;
+  }
+
+  test("a company-paid class defaults to $65 when staff leave the fee alone", async () => {
+    expect((await createNew({})).travelFee).toBe(65);
+  });
+
+  test("a staff-entered fee is stored, including 0 to waive it", async () => {
+    expect((await createNew({ travelFee: 90 })).travelFee).toBe(90);
+    createClassSessionMock.mockClear();
+    expect((await createNew({ travelFee: 0 })).travelFee).toBe(0);
+  });
+
+  test("an employee-paid class stores no fee", async () => {
+    const params = await createNew({ paymentMode: "per_seat", pricePerSeat: 35 });
+    expect(params.travelFee).toBeNull();
+  });
+
+  test("attaching to an existing class writes the fee onto that session", async () => {
+    const { client, sessionUpdates } = bookingSupabase();
+    const result = await createTeamBooking(client, {
+      actorId: CREATOR_ID,
+      actorRole: "super_admin",
+      details: details({ paymentMode: "company_per_signup", pricePerSeat: 80 }),
+      target: { kind: "existing", sessionId: SESSION_ID },
+    });
+
+    expect(result.success).toBe(true);
+    expect(sessionUpdates).toEqual([{ travel_fee: 65 }]);
+  });
+
+  test("attaching an employee-paid booking leaves the session's fee alone", async () => {
+    const { client, sessionUpdates } = bookingSupabase();
+    await createTeamBooking(client, {
+      actorId: CREATOR_ID,
+      actorRole: "super_admin",
+      details: details(),
+      target: { kind: "existing", sessionId: SESSION_ID },
+    });
+
+    expect(sessionUpdates).toEqual([]);
+  });
+
+  test("refuses a positive fee on an employee-paid booking before anything is created", async () => {
+    const { client } = bookingSupabase();
+    const result = await createTeamBooking(client, {
+      actorId: CREATOR_ID,
+      actorRole: "super_admin",
+      details: details({ travelFee: 65 }),
+      target: { kind: "new", session: newSession },
+    });
+
+    expect(result.success).toBe(false);
+    expect(createClassSessionMock).not.toHaveBeenCalled();
   });
 });

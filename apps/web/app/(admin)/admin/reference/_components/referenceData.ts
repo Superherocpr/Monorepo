@@ -110,6 +110,7 @@ export const GROUPS: GroupDef[] = [
           "Submission routes the session to the approvals queue for manager review before it goes live",
           "Tick \"This is a team / corporate booking\" to set up a company class instead: enter the company name and contact, then choose who pays under \"Who is paying?\"",
           "Who is paying? has three options: Each employee (they pay their own way at signup), The company (invoiced one flat total straight away), or Company, per signup (the company is billed a set rate for each person who signs up, invoiced after the class)",
+          "When the company pays (The company, or Company, per signup) a Travel & Setup Fee box appears, pre-filled with $65. It is added on top of the price as its own line on the company's invoice, once per class, not per person. Change the amount or enter 0 to waive it. When each employee pays their own seat there is no fee",
           "The signup link is emailed to the company contact automatically, so there is nothing to forward by hand. You still get your own copy of the link, and a Copy signup link button on the class page for resending",
           "Team classes are hidden from the public schedule and are only reachable through their link; add-ons are not offered on them",
           { text: "Team bookings you create go live immediately, and the contact is emailed their link on the spot", role: "manager" },
