@@ -15,6 +15,9 @@ import {
   estimatePayoutFee,
   estimatePlatformMargin,
   PAYOUT_FEE_CAP,
+  derivePayoutFeeModel,
+  describePayoutFee,
+  describePayoutFeeModel,
 } from "@/lib/payout-fees";
 
 describe("estimateInboundFee", () => {
@@ -154,5 +157,85 @@ describe("compareBatchingCost", () => {
     expect(comparison.earningCount).toBe(0);
     expect(comparison.immediateCost).toBe(0);
     expect(comparison.savings).toBe(0);
+  });
+});
+
+describe("derivePayoutFeeModel", () => {
+  test("learns a flat per-item fee from this account's real batches", () => {
+    // Production reported $0.25 per item whatever the amount: 1 item for $72.25,
+    // 2 items for $776.04. The published 2%-capped-at-$1 rate would say $1.00.
+    const model = derivePayoutFeeModel([
+      { feeTotal: 0.25, itemCount: 1 },
+      { feeTotal: 0.5, itemCount: 2 },
+      { feeTotal: 0.5, itemCount: 2 },
+    ]);
+    expect(model).toEqual({ kind: "flat", perItem: 0.25, sampleItems: 5 });
+  });
+
+  test("falls back to the published rate when there is nothing to learn from", () => {
+    expect(derivePayoutFeeModel([])).toEqual({ kind: "published" });
+    expect(derivePayoutFeeModel([{ feeTotal: 0, itemCount: 2 }])).toEqual({ kind: "published" });
+    expect(derivePayoutFeeModel([{ feeTotal: 0.25, itemCount: 0 }])).toEqual({ kind: "published" });
+  });
+
+  test("does not call it flat when the per-item fees disagree", () => {
+    // A percentage fee would vary with the amount; guessing flat would be wrong.
+    const model = derivePayoutFeeModel([
+      { feeTotal: 0.25, itemCount: 1 },
+      { feeTotal: 1, itemCount: 1 },
+    ]);
+    expect(model).toEqual({ kind: "published" });
+  });
+});
+
+describe("estimatePayoutFee with a flat model", () => {
+  const flat = { kind: "flat", perItem: 0.25, sampleItems: 7 } as const;
+
+  test("charges the same fee whatever the amount", () => {
+    expect(estimatePayoutFee(10, flat)).toBe(0.25);
+    expect(estimatePayoutFee(1445, flat)).toBe(0.25);
+  });
+
+  test("still charges nothing for a non-positive amount", () => {
+    expect(estimatePayoutFee(0, flat)).toBe(0);
+  });
+
+  test("batching saves the flat fee for every extra payment combined", () => {
+    const comparison = compareBatchingCost([[40, 40, 40]], flat);
+    expect(comparison.immediateCost).toBe(0.75);
+    expect(comparison.batchedCost).toBe(0.25);
+    expect(comparison.savings).toBe(0.5);
+  });
+
+  test("the platform margin uses the learned fee, not the published cap", () => {
+    // $100 class at 15%: cut 15.00, collection 3.20, send 0.25 (not 1.00).
+    expect(estimatePlatformMargin(100, 15, flat).netMargin).toBe(11.55);
+  });
+});
+
+describe("describePayoutFee", () => {
+  test("a denied or failed payout was not charged, whatever the header quoted", () => {
+    expect(describePayoutFee("denied", 0.25)).toEqual({ kind: "label", text: "Not charged" });
+    expect(describePayoutFee("failed", null)).toEqual({ kind: "label", text: "Not charged" });
+  });
+
+  test("a payout paid by hand never went through PayPal", () => {
+    expect(describePayoutFee("manually_paid", null)).toEqual({
+      kind: "label",
+      text: "None (paid by hand)",
+    });
+  });
+
+  test("a delivered payout shows the recorded fee, or pending until PayPal reports it", () => {
+    expect(describePayoutFee("completed", 0.25)).toEqual({ kind: "amount", amount: 0.25 });
+    expect(describePayoutFee("completed", null)).toEqual({ kind: "label", text: "Pending" });
+  });
+});
+
+describe("describePayoutFeeModel", () => {
+  test("says where a flat rate came from", () => {
+    expect(describePayoutFeeModel({ kind: "flat", perItem: 0.25, sampleItems: 7 })).toBe(
+      "$0.25 per payout, the fee PayPal reported on your last 7 payout items"
+    );
   });
 });

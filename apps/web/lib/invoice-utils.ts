@@ -6,7 +6,7 @@
  * fall out of sync across the three invoice UI components.
  */
 
-import type { InvoiceStatus } from "@/types/invoices";
+import type { InvoicePaymentMethod, InvoiceStatus } from "@/types/invoices";
 import type { PaymentPlatform } from "@/types/users";
 
 /**
@@ -55,6 +55,15 @@ export const STATUS_BADGES: Record<InvoiceStatus, { label: string; classes: stri
   sent: { label: "Sent", classes: "bg-blue-100 text-blue-700" },
   paid: { label: "Paid", classes: "bg-green-100 text-green-700" },
   cancelled: { label: "Cancelled", classes: "bg-gray-100 text-gray-500" },
+};
+
+/** Display labels for the ways an invoice can be paid, in the order they are offered. */
+export const PAYMENT_METHOD_LABELS: Record<InvoicePaymentMethod, string> = {
+  paypal: "PayPal",
+  check: "Check",
+  cash: "Cash",
+  bank_transfer: "Bank transfer",
+  other: "Other",
 };
 
 /** Maps PaymentPlatform values to human-readable display labels. */

@@ -25,6 +25,8 @@ import {
   getPayPalConnectBase,
 } from "@/lib/paypal";
 import { recordInvoiceEarning } from "@/lib/instructor-earnings";
+import { recordInvoicePayment } from "@/lib/invoice-fees";
+import type { InvoicePaymentMethod } from "@/types/invoices";
 import { maybeTriggerImmediatePayout } from "@/lib/payout-trigger";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -438,6 +440,12 @@ export interface MarkInvoicePaidParams {
   actorId: string;
   /** Distinguishes a genuine admin/instructor click from an automated PayPal webhook, for logging only. */
   source: "manual" | "webhook";
+  /**
+   * How the invoice was paid. Required so no caller can mark an invoice paid
+   * without saying; it decides whether a PayPal collection fee applies at all.
+   * The PayPal webhook always passes "paypal".
+   */
+  paymentMethod: InvoicePaymentMethod;
 }
 
 export type MarkInvoicePaidResult =
@@ -451,7 +459,7 @@ export type MarkInvoicePaidResult =
  * Shared by POST /api/invoices/mark-paid (manual) and the PayPal paid-invoice
  * webhook, so both paths behave identically.
  * Side effects: invoices/bookings/instructor_earnings/invoice_activity_log
- * writes via the RPC, possible payout trigger, two best-effort emails.
+ * writes via the RPC, the payment method and PayPal fee on the invoice, possible payout trigger, two best-effort emails.
  * @param adminClient - Admin Supabase client (RLS-bypassing).
  * @param params - Invoice id, the actor to attribute the paid action to, and the trigger source.
  */
@@ -464,6 +472,7 @@ export async function markInvoicePaidAndNotify(
     .select(`
       id, instructor_id, invoice_number, student_count, invoice_type,
       recipient_name, recipient_email, status, total_amount, class_session_id,
+      platform_invoice_id,
       profiles ( email, first_name, last_name ),
       class_sessions ( starts_at, class_types ( name ) )
     `)
@@ -495,6 +504,17 @@ export async function markInvoicePaidAndNotify(
   }
 
   const paidAt = (rpcResult as { paid_at?: string } | null)?.paid_at;
+
+  // Recorded before the earning so the dashboard never sees a paid invoice whose
+  // payment method is still unset. Best-effort: a failure leaves the fee unknown
+  // (flagged on the dashboard) rather than undoing a payment already recorded.
+  await recordInvoicePayment(adminClient, {
+    invoiceId: invoice.id,
+    method: params.paymentMethod,
+    totalAmount: Number(invoice.total_amount),
+    platformInvoiceId: invoice.platform_invoice_id as string | null,
+    paidAt: paidAt ? new Date(paidAt) : new Date(),
+  });
 
   await recordInvoiceEarning(adminClient, {
     instructorId: invoice.instructor_id,

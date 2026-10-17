@@ -16,6 +16,7 @@ import AdminThemeScope from "./_components/AdminThemeScope";
 import AdminTopBar from "./_components/AdminTopBar";
 import ViewAsBanner from "./_components/ViewAsBanner";
 import { isTeachingRole } from "@/lib/auth/view-as-constants";
+import { loadWhatsNewState } from "@/lib/whats-new";
 
 /**
  * Wraps all /admin/* pages with auth guard, sidebar, and top bar.
@@ -59,9 +60,13 @@ export default async function AdminLayout({
     }
   }
 
+  // Unread What's New count for the sidebar badge. loadWhatsNewState swallows its
+  // own DB errors (e.g. migration 0079 not applied yet), so it cannot break the layout.
+  const { unreadKeys } = await loadWhatsNewState(user.id, role);
+
   return (
     <AdminThemeScope>
-      <AdminSidebar role={role} />
+      <AdminSidebar role={role} whatsNewUnread={unreadKeys.length} />
       <div className="flex flex-col flex-1 min-w-0">
         <AdminTopBar
           firstName={profile.first_name}

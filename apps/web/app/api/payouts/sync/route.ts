@@ -13,6 +13,10 @@
  * accepts a batch, and before this job existed the only way to discover one was
  * for an admin to remember to click Sync.
  *
+ * The same run also fills in PayPal collection fees on paid PayPal invoices
+ * (lib/invoice-fees.ts). PayPal reports a payment's fee up to three hours late, so
+ * the fee is read here rather than at the moment the invoice is paid.
+ *
  * A batch whose PayPal lookup errors (network issue, expired credentials, PayPal
  * outage) does not abort the run, but it is counted in `failedBatches` rather
  * than silently dropped — otherwise a total PayPal outage would report the same
@@ -22,6 +26,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { reconcilePayoutBatch } from "@/lib/payout-reconcile";
+import { syncInvoicePayPalFees } from "@/lib/invoice-fees";
 import { notifyInstructorsPaid, notifyPayoutDenied } from "@/lib/payout-notify";
 import type { PayoutDenialSource } from "@/types/payouts";
 import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
@@ -34,6 +39,13 @@ import { isCronRequest, withCronHeartbeat } from "@/lib/cron-heartbeat";
  * `completed` and `denied` are terminal and deliberately excluded.
  */
 const SYNCABLE_STATUSES = ["assumed_complete", "failed", "needs_review"];
+
+/**
+ * How far back a finished batch is re-read looking for a payout fee PayPal had
+ * not reported when the batch completed. Bounded so an account on a genuinely
+ * zero-fee agreement is not re-checked forever.
+ */
+const FEE_GAP_LOOKBACK_DAYS = 30;
 
 /** Body accepted by the sync route. */
 interface SyncRequestBody {
@@ -95,6 +107,35 @@ async function handlePOST(request: Request) {
     );
   }
 
+  // A completed batch is terminal, so a payout fee PayPal reported late would
+  // otherwise stay blank forever and the history would understate what payouts
+  // cost. Re-read finished batches that still have a completed item with no fee.
+  // Skipped for a single-batch admin sync, which names exactly what to read.
+  let allBatches = (batches ?? []) as PayoutBatchRow[];
+  if (!requestedBatchId) {
+    const since = new Date(Date.now() - FEE_GAP_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+    const { data: gapItems } = await adminClient
+      .from("instructor_payout_items")
+      .select("payout_batch_id")
+      .eq("status", "completed")
+      .is("paypal_fee_amount", null)
+      .gte("created_at", since.toISOString())
+      .limit(50);
+    const gapBatchIds = [
+      ...new Set(((gapItems ?? []) as { payout_batch_id: string }[]).map((r) => r.payout_batch_id)),
+    ].filter((id) => !allBatches.some((b) => b.id === id));
+
+    if (gapBatchIds.length > 0) {
+      const { data: gapBatches } = await adminClient
+        .from("instructor_payout_batches")
+        .select("id, paypal_payout_batch_id")
+        .not("paypal_payout_batch_id", "is", null)
+        .in("id", gapBatchIds)
+        .limit(20);
+      allBatches = [...allBatches, ...((gapBatches ?? []) as PayoutBatchRow[])];
+    }
+  }
+
   // A denial found by reconciliation is attributed to paypal_sync, never to the
   // admin who happened to click Sync — the determination came from PayPal.
   const origin = {
@@ -107,7 +148,7 @@ async function handlePOST(request: Request) {
   let releasedItems = 0;
   let failedBatches = 0;
 
-  for (const batch of (batches ?? []) as PayoutBatchRow[]) {
+  for (const batch of allBatches) {
     if (!batch.paypal_payout_batch_id) continue;
     try {
       const result = await reconcilePayoutBatch(
@@ -140,9 +181,19 @@ async function handlePOST(request: Request) {
     );
   }
 
+  // Invoice fee catch-up. Skipped for a single-batch admin sync, which is about
+  // one payout, not invoices. Errors are contained inside the helper.
+  const invoiceFees = requestedBatchId ? null : await syncInvoicePayPalFees(adminClient);
+  if (invoiceFees && invoiceFees.unavailable > 0) {
+    console.error(
+      `[payouts/sync] ${invoiceFees.unavailable} invoice fee lookup(s) failed: ${invoiceFees.firstUnavailableReason}`
+    );
+  }
+
   return Response.json({
     success: true,
-    batchCount: batches?.length ?? 0,
+    invoiceFees,
+    batchCount: allBatches.length,
     syncedItems,
     deniedBatches,
     releasedItems,

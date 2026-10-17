@@ -2,6 +2,9 @@
  * POST /api/invoices/mark-paid
  * Called by: InvoiceDetailClient (Mark as Paid confirmation)
  * Auth: Instructor or manager (own invoice only), or super admin (any)
+ * Body: { invoiceId, paymentMethod } where paymentMethod is paypal, check, cash,
+ *       bank_transfer or other. It is required: it decides whether a PayPal
+ *       collection fee applies, so the payout dashboard's net figure is exact.
  *
  * Validates the caller and ownership, then delegates the actual mark-paid
  * work — the mark_invoice_paid() RPC call, instructor earnings recording,
@@ -14,6 +17,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
 import { markInvoicePaidAndNotify } from "@/lib/invoice-actions";
+import { isInvoicePaymentMethod } from "@/lib/invoice-fees";
 import { TEACHING_ROLES, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 /** Type guard — ensures a value is a non-null object. */
@@ -31,7 +35,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const { invoiceId } = body;
+  if (!isInvoicePaymentMethod(body.paymentMethod)) {
+    return Response.json(
+      { success: false, error: "Choose how the invoice was paid." },
+      { status: 400 }
+    );
+  }
+
+  const { invoiceId, paymentMethod } = body;
 
   // Auth check
   const authResult = await requireApiRole(TEACHING_ROLES);
@@ -61,6 +72,7 @@ export async function POST(request: Request) {
     invoiceId,
     actorId: actor.user.id,
     source: "manual",
+    paymentMethod,
   });
 
   if (!result.success) {

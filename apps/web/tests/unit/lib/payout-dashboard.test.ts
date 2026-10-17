@@ -9,7 +9,11 @@
  * page, so the status routing and rounding behaviour need explicit coverage.
  */
 import { describe, test, expect } from "vitest";
-import { buildInstructorEarningsSummary } from "@/lib/payout-dashboard";
+import {
+  buildInstructorEarningsSummary,
+  sumTotals,
+  type RawEarningRow,
+} from "@/lib/payout-dashboard";
 
 describe("buildInstructorEarningsSummary", () => {
   test("returns zero totals for an empty earnings list", () => {
@@ -109,5 +113,62 @@ describe("buildInstructorEarningsSummary", () => {
     // cancelled/failed do not have a dedicated bucket, so bucketSum < totalEarned here
     expect(result.totalEarned).toBe(185);
     expect(bucketSum).toBe(175);
+  });
+});
+
+describe("sumTotals", () => {
+  const earning = (id: string, gross: number, extra: Record<string, unknown> = {}) =>
+    ({
+      id,
+      instructor_id: "i1",
+      status: "pending",
+      source_type: "booking",
+      gross_amount: gross,
+      platform_fee_amount: gross * 0.15,
+      instructor_amount: gross * 0.85,
+      booking_id: null,
+      invoice_id: null,
+      payment_id: null,
+      profiles: null,
+      ...extra,
+    }) as unknown as RawEarningRow;
+
+  test("a recorded zero fee counts as tracked, so a check invoice is not flagged", () => {
+    const totals = sumTotals(
+      [earning("check-invoice", 1700, { source_type: "invoice", invoice_id: "inv" })],
+      [],
+      new Map([["check-invoice", 0]])
+    );
+    expect(totals.feeTrackedCount).toBe(1);
+    expect(totals.feeUntrackedCount).toBe(0);
+    expect(totals.inboundPayPalFees).toBe(0);
+    expect(totals.depositedAmount).toBe(1700);
+  });
+
+  test("an unknown fee is flagged and does not reduce the deposited amount", () => {
+    const totals = sumTotals([earning("e1", 100)], [], new Map([["e1", null]]));
+    expect(totals.feeUntrackedCount).toBe(1);
+    expect(totals.feeTrackedCount).toBe(0);
+    expect(totals.depositedAmount).toBe(100);
+  });
+
+  test("deposited is the amount charged minus the recorded collection fees", () => {
+    const totals = sumTotals(
+      [earning("e1", 100), earning("e2", 200)],
+      [],
+      new Map([
+        ["e1", 3.2],
+        ["e2", 6.1],
+      ])
+    );
+    expect(totals.grossCollected).toBe(300);
+    expect(totals.inboundPayPalFees).toBe(9.3);
+    expect(totals.depositedAmount).toBe(290.7);
+  });
+
+  test("the real net takes both PayPal fees out of the platform cut", () => {
+    const totals = sumTotals([earning("e1", 100)], [], new Map([["e1", 3.2]]));
+    // 15 platform cut, minus 3.20 to collect, with no payout groups to price.
+    expect(totals.estimatedNet).toBe(11.8);
   });
 });

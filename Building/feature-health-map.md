@@ -66,6 +66,8 @@ clone — so this file is the one that travels with the repo.
 | **PayPal invoice webhook** | — | — | — | ~ | — | — | Never fired in prod — but `invoices` is empty, so **untested, not proven broken** |
 | **PayPal payouts webhook** | — | — | — | — | ✅ | — | ✅ **Confirmed live** — received events 2026-08-17. Now covered by `payout_webhook_silent` |
 | Payouts | ✅✅✅✅ | ○ smoke | ✅✅✅ | ✅ | ✅✅✅ | ✅✅ | **Best-covered feature.** The model for everything else |
+| Invoice payment method and fees (0077) | ✅✅ | — | — | ✅ | ✅ (hourly sync) | — | Added 2026-10-15. Pure fee rules, PayPal response parsing and the sync are unit tested (check = known $0, PayPal = unknown until read, impossible fee = unknown). Signal: the hourly payout sync logs and returns `invoiceFees.unavailable` when PayPal's Transaction Search is not permitted. **Gaps:** never run against live PayPal (the PayPal MCP was unauthenticated, so Transaction Search access is unverified); no nightly invariant for "paid PayPal invoice still has no fee after 30 days"; `// TODO` add it to `health_invariants()` |
+| Selective payouts (0078) | ✅✅✅ | — | — | ✅ | — | — | Added 2026-10-15. The reservation function was run against a real Postgres engine (PGlite) in 17 scenarios: all-eligible still works with the old one-argument call, a subset reserves only the chosen earnings, an **empty list reserves nothing (never everything)**, an already-reserved or no-email earning in a selection is skipped, non super_admin refused, grants service_role only, one overload remains. Route tests cover validation (empty, malformed, oversized lists rejected), cron callers cannot narrow a batch, and the requested vs reserved counts. Selection logic is unit tested. **Gaps:** the PGlite run used a stub schema, not the real tables; no browser e2e of the checkbox UI or confirm step (`// TODO`); the SQL test is not in CI |
 | Payout manual settlement | ✅✅✅✅ | — | — | ✅ | ✅✅ | — | Added 2026-10-06 (migration 0075). Settle/void RPCs tested against a real Postgres engine (22 scenarios incl. double-settle, moved-on earnings, in-flight refusal, grants); route tests cover auth, typed confirmation, live-PayPal refusal and email; reconcile guard is mutation-checked. Signals: health invariants `paid_earning_item_not_paid` and `manual_payout_amount_mismatch` (nightly canary). **Gap:** no browser e2e of the dialog, and nothing alerts if an admin *forgets* to record a manual payment (the denied batch keeps appearing in the daily stuck-batch digest, which is the nudge) |
 | Promo codes | ✅ | — | — | ✅ | — | ✅ | Quarterly abuse audit only. No `max_uses` column exists, so there is no redemption cap to check |
 | Add-ons | ✅ | — | — | ✅ | — | — | No e2e; revenue-affecting |
@@ -166,6 +168,7 @@ idle feature.
 |---|---|
 | `tests/unit/lib/paypal-invoice-create.test.ts` | 7 tests pinning the PayPal contract: asserts the `Prefer` header is sent, and that **both** response shapes still yield an id, so a merchant account that ignores the header cannot resurrect this |
 | `tests/unit/lib/team-bookings.test.ts` (+6) | `ensureTeamInvoice()` short-circuits — an already-linked booking, a per-seat booking, and a booking with no total must never reach PayPal |
+| `tests/unit/lib/team-bookings.test.ts` + `team-travel-fee.test.ts` (2026-10-17, +30) | Travel & setup fee on company-paid team classes: it is stored on the session ($65 default, staff-editable, 0 waives it, never stored when employees pay), and the invoice adds it as its own line on top of the flat total or of signups x rate. Verified to fail against the pre-fix code. **Gap:** nothing watches production for a company-paid team class whose session has no fee, so a future code path that skips `createTeamBooking` would drop it silently again. // TODO: add a canary invariant (needs a migration; existing uninvoiced bookings predate the fee and need a backfill first). |
 | `tests/unit/lib/session-pricing.test.ts` + `team-bookings.test.ts` (2026-10-06) | Per-seat team price: the class discount is taken off the negotiated rate, and the public link's displayed price comes from the same `applyDiscountPercent()` that checkout charges. Found because two live per-seat bookings had a class discount that neither the link nor checkout honoured, so employees saw and paid the undiscounted rate. Company-paid modes deliberately ignore the discount. **Gap:** no e2e driving link price against the PayPal order amount |
 | Cron `retry-team-booking-invoices` (0067) | Daily 13:00 UTC. Retries every breaching booking, so the common case self-heals. **⚠️ Written and applied but NOT YET SCHEDULED in either environment** — see below |
 | Email alert | Fires **immediately** at booking time on failure, and daily from the sweep for anything still outstanding. This is the part that was missing |
@@ -717,6 +720,7 @@ notice. The stamp now happens only after a confirmed send.
 | **Staff Directory** | ✅✅✅✅✅✅✅✅✅✅✅✅✅ | — | — | ✅ | — | — | Added 2026-09-22 (migrations 0070/0071, staging only). Read-only internal contact page: classes-taught list, plus a per-person email override for hiding a real address; see note below |
 | **Admin dark theme** | ✅✅✅ | ● leak guard | — | ✅ | — | — | Added 2026-10-10. Opt-in, admin-only. Source-scan unit tests fail if a dark class reaches `<html>`/`<body>`, if the root layout regains a theme script, if a CSS rule escapes the `.admin-theme` wrapper, or if a colored text class has no dark rule. The e2e leak guard asserts customer pages render light with every storage key set and with OS dark on. See note below |
 | **Manager / instructor parity** | ✅✅ | — | — | ✅ | — | — | Added 2026-10-06. Managers get every instructor capability. A source scan fails the suite if any role gate admits instructors but not managers; route tests drive grading and rollcall code verification as a manager. No outcome e2e: there is still no staff-role Playwright fixture. See note below |
+| **Staff What's New (changelog)** | ✅✅✅ | — | — | ✅ | — | — | Added 2026-10-15 (migration 0079, applied to staging and production 2026-10-15). Unit tests pin the logic and, more importantly, the content: the suite fails if package.json reaches a new x.y.0 with no changelog entry, if entries are out of order, malformed, or name a role that does not exist. Route and component tests assert what is written and when. No outcome e2e: there is still no staff-role Playwright fixture. See note below |
 
 ### Admin dark theme (added 2026-10-10)
 
@@ -781,6 +785,37 @@ see those items, lost the headers and saw Contact, Directory and Settings listed
 "Financial". Headers are now derived per role in `lib/admin-nav.ts`, and
 `tests/unit/lib/admin-nav.test.ts` pins the exact menu for every role plus the
 hidden-first-item case that caused the bug.
+
+### Staff What's New (added 2026-10-15)
+
+Staff had no way to learn that something changed. `/admin/whats-new` lists
+plain-English entries from `content/changelog.ts`, grouped by the app version in
+`package.json`, filtered to the viewer's effective role. The sidebar shows an
+unread count. Opening the page calls `POST /api/profile/whats-new-seen`, which
+sets `profiles.whats_new_seen_version` (migration 0079) to the newest version in the
+server's own changelog. The version never comes from the request.
+
+Entries live in the repo, not the database, so an entry ships in the same merge as
+its feature and cannot appear on production before the feature does. The cost is
+that fixing a typo needs a deploy.
+
+**Signal:** the failure mode of a changelog is going stale, so the guard is on the
+content, not the page. `tests/unit/lib/changelog.test.ts` fails the suite if the
+version in `package.json` is a minor or major release (`x.y.0`) with no entry, if any
+entry is dated for a version the app has not reached, or if the list is unsorted,
+malformed, or uses a role that does not exist. Patch releases may have no entry on
+purpose. CLAUDE.md rule 14 is what makes writing the entry part of every task.
+
+**Failure containment:** `loadWhatsNewState` swallows its own DB errors and reports
+"nothing unread", because it runs inside the auth-guarded admin layout. So a deploy
+without migration 0079 (now applied to both environments) could not break the admin area;
+the badge would just stay hidden and the save would return a 500 that the page ignores. A person who has never
+opened the page (null column) sees only entries released after their account was
+created as unread, not the whole history.
+
+**Gaps:** the page has not yet been checked in a browser. Backfilled entries (1.0.0 to 1.7.0) were reconstructed
+from git history and each filed under the first version bump at or after the work
+landed, so a few dates are approximate.
 
 ### Staff self-service account (added 2026-08-28)
 
