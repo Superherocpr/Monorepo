@@ -17,6 +17,18 @@
 # is NOT encrypted, so set AGE_RECIPIENT before treating these as safe to carry around.
 set -euo pipefail
 
+TMP=""
+# On any failure, drop the partial file. Unattended (launchd) runs also pop a macOS
+# notification, since nobody is watching the log.
+on_exit() {
+  rc=$?
+  rm -f "${TMP:-}"
+  if [ "$rc" -ne 0 ] && [ ! -t 1 ]; then
+    osascript -e 'display notification "Production DB backup FAILED. See ~/SupabaseBackups/backup.log" with title "Supabase backup"' >/dev/null 2>&1 || true
+  fi
+}
+trap on_exit EXIT
+
 PROJECT_REF="qgvlguifubbnclxfascz"          # superherocpr-production
 ENV_FILE="$HOME/SupabaseBackups/.env"
 VOLUME="/Volumes/Sodalypsis"
@@ -45,7 +57,6 @@ mkdir -p "$DEST"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 OUT="$DEST/superherocpr-production_$STAMP.dump"
 TMP="$OUT.partial"
-trap 'rm -f "$TMP"' EXIT
 
 CONN="host=$POOLER_HOST port=5432 user=postgres.$PROJECT_REF dbname=postgres sslmode=require"
 echo "Backing up production ($POOLER_HOST, project $PROJECT_REF) -> $OUT"
