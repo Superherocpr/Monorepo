@@ -42,3 +42,10 @@ apps/web/test-results/
 # CRON_SECRET and the Turnstile secret in plaintext — which were then auto-committed.
 # Caught before any push; nothing reached the remote. Do not un-ignore this.
 .playwright-mcp/
+
+# Local Supabase database backups. These hold student names, emails and phone
+# numbers. The backup script writes to ~/SupabaseBackups (outside the repo); these
+# entries are a safety net in case a dump or the folder ever lands inside it.
+SupabaseBackups/
+backups/
+*.dump
