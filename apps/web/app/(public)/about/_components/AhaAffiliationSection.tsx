@@ -16,8 +16,8 @@ export default function AhaAffiliationSection() {
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
 
-          {/* AHA Authorized Training Site badge */}
-          <div className="flex items-center justify-center">
+          {/* AHA Authorized Training Site badge, with the Landes alignment caption tight underneath */}
+          <div className="flex flex-col items-center justify-center gap-1">
             <div className="relative h-[82px] w-[320px] max-w-full">
               <Image
                 src="/images/aha-authorized-training-site.png"
@@ -27,6 +27,10 @@ export default function AhaAffiliationSection() {
                 sizes="320px"
               />
             </div>
+            <p className="max-w-[320px] text-center text-xs text-gray-500">
+              SuperHeroCPR is aligned with Landes Emergency Training Services
+              in Sarasota, Florida, USA.
+            </p>
           </div>
 
           {/* Text */}
