@@ -23,6 +23,17 @@
 import type { ChangelogEntry } from "@/types/changelog";
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
+  // ── 1.7.2 ──────────────────────────────────────────────────────────────────
+  // NOTE: deliberate exception to rule 14. This is an invisible security update, but
+  // the owner wants staff to see that protections are actively maintained.
+  {
+    version: "1.7.2",
+    date: "2026-10-26",
+    kind: "improved",
+    title: "Security protections updated",
+    summary:
+      "We updated the software that runs the site to close several newly reported security problems, including one that could have let someone knock the site offline with specially crafted requests.",
+  },
   // ── 1.7.0 ──────────────────────────────────────────────────────────────────
   {
     version: "1.7.0",
