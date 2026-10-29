@@ -12,7 +12,7 @@ Companion to [`maintenance-overhaul.md`](maintenance-overhaul.md).
 | **E**● | e2e — outcome | A real action completes and the result is asserted |
 | **C** | Cron / automated alert | Something machine-checks it on a schedule |
 | **A** | Admin surface | A human *could* notice, if they happen to look |
-| **I** | SQL invariant | Data corruption would be caught (14 checks live — migrations 0056, 0061, 0065) |
+| **I** | SQL invariant | Data corruption would be caught (16 checks live; 17 once migration 0080 is applied — migrations 0056, 0061, 0065, 0075, 0080) |
 | **M** | Manual Todoist task | A human is scheduled to look |
 
 **A is not a signal.** It's the possibility of a signal. Counting it as coverage is
@@ -1064,6 +1064,26 @@ on its logic are judged sufficient for now. If it grows further editable
 fields beyond the super_admin-only panel it already has, that changes.
 
 ---
+
+### Public data exposure (added 2026-10-28, migration 0080)
+
+`profiles` and `roster_records` hold every customer's and staff member's contact
+details. Until this change, three RLS policies let anyone with the site's public
+API key read every row and column of both (see THREAT-070). The failure was
+silent by nature: nothing in the app breaks when a table is too readable, so no
+admin screen, cron or e2e test could ever have noticed it.
+
+| Signal | What it proves |
+|---|---|
+| Health check #17 `public_read_policy_on_pii_table` (nightly canary, via migration 0080) | No SELECT/ALL policy lets `anon`, signed-in customers or `public` read every row of a table outside a short allowlist of public-content tables, and none lets `anon`/`public` read `profiles` or `roster_records` at all. Reads `pg_policies`, so it sees a new policy the moment it exists. Verified 3 breaches on both databases before the migration; 0 after on a local Postgres. Adding a table to the allowlist means editing the function on purpose |
+| `tests/unit/lib/no-public-pii-reads.test.ts` | Fails the build if browser code filters profiles by email/phone or touches `roster_records`, or a migration after 0080 creates an anon/public policy on either table. Mutation-checked: putting the old pattern back makes it fail |
+| `tests/unit/api/bookings-check-existing-customer.test.ts` | The replacement route answers only yes/no, never a profile; keeps the old match rules; rejects bad input before the database; reports a database failure as an error instead of a false "no account"; rate limits |
+| `tests/unit/lib/lead-instructor.test.ts`, `rate-limit.test.ts` | The name helper selects only two columns; the limiter allows exactly `max` per window |
+
+**Gaps:** no browser e2e of the booking details step or the roster correction page
+against a real database (do a manual pass on staging before production). Nothing
+yet narrows `anon`'s table-level write privileges, which RLS alone blocks.
+// TODO: tighten anon/authenticated table privileges as a second layer.
 
 ## What the map exposes
 

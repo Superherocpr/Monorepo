@@ -7,6 +7,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getLeadInstructorName } from "@/lib/lead-instructor";
 import BlogPostContent from "../_components/BlogPostContent";
 import TagFilter from "../_components/TagFilter";
 import type { BlogPost, BlogTag } from "@/types/blog";
@@ -106,21 +107,15 @@ export default async function BlogPostPage({ params }: PageProps): Promise<React
     : null;
 
   // Fetch all tags for the filter bar and the lead instructor name for the byline.
-  const [{ data: allTags }, { data: leadInstructor }] = await Promise.all([
+  const [{ data: allTags }, leadInstructorName] = await Promise.all([
     supabase
       .from("blog_tags")
       .select("id, name, slug, created_at")
       .order("name"),
-    supabase
-      .from("profiles")
-      .select("first_name, last_name")
-      .eq("is_lead_instructor", true)
-      .single(),
+    getLeadInstructorName(),
   ]);
 
-  const instructorName = leadInstructor
-    ? `${leadInstructor.first_name} ${leadInstructor.last_name}`
-    : "our lead instructor";
+  const instructorName = leadInstructorName ?? "our lead instructor";
 
   return (
     <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
