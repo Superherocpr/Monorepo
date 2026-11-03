@@ -13,6 +13,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { businessDate, isSameBusinessDay, classDate, floatingNow } from "@/lib/business-time";
 import { TEACHING_ROLES } from "@/lib/auth/view-as-constants";
+import { createRateLimiter, getClientIp } from "@/lib/rate-limit";
 
 interface SessionRow {
   id: string;
@@ -21,47 +22,11 @@ interface SessionRow {
   locations: { name: string } | null;
 }
 
-/** Maximum verify attempts per IP per window. */
-const RATE_LIMIT_MAX = 10;
-/** Rolling rate-limit window length in ms (1 hour). */
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-
 /**
- * In-process IP → { count, resetAt } map. Module-level so it survives across
- * requests within the same server instance. Across serverless instances each
- * has its own bucket — acceptable for a brute-force deterrent (effective
- * limit is RATE_LIMIT_MAX × instanceCount).
+ * 10 verify attempts per IP per hour. Per-instance buckets (see lib/rate-limit.ts),
+ * which is acceptable for a brute-force deterrent.
  */
-const attemptBuckets = new Map<string, { count: number; resetAt: number }>();
-
-/**
- * Records one verify attempt for the given IP and reports whether the
- * caller has exceeded the limit within the rolling window.
- * @returns true when the request is allowed, false when over the limit.
- */
-function recordAttempt(ip: string): boolean {
-  const now = Date.now();
-  const bucket = attemptBuckets.get(ip);
-  if (!bucket || bucket.resetAt < now) {
-    attemptBuckets.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  bucket.count += 1;
-  return bucket.count <= RATE_LIMIT_MAX;
-}
-
-/**
- * Best-effort client IP extraction.
- * Prefers the first X-Forwarded-For entry (Amplify/Vercel proxy header).
- */
-function getClientIp(request: Request): string {
-  const fwd = request.headers.get("x-forwarded-for");
-  if (fwd) {
-    const first = fwd.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return request.headers.get("x-real-ip")?.trim() ?? "unknown";
-}
+const allowAttempt = createRateLimiter({ max: 10, windowMs: 60 * 60 * 1000 });
 
 /**
  * Verifies the 6-digit rollcall access code and returns today's sessions
@@ -70,7 +35,7 @@ function getClientIp(request: Request): string {
  */
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  if (!recordAttempt(ip)) {
+  if (!allowAttempt(ip)) {
     return Response.json(
       { valid: false, error: "Too many attempts. Try again later." },
       { status: 429 }

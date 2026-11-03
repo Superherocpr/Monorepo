@@ -1114,3 +1114,24 @@ mitigation is proportionate, and a lost race is now loud rather than silent.
 
 **Mitigation:** The write is a service-role-only RPC (execute revoked from PUBLIC, anon and authenticated). Every record stores who, when, method, reference, date and note, plus a typed batch-id confirmation and an amount that must equal what is owed. The instructor is emailed, so an unrecorded-in-reality payment is reported by the person who would be shorted. Undo requires a reason and keeps the original record. Health invariants 15 and 16 flag a paid earning without a settled item and an amount mismatch. The item must be denied or failed and PayPal is re-checked first, so it cannot be used to mask a payout PayPal is still moving.
 
+
+---
+
+## THREAT-070 — Public API key could read every customer, staff and roster record
+
+**Severity:** 9/10 (high)
+**File:** `apps/migrations/0023_enable_rls.sql` (policies `profiles_anon_email_exists_check`, `profiles_anon_read_lead_instructor`, `roster_records_anon_read_by_session`); consumers `book/details/page.tsx`, `roster/[session_token]/page.tsx`, `AboutInstructorSection.tsx`, `blog/[slug]/page.tsx`
+**Date:** 2026-10-28
+**Status:** FIX BUILT AND TESTED LOCALLY; NOT YET DEPLOYED (deploy code first, then migration 0080, staging before production)
+
+**Threat:** Three row-level-security policies let the `anon` role read every row of `profiles` and `roster_records`. RLS filters rows, not columns, and `anon` holds table-level SELECT on every column, so `GET /rest/v1/profiles?select=*` returned the whole table. On production that was 128 profiles (phone, address, `customer_notes`, role, `daily_access_code`, `paypal_payout_email`) and 93 roster records (email, phone, address, employer).
+
+**Attack vector:** The anon key is public by design and ships in the site's JavaScript. Anyone could run one unauthenticated request. No account, no exploit, no rate limit. Confirmed 2026-10-28 over the real REST API using a zero-row count request (`limit=0`), so no personal data was retrieved during the review. Not yet known whether anyone else used it; API log retention is short.
+
+**Why 9:** the data is real personal information including staff payout emails and the rollcall access codes, the request is trivial, and the exposure had existed since migration 0023. Not 10 because it exposes data rather than allowing writes, money movement or account takeover (the access codes expire daily).
+
+**Root cause:** 0023 added the policies as a convenience for three code paths and its own comment marked the profiles one as a TODO to remove. The comment's mitigation (that sensitive columns are only returned if explicitly selected) was wrong: the caller chooses the columns.
+
+**Fix:** The four reads moved server-side behind the service-role client (new `POST /api/bookings/check-existing-customer`, rate limited and returning only yes/no; `lib/lead-instructor.ts`; the roster page). Migration 0080 drops the three policies and adds health check #17 (`public_read_policy_on_pii_table`), which reports any open read policy on a personal-data table nightly. Tests: unit tests for the route, helper and rate limiter; a source scan that fails the build if browser code queries profiles by email/phone or touches `roster_records`, or a later migration re-opens either table; the migration was run before/after on a throwaway local Postgres.
+
+**Residual:** `anon` still holds INSERT/UPDATE/DELETE/TRUNCATE table privileges everywhere, blocked only by RLS. Tightening those is separate follow-up work. The booking page's account lookup still tells a visitor whether an email or phone has an account (a yes/no oracle, inherent to the feature), now rate limited per IP and per server instance.

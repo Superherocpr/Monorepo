@@ -6,26 +6,16 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/server";
+import { getLeadInstructorName } from "@/lib/lead-instructor";
 
 /**
  * Renders the "Meet Your Instructor" two-column section.
  * @returns The home page instructor spotlight section.
  */
 export default async function AboutInstructorSection() {
-  const supabase = await createClient();
-
-  // Use is_lead_instructor = true — NOT role = 'super_admin'.
+  // The helper keys on is_lead_instructor = true, NOT role = 'super_admin'.
   // There is exactly one profile with is_lead_instructor = true.
-  const { data: instructor } = await supabase
-    .from("profiles")
-    .select("first_name, last_name")
-    .eq("is_lead_instructor", true)
-    .single();
-
-  const instructorName = instructor
-    ? `${instructor.first_name} ${instructor.last_name}`
-    : "Our Lead Instructor";
+  const instructorName = (await getLeadInstructorName()) ?? "Our Lead Instructor";
 
   return (
     <section className="pt-20 pb-10 px-4 bg-white">
