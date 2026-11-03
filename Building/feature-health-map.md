@@ -1085,6 +1085,23 @@ against a real database (do a manual pass on staging before production). Nothing
 yet narrows `anon`'s table-level write privileges, which RLS alone blocks.
 // TODO: tighten anon/authenticated table privileges as a second layer.
 
+### Public /book without an instructor (added 2026-11-03)
+
+A scheduled, approved, public class with no instructor took `/book` down with a
+500 on staging: the session list reads the instructor's name on every row. Such a
+class also cannot be booked safely, because the payment is captured and then the
+instructor's earning cannot be recorded. The query now excludes classes with no
+instructor, `/find-a-class` counts dates by the same rule, and the page drops any
+row that still arrives without an instructor profile instead of throwing.
+
+| Signal | What it proves |
+|---|---|
+| `tests/unit/lib/book-page-no-instructor.test.ts` | The query asks for `instructor_id is not null`; a row with a null or empty instructor join is dropped rather than crashing; normal classes are unaffected. Mutation-checked: removing either layer fails 3 of 4 tests |
+
+**Gap:** nothing watches the data itself, so a class left with no instructor is
+now silently hidden from customers rather than loudly broken.
+// TODO: add a `scheduled_class_without_instructor` health invariant (needs a migration).
+
 ## What the map exposes
 
 **1. The test suite has the same disease as the monitoring.**

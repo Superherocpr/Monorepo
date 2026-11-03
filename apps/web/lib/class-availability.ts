@@ -68,7 +68,7 @@ interface AvailabilityRow {
  * Builds a per-class-type view of what is bookable right now.
  *
  * Applies the same visibility rules as /book: scheduled, approved, non-private,
- * and starting in the future. Sessions with no seats left are excluded, so a
+ * assigned to an instructor, and starting in the future. Sessions with no seats left are excluded, so a
  * class whose only session is full correctly reports zero upcoming dates.
  *
  * @param supabase - A service-role client. The anon client cannot see other
@@ -93,6 +93,9 @@ export async function getClassAvailability(
     .eq("status", "scheduled")
     .eq("approval_status", "approved")
     .eq("is_private", false)
+    // Same rule as /book: a class with no instructor cannot be booked there, so
+    // it must not count as a date /find-a-class can send someone to.
+    .not("instructor_id", "is", null)
     .gte("starts_at", floatingNow());
 
   const availability = new Map<string, ClassAvailability>();
