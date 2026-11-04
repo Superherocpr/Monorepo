@@ -1054,20 +1054,17 @@ ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_adjustments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE processed_webhook_events ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "profiles_anon_email_exists_check" ON profiles;
-CREATE POLICY "profiles_anon_email_exists_check" ON profiles
-  FOR SELECT TO anon
-  USING (true);
+-- NOTE: profiles has NO anon/public SELECT policy (migration 0080 removed
+-- profiles_anon_email_exists_check and profiles_anon_read_lead_instructor).
+-- RLS cannot limit columns, so an open read exposed every customer's and staff
+-- member's contact details to anyone with the public API key. Public pages that
+-- need a profile read it server-side (lib/lead-instructor.ts,
+-- /api/bookings/check-existing-customer). Health check #17 fails if one returns.
 
 DROP POLICY IF EXISTS "profiles_anon_insert_own" ON profiles;
 CREATE POLICY "profiles_anon_insert_own" ON profiles
   FOR INSERT TO anon,authenticated
   WITH CHECK ((id = auth.uid()));
-
-DROP POLICY IF EXISTS "profiles_anon_read_lead_instructor" ON profiles;
-CREATE POLICY "profiles_anon_read_lead_instructor" ON profiles
-  FOR SELECT TO anon
-  USING (((is_lead_instructor = true) AND (deactivated = false)));
 
 DROP POLICY IF EXISTS "profiles_auth_read_own" ON profiles;
 CREATE POLICY "profiles_auth_read_own" ON profiles
@@ -1115,10 +1112,10 @@ CREATE POLICY "bookings_auth_read_own" ON bookings
   FOR SELECT TO authenticated
   USING ((customer_id = auth.uid()));
 
-DROP POLICY IF EXISTS "roster_records_anon_read_by_session" ON roster_records;
-CREATE POLICY "roster_records_anon_read_by_session" ON roster_records
-  FOR SELECT TO anon,authenticated
-  USING (true);
+-- NOTE: roster_records has NO anon/authenticated SELECT policy (migration 0080
+-- removed roster_records_anon_read_by_session). Every read goes through the
+-- service-role client; the public /roster/[session_token] page scopes its read
+-- to the session resolved from the token.
 
 DROP POLICY IF EXISTS "public_read_published_posts" ON blog_posts;
 CREATE POLICY "public_read_published_posts" ON blog_posts

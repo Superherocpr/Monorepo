@@ -6,7 +6,7 @@
  * Used by: students attending group/corporate invoice-based classes.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import RosterCorrectionClient from "./_components/RosterCorrectionClient";
 import { formatClassDate } from "@/lib/business-time";
 
@@ -88,10 +88,16 @@ export default async function RosterCorrectionPage({ params }: PageProps) {
   }
 
   // ── Fetch roster records for this session ────────────────────────────────
+  // Read with the admin client: roster_records has no public read policy (it
+  // holds every student's contact details, and an open policy let anyone with
+  // the site's public API key list all of it). The session token resolved
+  // above is the only credential this page accepts, so the read is scoped to
+  // that one session's id and nothing else.
   // Full record fields are passed to the client so the edit form can pre-populate.
   // device_token is NOT passed — only a boolean indicating whether one is set.
   // This prevents exposing another student's device token via the page source.
-  const { data: records } = await supabase
+  const admin = await createAdminClient();
+  const { data: records } = await admin
     .from("roster_records")
     .select("id, first_name, last_name, email, phone, employer, confirmed, device_token")
     .eq("session_id", session.id)

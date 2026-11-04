@@ -11,7 +11,6 @@
 import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { getBookingStore, setBookingStore } from "@/lib/booking-store";
 import BookingProgress from "../_components/BookingProgress";
 import OrderSummary from "../_components/OrderSummary";
@@ -88,30 +87,34 @@ export default function BookDetailsPage() {
     if (!validate()) return;
 
     setLoading(true);
-    const supabase = createClient();
     const normalizedEmail = form.email.trim().toLowerCase();
     const normalizedPhone = form.phone.trim();
 
-    // Primary check: email
-    const { data: byEmail } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("email", normalizedEmail)
-      .maybeSingle();
-
-    if (byEmail) {
-      router.push(`/book/signin?email=${encodeURIComponent(normalizedEmail)}`);
-      return;
+    // Existing-account check (email first, then phone) runs on the server: the
+    // profiles table is not readable from the browser. Anything other than a
+    // clear "too many attempts" falls through as a new customer, as before; a
+    // duplicate email is still refused by auth when the account is created.
+    let accountExists = false;
+    try {
+      const res = await fetch("/api/bookings/check-existing-customer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail, phone: normalizedPhone }),
+      });
+      if (res.status === 429) {
+        setFieldErrors({ email: "Too many attempts. Please wait a while and try again." });
+        setLoading(false);
+        return;
+      }
+      if (res.ok) {
+        const json = (await res.json()) as { data?: { exists?: boolean } | null };
+        accountExists = json.data?.exists === true;
+      }
+    } catch {
+      // Network failure: carry on as a new customer rather than blocking the booking.
     }
 
-    // Secondary check: phone
-    const { data: byPhone } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("phone", normalizedPhone)
-      .maybeSingle();
-
-    if (byPhone) {
+    if (accountExists) {
       router.push(`/book/signin?email=${encodeURIComponent(normalizedEmail)}`);
       return;
     }

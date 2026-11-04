@@ -77,6 +77,11 @@ export default async function BookPage({ searchParams }: BookPageProps) {
     // Team/corporate classes are private to the company that booked them —
     // they must never be listed here or the public could take their seats.
     .eq("is_private", false)
+    // A class with no instructor cannot be booked: pricing, the instructor's
+    // earning and the confirmation all assume one, so a payment taken here would
+    // be charged and then fail to record who gets paid. (Cancelled classes clear
+    // their instructor too, but they are excluded by the status filter above.)
+    .not("instructor_id", "is", null)
     // Filter on the END time so a class already in progress stays bookable
     // (late arrivals); it drops off the list once it has finished.
     .gte("ends_at", floatingNow())
@@ -126,7 +131,10 @@ export default async function BookPage({ searchParams }: BookPageProps) {
       spotsRemaining,
       isFull: spotsRemaining <= 0,
     };
-  });
+    // Belt and braces for the query filter above: BookSessionSelector reads
+    // profiles.first_name on every session, so one row without an instructor
+    // profile would take the whole page down with a 500. Drop it instead.
+  }).filter((session) => session.profiles != null);
 
   // Only show filter pills for class types that have at least one upcoming bookable session.
   // Avoids pills that would always result in "No classes found".
