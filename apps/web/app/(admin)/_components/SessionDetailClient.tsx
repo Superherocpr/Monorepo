@@ -12,11 +12,8 @@ import Link from "next/link";
 import type { UserRole } from "@/types/users";
 import type { SessionStatus, SessionApprovalStatus } from "@/types/schedule";
 import { OWNER_DIRECT_PHONE } from "@/lib/constants";
-import { createClient } from "@/lib/supabase/client";
-import {
-  ROLLCALL_VERIFIED_EVENT,
-  rollcallChannelTopic,
-} from "@/lib/rollcall-realtime";
+import LiveRosterStatus from "@/components/rollcall/LiveRosterStatus";
+import { useRollcallLive } from "@/lib/use-rollcall-live";
 import {
   toDatetimeLocalValue,
   fromDatetimeLocalValue,
@@ -436,34 +433,18 @@ export default function SessionDetailClient({
 
   // ── Live-updating Verified column ─────────────────────────────────────────
   // When a student completes rollcall, the API broadcasts on a channel scoped
-  // to this session so the instructor's page can refresh without a manual
-  // reload. Only wired up for sessions where a check-in could still happen:
-  // completed/cancelled sessions get no new roster activity.
-  useEffect(() => {
-    if (session.status !== "scheduled" && session.status !== "in_progress") {
-      return;
-    }
-
-    const supabase = createClient();
-    const channel = supabase
-      .channel(rollcallChannelTopic(session.id))
-      .on("broadcast", { event: ROLLCALL_VERIFIED_EVENT }, () => {
-        router.refresh();
-      })
-      .subscribe();
-
-    // Fallback in case the websocket drops silently (laptop sleep, wifi
-    // blip): keeps the page converging even without a live broadcast.
-    const pollInterval = setInterval(() => {
-      router.refresh();
-    }, 45_000);
-
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(pollInterval);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.id, session.status]);
+  // to this session and the shared hook re-reads the roster (debounced). There
+  // is no timer poll: the status row + Refresh button above the roster let the
+  // instructor recover if a broadcast is missed. Only live for sessions where
+  // a check-in could still happen: completed/cancelled sessions get no new
+  // roster activity.
+  const liveRosterEnabled =
+    session.status === "scheduled" || session.status === "in_progress";
+  const {
+    connection: liveConnection,
+    refreshing: liveRefreshing,
+    reconnect: reconnectLive,
+  } = useRollcallLive({ sessionId: session.id, enabled: liveRosterEnabled });
 
   const isInstructor = userRole === "instructor";
   const isManager = userRole === "manager" || userRole === "super_admin";
@@ -3408,6 +3389,18 @@ export default function SessionDetailClient({
                 >
                   Import
                 </Link>
+              </div>
+            )}
+
+            {/* Live status + Refresh: the instructor's recovery path if a check-in is missing */}
+            {liveRosterEnabled && (
+              <div className="px-6 py-3 border-b border-gray-100">
+                <LiveRosterStatus
+                  connection={liveConnection}
+                  refreshing={liveRefreshing}
+                  onRefresh={reconnectLive}
+                  label="Refresh roster"
+                />
               </div>
             )}
 
