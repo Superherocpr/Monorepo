@@ -90,8 +90,8 @@ if (profile.role === 'instructor' && session.instructor_id !== profile.id) {
 ### THREAT-043
 **File:** `app/(public)/book/details/page.tsx`
 **Discovered:** 2026-07-14
-**Threat Level:** 5/10
-**Status:** Open
+**Threat Level:** 5/10 (understated: see THREAT-070, which rated the same exposure 9/10 and also covered `roster_records`)
+**Status:** FIXED 2026-11-03, verified in production 2026-11-09. Migration 0080 dropped the open anon read policies on `profiles` and `roster_records`; the duplicate-email check now runs server-side via `POST /api/bookings/check-existing-customer`. Production now has 0 anon read policies on either table, and health check `public_read_policy_on_pii_table` reports 0 breaches.
 
 **Description:**
 The `/book/details` step in the booking flow uses the client-side Supabase client (anon key) to check whether an email address is already registered: `supabase.from("profiles").select("id").eq("email", X)`. Because Supabase RLS policies gate rows (not columns), enabling a narrowly scoped duplicate-email check still requires an anon SELECT policy that matches any `profiles` row. The migration `0023_enable_rls.sql` adds this policy with a comment noting it should be tightened.
@@ -1122,7 +1122,7 @@ mitigation is proportionate, and a lost race is now loud rather than silent.
 **Severity:** 9/10 (high)
 **File:** `apps/migrations/0023_enable_rls.sql` (policies `profiles_anon_email_exists_check`, `profiles_anon_read_lead_instructor`, `roster_records_anon_read_by_session`); consumers `book/details/page.tsx`, `roster/[session_token]/page.tsx`, `AboutInstructorSection.tsx`, `blog/[slug]/page.tsx`
 **Date:** 2026-10-28
-**Status:** FIX BUILT AND TESTED LOCALLY; NOT YET DEPLOYED (deploy code first, then migration 0080, staging before production)
+**Status:** FIXED 2026-11-03 (code deployed in Amplify build #99, migration 0080 applied). Verified in production 2026-11-09: 0 anon read policies remain on `profiles` or `roster_records`, only `profiles_anon_insert_own` (INSERT) is left; health check `public_read_policy_on_pii_table` reports 0 breaches; the roster page and the booking-page lookup read through the service-role client. Open follow-ups, not part of this fix: the `anon` role's blanket write grants, and whether anyone read the data before 2026-11-03 (API log retention is short, so likely unanswerable).
 
 **Threat:** Three row-level-security policies let the `anon` role read every row of `profiles` and `roster_records`. RLS filters rows, not columns, and `anon` holds table-level SELECT on every column, so `GET /rest/v1/profiles?select=*` returned the whole table. On production that was 128 profiles (phone, address, `customer_notes`, role, `daily_access_code`, `paypal_payout_email`) and 93 roster records (email, phone, address, employer).
 

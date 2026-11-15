@@ -5,22 +5,18 @@
  * Renders a full-viewport branded page (covers the admin chrome) with a large
  * QR code, the plaintext rollcall code, check-in instructions, and a live
  * list of students who have verified for this session. The list updates via
- * the existing per-session Supabase Realtime broadcast (no reload needed),
- * with a slow poll as a fallback for dropped websockets.
+ * the per-session Supabase Realtime broadcast (no reload needed). There is no
+ * timer poll: a connection indicator and a Refresh button let the instructor
+ * recover if a broadcast is ever missed (see lib/use-rollcall-live.ts).
  * Used by: app/(admin)/admin/sessions/[id]/checkin/page.tsx
  */
 
-import { useState, useEffect, useMemo, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowLeft, RefreshCw, CheckCircle2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import {
-  ROLLCALL_VERIFIED_EVENT,
-  rollcallChannelTopic,
-  type RollcallVerifiedPayload,
-} from "@/lib/rollcall-realtime";
+import LiveRosterStatus from "@/components/rollcall/LiveRosterStatus";
+import { useRollcallLive } from "@/lib/use-rollcall-live";
 
 /** A student who has confirmed their info via rollcall. */
 export interface VerifiedStudent {
@@ -41,9 +37,6 @@ interface Props {
 
 /** Fallback origin for the QR URL during SSR; replaced with the real origin on mount. */
 const FALLBACK_ORIGIN = "https://superherocpr.com";
-
-/** Poll interval for the verified-list fallback refresh (ms). */
-const POLL_INTERVAL_MS = 30_000;
 
 /** Dedupe key for a verified student (names are what the broadcast carries). */
 function studentKey(s: VerifiedStudent): string {
@@ -75,8 +68,6 @@ export default function CheckinDisplayClient({
   initialCode,
   initialVerified,
 }: Props): React.ReactElement {
-  const router = useRouter();
-
   const [code, setCode] = useState<string | null>(initialCode);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,35 +82,18 @@ export default function CheckinDisplayClient({
   );
 
   // Names received over the live broadcast since the page loaded. Merged with
-  // the server-fetched list; router.refresh() reconciles the authoritative
-  // roster on each poll or broadcast.
+  // the server-fetched list; the hook's debounced router.refresh() reconciles
+  // the authoritative roster after each broadcast.
   const [broadcastVerified, setBroadcastVerified] = useState<VerifiedStudent[]>([]);
 
   // ── Live updates ───────────────────────────────────────────────────────────
-  // Same channel + fallback pattern as SessionDetailClient: broadcast for
-  // instant updates, slow poll in case the websocket drops silently.
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(rollcallChannelTopic(sessionId))
-      .on("broadcast", { event: ROLLCALL_VERIFIED_EVENT }, (message) => {
-        const payload = message.payload as RollcallVerifiedPayload;
-        if (payload?.firstName) {
-          setBroadcastVerified((prev) => [...prev, payload]);
-        }
-        router.refresh();
-      })
-      .subscribe();
-
-    const pollInterval = setInterval(() => {
-      router.refresh();
-    }, POLL_INTERVAL_MS);
-
-    return () => {
-      void supabase.removeChannel(channel);
-      clearInterval(pollInterval);
-    };
-  }, [sessionId, router]);
+  // Broadcast shows the name instantly; the hook refreshes the roster after a
+  // burst settles, on reconnect, on tab return, and when the instructor presses
+  // Refresh. No timer poll.
+  const { connection, refreshing: rosterRefreshing, reconnect } = useRollcallLive({
+    sessionId,
+    onVerified: (payload) => setBroadcastVerified((prev) => [...prev, payload]),
+  });
 
   /** Server list ∪ broadcast list, deduped: server order first, newest broadcasts last. */
   const verified = useMemo(() => {
@@ -258,6 +232,18 @@ export default function CheckinDisplayClient({
               <span className="text-sm font-bold text-gray-900 tabular-nums">
                 {verified.length}
               </span>
+            </div>
+
+            {/* Live status + Refresh: the instructor's recovery path if a name is missing */}
+            <div className="px-6 py-3 border-b border-gray-100">
+              <LiveRosterStatus
+                connection={connection}
+                refreshing={rosterRefreshing}
+                onRefresh={reconnect}
+              />
+              <p className="mt-2 text-xs text-gray-500">
+                Names appear on their own. If someone is missing, press Refresh.
+              </p>
             </div>
 
             {verified.length === 0 ? (

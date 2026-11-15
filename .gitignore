@@ -7,6 +7,9 @@ TwilioRecovery.rtf
 Building/Keys.md
 Building/superherocpr-app_accessKeys.csv
 
+# Mobile app planning docs. Nate wants these kept local/uncommitted (2026-11-09).
+Building/mobile-app/
+
 # Build output
 dist/
 build/

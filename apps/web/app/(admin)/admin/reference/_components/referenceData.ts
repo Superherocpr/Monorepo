@@ -161,6 +161,7 @@ export const GROUPS: GroupDef[] = [
           "Submit to Enrollware: marks the session as submitted to the Enrollware platform",
           "Export student list as a CSV file",
           "View a combined student table of all bookings and imported roster records, deduplicated by email",
+          "On a class that has not finished, a Live / Not live indicator and a Refresh roster button sit above the table: check-ins appear on their own, and if one is missing, press the button to reconnect and reload",
           "Edit customer contact info directly from this page via a modal",
           {
             text: "Upload, view, and delete per-student photos/documents (e.g. certification cards) via the Photos button on each student row",
@@ -218,6 +219,7 @@ export const GROUPS: GroupDef[] = [
         bullets: [
           "Generates a daily QR code designed to be projected on screen for students to scan and check in",
           "Shows a live-updating list of students who have successfully verified their attendance",
+          "A Live / Not live indicator and a Refresh button sit above the list: if a student is missing, press Refresh to reconnect and reload the roster (the page no longer reloads itself on a timer)",
           "Codes are valid for the current business day: prompts to refresh if yesterday's code is loaded",
           "Session header displays class type, location, and time for easy reference at the front of the room",
           "A student is sent a branded welcome email the first time they're confirmed: not on repeat check-ins",

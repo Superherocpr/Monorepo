@@ -23,6 +23,17 @@
 import type { ChangelogEntry } from "@/types/changelog";
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
+  // ── 1.8.0 ──────────────────────────────────────────────────────────────────
+  {
+    version: "1.8.0",
+    date: "2026-11-14",
+    kind: "improved",
+    title: "Refresh button for live check-ins",
+    summary:
+      "The check-in display and the session roster now show whether check-ins are coming through live, with a clear Refresh button beside it. If a student says they checked in and you do not see them, press Refresh and the page reconnects and loads the latest roster. The pages also no longer reload themselves every 30 to 45 seconds.",
+    roles: ["super_admin", "manager", "instructor"],
+    href: "/admin/sessions",
+  },
   // ── 1.7.2 ──────────────────────────────────────────────────────────────────
   // NOTE: deliberate exception to rule 14. This is an invisible security update, but
   // the owner wants staff to see that protections are actively maintained.
