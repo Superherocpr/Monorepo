@@ -14,6 +14,7 @@
  * double-notify anyone.
  */
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { invoiceEmail } from "@/lib/emails";
 
 const sendEmailMock = vi.fn().mockResolvedValue({ sent: true, id: "email-1" });
 vi.mock("@/lib/send-email", () => ({
@@ -205,5 +206,35 @@ describe("markInvoicePaidAndNotify", () => {
     // Re-marking a paid invoice must not re-announce the payment.
     expect(result.success).toBe(false);
     expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("invoiceEmail isUpdate", () => {
+  const base = {
+    invoiceNumber: "INV-00001",
+    recipientName: "Pat",
+    invoiceType: "individual" as const,
+    companyName: null,
+    studentCount: 2,
+    totalAmount: 165,
+    className: "BLS",
+    classDate: "2026-12-01T09:00:00",
+    locationName: "Hall",
+    locationCity: "Sarasota",
+    locationState: "FL",
+    notes: null,
+    paymentLink: "https://pay.test/x",
+  };
+
+  test("an update says it replaces the earlier invoice, so it is not read as a second bill", () => {
+    const { subject, html } = invoiceEmail({ ...base, isUpdate: true });
+    expect(subject).toMatch(/^Updated invoice INV-00001/);
+    expect(html).toContain("replaces the invoice we sent earlier");
+  });
+
+  test("a first send is unchanged", () => {
+    const { subject, html } = invoiceEmail(base);
+    expect(subject).toMatch(/^Invoice INV-00001/);
+    expect(html).not.toContain("replaces the invoice");
   });
 });

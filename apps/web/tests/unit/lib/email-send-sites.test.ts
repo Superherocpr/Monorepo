@@ -84,6 +84,7 @@ const EXPECTED_SEND_SITES: Record<string, string> = {
   "invoice-actions:instructor-paid": "lib/invoice-actions.ts",
   "invoice-actions:customer-paid": "lib/invoice-actions.ts",
   "invoices/resend": "app/api/invoices/resend/route.ts",
+  "invoices/edit": "app/api/invoices/edit/route.ts",
 
   // ── Merch orders ───────────────────────────────────────────────────────────
   "orders/confirm:customer": "app/api/orders/confirm/route.ts",

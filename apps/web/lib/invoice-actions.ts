@@ -218,6 +218,139 @@ export async function createBusinessPayPalInvoice(
 }
 
 /**
+ * The roster template CSV attached to every group invoice email, so the
+ * "attached to this email" line in the invoice email stays true on a re-send too.
+ * @returns A Resend attachment holding the sample roster CSV.
+ */
+export function rosterTemplateAttachment(): { filename: string; content: Buffer } {
+  return {
+    filename: "roster-template.csv",
+    content: Buffer.from(
+      [
+        `"First Name","Last Name","Email","Phone","Employer"`,
+        `"Jane","Smith","jane.smith@example.com","555-867-5309","Acme Hospital"`,
+        `"John","Doe","john.doe@example.com","",""`,
+      ].join("\r\n")
+    ),
+  };
+}
+
+/** Parameters for updating an already-sent PayPal invoice. */
+export interface PayPalInvoiceUpdateParams {
+  platformInvoiceId: string;
+  recipientEmail: string;
+  /**
+   * The full new line items, or a function that builds them from the invoice's
+   * current PayPal line items (for edits that must keep PayPal's own line names).
+   * A function returning null refuses the edit.
+   */
+  items: InvoiceLineItem[] | ((current: InvoiceLineItem[]) => InvoiceLineItem[] | null);
+}
+
+/**
+ * Updates a sent, unpaid invoice on PayPal: new line items and recipient email.
+ *
+ * PayPal's PUT is a full replace with no partial updates, so the live invoice is
+ * fetched first and its `detail`, `invoicer` and `configuration` are sent back
+ * unchanged. That keeps PayPal's own invoice number, dates and branding intact.
+ * Read-only fields (status, amount, links, ids) are deliberately not echoed back.
+ * `send_to_recipient=true` makes PayPal email the customer the updated invoice.
+ *
+ * The hosted payment link does not change, because the PayPal invoice id does not.
+ *
+ * Side effects: one GET and one PUT to PayPal, and PayPal emails the recipient.
+ * The caller must update our own DB only when this returns null.
+ *
+ * @param params - PayPal invoice id, the recipient email, and the full new line items.
+ * @returns null on success, otherwise a fixed reason string safe to show staff
+ *          (never raw PayPal output).
+ */
+export async function updateBusinessPayPalInvoice(
+  params: PayPalInvoiceUpdateParams
+): Promise<string | null> {
+  try {
+    const accessToken = await getPayPalAccessToken();
+    const apiBase = getPayPalApiBase();
+    const url = `${apiBase}/v2/invoicing/invoices/${encodeURIComponent(params.platformInvoiceId)}`;
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    };
+
+    const getRes = await fetch(url, { method: "GET", headers, cache: "no-store" });
+    if (!getRes.ok) {
+      console.error("[invoice-actions] PayPal invoice fetch failed:", getRes.status);
+      return `PayPal could not find this invoice (HTTP ${getRes.status}).`;
+    }
+    const current: unknown = await getRes.json().catch(() => null);
+    if (typeof current !== "object" || current === null) {
+      return "PayPal returned an unreadable invoice.";
+    }
+    const live = current as Record<string, unknown>;
+
+    // Only an invoice still awaiting payment can be edited on PayPal. Refusing
+    // here, before the PUT, covers an invoice paid on PayPal a moment ago whose
+    // webhook has not reached us yet.
+    const status = typeof live.status === "string" ? live.status : "";
+    if (!["SENT", "UNPAID", "VIEWED"].includes(status)) {
+      return `PayPal shows this invoice as ${status || "unknown"}, so it can no longer be edited.`;
+    }
+
+    let items: InvoiceLineItem[] | null;
+    if (typeof params.items === "function") {
+      const rawItems = Array.isArray(live.items) ? (live.items as unknown[]) : [];
+      const currentItems: InvoiceLineItem[] = rawItems.map((raw) => {
+        const row = (raw ?? {}) as {
+          name?: unknown;
+          quantity?: unknown;
+          unit_amount?: { value?: unknown };
+        };
+        return {
+          name: typeof row.name === "string" ? row.name : "",
+          quantity: Number(row.quantity),
+          unitAmount: Number(row.unit_amount?.value),
+        };
+      });
+      items = params.items(currentItems);
+    } else {
+      items = params.items;
+    }
+    if (!items) {
+      return "This invoice has line items that cannot be edited here. Change it in PayPal instead.";
+    }
+
+    const putBody = {
+      id: params.platformInvoiceId,
+      detail: live.detail,
+      invoicer: live.invoicer,
+      configuration: live.configuration,
+      primary_recipients: [{ billing_info: { email_address: params.recipientEmail } }],
+      items: items.map((item) => ({
+        name: item.name,
+        quantity: String(item.quantity),
+        unit_amount: { currency_code: "USD", value: item.unitAmount.toFixed(2) },
+      })),
+    };
+
+    const putRes = await fetch(`${url}?send_to_recipient=true`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(putBody),
+      cache: "no-store",
+    });
+    if (!putRes.ok) {
+      const errorText = await putRes.text().catch(() => "");
+      console.error("[invoice-actions] PayPal invoice update failed:", errorText);
+      return `PayPal rejected the change (HTTP ${putRes.status}).`;
+    }
+    return null;
+  } catch (err) {
+    console.error("[invoice-actions] PayPal invoice update request failed:", err);
+    return "Could not reach PayPal to update the invoice.";
+  }
+}
+
+/**
  * Inserts the invoice row, retrying on invoice_number UNIQUE-constraint conflicts.
  * Side effects: INSERT into invoices.
  * @param adminClient - Admin Supabase client (RLS-bypassing).
@@ -290,6 +423,11 @@ export interface CreateAndSendInvoiceParams {
   /** Additional PayPal line items beyond the per-student class fee, e.g. a travel fee. */
   extraLineItems?: InvoiceLineItem[];
   /**
+   * The travel fee included in totalAmount, in dollars, stored on invoices.travel_fee
+   * so an edit can read it back exactly. Pass it whenever extraLineItems holds one.
+   */
+  travelFee?: number;
+  /**
    * Replaces the default "className × studentCount @ amountPerStudent" PayPal
    * line item. Used by team/corporate bookings, which are billed as a flat total
    * with no per-head breakdown and are stored with studentCount = 0 (so they
@@ -360,6 +498,7 @@ export async function createAndSendInvoice(
       student_count: params.studentCount,
       amount_per_student: params.amountPerStudent,
       custom_price: params.customPrice,
+      travel_fee: params.travelFee ?? 0,
       total_amount: params.totalAmount,
       payment_platform: "paypal",
       platform_invoice_id: platformInvoiceId,
@@ -409,20 +548,7 @@ export async function createAndSendInvoice(
       subject,
       html,
       idempotencyKey: `invoice-sent-${invoice.id}`,
-      ...(params.invoiceType === "group" && {
-        attachments: [
-          {
-            filename: "roster-template.csv",
-            content: Buffer.from(
-              [
-                `"First Name","Last Name","Email","Phone","Employer"`,
-                `"Jane","Smith","jane.smith@example.com","555-867-5309","Acme Hospital"`,
-                `"John","Doe","john.doe@example.com","",""`,
-              ].join("\r\n")
-            ),
-          },
-        ],
-      }),
+      ...(params.invoiceType === "group" && { attachments: [rosterTemplateAttachment()] }),
     });
   }
 

@@ -1120,6 +1120,7 @@ export function bookingConfirmationEmail({
  * @param notes          - Optional instructor notes.
  * @param paymentLink    - Direct payment URL (null if not provided).
  * @param instructorName - Instructor's name.
+ * @param isUpdate       - True when this re-sends an edited invoice (POST /api/invoices/edit).
  */
 export function invoiceEmail({
   invoiceNumber,
@@ -1136,6 +1137,7 @@ export function invoiceEmail({
   instructorName,
   notes,
   paymentLink,
+  isUpdate = false,
 }: {
   invoiceNumber: string;
   recipientName: string;
@@ -1151,6 +1153,8 @@ export function invoiceEmail({
   instructorName?: string | null;
   notes: string | null;
   paymentLink: string | null;
+  /** True when staff edited an invoice already sent; the email then says so, so it is not read as a second bill. */
+  isUpdate?: boolean;
 }): EmailContent {
   const formattedDate = formatClassDate(classDate);
 
@@ -1222,9 +1226,10 @@ export function invoiceEmail({
       : "";
 
   return {
-    subject: `Invoice ${invoiceNumber} - ${className} on ${formattedDate}`,
+    subject: `${isUpdate ? "Updated invoice" : "Invoice"} ${invoiceNumber} - ${className} on ${formattedDate}`,
     html: wrapEmail(`
-      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">Invoice from SuperHeroCPR</h1>
+      <h1 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:4px;">${isUpdate ? "Updated invoice from SuperHeroCPR" : "Invoice from SuperHeroCPR"}</h1>
+      ${isUpdate ? `<p style="font-size:14px;color:#374151;margin-bottom:16px;">This replaces the invoice we sent earlier. The details below are the current amount due; you do not owe the earlier amount as well.</p>` : ""}
       <p style="font-size:14px;color:#6b7280;margin-bottom:24px;">Invoice number: <strong>${safeInvoiceNumber}</strong></p>
 
       <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">

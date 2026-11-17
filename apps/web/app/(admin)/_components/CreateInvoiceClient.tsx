@@ -2,8 +2,8 @@
  * CreateInvoiceClient: 3-step invoice creation wizard.
  * Used by: /admin/invoices/new
  *
- * Step 1: Select a class session
- * Step 2: Fill in invoice details (recipient, students, price, notes)
+ * Step 1: Select a class session (upcoming or past, with search)
+ * Step 2: Fill in invoice details (recipient, students, price, travel fee, notes)
  * Step 3: Review and send
  *
  * Handles success state inline: replaces the form with a confirmation screen
@@ -15,7 +15,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Check } from "lucide-react";
-import { formatCurrency } from "@/lib/invoice-utils";
+import {
+  formatCurrency,
+  findInvoicesForRecipient,
+  type ExistingClassInvoice,
+} from "@/lib/invoice-utils";
+import { TEAM_TRAVEL_FEE_MAX } from "@/lib/team-travel-fee";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,6 +32,10 @@ export interface SessionOption {
   starts_at: string;
   ends_at: string;
   spotsRemaining: number;
+  /** True once the class has ended. Past classes are invoiced with no spot limit. */
+  isPast: boolean;
+  /** Non-cancelled invoices already raised for this class, for the duplicate warning. */
+  existingInvoices: ExistingClassInvoice[];
   class_types: { id: string; name: string; price: number };
   locations: { name: string; city: string; state: string };
 }
@@ -95,7 +104,8 @@ function formatTime(iso: string): string {
  * Returns the Tailwind color classes for spots remaining badges.
  * Green for 5+, amber for 1–4, red for 0.
  */
-function spotsColor(spots: number): string {
+function spotsColor(spots: number, isPast = false): string {
+  if (isPast) return "text-gray-500";
   if (spots === 0) return "text-red-600";
   if (spots <= 4) return "text-amber-600";
   return "text-green-600";
@@ -104,7 +114,8 @@ function spotsColor(spots: number): string {
 /**
  * Returns the spots label string for display in session cards.
  */
-function spotsLabel(spots: number): string {
+function spotsLabel(spots: number, isPast = false): string {
+  if (isPast) return "Past class";
   if (spots === 0) return "No spots available";
   if (spots <= 4) return `Only ${spots} spot${spots === 1 ? "" : "s"} left`;
   return `${spots} spots available`;
@@ -160,6 +171,15 @@ export default function CreateInvoiceClient({
   const [useCustomPrice, setUseCustomPrice] = useState(false);
   const [customAmount, setCustomAmount] = useState(0);
   const [notes, setNotes] = useState("");
+  // Optional flat fee added on top of the price; "" means none.
+  const [travelFeeInput, setTravelFeeInput] = useState("");
+
+  // Step 1 picker: which list is showing and what is typed in the search box.
+  // Starts on Upcoming unless there is nothing upcoming to pick.
+  const [tab, setTab] = useState<"upcoming" | "past">(
+    sessions.some((s) => !s.isPast) ? "upcoming" : "past"
+  );
+  const [query, setQuery] = useState("");
 
   // Submission
   const [isSending, setIsSending] = useState(false);
@@ -177,8 +197,14 @@ export default function CreateInvoiceClient({
     ? selectedSession.class_types.price * studentCount
     : 0;
 
-  /** The authoritative total to invoice: custom or calculated. */
+  /** The price before any travel fee: custom or calculated. */
   const totalAmount = useCustomPrice ? customAmount : calculatedTotal;
+
+  /** The travel fee in dollars; 0 when blank or not a number. */
+  const travelFee = Math.round((parseFloat(travelFeeInput) || 0) * 100) / 100;
+
+  /** What the customer is billed: the price plus the travel fee. */
+  const grandTotal = Math.round((totalAmount + travelFee) * 100) / 100;
 
   /**
    * Amount per student: used for DB record.
@@ -190,14 +216,22 @@ export default function CreateInvoiceClient({
       : 0
     : (selectedSession?.class_types.price ?? 0);
 
+  /** Invoices already sent to this email for this class; drives the duplicate warning. */
+  const duplicateInvoices = selectedSession
+    ? findInvoicesForRecipient(selectedSession.existingInvoices, recipientEmail)
+    : [];
+
   /**
    * Whether all Step 2 fields are valid enough to proceed to Step 3.
    * Validates required fields and student count against available spots.
    */
   const isStep2Valid = ((): boolean => {
     if (!selectedSession) return false;
-    if (studentCount < 1 || studentCount > selectedSession.spotsRemaining)
+    if (studentCount < 1) return false;
+    // A class that has already ended has no seats left to protect.
+    if (!selectedSession.isPast && studentCount > selectedSession.spotsRemaining)
       return false;
+    if (travelFee < 0 || travelFee > TEAM_TRAVEL_FEE_MAX) return false;
     if (invoiceType === "individual") {
       return (
         recipientName.trim().length > 0 && isValidEmail(recipientEmail.trim())
@@ -217,11 +251,12 @@ export default function CreateInvoiceClient({
 
   /**
    * Selects a session from the Step 1 list and advances to Step 2.
-   * Only sessions with available spots can be selected.
+   * Only sessions with available spots can be selected, except past classes,
+   * which are invoiced after the fact and have no spot limit.
    * @param session - The session the instructor clicked on.
    */
   function handleSelectSession(session: SessionOption): void {
-    if (session.spotsRemaining === 0) return;
+    if (session.spotsRemaining === 0 && !session.isPast) return;
     setSelectedSession(session);
     setStep(2);
   }
@@ -253,7 +288,9 @@ export default function CreateInvoiceClient({
             invoiceType === "group" ? companyName.trim() : null,
           studentCount,
           customPrice: useCustomPrice,
+          // The price BEFORE the travel fee; the server adds the fee itself.
           totalAmount,
+          travelFee,
           amountPerStudent,
           notes: notes.trim() || null,
         }),
@@ -384,9 +421,9 @@ export default function CreateInvoiceClient({
               {selectedSession.locations.state}
             </p>
             <p
-              className={`mt-1 text-sm font-medium ${spotsColor(selectedSession.spotsRemaining)}`}
+              className={`mt-1 text-sm font-medium ${spotsColor(selectedSession.spotsRemaining, selectedSession.isPast)}`}
             >
-              {spotsLabel(selectedSession.spotsRemaining)}
+              {spotsLabel(selectedSession.spotsRemaining, selectedSession.isPast)}
             </p>
           </div>
           {/* Only show "Change class" in Step 2: Step 3 has its own "Edit Details" button */}
@@ -406,6 +443,71 @@ export default function CreateInvoiceClient({
   // ---------------------------------------------------------------------------
   // Step renders
   // ---------------------------------------------------------------------------
+
+  /**
+   * Sessions for the current Step 1 tab, filtered by the search text.
+   * Upcoming runs soonest first; past runs most recent first, so the class an
+   * instructor is looking for is near the top of either list.
+   */
+  const needle = query.trim().toLowerCase();
+  const visibleSessions = sessions
+    .filter((s) => s.isPast === (tab === "past"))
+    .filter(
+      (s) =>
+        needle === "" ||
+        [
+          s.class_types.name,
+          s.locations.name,
+          s.locations.city,
+          s.locations.state,
+          formatDate(s.starts_at),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle)
+    )
+    .sort((a, b) =>
+      tab === "past"
+        ? b.starts_at.localeCompare(a.starts_at)
+        : a.starts_at.localeCompare(b.starts_at)
+    );
+
+  /**
+   * Warns, without blocking, that this email already has an invoice for this
+   * class, and reminds staff how to deal with the old one. Shown in Steps 2 and 3.
+   */
+  function renderDuplicateWarning() {
+    if (duplicateInvoices.length === 0) return null;
+    return (
+      <div
+        className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+        role="alert"
+      >
+        <p className="font-semibold">This email already has an invoice for this class.</p>
+        <ul className="mt-2 space-y-1">
+          {duplicateInvoices.map((inv) => (
+            <li key={inv.id}>
+              <Link
+                href={`/admin/invoices/${inv.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono font-medium underline"
+              >
+                {inv.invoice_number}
+              </Link>{" "}
+              ({inv.status === "paid" ? "paid" : "sent, unpaid"},{" "}
+              {formatCurrency(Number(inv.total_amount))})
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2">
+          Sending this invoice as well will bill them twice. If you only need to
+          fix the existing one, open it and use Edit Invoice instead. If this
+          new invoice replaces it, you can cancel the old invoice from its page.
+        </p>
+      </div>
+    );
+  }
 
   /** Renders the session selection list for Step 1. */
   function renderStep1() {
@@ -431,9 +533,42 @@ export default function CreateInvoiceClient({
         <h2 className="mb-4 text-xl font-semibold text-gray-900">
           Select a Class
         </h2>
+        {/* Upcoming / Past tabs and search: the full list is long and mixes both */}
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="flex w-fit gap-1 rounded-lg border border-gray-300 p-1">
+            {(["upcoming", "past"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={[
+                  "rounded-md px-4 py-1.5 text-sm font-medium capitalize transition-colors",
+                  tab === t ? "bg-red-600 text-white" : "text-gray-600 hover:text-gray-900",
+                ].join(" ")}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search classes"
+            placeholder="Search by class, place, or date"
+            className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          />
+        </div>
+        {visibleSessions.length === 0 && (
+          <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+            {query.trim()
+              ? "No classes match your search."
+              : `No ${tab} classes.`}
+          </p>
+        )}
         <ul className="space-y-3">
-          {sessions.map((session) => {
-            const isDisabled = session.spotsRemaining === 0;
+          {visibleSessions.map((session) => {
+            const isDisabled = session.spotsRemaining === 0 && !session.isPast;
             const isSelected = selectedSession?.id === session.id;
 
             return (
@@ -466,9 +601,9 @@ export default function CreateInvoiceClient({
                       </p>
                     </div>
                     <span
-                      className={`shrink-0 text-sm font-medium ${spotsColor(session.spotsRemaining)}`}
+                      className={`shrink-0 text-sm font-medium ${spotsColor(session.spotsRemaining, session.isPast)}`}
                     >
-                      {spotsLabel(session.spotsRemaining)}
+                      {spotsLabel(session.spotsRemaining, session.isPast)}
                     </span>
                   </div>
                 </button>
@@ -584,6 +719,8 @@ export default function CreateInvoiceClient({
             />
           </div>
 
+          {renderDuplicateWarning()}
+
           {/* Student count */}
           <div>
             <label
@@ -598,7 +735,7 @@ export default function CreateInvoiceClient({
               required
               aria-required="true"
               min={1}
-              max={selectedSession?.spotsRemaining ?? 1}
+              max={selectedSession?.isPast ? undefined : (selectedSession?.spotsRemaining ?? 1)}
               value={studentCount}
               onChange={(e) =>
                 setStudentCount(Math.max(1, parseInt(e.target.value, 10) || 1))
@@ -607,6 +744,7 @@ export default function CreateInvoiceClient({
             />
             {/* Inline error if student count exceeds available spots */}
             {selectedSession &&
+              !selectedSession.isPast &&
               studentCount > selectedSession.spotsRemaining && (
                 <p className="mt-1 text-sm text-red-600" role="alert">
                   Only {selectedSession.spotsRemaining} spot
@@ -619,7 +757,7 @@ export default function CreateInvoiceClient({
           {/* Price */}
           <div>
             <p className="mb-1 text-sm font-medium text-gray-700">
-              Total amount to invoice
+              Class price (before any travel fee)
             </p>
             {!useCustomPrice ? (
               <div className="flex items-center gap-3">
@@ -659,6 +797,41 @@ export default function CreateInvoiceClient({
             >
               {useCustomPrice ? "Use standard price" : "Use custom price"}
             </button>
+          </div>
+
+          {/* Optional travel fee, added on top of the price as its own line */}
+          <div>
+            <label
+              htmlFor="travelFee"
+              className="mb-1 block text-sm font-medium text-gray-700"
+            >
+              Travel fee <span className="text-gray-400">(optional)</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">$</span>
+              <input
+                id="travelFee"
+                type="number"
+                min={0}
+                max={TEAM_TRAVEL_FEE_MAX}
+                step="0.01"
+                value={travelFeeInput}
+                onChange={(e) => setTravelFeeInput(e.target.value)}
+                className="w-36 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                placeholder="0.00"
+              />
+            </div>
+            {travelFee > 0 && (
+              <p className="mt-1 text-sm text-gray-600">
+                Invoice total with travel fee:{" "}
+                <strong>{formatCurrency(grandTotal)}</strong>
+              </p>
+            )}
+            {travelFee > TEAM_TRAVEL_FEE_MAX && (
+              <p className="mt-1 text-sm text-red-600" role="alert">
+                The travel fee cannot be more than ${TEAM_TRAVEL_FEE_MAX}.
+              </p>
+            )}
           </div>
 
           {/* Optional note */}
@@ -767,7 +940,7 @@ export default function CreateInvoiceClient({
                 Amount
               </span>
               <p className="flex items-center gap-2 text-gray-900">
-                {formatCurrency(totalAmount)}
+                {formatCurrency(grandTotal)}
                 {useCustomPrice && (
                   <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
                     Custom price
@@ -775,6 +948,15 @@ export default function CreateInvoiceClient({
                 )}
               </p>
             </div>
+
+            {travelFee > 0 && (
+              <div>
+                <span className="text-xs font-semibold uppercase text-gray-400">
+                  Includes travel fee
+                </span>
+                <p className="text-gray-900">{formatCurrency(travelFee)}</p>
+              </div>
+            )}
 
             {notes.trim() && (
               <div>
@@ -786,6 +968,8 @@ export default function CreateInvoiceClient({
             )}
           </div>
         </div>
+
+        {duplicateInvoices.length > 0 && <div className="mt-4">{renderDuplicateWarning()}</div>}
 
         {/* Error message */}
         {sendError && (

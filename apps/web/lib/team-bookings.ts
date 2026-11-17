@@ -829,6 +829,7 @@ async function createTeamInvoice(
       unitAmount: total,
     },
     extraLineItems,
+    travelFee,
   });
 
   if (!result.success) {
