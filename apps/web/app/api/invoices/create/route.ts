@@ -9,6 +9,10 @@
  * (lib/invoice-actions.ts) — the same helper used by the accept-teach
  * auto-invoicing flow, so both paths stay in sync.
  *
+ * A class that has already ended skips the spot-capacity check: invoicing after
+ * the fact is normal, and the seats no longer mean anything. An optional
+ * travelFee is added on top of the price as its own PayPal line.
+ *
  * Instructor compensation is not paid directly from the invoice. When the
  * invoice is later marked paid, markInvoicePaidAndNotify() records instructor
  * earnings for the payout system.
@@ -16,7 +20,9 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/auth/effective-role";
-import { createAndSendInvoice } from "@/lib/invoice-actions";
+import { createAndSendInvoice, type InvoiceLineItem } from "@/lib/invoice-actions";
+import { hasClassEnded } from "@/lib/business-time";
+import { validateTravelFee } from "@/lib/team-travel-fee";
 import { TEACHING_ROLES, canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
 
 /** Type guard — ensures a value is a non-null plain object. */
@@ -93,6 +99,19 @@ export async function POST(request: Request) {
     notes,
   } = body;
 
+  // Optional: absent means no travel fee.
+  const travelFee =
+    body.travelFee === undefined || body.travelFee === null
+      ? 0
+      : Math.round(Number(body.travelFee) * 100) / 100;
+  const travelFeeError =
+    body.travelFee !== undefined && body.travelFee !== null && typeof body.travelFee !== "number"
+      ? "The travel fee must be a number."
+      : validateTravelFee(travelFee);
+  if (travelFeeError) {
+    return Response.json({ success: false, error: travelFeeError }, { status: 400 });
+  }
+
   if (invoiceType !== "individual" && invoiceType !== "group") {
     return Response.json(
       { success: false, error: "Invalid invoice type" },
@@ -129,7 +148,7 @@ export async function POST(request: Request) {
   const { data: sessionData } = await adminClient
     .from("class_sessions")
     .select(`
-      id, max_capacity, instructor_id, starts_at,
+      id, max_capacity, instructor_id, starts_at, ends_at,
       class_types ( name, price ),
       locations ( name, city, state ),
       bookings ( id, cancelled ),
@@ -170,7 +189,11 @@ export async function POST(request: Request) {
   const spotsRemaining =
     sessionData.max_capacity - activeBookings - activeInvoiceStudents;
 
-  if (studentCount > spotsRemaining) {
+  const classHasEnded = hasClassEnded(
+    sessionData.starts_at as string,
+    sessionData.ends_at as string | null
+  );
+  if (!classHasEnded && studentCount > spotsRemaining) {
     return Response.json(
       {
         success: false,
@@ -211,7 +234,10 @@ export async function POST(request: Request) {
     typeof rawClassPrice === "number"
       ? rawClassPrice
       : parseFloat(String(rawClassPrice ?? "0"));
-  const serverTotalAmount = customPrice ? totalAmount : classPrice * studentCount;
+  // totalAmount from the form is the price BEFORE the travel fee; the fee is
+  // added here so the client can never send a total that hides or inflates it.
+  const serverBaseAmount = customPrice ? totalAmount : classPrice * studentCount;
+  const serverTotalAmount = Math.round((serverBaseAmount + travelFee) * 100) / 100;
   const serverAmountPerStudent = customPrice ? amountPerStudent : classPrice;
 
   if (!Number.isFinite(serverTotalAmount) || !Number.isFinite(serverAmountPerStudent)) {
@@ -225,6 +251,8 @@ export async function POST(request: Request) {
     invoiceType === "group" && typeof body.companyName === "string"
       ? body.companyName
       : null;
+  const extraLineItems: InvoiceLineItem[] =
+    travelFee > 0 ? [{ name: "Travel Fee", quantity: 1, unitAmount: travelFee }] : [];
   const cleanNotes = typeof notes === "string" && notes.trim() ? notes.trim() : null;
 
   const result = await createAndSendInvoice(adminClient, {
@@ -238,7 +266,8 @@ export async function POST(request: Request) {
     studentCount,
     amountPerStudent: serverAmountPerStudent,
     totalAmount: serverTotalAmount,
-    customPrice,
+    // True with a travel fee too: the total is then not students x price.
+    customPrice: customPrice || travelFee > 0,
     notes: cleanNotes,
     className,
     classDate: sessionData.starts_at as string,
@@ -246,6 +275,8 @@ export async function POST(request: Request) {
     locationCity,
     locationState,
     actorId: actor.user.id,
+    extraLineItems,
+    travelFee,
   });
 
   if (!result.success) {

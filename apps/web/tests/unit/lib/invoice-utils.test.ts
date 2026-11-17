@@ -11,6 +11,8 @@ import {
   formatDateTime,
   STATUS_BADGES,
   PLATFORM_LABELS,
+  findInvoicesForRecipient,
+  type ExistingClassInvoice,
 } from "@/lib/invoice-utils";
 
 describe("formatCurrency", () => {
@@ -109,5 +111,28 @@ describe("PLATFORM_LABELS", () => {
 
   test("stripe maps to 'Stripe'", () => {
     expect(PLATFORM_LABELS.stripe).toBe("Stripe");
+  });
+});
+
+describe("findInvoicesForRecipient", () => {
+  const inv = (over: Partial<ExistingClassInvoice>): ExistingClassInvoice => ({
+    id: "i1",
+    invoice_number: "INV-00001",
+    recipient_email: "Pat@Example.com",
+    status: "sent",
+    total_amount: 100,
+    ...over,
+  });
+
+  test("matches the same email ignoring case and spaces", () => {
+    expect(findInvoicesForRecipient([inv({})], "  pat@example.COM ")).toHaveLength(1);
+  });
+  test("counts paid invoices but not cancelled ones", () => {
+    const list = [inv({ id: "a", status: "paid" }), inv({ id: "b", status: "cancelled" })];
+    expect(findInvoicesForRecipient(list, "pat@example.com").map((i) => i.id)).toEqual(["a"]);
+  });
+  test("ignores other emails and a blank email", () => {
+    expect(findInvoicesForRecipient([inv({})], "other@example.com")).toEqual([]);
+    expect(findInvoicesForRecipient([inv({})], "  ")).toEqual([]);
   });
 });

@@ -43,7 +43,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
     .select(`
       id, invoice_number, invoice_type, recipient_name,
       recipient_email, company_name, student_count,
-      amount_per_student, custom_price, total_amount,
+      amount_per_student, custom_price, total_amount, travel_fee,
       payment_platform, platform_invoice_id,
       status, notes, created_at, paid_at, cancelled_at,
       payment_method, paypal_fee_amount, net_amount,
