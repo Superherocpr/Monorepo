@@ -2,12 +2,13 @@
 
 /**
  * InvoiceDetailClient: Interactive invoice detail view for /admin/invoices/[id].
- * Handles Mark as Paid, Resend, and Cancel Invoice actions inline.
+ * Handles Mark as Paid, Edit, Resend, and Cancel Invoice actions inline.
  * Used by: InvoiceDetailPage (admin/invoices/[id]/page.tsx)
  */
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { InvoicePaymentMethod, InvoiceStatus, InvoiceType } from "@/types/invoices";
 import type { PaymentPlatform, UserRole } from "@/types/users";
 import {
@@ -19,6 +20,7 @@ import {
 } from "@/lib/invoice-utils";
 import { formatClassDateTimeLong } from "@/lib/business-time";
 import { canUseInstructorToolsOn } from "@/lib/auth/view-as-constants";
+import { computeInvoiceTotal } from "@/lib/invoice-edit";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +45,8 @@ export interface InvoiceDetail {
   amount_per_student: number;
   custom_price: boolean;
   total_amount: number;
+  /** Travel fee included in total_amount, in dollars (invoices.travel_fee). */
+  travel_fee: number | string;
   payment_platform: PaymentPlatform;
   platform_invoice_id: string | null;
   status: InvoiceStatus;
@@ -102,17 +106,18 @@ const ACTION_LABELS: Record<string, string> = {
   sent: "Invoice sent",
   resent: "Invoice resent",
   marked_paid: "Marked as paid",
+  edited: "Invoice edited",
   cancelled: "Invoice cancelled",
 };
 
 // ─── Action panel states ──────────────────────────────────────────────────────
 
-type ActionMode = "idle" | "confirm-paid" | "resend" | "confirm-cancel";
+type ActionMode = "idle" | "confirm-paid" | "edit" | "resend" | "confirm-cancel";
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
- * Full invoice detail view with inline action panels for paid/resend/cancel.
+ * Full invoice detail view with inline action panels for paid/edit/resend/cancel.
  * Managers see all details but no action buttons.
  * Instructors can only act on their own invoices.
  * @param invoice - The full invoice record with all joined relations
@@ -124,6 +129,7 @@ export default function InvoiceDetailClient({
   userRole,
   userId,
 }: InvoiceDetailClientProps) {
+  const router = useRouter();
   const isManager = userRole === "manager";
   // Instructors and managers act on their own invoices; super admins act on all.
   // A manager viewing another instructor's invoice is read-only.
@@ -131,6 +137,12 @@ export default function InvoiceDetailClient({
 
   const [actionMode, setActionMode] = useState<ActionMode>("idle");
   const [resendEmail, setResendEmail] = useState(invoice.recipient_email);
+  // Edit form fields are strings so a half-typed number is not forced to 0 while typing.
+  const [editName, setEditName] = useState(invoice.recipient_name);
+  const [editEmail, setEditEmail] = useState(invoice.recipient_email);
+  const [editStudents, setEditStudents] = useState(String(invoice.student_count));
+  const [editPrice, setEditPrice] = useState(String(invoice.amount_per_student));
+  const [editTravel, setEditTravel] = useState(String(Number(invoice.travel_fee)));
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -158,7 +170,7 @@ export default function InvoiceDetailClient({
   /** Calls an invoice action API route and handles state updates. */
   async function callAction(
     url: string,
-    body: Record<string, string>,
+    body: Record<string, string | number>,
     onSuccess: () => void
   ) {
     setLoading(true);
@@ -206,6 +218,52 @@ export default function InvoiceDetailClient({
         setCurrentMethod(chosen);
         setCurrentFee(chosen === "paypal" ? null : 0);
         setSuccessMsg("Invoice marked as paid. Booking spots have been reserved.");
+      }
+    );
+  }
+
+  /**
+   * Opens the edit form pre-filled from the saved invoice, including its stored travel fee.
+   */
+  function openEdit() {
+    setEditName(invoice.recipient_name);
+    setEditEmail(invoice.recipient_email);
+    setEditStudents(String(invoice.student_count));
+    setEditPrice(String(Number(invoice.amount_per_student)));
+    setEditTravel(String(Number(invoice.travel_fee)));
+    setErrorMsg(null);
+    setActionMode("edit");
+  }
+
+  // Flat team invoices are stored with 0 students; their price is the whole
+  // flat amount, so there is no student count to edit or multiply by.
+  const isFlat = invoice.student_count === 0;
+
+  const editTotal = computeInvoiceTotal(
+    isFlat ? 1 : Number(editStudents) || 0,
+    Number(editPrice) || 0,
+    Number(editTravel) || 0
+  );
+
+  /**
+   * Saves the edit: PayPal is updated first and the customer is emailed the
+   * corrected invoice. Server totals are authoritative; the page then refreshes
+   * so every panel shows the saved values.
+   */
+  function handleEdit() {
+    callAction(
+      "/api/invoices/edit",
+      {
+        invoiceId: invoice.id,
+        recipientName: editName,
+        recipientEmail: editEmail,
+        studentCount: isFlat ? 0 : Number(editStudents),
+        amountPerStudent: Number(editPrice),
+        travelFee: Number(editTravel) || 0,
+      },
+      () => {
+        setSuccessMsg("Invoice updated. The customer has been emailed the corrected invoice.");
+        router.refresh();
       }
     );
   }
@@ -355,6 +413,12 @@ export default function InvoiceDetailClient({
                   <dd className="text-gray-900">{formatCurrency(invoice.amount_per_student)}</dd>
                 </div>
               )}
+              {Number(invoice.travel_fee) > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">Travel fee</dt>
+                  <dd className="text-gray-900">{formatCurrency(Number(invoice.travel_fee))}</dd>
+                </div>
+              )}
               <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                 <dt className="font-semibold text-gray-900">Total</dt>
                 <dd className="text-xl font-bold text-gray-900">
@@ -469,6 +533,13 @@ export default function InvoiceDetailClient({
                 </button>
                 <button
                   type="button"
+                  onClick={openEdit}
+                  className="w-full px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Edit Invoice
+                </button>
+                <button
+                  type="button"
                   onClick={() => { setResendEmail(invoice.recipient_email); setActionMode("resend"); }}
                   className="w-full px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 transition-colors"
                 >
@@ -528,6 +599,66 @@ export default function InvoiceDetailClient({
                     className="flex-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50"
                   >
                     {loading ? "Saving…" : "Confirm - Mark Paid"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Edit form */}
+            {actionMode === "edit" && (
+              <div className="space-y-3">
+                {([
+                  ["edit-name", "Recipient name", "text", editName, setEditName],
+                  ["edit-email", "Recipient email", "email", editEmail, setEditEmail],
+                  ["edit-students", "Students", "number", editStudents, setEditStudents],
+                  [
+                    "edit-price",
+                    isFlat ? "Price before travel fee ($)" : "Price per student ($)",
+                    "number",
+                    editPrice,
+                    setEditPrice,
+                  ],
+                  ["edit-travel", "Travel fee ($)", "number", editTravel, setEditTravel],
+                ] as const)
+                  .filter(([id]) => !(isFlat && id === "edit-students"))
+                  .map(([id, label, type, value, setValue]) => (
+                  <div key={id}>
+                    <label htmlFor={id} className="block text-xs font-medium text-gray-500 mb-1">
+                      {label}
+                    </label>
+                    <input
+                      id={id}
+                      type={type}
+                      value={value}
+                      min={type === "number" ? 0 : undefined}
+                      step={id === "edit-students" ? 1 : type === "number" ? "0.01" : undefined}
+                      onChange={(e) => setValue(e.target.value)}
+                      className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                ))}
+                <p className="text-sm text-gray-700">
+                  New total: <strong>{formatCurrency(editTotal)}</strong>
+                </p>
+                <p className="text-xs text-gray-400">
+                  Saving updates the invoice in PayPal and emails the customer the corrected invoice.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActionMode("idle")}
+                    disabled={loading}
+                    className="flex-1 px-3 py-1.5 border border-gray-300 text-sm rounded-md hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEdit}
+                    disabled={loading || !editName.trim() || !editEmail.trim()}
+                    className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {loading ? "Saving…" : "Save and Send"}
                   </button>
                 </div>
               </div>

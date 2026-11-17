@@ -206,6 +206,7 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
           locationState: location.state,
           actorId: actor.user.id,
           extraLineItems,
+          travelFee,
         });
 
         if (!invoiceResult.success) {

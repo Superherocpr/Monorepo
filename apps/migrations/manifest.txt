@@ -88,4 +88,5 @@
 0078_selective_payout_reservation.sql
 0079_whats_new_seen.sql
 0080_revoke_anon_pii_reads.sql
+0081_invoice_travel_fee.sql
 replace-user-uuid.sql

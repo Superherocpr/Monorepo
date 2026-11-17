@@ -16,6 +16,8 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminActor } from "@/lib/auth/effective-role";
 import { TEACHING_ROLES, isTeachingRole } from "@/lib/auth/view-as-constants";
+import { hasClassEnded } from "@/lib/business-time";
+import type { ExistingClassInvoice } from "@/lib/invoice-utils";
 import CreateInvoiceClient, {
   type SessionOption,
   type InstructorOption,
@@ -153,7 +155,7 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
       class_types ( id, name, price ),
       locations ( name, city, state ),
       bookings ( id, cancelled ),
-      invoices ( id, student_count, status )
+      invoices ( id, student_count, status, invoice_number, recipient_email, total_amount )
     `)
     .eq("instructor_id", instructorId)
     .eq("approval_status", "approved")
@@ -193,6 +195,19 @@ export default async function CreateInvoicePage({ searchParams }: PageProps) {
       starts_at: s.starts_at,
       ends_at: s.ends_at,
       spotsRemaining: Math.max(0, spotsRemaining),
+      // Computed here, in the business time zone, so a past class is the same
+      // answer for every viewer. Past classes are invoiced with no spot limit.
+      isPast: hasClassEnded(s.starts_at, s.ends_at),
+      // Lets the form warn when the same email is about to be billed twice.
+      existingInvoices: (invoices as unknown as ExistingClassInvoice[])
+        .filter((inv) => inv.status !== "cancelled")
+        .map((inv) => ({
+          id: inv.id,
+          invoice_number: inv.invoice_number,
+          recipient_email: inv.recipient_email,
+          status: inv.status,
+          total_amount: Number(inv.total_amount),
+        })),
       class_types: {
         id: classType?.id ?? "",
         name: classType?.name ?? "Unknown Class",

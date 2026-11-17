@@ -73,3 +73,32 @@ export const PLATFORM_LABELS: Record<PaymentPlatform, string> = {
   stripe: "Stripe",
   venmo_business: "Venmo Business",
 };
+
+/** An invoice already raised for a class, as the Create Invoice form needs it to spot duplicates. */
+export interface ExistingClassInvoice {
+  id: string;
+  invoice_number: string;
+  recipient_email: string;
+  status: InvoiceStatus;
+  total_amount: number;
+}
+
+/**
+ * Finds invoices already sent to the same email for a class, so Create Invoice
+ * can warn before the customer is billed twice. Cancelled invoices are ignored
+ * (they are void); paid ones still count, since billing a paid customer again
+ * is exactly the mistake worth catching.
+ * @param existing - The class's invoices.
+ * @param email - The recipient email being typed; compared trimmed and case-insensitively.
+ * @returns The matching invoices, or an empty list.
+ */
+export function findInvoicesForRecipient(
+  existing: ExistingClassInvoice[],
+  email: string
+): ExistingClassInvoice[] {
+  const wanted = email.trim().toLowerCase();
+  if (!wanted) return [];
+  return existing.filter(
+    (inv) => inv.status !== "cancelled" && inv.recipient_email.trim().toLowerCase() === wanted
+  );
+}

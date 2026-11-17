@@ -23,6 +23,27 @@
 import type { ChangelogEntry } from "@/types/changelog";
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
+  // ── 1.9.0 ──────────────────────────────────────────────────────────────────
+  {
+    version: "1.9.0",
+    date: "2026-11-17",
+    kind: "new",
+    title: "Edit an invoice after it is sent",
+    summary:
+      "Open an unpaid invoice and press Edit Invoice to change the number of students, the price per student, the travel fee, or the recipient's name and email. On a flat-rate team invoice you change the price and travel fee instead, which is how to adjust a corporate class price. The invoice is updated in PayPal and the customer is emailed the corrected invoice, so you no longer have to cancel and start over. Paid and cancelled invoices stay locked.",
+    roles: ["super_admin", "manager", "instructor"],
+    href: "/admin/invoices",
+  },
+  {
+    version: "1.9.0",
+    date: "2026-11-17",
+    kind: "improved",
+    title: "Invoice past classes and add a travel fee",
+    summary:
+      "When you create an invoice, the class picker now has Upcoming and Past tabs and a search box, and a class that has already happened can be invoiced even if it was full. There is also a new optional Travel fee box, added on top of the price and shown to the customer as its own line. If the same email already has an invoice for that class, you now get a warning with a link to it, so nobody is billed twice by accident.",
+    roles: ["super_admin", "manager", "instructor"],
+    href: "/admin/invoices/new",
+  },
   // ── 1.8.0 ──────────────────────────────────────────────────────────────────
   {
     version: "1.8.0",
