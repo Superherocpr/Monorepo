@@ -385,6 +385,12 @@ export default function CustomerDetailClient({
     state: initialProfile.state ?? "",
     zip: initialProfile.zip ?? "",
   });
+  // What the server last accepted. profileValues changes on every keystroke, so
+  // it cannot answer "did this field change?"; comparing against it made every
+  // blur look unchanged and nothing was ever saved.
+  const [savedValues, setSavedValues] = useState(profileValues);
+  /** Outcome of the most recent profile field save, shown under the Profile card. */
+  const [fieldMsg, setFieldMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   // Email gets its own explicit-save flow so a typo can't accidentally
   // trigger a Supabase confirmation email on blur.
@@ -491,22 +497,41 @@ export default function CustomerDetailClient({
 
   /**
    * Saves a single profile field when the user leaves the input (blur).
+   * On success the field becomes the new saved baseline; on failure the input
+   * is put back to its last saved value so the screen never shows an edit the
+   * server refused.
+   * Side effects: PATCH /api/customers/[id]/update-profile, router refresh.
    * @param field - The profile field name to update.
    * @param value - The new value (empty string is stored as null for optional fields).
    */
-  async function handleFieldBlur(field: string, value: string) {
-    const original =
-      profileValues[field as keyof typeof profileValues] ?? "";
-    if (value === original) return; // No change: skip the request
+  async function handleFieldBlur(
+    field: keyof typeof profileValues,
+    value: string
+  ): Promise<void> {
+    if (value.trim() === savedValues[field].trim()) return; // No change: skip the request
 
     setFieldSaving(field);
+    setFieldMsg(null);
     try {
-      await fetch(`/api/customers/${initialProfile.id}/update-profile`, {
+      const res = await fetch(`/api/customers/${initialProfile.id}/update-profile`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ field, value }),
       });
-      router.refresh();
+      const json: { error?: string } = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const clean = value.trim();
+        setSavedValues((prev) => ({ ...prev, [field]: clean }));
+        setProfileValues((prev) => ({ ...prev, [field]: clean }));
+        setFieldMsg({ kind: "ok", text: "Saved." });
+        router.refresh();
+      } else {
+        setProfileValues((prev) => ({ ...prev, [field]: savedValues[field] }));
+        setFieldMsg({ kind: "error", text: json.error ?? "Could not save that change. Please try again." });
+      }
+    } catch {
+      setProfileValues((prev) => ({ ...prev, [field]: savedValues[field] }));
+      setFieldMsg({ kind: "error", text: "Network error. That change was not saved." });
     } finally {
       setFieldSaving(null);
     }
@@ -1404,6 +1429,18 @@ export default function CustomerDetailClient({
             onBlur={(v) => handleFieldBlur("zip", v)}
           />
         </div>
+        {fieldMsg ? (
+          <p
+            role="status"
+            className={`mt-3 text-sm ${fieldMsg.kind === "ok" ? "text-green-700" : "text-red-700"}`}
+          >
+            {fieldMsg.text}
+          </p>
+        ) : (
+          <p className="mt-3 text-xs text-gray-400">
+            Changes to these fields save automatically when you click out of the field.
+          </p>
+        )}
 
         {/* Send password reset */}
         <div className="mt-6 border-t border-gray-100 pt-4">
