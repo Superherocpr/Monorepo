@@ -26,6 +26,14 @@ const ALLOWED_FIELDS = new Set([
   "zip",
 ]);
 
+/** Fields that may never be blank, with the name shown in the error message. */
+const REQUIRED_FIELD_LABELS: Record<string, string> = {
+  first_name: "First name",
+  last_name: "Last name",
+  email: "Email",
+  phone: "Phone number",
+};
+
 /**
  * Updates a single profile field for the given customer ID.
  * @param request - PATCH request with JSON body: { field: string; value: string | null }
@@ -64,9 +72,26 @@ export async function PATCH(
       ? value.trim()
       : null;
 
-  // Email requires a non-null value.
-  if (field === "email" && !cleanValue) {
-    return Response.json({ success: false, error: "Email cannot be empty." }, { status: 400 });
+  // These cannot be blank. Phone is required site-wide, and the database also
+  // refuses a null phone, so rejecting here turns a bare 500 into a clear message.
+  const requiredLabel = REQUIRED_FIELD_LABELS[field];
+  if (requiredLabel && !cleanValue) {
+    return Response.json(
+      { success: false, error: `${requiredLabel} is required.` },
+      { status: 400 }
+    );
+  }
+
+  // The rollback below needs the address as it is now, so read it before writing.
+  let previousEmail: string | null = null;
+  if (field === "email") {
+    const { data: current } = await adminClient
+      .from("profiles")
+      .select("email")
+      .eq("id", customerId)
+      .eq("role", "customer")
+      .maybeSingle();
+    previousEmail = current?.email ?? null;
   }
 
   // ── Update profile ─────────────────────────────────────────────────────────
@@ -89,14 +114,20 @@ export async function PATCH(
       { email: cleanValue, email_confirm: true }
     );
     if (authError) {
-      // The profiles row was already updated — roll it back to keep things in sync.
-      await adminClient
-        .from("profiles")
-        .update({ email: body.value, updated_at: new Date().toISOString() })
-        .eq("id", customerId);
+      // The profiles row was already updated: put the previous address back so
+      // the profile and the login email stay in sync.
+      if (previousEmail) {
+        await adminClient
+          .from("profiles")
+          .update({ email: previousEmail, updated_at: new Date().toISOString() })
+          .eq("id", customerId);
+      }
       return Response.json(
-        { success: false, error: "Failed to update login email. Profile rolled back." },
-        { status: 500 }
+        {
+          success: false,
+          error: "That email could not be used for login. It may already belong to another account. Nothing was changed.",
+        },
+        { status: 409 }
       );
     }
   }

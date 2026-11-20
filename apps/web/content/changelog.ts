@@ -34,6 +34,16 @@ export const CHANGELOG: readonly ChangelogEntry[] = [
     roles: ["super_admin", "manager"],
     href: "/admin/customers",
   },
+  {
+    version: "1.9.1",
+    date: "2026-11-20",
+    kind: "fixed",
+    title: "Editing a customer's details now saves",
+    summary:
+      "Changes to a customer's name, phone, address, city, state or ZIP on their page were not being saved at all. They now save when you click out of the field, and you see a Saved message or the reason it was refused. A name or phone number can no longer be cleared, and if a new login email is already used by another account, nothing is changed and you are told why.",
+    roles: ["super_admin", "manager"],
+    href: "/admin/customers",
+  },
   // ── 1.9.0 ──────────────────────────────────────────────────────────────────
   {
     version: "1.9.0",
