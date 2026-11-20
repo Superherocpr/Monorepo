@@ -115,7 +115,9 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       .eq("customer_id", customerId)
       .order("created_at", { ascending: false }),
 
-    // Approved upcoming sessions for the "Add Booking" panel
+    // Approved sessions that have not ended, for the "Add Booking" panel. Keyed
+    // on ends_at and including in_progress so a class already under way still
+    // appears: the add-booking API accepts it, and walk-ins are the main use.
     admin
       .from("class_sessions")
       .select(
@@ -127,8 +129,8 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       `
       )
       .eq("approval_status", "approved")
-      .eq("status", "scheduled")
-      .gte("starts_at", floatingNow())
+      .in("status", ["scheduled", "in_progress"])
+      .gte("ends_at", floatingNow())
       .order("starts_at", { ascending: true })
       .limit(50),
 

@@ -23,6 +23,17 @@
 import type { ChangelogEntry } from "@/types/changelog";
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
+  // ── 1.9.1 ──────────────────────────────────────────────────────────────────
+  {
+    version: "1.9.1",
+    date: "2026-11-20",
+    kind: "fixed",
+    title: "Add a student after the class has started",
+    summary:
+      "Once an instructor pressed Start Class, adding a student without charging them failed with a 'not available for booking' error, and the class no longer showed in the Add Booking list on a customer's page. Both now work until the class ends, so late arrivals and walk-ins can be added at the door.",
+    roles: ["super_admin", "manager"],
+    href: "/admin/customers",
+  },
   // ── 1.9.0 ──────────────────────────────────────────────────────────────────
   {
     version: "1.9.0",

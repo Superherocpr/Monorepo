@@ -13,6 +13,9 @@ import { sendEmail, isEmailConfigured } from "@/lib/send-email";
 import { bookingConfirmationEmail, instructorBookingNotificationEmail } from "@/lib/emails";
 import { hasClassEnded } from "@/lib/business-time";
 
+/** Session statuses that can still take a manual booking (see the check below). */
+const BOOKABLE_STATUSES: readonly string[] = ["scheduled", "in_progress"];
+
 /**
  * Adds a manual booking for the specified customer.
  * @param request - POST request with JSON body: { sessionId: string; reason: string }
@@ -63,7 +66,14 @@ export async function POST(
     .eq("id", sessionId)
     .single();
 
-  if (!session || session.approval_status !== "approved" || session.status !== "scheduled") {
+  // "in_progress" is what the session becomes once the instructor presses Start
+  // Class, and walk-ins and late arrivals are exactly who gets added then, so
+  // it must stay bookable. Only cancelled/completed sessions are closed.
+  if (
+    !session ||
+    session.approval_status !== "approved" ||
+    !BOOKABLE_STATUSES.includes(session.status)
+  ) {
     return Response.json(
       { success: false, error: "Session is not available for booking." },
       { status: 400 }
